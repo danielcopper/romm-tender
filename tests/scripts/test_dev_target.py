@@ -43,6 +43,7 @@ from _remote_target import (
     end_processes,
     fake_path,
     set_unit,
+    ssh_calls,
     units,
 )
 
@@ -624,6 +625,40 @@ class TestTheLog:
         assert "tender-dev: refused: follow log" in result.stderr
         assert "dispatcher refused the request, so it is older than this checkout's" in result.stderr
         assert f"mise run setup:remote-target deck deck@{_ADDRESS}" in result.stderr
+
+
+class TestTheConnection:
+    def test_every_ssh_call_gives_up_on_a_target_that_stops_answering(self, loop: Loop) -> None:
+        """Keepalive and connect timeout on the command line, so targets set up before them get them too."""
+        before = len(ssh_calls(loop.world))
+        loop.hold_lock("romm-tender-dev")
+
+        loop.run("dev:stop")
+        loop.run("dev:log")
+
+        calls = ssh_calls(loop.world)[before:]
+        assert len(calls) == 3
+        for call in calls:
+            assert call["serveraliveinterval"] == ["15"]
+            assert call["serveralivecountmax"] == ["3"]
+            assert call["connecttimeout"] == ["10"]
+
+    def test_the_copy_is_announced_before_it_starts(self, loop: Loop) -> None:
+        result = loop.run("dev:status")
+
+        assert result.returncode == 0, result.stderr
+        assert "tender-dev: copying to deck" in result.stderr
+
+    def test_a_connection_that_ends_while_following_is_said(self, loop: Loop) -> None:
+        loop.log.parent.mkdir(parents=True)
+        loop.log.write_text("one\ntwo\n", encoding="utf-8")
+        loop.world.follow_holds = False
+        loop.world.drop_after_first_line = True
+
+        result = loop.run("dev:log", "--follow")
+
+        assert result.returncode == 255
+        assert "the connection to deck ended while following" in result.stderr
 
 
 class TestWhenATargetCannotBeUsed:

@@ -127,8 +127,18 @@ def find_target(name: str) -> Target:
     return Target(name, config, destination)
 
 
+# A target that stops answering — a Deck gone to sleep, a network gone — ends the
+# call within a minute rather than leaving it waiting with nothing said. Given
+# here rather than in the dev loop's config, so targets set up before them get
+# them too.
+KEEPALIVE = ("ServerAliveInterval=15", "ServerAliveCountMax=3", "ConnectTimeout=10")
+
+
 def ssh(target: Target) -> list[str]:
-    return ["ssh", "-F", str(target.config), "-T"]
+    command = ["ssh", "-F", str(target.config), "-T"]
+    for option in KEEPALIVE:
+        command += ["-o", option]
+    return command
 
 
 def setup_hint(target: Target) -> str:
@@ -219,6 +229,7 @@ def copy(target: Target) -> None:
     rules = ["--exclude=__pycache__", *(f"--include=/{entry}" for entry in copied_tree()), "--exclude=/*"]
     remote_shell = " ".join(shlex.quote(word) for word in ssh(target))
     command = ["rsync", "-a", "--delete", "--delete-excluded", "-e", remote_shell, *rules]
+    print(f"tender-dev: copying to {target.name} …", file=sys.stderr, flush=True)
     try:
         result = subprocess.run(
             [*command, f"{REPO}/", f"{target.name}:{INCOMING}"],
@@ -333,6 +344,17 @@ def after_following(task: str, target: Target, *, follow: bool = False) -> str:
     )
 
 
+def connection_ended(task: str, target: Target, *, follow: bool = False) -> str:
+    name = target.name
+    ended = f"tender-dev: the connection to {name} ended while following"
+    status = f"`mise run dev:status --target {name}` says what runs there."
+    if task == "dev:log" and follow:
+        return f"{ended} the log."
+    if task == "dev:ui-scale":
+        return f"{ended} dev:ui-scale, which may still run there; {status}"
+    return f"{ended} the log. The backend may still run there; {status}"
+
+
 def on_target(target: Target, task: str, words: list[str], *, follow: bool = False) -> int:
     outcome = run_streaming([*ssh(target), "--", target.name, *words])
     if outcome.interrupted and not outcome.following and not (task == "dev:log" and follow):
@@ -345,6 +367,10 @@ def on_target(target: Target, task: str, words: list[str], *, follow: bool = Fal
     if outcome.interrupted or (outcome.following and outcome.returncode == 0):
         print(after_following(task, target, follow=follow), file=sys.stderr)
         return 0
+    following = outcome.following or (task == "dev:log" and follow)
+    if following and outcome.returncode == setup.SSH_FAILED:
+        print(connection_ended(task, target, follow=follow), file=sys.stderr)
+        return outcome.returncode
     if outcome.returncode != 0 and not outcome.following:
         explained = connection_failure(outcome.stderr, target) if outcome.returncode == setup.SSH_FAILED else None
         explained = explained or dispatcher_refusal(outcome.stderr, target)

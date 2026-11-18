@@ -591,6 +591,12 @@ may ask as your own `ssh` would, about its host key or a key's passphrase, and t
 whose dispatcher is older than the checkout — one that refuses `dev:log --follow`, say — is brought up to date by
 running `setup:remote-target` again.
 
+**A lost connection ends the call within a minute.** Every call gives up on a target it cannot reach within 10 seconds,
+and on one that stops answering for 45 — a Deck gone to sleep, a network gone. Before the copy the task says
+`copying to <name> …`, so a wait there is not a silent one. A connection lost while a task follows ends the following
+with `the connection to <name> ended while following`; what the task started there may still run, and `dev:status` says
+whether it does.
+
 #### When a target cannot be used
 
 A task that cannot reach the target says why and what to do, and nothing is done on the target:
