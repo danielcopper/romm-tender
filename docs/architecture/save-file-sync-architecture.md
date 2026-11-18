@@ -2229,19 +2229,24 @@ The sync knows the ROM is gone only from that 404 confirmed by the ROM's own loo
 (`services/saves/sync_engine/matrix.py`) asks `get_rom` when an upload raises `RommNotFoundError`, and only the lookup's
 own `RommNotFoundError` is the proof
 ([what makes a 404 an entity verdict](backend-architecture.md#rommhttpadapter-notes-what-makes-a-404-an-entity-verdict)).
-An answer, or any other error, leaves the upload's 404 that file's error, as before. The `gone_from_romm` mark is not
-read for this: it is absent for a platform the library sync did not read, and a stale one would stop the sync of a game
-RomM still has. No lookup runs before the listing, so a run pays the extra request only for a game that is gone — one
-upload and one lookup each time it is synced.
+An answer, or any other error, leaves the upload's 404 that file's error; the run asks at most once, and the verdict
+holds for its other files. The `roms.gone_from_romm` mark is not read for this: it is absent for a platform the library
+sync did not read, and a stale one would stop the sync of a game RomM still has. No lookup runs before the listing, so a
+run pays the extra request only after an upload's entity 404: for a game that is gone, one upload and one lookup each
+time it is synced.
 
-On the proof the ROM's run ends with the `GoneFromRomm` refusal (`gone_from_romm`, `services/saves/_refusals.py`): no
-further file of it is uploaded or downloaded, its save state is not written, and nothing local is moved or deleted.
+On the proof the ROM's run ends with the `GoneFromRomm` refusal (reason `gone_from_romm`,
+`services/saves/_refusals.py`): no further file of it is uploaded or downloaded, and nothing local is moved or deleted.
 
 - **A single game's sync** — Sync Saves, the sync after a game, the sync before a start and a version switch's sync of
   the version it leaves — is refused with `gone_from_romm` and `synced=0`, its message "RomM no longer has this game —
-  its saves stay on this device" in place of the per-file error. The panel shows that message as it shows any refused
-  sync: Sync Saves as a toast, the sync after a game as its failure toast, the launch check in its sync-failed prompt,
-  and a version switch in the toast that ends it.
+  its saves stay on this device" in place of the per-file error, and the game's save state is not written. The panel
+  shows that message as it shows any refused sync: Sync Saves as a toast, the sync after a game as its failure toast,
+  the launch check in its sync-failed prompt (it still asks whether to play anyway), and a version switch in the toast
+  that ends it, as it does for a running game.
+- **Restoring a save version and copying a save to a slot** sync the game first; where that sync refuses with
+  `gone_from_romm`, they write the save state as their other bail-outs do and pass the refusal on, and the panel shows
+  the message after "Couldn't restore the save:" or "Couldn't copy the save:".
 - **Sync All Saves Now** passes the game over with nothing counted and names it in a clause of its own: "_\<game\>_ is
   no longer on RomM — its saves stay on this device", or, for more than one, "_\<A\>_ and _\<B\>_ are no longer on RomM
   — their saves stay on this device", the names joined as the running games' are (`GoneRoms`,

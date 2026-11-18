@@ -644,6 +644,8 @@ class FakeSaveApi:
             exc, self._fail_next_list_saves = self._fail_next_list_saves, None
             raise exc
         self._check_fail()
+        if rom_id in self.gone_rom_ids:
+            return []
         saves = [s for s in self.saves.values() if s.get("rom_id") == rom_id]
         if slot is not None:
             saves = [s for s in saves if s.get("slot") == slot]

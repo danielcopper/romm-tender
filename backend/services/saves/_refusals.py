@@ -53,7 +53,7 @@ def game_running(name: str, **details: Any) -> GameRunning:
 
 
 class GoneFromRomm(NamedRefused):
-    """RomM no longer has the game: an upload of its save was refused with a 404 RomM's lookup of the ROM confirmed."""
+    """RomM no longer has the game, so its saves cannot be synced."""
 
     reason = "gone_from_romm"
 

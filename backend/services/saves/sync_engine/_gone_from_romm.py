@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from services.saves._messages import GONE_FROM_ROMM_ONE, GONE_FROM_ROMM_SEVERAL
 from services.saves.sync_engine._result_message import joined_names
 
 
@@ -26,5 +27,5 @@ class GoneRoms:
         if not self.names:
             return message
         if len(self.names) == 1:
-            return f"{message}; {self.names[0]} is no longer on RomM — its saves stay on this device"
-        return f"{message}; {joined_names(self.names)} are no longer on RomM — their saves stay on this device"
+            return f"{message}; {GONE_FROM_ROMM_ONE.format(name=self.names[0])}"
+        return f"{message}; {GONE_FROM_ROMM_SEVERAL.format(names=joined_names(self.names))}"
