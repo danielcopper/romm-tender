@@ -51,6 +51,7 @@ from _vendor.atlas import (
     KIND_RETROARCH_FOREIGN_CORE,
     KIND_STANDALONE,
     RESOLUTION_AMBIGUOUS,
+    RESOLUTION_CONFLICT,
     RESOLUTION_UNKNOWN,
     SystemCandidate,
     SystemResolution,
@@ -786,6 +787,13 @@ class TestKnownSystem:
         )
         installation = _Installation(placement=RomPlacement(resolution=several))
         pairs = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
+        assert _adapter(installation, traces).is_known_system(pairs) is None
+
+    def test_pairs_that_name_different_systems_answer_neither_yes_nor_no(self, traces):
+        """Review F4: a contradiction says nothing about what the catalogue holds."""
+        conflict = SystemResolution(RESOLUTION_CONFLICT, None, None, translation=translate((("romm", "snes"),)))
+        installation = _Installation(placement=RomPlacement(resolution=conflict))
+        pairs = (SystemPair("romm", "snes"), SystemPair("folder", "xbox360"))
         assert _adapter(installation, traces).is_known_system(pairs) is None
 
 

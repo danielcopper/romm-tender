@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from _vendor import atlas
 from _vendor.atlas import (
+    CAVEAT_PLATFORM_SOURCE_UNKNOWN,
     INTERSECTION_AGREED,
     PLATFORM_STATUS_ABSENT,
     PLATFORM_STATUS_DECLARED,
@@ -136,8 +137,14 @@ class TestThePairsAsked:
             _pair("folder", "megadrivejp"),
         )
 
-    def test_a_platform_kept_without_its_folder_is_asked_by_its_slug_alone(self):
+    def test_a_platform_without_a_folder_is_asked_by_its_slug_alone(self):
         assert platform_pairs(PlatformKeys("snes")) == (_pair("romm", "snes"),)
+
+    def test_the_vendored_table_knows_rom_ms_column(self):
+        """Review F6: a table without RomM's column would read every platform as unmatched, so it fails here."""
+        caveats = translate(platform_pairs(PlatformKeys("snes"))).caveats
+
+        assert CAVEAT_PLATFORM_SOURCE_UNKNOWN not in {caveat.code for caveat in caveats}
 
 
 class TestTheRealResolverOverARealTree:

@@ -45,12 +45,12 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from _vendor.atlas import HEALTH_ISSUE_ROOT_MISSING, RESOLUTION_RESOLVED
+from _vendor.atlas import HEALTH_ISSUE_ROOT_MISSING
 
-from adapters.atlas_catalogue import resolution_status
+from adapters.atlas_catalogue import resolution_trace, resolved
 from adapters.emulator_sources import source_roots
 from domain.emulator_sources import RETRODECK
-from domain.platform_system import system_key
+from domain.platform_system import system_keys
 from domain.retrodeck_folders import (
     GAME_DOWNLOAD,
     FolderRefused,
@@ -132,12 +132,13 @@ class RetroDeckFoldersAdapter:
             placement = self._ask(retrodeck.installation, f"rom_location({system!r})", lambda h: h.rom_location(system))
         except _Unasked:
             return unanswered_refusal()
-        if placement.dir is None or root is None or resolution_status(placement) != RESOLUTION_RESOLVED:
+        if placement.dir is None or root is None or not resolved(placement):
             self._log_debug(
-                f"[folders] no ROM folder for {system!r}: resolution={resolution_status(placement)} "
+                f"[folders] no ROM folder for {system!r}: {resolution_trace(placement)} "
                 f"caveats={sorted({c.code for c in placement.caveats})}"
             )
-            return no_rom_folder(system_key(system) or repr(system))
+            # Several pairs are named by every key they hold, never folded into one.
+            return no_rom_folder(", ".join(system_keys(system)))
         folder, root = os.path.realpath(placement.dir), os.path.realpath(root)
         if os.path.isdir(folder) or (_inside(folder, root) and os.path.isdir(root)):
             return folder
@@ -174,7 +175,7 @@ class RetroDeckFoldersAdapter:
             placement = self._ask(installation, f"rom_location({system!r})", lambda h: h.rom_location(system))
         except _Unasked:
             return system_unanswered_refusal()
-        if placement.dir is None or resolution_status(placement) != RESOLUTION_RESOLVED:
+        if placement.dir is None or not resolved(placement):
             return no_rom_root()
         return os.path.realpath(placement.dir)
 

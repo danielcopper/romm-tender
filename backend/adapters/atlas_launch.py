@@ -46,11 +46,10 @@ from _vendor.atlas import (
     CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED,
     CAVEAT_LAUNCH_ENVIRONMENT_UNREAD,
     CAVEAT_LAUNCHER_SCRIPT_UNPINNED,
-    RESOLUTION_RESOLVED,
     VARIANT_FLATPAK,
 )
 
-from adapters.atlas_catalogue import installation_word, resolution_status
+from adapters.atlas_catalogue import installation_word, resolution_trace, resolved
 from domain.start_command import (
     COMMAND_TOO_LONG,
     COMMAND_UNREAD,
@@ -122,7 +121,7 @@ def _refusal(answer: Any) -> StartRefused:
     A system that resolved to none or several of the source's systems names no
     entry and no refusal of its own: its command could not be read.
     """
-    if resolution_status(answer) != RESOLUTION_RESOLVED:
+    if not resolved(answer):
         return StartRefused(COMMAND_UNREAD)
     entry = answer.entry
     if entry is not None and entry.availability != AVAILABILITY_STARTABLE:
@@ -248,5 +247,6 @@ class AtlasLaunchAdapter:
         if answer is None:
             return StartRefused(COMMAND_UNREAD)
         codes = sorted({caveat.code for caveat in answer.caveats} - _CHANGES_NOTHING)
-        self._log_debug(f"[launch] {system}/{label}: command={answer.command is not None} caveats={codes}")
+        command = answer.command is not None
+        self._log_debug(f"[launch] {system}/{label}: command={command} {resolution_trace(answer)} caveats={codes}")
         return read_start(answer, writable=writable, read_only=read_only)

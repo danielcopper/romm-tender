@@ -295,7 +295,7 @@ class TestARefusedCommand:
         assert read_start(_answer(None, _caveat(code))) == StartRefused(reason)
 
     def test_a_system_that_resolved_to_no_one_system_gives_no_command_and_names_no_entry_s_reason(self):
-        """#2751: several systems answering alike or none here is no command, whatever the entry would say."""
+        """#2751: several systems the resolver names none of, or none here: no command, whatever the entry says."""
         answer = replace(
             _answer(None, entry=_entry(AVAILABILITY_NOT_INSTALLED)),
             resolution=SystemResolution(RESOLUTION_UNKNOWN, None, None),

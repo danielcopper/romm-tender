@@ -1177,7 +1177,10 @@ class TestHowTheQuestionIsPut:
 
 
 class TestASystemThatResolvedToNoOneSystem:
-    """An entry beside a resolution other than resolved is asked nothing: its system is not established (#2751)."""
+    """An entry beside a resolution other than resolved is asked nothing: its system is not established (#2751).
+
+    The resolver was asked and established nothing — not "never asked" (review F5).
+    """
 
     def test_no_save_place_is_asked_of_any_entry(self, traces):
         entry = _Entry("mGBA", _placement(files=("Game Title.srm",)))
@@ -1187,7 +1190,7 @@ class TestASystemThatResolvedToNoOneSystem:
             system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
         )
 
-        assert answer.unestablished == UNESTABLISHED_NOT_ASKED
+        assert answer.unestablished == UNESTABLISHED_NOTHING
         assert entry.asked == []
 
 

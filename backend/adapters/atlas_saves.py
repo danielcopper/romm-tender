@@ -50,20 +50,20 @@ from _vendor.atlas import (
     CAVEAT_REDIRECT_OUTRANKED,
     CAVEAT_SAVE_FILES_SHARED_WITH_CORE,
     HEALTH_ISSUE_NOT_SET_UP,
-    RESOLUTION_RESOLVED,
     SavestateAbsence,
     SavestatePlacement,
     Unresolved,
     core_probe_interpreter,
 )
 
-from adapters.atlas_catalogue import catalogue_refused, resolution_status
+from adapters.atlas_catalogue import catalogue_refused, resolution_trace, resolved
 from adapters.emulator_sources import source_roots
 from domain.emulator_sources import SourceFinding
 from domain.save_answer import (
     SAVE_STATE_SAVES_ROOT_MISSING,
     SAVES_ROOT_MISSING,
     UNESTABLISHED_NOT_ASKED,
+    UNESTABLISHED_NOTHING,
     SaveAnswer,
     SaveGroup,
     build_save_answer,
@@ -170,9 +170,18 @@ class AtlasSaveLocationAdapter:
 
         A refused catalogue lends the answer its ``not-set-up`` finding and no
         other: the entry was never reached, so whether another finding concerns
-        its place is not known.
+        its place is not known. A system the resolver resolved to no one system
+        was asked and established nothing, which is not "never asked"; it keeps
+        its ``not-set-up`` finding too.
         """
         catalogue = self._catalogue(installation, system, content_path)
+        if catalogue is not None and not catalogue_refused(catalogue) and not resolved(catalogue):
+            return (
+                unestablished_answer(
+                    emulator=emulator_label, shape=UNESTABLISHED_NOTHING, content_installed=content_installed
+                ),
+                _findings(catalogue.caveats, only=HEALTH_ISSUE_NOT_SET_UP),
+            )
         if catalogue is None or catalogue_refused(catalogue):
             not_set_up = () if catalogue is None else _findings(catalogue.caveats, only=HEALTH_ISSUE_NOT_SET_UP)
             # The question never reached the resolver, so this says nothing
@@ -253,21 +262,19 @@ class AtlasSaveLocationAdapter:
             self._log_debug(f"[saves] no emulator source answers ({reading.no_answer_reason()})")
             return None
         catalogue = self._catalogue(installation, system, content_path)
-        if catalogue is None or catalogue_refused(catalogue):
+        if catalogue is None or catalogue_refused(catalogue) or not resolved(catalogue):
             return None
         return self._labelled(catalogue, system, emulator_label)
 
     def _catalogue(self, installation: Any, system: SystemArgument, content_path: str) -> Any | None:
-        """The catalogue answer for *system*, or ``None`` where it could not be asked or *system* resolved to no one
-        system the source holds; a refusal is logged."""
+        """The catalogue answer for *system*, or ``None`` where it could not be asked; a refusal, and a system
+        resolved to no one system the source holds, are logged."""
         answer = self._ask(
             lambda: installation.emulators_for(system, content_path=content_path),
             f"emulators_for({system!r})",
         )
-        status = None if answer is None else resolution_status(answer)
-        if status is not None and status != RESOLUTION_RESOLVED:
-            self._log_debug(f"[saves] {system}: resolved to no one system ({status}); nothing to ask")
-            return None
+        if answer is not None and not resolved(answer):
+            self._log_debug(f"[saves] {system}: resolved to no one system ({resolution_trace(answer)})")
         if answer is not None and catalogue_refused(answer):
             self._log_debug(
                 f"[saves] {system}: the catalogue was refused "

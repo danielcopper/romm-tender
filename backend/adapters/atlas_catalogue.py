@@ -124,6 +124,7 @@ from _vendor.atlas import (
     KIND_STANDALONE,
     RESOLUTION_AMBIGUOUS,
     RESOLUTION_RESOLVED,
+    RESOLUTION_UNKNOWN,
     VERDICT_ENTRY_NOT_ACCEPTED,
     VERDICT_LAUNCHABLE,
     VERDICT_NEEDS_INSTALLATION,
@@ -218,10 +219,11 @@ if TYPE_CHECKING:
 # The codes on which Tender declines to answer from a catalogue. The first
 # four are the resolver's own "nobody could answer" family: the arrangement ships
 # none, atlas has not established where it keeps one, the one it has could not be
-# read, or part of it sits where atlas does not open. Only their absence makes an
-# empty entry list a statement about the machine — "the catalogue was read and
-# this frontend knows no emulator for this system" — and that is the one empty
-# the picker may render as an empty list.
+# read, or part of it sits where atlas does not open. Only their absence, on an
+# answer whose system resolved to one, makes an empty entry list a statement
+# about the machine — "the catalogue was read and this frontend knows no
+# emulator for this system" — and that is the one empty the picker may render
+# as an empty list.
 #
 # ``catalogue-invalid`` is Tender's own addition, and it reads the same
 # answer differently from the resolver on purpose. It means a catalogue file
@@ -311,8 +313,8 @@ _LAUNCH_STATES = {
 # Why a system question named no single system, stated beside the answer's
 # resolution: the status is what is read ("Branch on the status, not on the
 # caveat codes", atlas docs/how-to-use.md, "Naming a system"), and the code is
-# only traced.
-RESOLUTION_STATED_BECAUSE = frozenset({CAVEAT_SYSTEM_AMBIGUOUS, CAVEAT_SYSTEM_PAIRS_CONFLICT})
+# only traced (:func:`resolution_trace`).
+_RESOLUTION_STATED_BECAUSE = frozenset({CAVEAT_SYSTEM_AMBIGUOUS, CAVEAT_SYSTEM_PAIRS_CONFLICT})
 
 # Why a verdict could not be established, in Tender's word, the first code
 # found winning. A label the system's entries do not carry is the caller's own
@@ -574,15 +576,24 @@ def _named_file(caveat: Any) -> str | None:
     file = caveat.data.get("file")
     if not isinstance(file, str):
         return None
-    return os.path.basename(file.rstrip("/")) or file
+    return _file_name(file)
+
+
+def _file_name(path: str) -> str:
+    """*path* without its folder: a folder's path by its last folder, a path with no name of its own as it is."""
+    return os.path.basename(path.rstrip("/")) or path
 
 
 def _named_files(caveat: Any) -> str | None:
-    """The names of the files *caveat* lists, without their folder, joined; ``None`` where it lists none."""
+    """The names of the files *caveat* lists, without their folder, joined by ", "; ``None`` where it lists none.
+
+    It fills :attr:`~domain.launchability.LaunchStatement.file` for what a
+    folder holds, which the panel names as one list.
+    """
     files = caveat.data.get("files")
     if not isinstance(files, (list, tuple)) or not files:
         return None
-    return ", ".join(os.path.basename(str(file).rstrip("/")) or str(file) for file in files)
+    return ", ".join(_file_name(str(file)) for file in files)
 
 
 def _statement(caveat: Any, reason: str) -> LaunchStatement:
@@ -651,15 +662,13 @@ def _not_established_reason(answer: Any) -> str | None:
     """Why the verdict could not be established, in Tender's word.
 
     Where the system asked about resolved to none, its resolution says why:
-    several systems answer alike, or none here (#2751). An entry reading that
-    ended without a take or a refusal names no reason of its own; what it
-    could not establish is the answer's statements.
+    several systems answer and the resolver names none of them, or none here
+    (#2751). An entry reading that ended without a take or a refusal names no
+    reason of its own; what it could not establish is the answer's statements.
     """
-    status = resolution_status(answer)
-    if status == RESOLUTION_AMBIGUOUS:
-        return SYSTEMS_SEVERAL
-    if status != RESOLUTION_RESOLVED:
-        return SYSTEM_UNKNOWN
+    unresolved = unresolved_reason(answer)
+    if unresolved is not None:
+        return unresolved
     codes = _caveat_codes(answer)
     reason = next((reason for code, reason in _NOT_ESTABLISHED_LAUNCH_BECAUSE if code in codes), None)
     if reason is None and catalogue_refused(answer):
@@ -696,8 +705,7 @@ def _installed_in(installers: Any) -> tuple[str, ...]:
 
 def _launchability(answer: Any, *, system: SystemArgument, content_path: str, label: str) -> Launchability:
     """*answer* in Tender's words; a system that resolved to none is not established, whatever else it says."""
-    resolved = resolution_status(answer) == RESOLUTION_RESOLVED
-    state = _LAUNCH_STATES.get(answer.verdict, LAUNCH_NOT_ESTABLISHED) if resolved else LAUNCH_NOT_ESTABLISHED
+    state = _LAUNCH_STATES.get(answer.verdict, LAUNCH_NOT_ESTABLISHED) if resolved(answer) else LAUNCH_NOT_ESTABLISHED
     codes = set(_caveat_codes(answer))
     reason, reason_file = _launch_reason(answer, state)
     return Launchability(
@@ -732,7 +740,7 @@ def catalogue_refused(answer: Any) -> bool:
 
 
 def resolution_status(answer: Any) -> str:
-    """How the system *answer* was asked about resolved, as the resolver states it (``resolution_status(answer)``).
+    """How the system *answer* was asked about resolved, as the resolver states it (``answer.resolution.status``).
 
     An answer that states no resolution is one to a question that named no
     system, and reads as resolved: nothing stood between the question and its
@@ -740,6 +748,32 @@ def resolution_status(answer: Any) -> str:
     """
     resolution = answer.resolution
     return RESOLUTION_RESOLVED if resolution is None else resolution.status
+
+
+def resolved(answer: Any) -> bool:
+    """Whether the system *answer* was asked about resolved to one system (:func:`resolution_status`)."""
+    return resolution_status(answer) == RESOLUTION_RESOLVED
+
+
+def unresolved_reason(answer: Any) -> str | None:
+    """Why the system *answer* was asked about resolved to no one system, in Tender's word; ``None`` where it did.
+
+    :data:`~domain.launchability.SYSTEMS_SEVERAL` where several of the
+    source's systems answer and the resolver names none of them, else
+    :data:`~domain.launchability.SYSTEM_UNKNOWN`: the source has no system the
+    question names, or the pairs asked with name different ones. The one place
+    that splits the two (review A6).
+    """
+    status = resolution_status(answer)
+    if status == RESOLUTION_RESOLVED:
+        return None
+    return SYSTEMS_SEVERAL if status == RESOLUTION_AMBIGUOUS else SYSTEM_UNKNOWN
+
+
+def resolution_trace(answer: Any) -> str:
+    """The resolution of the system *answer* was asked about, with the codes that state why, for a log line."""
+    codes = sorted(code for code in _caveat_codes(answer) if code in _RESOLUTION_STATED_BECAUSE)
+    return f"resolution={resolution_status(answer)} {codes}"
 
 
 class AtlasCatalogueAdapter:
@@ -795,7 +829,7 @@ class AtlasCatalogueAdapter:
         platform about".
         """
         answer = self._catalogue_answer(system, self._reading(reading))
-        if answer is None or catalogue_refused(answer) or resolution_status(answer) != RESOLUTION_RESOLVED:
+        if answer is None or catalogue_refused(answer) or not resolved(answer):
             return (None, None)
         cores = [
             entry
@@ -856,9 +890,9 @@ class AtlasCatalogueAdapter:
             return _unavailable(CATALOGUE_UNAVAILABLE, payload)
         if catalogue_refused(answer):
             return _unavailable(catalogue_refusal_reason(answer), payload)
-        status = resolution_status(answer)
-        if status != RESOLUTION_RESOLVED:
-            reason = PlatformRefusal.SEVERAL.value if status == RESOLUTION_AMBIGUOUS else CATALOGUE_UNAVAILABLE
+        unresolved = unresolved_reason(answer)
+        if unresolved is not None:
+            reason = PlatformRefusal.SEVERAL.value if unresolved == SYSTEMS_SEVERAL else CATALOGUE_UNAVAILABLE
             return _unavailable(reason, payload)
         chosen = _frontend_choice(answer.entries)
         options = [_entry_option(entry, chosen_in_frontend=entry is chosen) for entry in answer.entries]
@@ -882,9 +916,10 @@ class AtlasCatalogueAdapter:
     def is_known_system(self, system: SystemArgument) -> bool | None:
         """Whether the frontend's catalogue holds *system*, as the resolver resolves it.
 
-        ``None`` when the catalogue could not be read at all, or the system
-        resolved to several of its systems — the caller must not read a source
-        that did not answer as a denial, which is the same default-safe rule
+        ``None`` when the catalogue could not be read at all, the system
+        resolved to several of its systems, or the pairs asked with name
+        different ones — the caller must not read a source that did not
+        answer as a denial, which is the same default-safe rule
         :meth:`get_supported_extensions` follows by returning an empty set.
         ``False`` is therefore a positive statement: this catalogue was read,
         and it holds no such system.
@@ -895,7 +930,7 @@ class AtlasCatalogueAdapter:
         status = resolution_status(placement)
         if status == RESOLUTION_RESOLVED:
             return True
-        return None if status == RESOLUTION_AMBIGUOUS else False
+        return False if status == RESOLUTION_UNKNOWN else None
 
     def get_supported_extensions(
         self, system: SystemArgument, *, reading: SourcesReading | None = None
@@ -911,7 +946,7 @@ class AtlasCatalogueAdapter:
         falls back to the full disc set).
         """
         placement = self._rom_location(system, self._reading(reading))
-        if placement is None or resolution_status(placement) != RESOLUTION_RESOLVED:
+        if placement is None or not resolved(placement):
             return frozenset()
         return frozenset(placement.extensions)
 

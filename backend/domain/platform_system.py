@@ -63,11 +63,11 @@ def system_key(system: SystemArgument) -> str | None:
 
 
 def system_keys(system: SystemArgument) -> tuple[str, ...]:
-    """Every key *system* names: its one key, or the key of each of several pairs."""
+    """Every key *system* names, each once: its one key, or the key of each of several pairs."""
     key = system_key(system)
     if key is not None:
         return (key,)
-    return tuple(pair.key for pair in system if isinstance(pair, SystemPair))
+    return tuple(dict.fromkeys(pair.key for pair in system if isinstance(pair, SystemPair)))
 
 
 class SystemStatus(StrEnum):

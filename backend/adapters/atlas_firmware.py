@@ -94,7 +94,6 @@ from _vendor.atlas import (
     CAVEAT_FIRMWARE_UNREADABLE,
     CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE,
     REASON_REGION_DECIDED_BY_DISC,
-    RESOLUTION_RESOLVED,
 )
 
 # None of these names is in emu-atlas's ``__all__``, and emu-atlas has not said
@@ -102,7 +101,7 @@ from _vendor.atlas import (
 # start-up.
 from _vendor.atlas.firmware import core_short_name, declared_directory_of, load_hashes
 
-from adapters.atlas_catalogue import resolution_status
+from adapters.atlas_catalogue import resolved
 from adapters.atlas_identity import emulator_identity
 from adapters.emulator_sources import source_roots
 from domain.firmware_wants import (
@@ -403,7 +402,7 @@ def _established(answer: Any) -> bool:
     same code speaks only of the empty requirement list; each emulator's own
     verdict stands.
     """
-    if resolution_status(answer) != RESOLUTION_RESOLVED:
+    if not resolved(answer):
         return False
     return bool(answer.cores) or all(caveat.code != CAVEAT_FIRMWARE_DECLARATION_UNKNOWN for caveat in answer.caveats)
 
