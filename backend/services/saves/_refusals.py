@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.save_answer import save_finding_details, save_shape_message
 from lib.errors import NamedRefused
+from services.saves._messages import ROM_GONE_FROM_ROMM
 
 if TYPE_CHECKING:
     from domain.save_answer import SaveAnswer
@@ -49,3 +50,14 @@ class GameRunning(NamedRefused):
 def game_running(name: str, **details: Any) -> GameRunning:
     """The refusal of a press that would change the saves of *name*, which is running."""
     return GameRunning(f"{name} is running. Quit it first.", **details)
+
+
+class GoneFromRomm(NamedRefused):
+    """RomM no longer has the game: an upload of its save was refused with a 404 RomM's lookup of the ROM confirmed."""
+
+    reason = "gone_from_romm"
+
+
+def gone_from_romm(**details: Any) -> GoneFromRomm:
+    """The refusal of a sync of a game RomM no longer has, carrying *details*."""
+    return GoneFromRomm(ROM_GONE_FROM_ROMM, **details)

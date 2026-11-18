@@ -543,8 +543,11 @@ class RommLibraryApi(RommPlatformReader, RommRomReader, Protocol):
     """RomM surface for LibraryService — platforms, collections, ROM listing & downloads."""
 
 
-class RommSyncApi(RommSaveApi, RommVersion, RommDeviceApi, Protocol):
-    """RomM surface for save-sync — saves cluster + server identity + device registration."""
+class RommSyncApi(RommSaveApi, RommRomReader, RommVersion, RommDeviceApi, Protocol):
+    """RomM surface for save-sync — saves cluster + server identity + device registration + the ROM lookup.
+
+    The lookup is what proves an upload's 404 means RomM no longer has the ROM.
+    """
 
 
 class RommApi(

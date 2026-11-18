@@ -93,6 +93,18 @@ runs or not. While a game runs:
 When a press is refused and no game is running, see
 [A save action says the game is running](troubleshooting.md#a-save-action-says-the-game-is-running).
 
+### A game RomM no longer has
+
+A game you downloaded stays on this device after it is removed from RomM, and so do its saves. RomM has nowhere to keep
+them any more, so a sync of that game uploads nothing: it stops as soon as RomM refuses the first save file, once Tender
+has asked RomM and RomM confirmed it no longer has the game. Your save files stay on this device as they are — nothing
+is moved, deleted or marked as synced.
+
+- **Sync Save Files**, the sync after you quit the game and the check before it starts say: "RomM no longer has this
+  game — its saves stay on this device".
+- **Sync All Saves Now** syncs every other game and names it: "_\<game\>_ is no longer on RomM — its saves stay on this
+  device". The game is not counted among the games synced, and it is no error.
+
 ## Important: Use Your Own RomM Account
 
 Save files in RomM are tied to the authenticated user account. If multiple people share the same RomM account, their
@@ -193,8 +205,9 @@ device.
 In the line it answers with, "Synced _N_ save(s) across _M_ ROM(s)", _M_ counts the games whose saves it compared with
 RomM, those already in step included. After it, it says how many games it skipped and why, one reason at a time: games
 not set up for save sync, games whose saves cannot be synced, games whose saves folder does not exist (naming the
-folder), games whose saves are written beside the game file, and, by name, games that are running. A missing saves
-folder makes the sync fail, as syncing that one game would; every other skip is no error.
+folder), games whose saves are written beside the game file, and, by name, games
+[RomM no longer has](#a-game-romm-no-longer-has) and games that are running. A missing saves folder makes the sync fail,
+as syncing that one game would; every other skip is no error.
 
 ## Resolving Conflicts
 

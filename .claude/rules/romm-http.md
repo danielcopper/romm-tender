@@ -59,7 +59,8 @@ Pinned in `tests/adapters/romm/test_retry.py::TestKnownUnreachableFastPath`:
 
 `RommNotFoundError` does not mean "the server said 404". It means **RomM's entity layer said this entity does not
 exist**, and downstream that reading is authority: the removed-game cleanup deletes on it, the version picker marks a
-version vanished on it, save-sync drops a stale device registration on it.
+version vanished on it, save-sync drops a stale device registration on it and stops uploading the saves of a game RomM
+no longer has on it.
 
 A bare 404 does not carry that meaning on its own. FastAPI answers a misconfigured path prefix with the same status and
 a generic `{"detail": "Not Found"}` body, and a reverse proxy in front of RomM (Cloudflare Tunnel, Traefik) answers a
