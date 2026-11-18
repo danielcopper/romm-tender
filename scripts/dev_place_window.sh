@@ -318,12 +318,14 @@ EOF
     rm -f "$js_file"
     return 1
   }
-  # Keep the watcher armed for the window to appear, then self-clean.
+  # Keep the watcher armed for the window to appear, then self-clean. Its
+  # descriptors are let go: an ssh session that ran this (a dev task's
+  # --target) ends only once nothing holds its output open.
   (
     sleep 120
     "$qdbus" org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "$SCRIPT_NAME" >/dev/null 2>&1 || true
     rm -f "$js_file"
-  ) &
+  ) </dev/null >/dev/null 2>&1 &
   return 0
 }
 
