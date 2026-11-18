@@ -665,10 +665,10 @@ def check_login(name: str, config: pathlib.Path) -> subprocess.CompletedProcess[
     """A login to *name* through the dev loop's own *config* alone, sending an empty setup request.
 
     The target's leg runs in batch mode and asks for nothing: its host key is
-    recorded by then. A hop's leg takes nothing from *config* — ``-o`` options
-    and *config*'s entry apply to the destination only (ssh(1), ``-J``) — so it
-    may still ask, about its host key among others. It gets in exactly where
-    the dev loop will.
+    recorded by then. A hop's leg reads *config* too, but no entry in it names
+    the hop, and ``-o`` options apply to the destination only (ssh(1), ``-J``),
+    so it may still ask, about its host key among others. It gets in exactly
+    where the dev loop will.
     """
     command = ["ssh", "-F", str(config), "-T"]
     for option in ("BatchMode=yes", "ControlMaster=no", "ControlPath=none"):

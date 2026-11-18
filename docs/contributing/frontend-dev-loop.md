@@ -433,11 +433,12 @@ the setup reads with `ssh -G` and never writes. `<name>` is yours to choose — 
    prints it.
 6. **It checks that the dev loop can reach the target** with that file alone: one more login, through the entry just
    written and the dev loop's key, which sends an empty setup request. Its leg to the target runs in batch mode and asks
-   for nothing, the target's host key being recorded by then; a jump host's leg takes nothing from that file and may
-   still ask, about its host key among others. Only when the login gets in does the setup end as done. Otherwise the
-   target is set up all the same, and so is its entry, but the setup ends saying the dev loop cannot reach it with its
-   own config, with what `ssh` said and that the dev loop's config carries none of yours — a jump host your own config
-   lets past, with settings of its own there, is the likely case.
+   for nothing, the target's host key being recorded by then; a jump host's leg reads that file too, but no entry the
+   setup writes names it, and the batch mode given on the command line reaches only the target's leg, so it may still
+   ask, about its host key among others. Only when the login gets in does the setup end as done. Otherwise the target is
+   set up all the same, and so is its entry, but the setup ends saying the dev loop cannot reach it with its own config,
+   with what `ssh` said and that the dev loop's config carries none of yours — a jump host your own config lets past,
+   with settings of its own there, is the likely case.
 
 Run again, it changes what changed: one key, one `authorized_keys` line and one config entry, however often it runs.
 That is also how a target is repaired. While the build host's address is the one the line names, the repair needs no
