@@ -97,6 +97,8 @@ class World:
     """Drop the connection once the login's command has written its first line to stdout."""
     hop_failure: HopFailure | None = None
     """How a ProxyJump hop fails, if it does."""
+    hop_fails_only_with_config: bool = False
+    """The hop fails only for a login given ``-F`` — one the user's own config, not read then, would let past."""
     keygen_fails: bool = False
     ssh_g_fails: bool = False
     fail_with: str | None = None
@@ -362,8 +364,6 @@ def _hop_fails(failure: HopFailure, hop: str) -> int:
     if failure == "refused":
         print(f"ssh: connect to host {hop} port 22: Connection refused\n{closed}", file=sys.stderr)
         return 255
-    if failure != "host-key":
-        raise AssertionError(f"no such hop failure: {failure!r}")
     known_hosts = Path.home() / ".ssh" / "known_hosts"
     print(
         "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
@@ -389,7 +389,8 @@ def _ssh(argv: list[str]) -> int:
         resolved = _resolve(world, destination)
     with open(world.log + ".calls", "a", encoding="utf-8") as calls:
         calls.write(json.dumps({**options, "_offered": _identity_files(options, resolved)}) + "\n")
-    if "proxyjump" in resolved and world.hop_failure is not None:
+    hop_fails = world.hop_failure is not None and (not world.hop_fails_only_with_config or "_config" in options)
+    if "proxyjump" in resolved and world.hop_failure is not None and hop_fails:
         return _hop_fails(world.hop_failure, _hop_host(resolved["proxyjump"][0]))
     if world.fail_with is not None:
         print(world.fail_with, file=sys.stderr)

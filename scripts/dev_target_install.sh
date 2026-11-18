@@ -31,11 +31,19 @@ esac
 printf 'tender-dev-setup: the key from %s will be accepted from %s only.\n' "$build_host" "$from_address" >&2
 
 root="$HOME/$target_root"
+line="from=\"$from_address\",command=\"$root/dispatch.sh\",restrict $public_key"
 keys="$HOME/.ssh/authorized_keys"
 # A symlinked file (a dotfile manager's) is written through: the new file is
 # built beside the file the link names and replaces that one, and the link stays.
+# A place that cannot be written stays so however often this runs, so it ends
+# the setup with what to do instead.
 if [ -L "$keys" ]; then
-    keys=$(readlink -f "$keys")
+    if ! resolved=$(readlink -f "$keys") || [ ! -w "${resolved%/*}" ]; then
+        printf '%s%s cannot be written; add this line to it through whatever manages it: %s\n' \
+            "$stopped_marker" "${resolved%/*}" "$line" >&2
+        exit 1
+    fi
+    keys="$resolved"
 fi
 new_dispatcher="$root/.dispatch.sh.new"
 new_keys="$keys.tender-dev.new"
@@ -53,7 +61,6 @@ chmod 755 "$new_dispatcher"
 key_comment="${public_key##* }"
 key_blob="${public_key#* }"
 key_blob="${key_blob%% *}"
-line="from=\"$from_address\",command=\"$root/dispatch.sh\",restrict $public_key"
 comment_line="# $key_comment: written by setup:remote-target from $build_host, $written. Running it again changes it."
 
 # Every line of this build host's key goes — by its key, by its comment, and the

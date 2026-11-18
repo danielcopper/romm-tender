@@ -170,6 +170,7 @@ class TestTheSetupLogin:
             "host key shown romm-tender-dev.deck",
             f"password asked {_ADDRESS}",
             f"login {_ADDRESS} own",
+            f"login {_ADDRESS} key",
         ]
 
     def test_the_line_restricts_the_key_to_the_address_the_target_sees(
@@ -362,7 +363,7 @@ class TestRunAgain:
         second, _, err = remote.setup(capsys, "deck", f"deck@{_NEW_ADDRESS}")
 
         assert second == 0, err
-        assert log_lines(remote.world)[logged:] == [f"login {_NEW_ADDRESS} key"]
+        assert log_lines(remote.world)[logged:] == [f"login {_NEW_ADDRESS} key"] * 2
         assert f"    HostName {_NEW_ADDRESS}\n" in remote.config()
         assert _ADDRESS not in remote.config()
         assert remote.config().count("Host deck\n") == 1
@@ -387,7 +388,7 @@ class TestRunAgain:
         second, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
 
         assert second == 0, err
-        assert log_lines(remote.world)[logged:] == [f"login {_ADDRESS} key"]
+        assert log_lines(remote.world)[logged:] == [f"login {_ADDRESS} key"] * 2
         assert (root / "dispatch.sh").read_text(encoding="utf-8") == _DISPATCHER.read_text(encoding="utf-8")
         assert (root / "incoming").is_dir()
         assert remote.key_lines()[1] == _dispatcher_line(remote, "10.8.0.7")
@@ -455,7 +456,7 @@ class TestNoPasswordLogin:
         code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
 
         assert code == 0, err
-        assert log_lines(remote.world) == ["host key shown romm-tender-dev.deck", f"login {_ADDRESS} key"]
+        assert log_lines(remote.world) == ["host key shown romm-tender-dev.deck", *[f"login {_ADDRESS} key"] * 2]
         assert "Host deck\n" in remote.config()
         assert (remote.dev_dir / "known_hosts").read_text(encoding="utf-8") == f"romm-tender-dev.deck {_HOST_KEY}\n"
 
@@ -693,7 +694,7 @@ class TestTheKeyFirst:
         code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
 
         assert code == 0, err
-        (login,) = ssh_calls(remote.world)[calls:]
+        login, _ = ssh_calls(remote.world)[calls:]
         assert login["_offered"] == [str(remote.dev_dir / "id_ed25519")]
         assert login["identitiesonly"] == ["yes"]
         assert login["preferredauthentications"] == ["publickey"]
@@ -725,7 +726,7 @@ class TestTheKeyFirst:
         code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
 
         assert code == 0, err
-        (login,) = ssh_calls(remote.world)
+        login, _ = ssh_calls(remote.world)
         assert login["batchmode"] == ["no"]
         assert login["identitiesonly"] == ["yes"]
         assert login["preferredauthentications"] == ["publickey"]
@@ -739,13 +740,14 @@ class TestTheKeyFirst:
         code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
 
         assert code == 0, err
-        key_login, own_login = ssh_calls(remote.world)
+        key_login, own_login, _ = ssh_calls(remote.world)
         assert key_login["preferredauthentications"] == ["publickey"]
         assert "preferredauthentications" not in own_login
         assert log_lines(remote.world) == [
             "host key shown romm-tender-dev.deck",
             f"password asked {_ADDRESS}",
             f"login {_ADDRESS} own",
+            f"login {_ADDRESS} key",
         ]
 
     def test_a_refused_key_hands_over_to_the_users_own_login_which_repairs_the_target(
@@ -758,7 +760,7 @@ class TestTheKeyFirst:
         code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
 
         assert code == 0, err
-        key_login, own_login = ssh_calls(remote.world)[calls:]
+        key_login, own_login, _ = ssh_calls(remote.world)[calls:]
         assert key_login["identitiesonly"] == ["yes"]
         assert "identityfile" not in own_login
         assert own_login["batchmode"] == ["no"]
@@ -784,10 +786,12 @@ class TestTheKeyFirst:
 
         calls = ssh_calls(remote.world)
 
-        assert len(calls) == 3
+        assert len(calls) == 5
         for login in calls:
             assert login["controlmaster"] == ["no"]
             assert login["controlpath"] == ["none"]
+        installs = [calls[0], calls[2], calls[3]]
+        for login in installs:
             assert login["stricthostkeychecking"] == ["ask"]
 
     def test_a_key_without_its_public_half_is_refused_before_any_login(
@@ -1011,6 +1015,38 @@ class TestReadingWhatSshSaid:
         assert (self._classify(_STDERR[case]) or "").startswith("tender-dev: no SSH server answers at 192.168.1.20")
         assert not setup_remote_target.is_no_login(_STDERR[case])
 
+    _BEHIND_A_HOP = setup_remote_target.Destination(
+        text="deck", user="deck", hostname="192.168.1.20", port="22", proxy_jump="bastion", proxy_command=None
+    )
+
+    def test_the_targets_refusal_behind_a_hop_it_got_past_is_the_targets(self) -> None:
+        refused = subprocess.CompletedProcess(["ssh"], 255, "", _STDERR["denied"])
+
+        assert (
+            setup_remote_target.classify(
+                _STDERR["denied"],
+                name="deck",
+                destination=self._BEHIND_A_HOP,
+                known_hosts=Path("/build/known_hosts"),
+                trial_known_hosts=Path("/tmp/trial/known_hosts"),
+            )
+            is None
+        )
+        assert setup_remote_target.hand_over(refused, name="deck", destination=self._BEHIND_A_HOP) == "refused"
+
+    def test_no_server_named_on_no_host_behind_a_hop_is_the_targets_or_the_hops(self) -> None:
+        message = setup_remote_target.classify(
+            _STDERR["kex reset"],
+            name="deck",
+            destination=self._BEHIND_A_HOP,
+            known_hosts=Path("/build/known_hosts"),
+            trial_known_hosts=Path("/tmp/trial/known_hosts"),
+        )
+
+        assert (message or "").startswith(
+            "tender-dev: no SSH server answers at 192.168.1.20 port 22, or at the hop bastion"
+        )
+
     def test_a_name_that_does_not_resolve(self) -> None:
         assert (self._classify(_STDERR["unresolved"]) or "").startswith(
             "tender-dev: this machine cannot resolve 192.168.1.20"
@@ -1067,6 +1103,7 @@ class TestAKeyWhoseForcedCommandFails:
             f"login {_ADDRESS} key",
             f"password asked {_ADDRESS}",
             f"login {_ADDRESS} own",
+            f"login {_ADDRESS} key",
         ]
         assert installed.read_text(encoding="utf-8") == _DISPATCHER.read_text(encoding="utf-8")
 
@@ -1083,6 +1120,8 @@ class TestAKeyWhoseForcedCommandFails:
         assert "deck accepted the dev loop's key, but its forced command failed (ssh ended with 127)" in err
         assert "dispatch.sh: not found" in err
         assert "refused the dev loop's key" not in err
+        forced = err.index("its forced command failed")
+        assert forced < err.index(f"deck@{_ADDRESS} accepted no login") < err.index("Nothing was changed")
 
 
 class TestTheKeysLoginReadsNoConfigOfTheUsers:
@@ -1099,7 +1138,7 @@ class TestTheKeysLoginReadsNoConfigOfTheUsers:
         code, _, err = remote.setup(capsys, "deck", "deck")
 
         assert code == 0, err
-        first, second = ssh_calls(remote.world)
+        first, _, second, _ = ssh_calls(remote.world)
         assert first["_offered"] == ["~/.ssh/id_user"]
         assert "_config" not in first
         assert second["_offered"] == [str(remote.dev_dir / "id_ed25519")]
@@ -1138,6 +1177,131 @@ class TestASymlinkedAuthorizedKeys:
         assert lines[0] == "ssh-ed25519 AAAAothersKey someone@laptop"
         assert lines[2] == _dispatcher_line(remote, _SEEN_FROM)
         assert sorted(path.name for path in managed.parent.iterdir()) == ["authorized_keys"]
+
+    def test_a_relative_link_is_written_through_too(self, remote: Remote, capsys: pytest.CaptureFixture[str]) -> None:
+        managed = remote.target_home / "dotfiles" / "authorized_keys"
+        managed.parent.mkdir()
+        managed.write_text("ssh-ed25519 AAAAothersKey someone@laptop\n", encoding="utf-8")
+        remote.authorized_keys.parent.mkdir()
+        remote.authorized_keys.symlink_to(Path("..") / "dotfiles" / "authorized_keys")
+
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        assert code == 0, err
+        assert remote.authorized_keys.is_symlink()
+        assert managed.read_text(encoding="utf-8").splitlines()[2] == _dispatcher_line(remote, _SEEN_FROM)
+
+    @pytest.mark.skipif(os.geteuid() == 0, reason="root writes into a directory whatever its mode")
+    def test_a_link_into_a_place_that_cannot_be_written_stops_with_what_to_do(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        managed = remote.target_home / "store" / "authorized_keys"
+        managed.parent.mkdir()
+        managed.write_text("ssh-ed25519 AAAAothersKey someone@laptop\n", encoding="utf-8")
+        managed.parent.chmod(0o555)
+        remote.authorized_keys.parent.mkdir()
+        remote.authorized_keys.symlink_to(managed)
+
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        managed.parent.chmod(0o755)
+        assert code == 1
+        assert f"the setup stopped on deck: {managed.parent} cannot be written" in err
+        assert "add this line to it through whatever manages it" in err
+        assert "run the setup again" not in err
+        assert managed.read_text(encoding="utf-8") == "ssh-ed25519 AAAAothersKey someone@laptop\n"
+
+
+class TestTheCheckLogin:
+    """#2845 D3: a setup that installed ends with a login through the dev loop's own config."""
+
+    def test_a_setup_ends_with_the_check_through_the_dev_loops_own_config(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        assert code == 0, err
+        install, check = ssh_calls(remote.world)
+        assert "_config" not in install
+        assert "_config" in check
+        assert check["batchmode"] == ["yes"]
+        assert check["_offered"] == [check["_offered"][0]]
+        assert check["_offered"][0].endswith("/id_ed25519")
+        assert log_lines(remote.world)[-1] == f"login {_ADDRESS} key"
+        assert "deck is set up." in err
+
+    def _behind_a_hop_only_the_users_config_passes(self, remote: Remote) -> None:
+        remote.world.configs = {"deck": {"user": ["deck"], "hostname": [_ADDRESS], "proxyjump": ["bastion"]}}
+        remote.world.hop_failure = "denied"
+        remote.world.hop_fails_only_with_config = True
+
+    def _says_the_dev_loop_cannot_reach_it(self, code: int, err: str) -> None:
+        assert code == 1
+        assert "deck is set up, but the dev loop cannot reach it with its own config" in err
+        assert "jumper@bastion: Permission denied" in err
+        assert "carries none of your SSH config" in err
+        assert "deck is set up. It accepts" not in err
+
+    def test_a_first_setup_behind_a_hop_only_the_users_config_passes(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._behind_a_hop_only_the_users_config_passes(remote)
+
+        code, _, err = remote.setup(capsys, "deck", "deck")
+
+        self._says_the_dev_loop_cannot_reach_it(code, err)
+        assert "Host deck\n" in remote.config()
+        assert (remote.dev_dir / "id_ed25519").exists()
+
+    def test_a_rerun_handed_over_at_that_hop_says_the_same(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._behind_a_hop_only_the_users_config_passes(remote)
+        remote.setup(capsys, "deck", "deck")
+        calls = len(ssh_calls(remote.world))
+
+        code, _, err = remote.setup(capsys, "deck", "deck")
+
+        self._says_the_dev_loop_cannot_reach_it(code, err)
+        key_login, own_login, check = ssh_calls(remote.world)[calls:]
+        assert "_config" in key_login
+        assert "_config" not in own_login
+        assert "_config" in check
+        assert "refused the dev loop's key" not in err
+
+    def test_a_hop_failure_other_than_a_refusal_in_the_keys_login_stands(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """#2845 D2: only a hop's refusal hands over to the user's own login."""
+        remote.world.configs = {"deck": {"user": ["deck"], "hostname": [_ADDRESS], "proxyjump": ["bastion"]}}
+        remote.setup(capsys, "deck", "deck")
+        remote.world.hop_failure = "refused"
+        remote.world.hop_fails_only_with_config = True
+        calls = len(ssh_calls(remote.world))
+
+        code, _, err = remote.setup(capsys, "deck", "deck")
+
+        assert code == 1
+        assert "no SSH server answers at the hop bastion" in err
+        assert len(ssh_calls(remote.world)) == calls + 1
+
+    def test_a_key_login_that_started_and_stopped_hands_nothing_over(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str], tmp_path: Path
+    ) -> None:
+        remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+        with open(remote.authorized_keys, "a", encoding="utf-8") as keys:
+            keys.write("ssh-ed25519 AAAAothersKey someone@laptop\nssh-ed25519 AAAAanotherOne other@desktop\n")
+        _short_awk(tmp_path / "tools" / "fakes" / "awk")
+        calls = len(ssh_calls(remote.world))
+        logged = len(log_lines(remote.world))
+
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        assert code == 1
+        assert "the setup stopped on deck: the new" in err
+        assert "forced command failed" not in err
+        assert len(ssh_calls(remote.world)) == calls + 1
+        assert log_lines(remote.world)[logged:] == [f"login {_ADDRESS} key"]
 
 
 class TestMoreHops:

@@ -24,7 +24,8 @@ import socket
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Literal
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 DISPATCHER = REPO / "scripts" / "dev_dispatch.sh"
@@ -60,7 +61,8 @@ SSH_FAILED = 255
 # What ssh says on stderr for each failure that ends a login before it starts,
 # in the order they are tested: a host key mismatch also prints "Host key
 # verification failed", and a refused login can end in "Connection closed".
-_HOST_KEY_CHANGED = re.compile(r"REMOTE HOST IDENTIFICATION HAS CHANGED|Host key for \S+ has changed")
+_HOST_KEY_CHANGED_FOR = re.compile(r"Host key for (\S+) has changed")
+_HOST_KEY_CHANGED = re.compile(r"REMOTE HOST IDENTIFICATION HAS CHANGED|" + _HOST_KEY_CHANGED_FOR.pattern)
 _OFFENDING_FILE = re.compile(r"Offending \S+ key in (\S+):\d+")
 _HOST_KEY_NOT_ACCEPTED = re.compile(r"Host key verification failed")
 _KEY_REFUSED = re.compile(r"Permission denied \(")
@@ -74,10 +76,10 @@ _NO_SERVER = re.compile(
 # Where ssh names the host a failure is about: a refused login as user@host, a
 # connection as "connect to host <host> port", a name and a changed key by it.
 _NAMED_HOSTS = (
-    re.compile(r"\S+@(\S+): Permission denied \("),
+    re.compile(r"\S+@(\S+): " + _KEY_REFUSED.pattern),
     re.compile(r"connect to host (\S+) port"),
     _UNRESOLVED,
-    re.compile(r"Host key for (\S+) has changed"),
+    _HOST_KEY_CHANGED_FOR,
 )
 
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
@@ -108,6 +110,8 @@ class Destination:
     port: str
     proxy_jump: str | None
     proxy_command: str | None
+    jump: str | None = None
+    """:attr:`proxy_jump` with every hop spelled out (:func:`resolve_jump`), once :func:`with_jump` has run."""
 
     @property
     def via(self) -> str | None:
@@ -213,6 +217,13 @@ def resolve_jump(proxy_jump: str) -> str:
     return ",".join(hops)
 
 
+def with_jump(destination: Destination) -> Destination:
+    """*destination* with its ProxyJump resolved, for :func:`config_entry` to write."""
+    if destination.proxy_jump is None:
+        return destination
+    return replace(destination, jump=resolve_jump(destination.proxy_jump))
+
+
 def split_hop(hop: str) -> tuple[str | None, str, str | None]:
     """One ProxyJump hop, ``[ssh://][user@]host[:port]``, as its user, host and port.
 
@@ -284,7 +295,11 @@ def install_script(*, public_key: str, build_host: str, written: str, default_fr
     return template.replace("# @VALUES@", values, 1).replace("@DISPATCHER@", read_text(DISPATCHER).rstrip("\n"), 1)
 
 
-def failed_where(stderr: str, *, name: str, destination: Destination) -> str:
+Where = Literal["target", "hop", "either"]
+HandOver = Literal["refused", "forced command", "hop"]
+
+
+def failed_where(stderr: str, *, name: str, destination: Destination) -> Where:
     """Whose failure ssh reported: ``target``, ``hop``, or ``either`` where it names no host."""
     if not destination.via:
         return "target"
@@ -300,9 +315,9 @@ def classify(
     """What to tell the user for an ``ssh`` that ended before the login.
 
     ``None`` for the target's refusal of the login, which ``no_login_message``
-    words, and for anything that is no failure of ssh's. A failure ssh names on
-    a hop is worded as the hop's; one it names on no host, as the target's or
-    the hop's.
+    words, and for anything no pattern here knows — a failure that is not
+    ssh's, or one of ssh's worded otherwise. A failure ssh names on a hop is
+    worded as the hop's; one it names on no host, as the target's or the hop's.
     """
     host = destination.hostname
     where = failed_where(stderr, name=name, destination=destination)
@@ -333,7 +348,7 @@ def classify(
             return f"tender-dev: {hop} accepted no login from this machine.\n  Check that hop with your own ssh."
         return None
     unresolved = _UNRESOLVED.search(stderr)
-    if unresolved is not None and destination.via and unresolved.group(1) != host:
+    if unresolved is not None and where == "hop":
         return (
             f"tender-dev: this machine cannot resolve {unresolved.group(1)}, a hop on the way to {name}"
             f" ({destination.via}).\n"
@@ -383,18 +398,29 @@ def route_source(destination: Destination) -> str:
     return words[words.index("src") + 1]
 
 
+def after_marker(text: str, marker: str) -> str | None:
+    """What follows *marker* on the first line of *text* that starts with it."""
+    return next((line[len(marker) :] for line in text.splitlines() if line.startswith(marker)), None)
+
+
 def failure_message(
     result: subprocess.CompletedProcess[str],
     *,
     name: str,
     destination: Destination,
-    key_refused: bool,
+    handed_over: HandOver | None,
+    key_result: subprocess.CompletedProcess[str] | None,
     known_hosts: pathlib.Path,
     trial_known_hosts: pathlib.Path,
 ) -> str:
-    """What to tell the user for a setup login that did not end with the install done."""
+    """What to tell the user for a setup that did not end with the install done.
+
+    *result* is the last login's; *key_result* the key's login, when it handed
+    over to the user's own for *handed_over*. A key whose forced command failed
+    is told first, then why the user's own login did not install either.
+    """
     ssh_said = result.stderr.rstrip()
-    stopped = next((line[len(STOPPED) :] for line in result.stderr.splitlines() if line.startswith(STOPPED)), None)
+    stopped = after_marker(result.stderr, STOPPED)
     if stopped is not None:
         return f"tender-dev: the setup stopped on {name}: {stopped}\n  This machine is unchanged."
     if STARTED in result.stdout.splitlines():
@@ -402,6 +428,7 @@ def failure_message(
             f"tender-dev: the setup stopped part-way on {name} (ssh ended with {result.returncode}):\n{ssh_said}\n"
             "  This machine is unchanged; run the setup again to finish it."
         )
+    failure = None
     if result.returncode == SSH_FAILED:
         failure = classify(
             result.stderr,
@@ -411,13 +438,16 @@ def failure_message(
             trial_known_hosts=trial_known_hosts,
         )
         if failure is None and is_no_login(result.stderr):
-            failure = no_login_message(destination, key_refused=key_refused)
-        if failure is not None:
-            return failure + "\n  Nothing was changed, here or on the target."
-    return (
-        f"tender-dev: the setup did not start on {name} (ssh ended with {result.returncode}):\n{ssh_said}\n"
-        "  Nothing was changed, here or on the target."
-    )
+            failure = no_login_message(destination, key_refused=handed_over == "refused")
+    if failure is None:
+        failure = f"tender-dev: the setup did not start on {name} (ssh ended with {result.returncode}):\n{ssh_said}"
+    if handed_over == "forced command" and key_result is not None:
+        failure = (
+            f"tender-dev: {name} accepted the dev loop's key, but its forced command failed"
+            f" (ssh ended with {key_result.returncode}):\n{key_result.stderr.rstrip()}\n"
+            "  Your own login, tried next, did not install either:\n" + failure
+        )
+    return failure + "\n  Nothing was changed, here or on the target."
 
 
 def no_login_message(destination: Destination, *, key_refused: bool) -> str:
@@ -456,18 +486,20 @@ def write_atomically(path: pathlib.Path, text: str) -> None:
 def config_entry(name: str, destination: Destination, *, key: pathlib.Path, known_hosts: pathlib.Path) -> list[str]:
     """The lines of a target's entry in a dev loop SSH config, without its comment.
 
-    A ProxyJump goes in resolved (:func:`resolve_jump`); a ProxyCommand as
+    A ProxyJump goes in as :func:`with_jump` resolved it; a ProxyCommand as
     ``ssh -G`` printed it, a ``%h`` or ``%p`` left in it expanding against this
     entry's HostName and Port when it runs.
     """
+    if destination.proxy_jump and not destination.jump:
+        raise ValueError("config_entry needs the jump resolved: with_jump(destination)")
     lines = [
         f"Host {name}",
         f"    HostName {destination.hostname}",
         f"    Port {destination.port}",
         f"    User {destination.user}",
     ]
-    if destination.proxy_jump:
-        lines.append(f"    ProxyJump {resolve_jump(destination.proxy_jump)}")
+    if destination.jump:
+        lines.append(f"    ProxyJump {destination.jump}")
     elif destination.proxy_command:
         lines.append(f"    ProxyCommand {destination.proxy_command}")
     lines += [
@@ -601,17 +633,19 @@ def setup_login(
 
 def installed_from(result: subprocess.CompletedProcess[str]) -> str | None:
     """The address the install restricted the key to, once it ran to its end."""
-    return next((line[len(INSTALLED) :] for line in result.stdout.splitlines() if line.startswith(INSTALLED)), None)
+    return after_marker(result.stdout, INSTALLED)
 
 
-def hand_over(result: subprocess.CompletedProcess[str], *, name: str, destination: Destination) -> str | None:
+def hand_over(result: subprocess.CompletedProcess[str], *, name: str, destination: Destination) -> HandOver | None:
     """Why the key's login gives way to the user's own, or ``None`` when its result stands.
 
     ``refused`` for the target's refusal of the key; ``forced command`` for a
     key the target took whose forced command ran no install (a dispatcher gone,
-    or one that refuses the setup request); ``hop`` for a failure on a hop, which
-    the user's own config may pass. Any other failure, and an install that
-    started, stand: the user's own login would meet them too.
+    or one that refuses the setup request); ``hop`` for a hop's refusal of the
+    login, which the user's own config may pass (#2845 D2). An install that started
+    stands, and so does every other failure, which the user's own login would
+    mostly meet too; one only the user's config avoids is the check login's to
+    find (:func:`check_login`).
     """
     if installed_from(result) is not None or STARTED in result.stdout.splitlines():
         return None
@@ -620,16 +654,29 @@ def hand_over(result: subprocess.CompletedProcess[str], *, name: str, destinatio
     where = failed_where(result.stderr, name=name, destination=destination)
     if where == "target" and _KEY_REFUSED.search(result.stderr):
         return "refused"
-    if where == "hop":
+    if where == "hop" and _NO_LOGIN.search(result.stderr):
         return "hop"
     return None
 
 
+def check_login(name: str, config: pathlib.Path) -> subprocess.CompletedProcess[str]:
+    """A login to *name* through the dev loop's own *config* alone, sending an empty setup request.
+
+    The host key is recorded by then, so it runs in batch mode and asks for
+    nothing: it gets in exactly where the dev loop will.
+    """
+    command = ["ssh", "-F", str(config), "-T"]
+    for option in ("BatchMode=yes", "ControlMaster=no", "ControlPath=none"):
+        command += ["-o", option]
+    return run([*command, "--", name, "sh", "-s"], stdin="")
+
+
 def run_setup(name: str, destination_text: str) -> int:
-    destination = resolve(destination_text)
+    destination = with_jump(resolve(destination_text))
     directory = config_dir()
     key = existing_key(directory)
     known_hosts = directory / KNOWN_HOSTS_NAME
+    config_path = directory / SSH_CONFIG_NAME
     build_host = build_host_name()
     written = stamp()
     final_entry = config_entry(name, destination, key=directory / KEY_NAME, known_hosts=known_hosts)
@@ -663,7 +710,7 @@ def run_setup(name: str, destination_text: str) -> int:
                 host_key_recorded=host_key_recorded,
             )
 
-        handed_over = None
+        handed_over: HandOver | None = None
         key_result = None
         if key is not None:
             key_config = scratch / SSH_CONFIG_NAME
@@ -675,20 +722,17 @@ def run_setup(name: str, destination_text: str) -> int:
 
         installed = installed_from(result)
         if installed is None:
-            message = failure_message(
-                result,
-                name=name,
-                destination=destination,
-                key_refused=handed_over == "refused",
-                known_hosts=known_hosts,
-                trial_known_hosts=trial_known_hosts,
-            )
-            if handed_over == "forced command" and key_result is not None:
-                message += (
-                    f"\n  {name} accepted the dev loop's key, but its forced command failed"
-                    f" (ssh ended with {key_result.returncode}):\n{key_result.stderr.rstrip()}"
+            raise SetupError(
+                failure_message(
+                    result,
+                    name=name,
+                    destination=destination,
+                    handed_over=handed_over,
+                    key_result=key_result,
+                    known_hosts=known_hosts,
+                    trial_known_hosts=trial_known_hosts,
                 )
-            raise SetupError(message)
+            )
 
         try:
             if new_key is not None:
@@ -696,7 +740,6 @@ def run_setup(name: str, destination_text: str) -> int:
             trial = trial_known_hosts.read_text(encoding="utf-8")
             if trial != recorded:
                 write_atomically(known_hosts, trial)
-            config_path = directory / SSH_CONFIG_NAME
             current = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
             config = updated_config(current, name, final_entry, entry_comment(name, build_host, written))
             if config != current:
@@ -709,6 +752,14 @@ def run_setup(name: str, destination_text: str) -> int:
                 "  Run the setup again to finish it."
             ) from error
 
+    check = check_login(name, config_path)
+    if check.returncode != 0:
+        raise SetupError(
+            f"tender-dev: {name} is set up, but the dev loop cannot reach it with its own config"
+            f" (ssh ended with {check.returncode}):\n{check.stderr.rstrip()}\n"
+            f"  {config_path} carries none of your SSH config, a hop's settings among it. Its entry for {name}"
+            " is written all the same."
+        )
     print(
         f"tender-dev: {name} is set up. It accepts this machine's key from {installed} only — the address it"
         " sees this machine at; if that changes, run the setup again.",
