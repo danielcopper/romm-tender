@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from domain.emulator_choice import ResolvedEmulator, choose_emulator
+from domain.emulator_choice import ResolvedEmulator, choose_emulator, starting_entry
 from domain.emulator_commands import option_for_label
 from domain.emulator_pick import StoredPick, game_platform_pick, pick_for, source_kind
 
@@ -79,8 +79,7 @@ class ActiveCoreResolver:
         effect, where the system lists none, where no system is found in the
         answering source, or where the catalogue cannot be read.
         """
-        resolved = self.resolve_rom(rom_id, reading=reading)
-        return resolved.choice.option if resolved is not None else None
+        return starting_entry(self.resolve_rom(rom_id, reading=reading))
 
     def resolve_rom(self, rom_id: int, *, reading: SourcesReading | None = None) -> ResolvedEmulator | None:
         """Return the ROM ``rom_id``'s emulator choice and its options, or ``None`` with no system to ask.
