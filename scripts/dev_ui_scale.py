@@ -1283,14 +1283,15 @@ def _verify_restore(prior: SteamScaleState | None) -> bool:
 
     Verified against the live settings store and the live ``devicePixelRatio`` — never
     against ``config.vdf``, whose ``AutoScaleFactor`` is not re-flushed in-session and so
-    cannot tell an auto restore from a forced scale.
+    cannot tell an auto restore from a forced scale. A reading that failed, or no prior
+    state to compare with, verifies nothing.
     """
     time.sleep(_SETTLE_SEC)
     dpr = _current_dpr()
     live = _read_live_scale_state()
     now = "an unreadable state" if live is None else SteamScaleState(live[0], live[1], dpr, "live").describe()
     print(f"Verified: Steam is on {now}, rendering at dpr {'unknown' if dpr is None else dpr}")
-    if prior is None:
+    if prior is None or live is None or (prior.dpr is not None and dpr is None):
         return False
 
     auto_drifted = live is not None and live[0] != prior.auto
