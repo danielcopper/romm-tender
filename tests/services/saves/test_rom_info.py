@@ -33,6 +33,15 @@ def _asked(svc) -> list[tuple[str, str, str | None]]:
     return cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls
 
 
+def _resolutions(svc) -> list[int]:
+    """Every resolution of a ROM's entry, as the fake recorded them.
+
+    One where no question is put changes no answer; it only reads the database
+    again and repeats a stale pick's warning, so nothing but this list sees it.
+    """
+    return cast("FakeActiveCoreResolver", svc._rom_info._active_core).emulator_calls
+
+
 def _seed_amiga_inside_content(svc) -> None:
     """Make the fake answer for Amiga the way PUAE really does for an ``.adf``.
 
@@ -197,6 +206,7 @@ class TestFindSaveFiles:
         answer = svc._rom_info.save_answer(80)
 
         assert _asked(svc) == []
+        assert _resolutions(svc) == []
         assert answer.state == "unestablished"
         assert answer.syncable is False
 
@@ -216,6 +226,7 @@ class TestFindSaveFiles:
 
         assert _asked(svc) == []
         assert asked_folders == []
+        assert _resolutions(svc) == []
         assert answer.state == "unestablished"
         assert answer.syncable is False
 
@@ -227,28 +238,21 @@ class TestFindSaveFiles:
         answer = svc._rom_info.save_answer(999)
 
         assert _asked(svc) == []
+        assert _resolutions(svc) == []
         assert answer.state == "unestablished"
         assert answer.syncable is False
 
-    @pytest.mark.parametrize("cause", ["no_row", "no_name", "no_system", "no_folder"])
-    def test_a_rom_with_no_path_to_ask_about_resolves_no_emulator(self, tmp_path, cause):
-        """Resolving reads the database and warns of a stale pick again, for an entry no question would be put to."""
+    def test_an_uninstalled_rom_with_no_name_asks_nothing(self, tmp_path):
+        # No name, so no extension: there is no path to put the question about.
         svc, _ = make_service(tmp_path)
-        rom_id = 999 if cause == "no_row" else 80
-        if cause != "no_row":
-            _seed_rom(svc, 80, platform_slug="commodore-amiga", fs_name="" if cause == "no_name" else "Turrican.adf")
-        if cause == "no_system":
-            platform = PlatformSystem(NO_SYSTEM, "commodore-amiga", "Amiga", system="amiga", source=RETRODECK_SOURCE)
-            svc._rom_info._platform_systems = FakePlatformSystems(answers={"commodore-amiga": platform})
-        if cause == "no_folder":
-            svc._rom_info._retrodeck_folders = FakeRetroDeckFolders(
-                roms=str(tmp_path / "retrodeck" / "roms"), download_refusal=switched_off(GAME_DOWNLOAD)
-            )
+        _seed_rom(svc, 80, platform_slug="commodore-amiga", fs_name="")
 
-        answer = svc._rom_info.save_answer(rom_id)
+        answer = svc._rom_info.save_answer(80)
 
+        assert _asked(svc) == []
+        assert _resolutions(svc) == []
         assert answer.state == "unestablished"
-        assert cast("FakeActiveCoreResolver", svc._rom_info._active_core).emulator_calls == []
+        assert answer.syncable is False
 
     def test_the_question_carries_the_roms_own_content_path(self, tmp_path):
         """The answer turns on the content file's extension, so the real path goes out.
