@@ -13,10 +13,10 @@ and compares the level with the resolver's verdict, and `tests/adapters/test_lau
 question among them through Tender's launch reading; each docstring says what it compares and what it leaves out.
 `tests/adapters/test_atlas_launchability.py` asks a few of the launch machines (`machines/disc-opens.json`) one by one.
 `tests/adapters/test_platform_table_vectors.py` runs the platform table's translations
-(`platform-table/translations.json`) and every recorded platform question (`platform_systems_query`, in
-`machines/system-pairs.json` and `machines/named-cases.json`) through Tender's reading of the platform question, and
-`tests/test_vendored_atlas.py` pins the table's version (#2223 D16). The other files come along because the folder is
-copied whole.
+(`platform-table/translations.json`) and every recorded platform question, by one pair (`platform_systems_query`, in
+`machines/system-pairs.json` and `machines/named-cases.json`) and by several pairs (`platform_pairs_query`, in
+`machines/named-cases.json`), through Tender's reading of the platform question, and `tests/test_vendored_atlas.py` pins
+the table's version (#2223 D16). The other files come along because the folder is copied whole.
 
 The copy lives under `tests/` rather than `backend/_vendor/`, because everything under `backend/` ships to users
 ([#2585](https://github.com/danielcopper/romm-tender/issues/2585) D1). It is licensed as the resolver is, MIT

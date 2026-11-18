@@ -3,8 +3,9 @@
 Two families of the vendored copy (``tests/adapters/atlas_vectors/``) state
 what the table answers. ``platform-table/translations.json`` is pairs in and a
 translation out; ``machines/*.json`` holds platform questions put to a whole
-recorded machine (``platform_systems_query``). Each is asked live of the
-vendored resolver and compared, in the projection the copy's
+recorded machine, by one pair (``platform_systems_query``) or by several
+asked together (``platform_pairs_query``, the form Tender asks in). Each is
+asked live of the vendored resolver and compared, in the projection the copy's
 ``vectors/README.md`` defines, with what the vector recorded — so a release
 that moves a platform's mapping shows as a vector diff — and its answer is read
 through :func:`adapters.atlas_platforms.read_platform_answer`, the one reading
@@ -50,12 +51,17 @@ def _translation_vectors() -> list[dict[str, Any]]:
     return json.loads(_TRANSLATIONS.read_text(encoding="utf-8"))["vectors"]
 
 
+# Each recorded form of the platform question: the vector's query key, and the answer's key in its expectations.
+_ONE_PAIR = ("platform_systems_query", "systems_for_platform")
+_SEVERAL_PAIRS = ("platform_pairs_query", "systems_for_platforms")
+
+
 def _platform_question_vectors() -> list[tuple[str, dict[str, Any]]]:
     return [
         (path.stem, vector)
         for path in sorted(MACHINES.glob("*.json"))
         for vector in json.loads(path.read_text(encoding="utf-8"))["vectors"]
-        if "platform_systems_query" in vector["input"]
+        if _ONE_PAIR[0] in vector["input"] or _SEVERAL_PAIRS[0] in vector["input"]
     ]
 
 
@@ -93,7 +99,8 @@ class TestTheCopy:
 
     def test_the_copy_holds_both_families(self):
         """A family that stops shipping would pass on nothing."""
-        assert (len(_TRANSLATION_VECTORS), len(_PLATFORM_VECTORS)) == (29, 36)
+        several = sum(1 for _, vector in _PLATFORM_VECTORS if _SEVERAL_PAIRS[0] in vector["input"])
+        assert (len(_TRANSLATION_VECTORS), len(_PLATFORM_VECTORS), several) == (29, 40, 4)
 
 
 @pytest.mark.parametrize("vector", [pytest.param(v, id=v["name"]) for v in _TRANSLATION_VECTORS])
@@ -113,20 +120,30 @@ class TestTheTranslations:
 
 @pytest.mark.parametrize("vector", [pytest.param(v, id=f"{stem}:{v['name']}") for stem, v in _PLATFORM_VECTORS])
 class TestThePlatformQuestionOnRecordedMachines:
+    """Both recorded forms: one pair, and several pairs asked together — the form Tender asks in."""
+
     def _answer(self, vector: dict[str, Any]) -> Any:
         inp = vector["input"]
-        query = inp["platform_systems_query"]
+        several = _SEVERAL_PAIRS[0] in inp
+        query = inp[_SEVERAL_PAIRS[0] if several else _ONE_PAIR[0]]
         installation = select(atlas.detect(inp["home"], fixture_machine(inp)), query.get("installation"))
+        if several:
+            return installation.systems_for_platforms(_pairs(query["pairs"]))
         return installation.systems_for_platform(query["vocabulary"], query["value"])
+
+    @staticmethod
+    def _expected(vector: dict[str, Any]) -> dict[str, Any]:
+        key = _SEVERAL_PAIRS[1] if _SEVERAL_PAIRS[0] in vector["input"] else _ONE_PAIR[1]
+        return vector["expected"][key]
 
     def test_the_live_answer_is_the_recorded_one(self, vector):
         contract = platform_systems_contract(self._answer(vector))
         projected = {**contract, "translation": translation_projection(contract["translation"])}
 
-        assert projected == vector["expected"]["systems_for_platform"]
+        assert projected == self._expected(vector)
 
     def test_tender_reads_the_systems_the_answer_states_and_picks_none(self, vector):
-        expected = vector["expected"]["systems_for_platform"]
+        expected = self._expected(vector)
 
         assert read_platform_answer(self._answer(vector)) == _expected_reading(
             expected["translation"], expected["matches"]
