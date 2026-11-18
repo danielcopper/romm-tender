@@ -2216,12 +2216,15 @@ reading of the file ended without a take or a refusal (its `unestablished` verdi
 own boot read as far as it goes, a loader that takes the extension and then reads content the resolver does not, an
 extension the emulator's builds disagree on, a folder handed to a core whose way of taking it the resolver does not
 follow — the verdict is not established, Play stays on, and `statements` names what was not established; nothing says
-the game can start (#2195 D2, D40, D41 as changed 2026-11-18). A system that resolved to no one system the source holds
-(`resolution.status` other than `resolved`) is not established for that reason: `systems_several` where several of its
-systems answer and the resolver names none, `system_unknown` otherwise. A file the frontend's scan would not list under
-its name (`frontend-name-unscanned`) is a statement of its own beside a start or a verdict not established, and a folder
-whose files the entry would take as games of their own (`entry-directory-holds`) another; beside a refusal both ride the
-answer's `statements` and the page words neither; the resolver no longer answers "not a launch file".
+the game can start (#2195 D2, D40, D41 as changed 2026-11-18). The page always says first that whether the game starts
+cannot be established, with its reason, where no statement of its own says what could not be; a note on how the frontend
+lists the file, or on what a folder holds, follows it and never stands in its place. A system that resolved to no one
+system the source holds (`resolution.status` other than `resolved`) is not established for that reason:
+`systems_several` where several of its systems answer and the resolver names none, `system_unknown` otherwise. A file
+the frontend's scan would not list under its name (`frontend-name-unscanned`) is a statement of its own beside a start
+or a verdict not established, and a folder whose files the entry would take as games of their own
+(`entry-directory-holds`) another; beside a refusal both ride the answer's `statements` and the page words neither; the
+resolver no longer answers "not a launch file".
 
 **Where the resolver reads the files a disc file opens**, each failure of that open carries the course the resolver
 states for it (`effect`), and Tender reads it by that alone
@@ -2231,16 +2234,16 @@ a failure whose course is not established is said as not established, as is anyt
 Genesis Plus GX not reading every disc a playlist lists is said beside the start the same way.
 
 **Every statement is said** (#2698 D8): beside a start, `statements` carries each one Tender words, in the resolver's
-caveat order — the format not established (#2195 D41) and the archive whose contents were not read among them; beside a
-refusal, whose stop is `reason`, and beside a verdict not established, it carries each file the emulator would go on
-without, what else it is established to do, and each thing the resolver could not establish, in the same order. On a
-start `reason` holds the first statement but the format and archive notes; what a start says is `statements`. Which code
-is which is `adapters/atlas_catalogue.py`'s (`_REFUSED_BECAUSE`, `_OPEN_FAILED_BECAUSE`, `_STOPPED_SHORT_BECAUSE`,
-`_STARTS_WITH_A_NOTE_BECAUSE`, `_STARTS_ALSO_SAYS`), and so is which statement names a file. The resolver's boot facts
-themselves (`boots`) are not read until the direct start does (D38), and the list of files a disc file opens (`opens`)
-is not read at all. Every recorded launch machine of the resolver is run through this reading by
-`tests/adapters/test_launch_vectors.py` (#2698 D6), which holds Tender's judgement to the resolver's verdict and stated
-`effect`.
+caveat order — what the reading of the file stopped short of (the format not established, #2195 D41, among it) and the
+archive whose contents were not read among them; beside a refusal, whose stop is `reason`, and beside a verdict not
+established, it carries each file the emulator would go on without, what else it is established to do, and each thing
+the resolver could not establish, in the same order. On a start `reason` holds the first statement but the format and
+archive notes; what a start says is `statements`. Which code is which is `adapters/atlas_catalogue.py`'s
+(`_REFUSED_BECAUSE`, `_OPEN_FAILED_BECAUSE`, `_STOPPED_SHORT_BECAUSE`, `_STARTS_WITH_A_NOTE_BECAUSE`,
+`_STARTS_ALSO_SAYS`), and so is which statement names a file. The resolver's boot facts themselves (`boots`) are not
+read until the direct start does (D38), and the list of files a disc file opens (`opens`) is not read at all. Every
+recorded launch machine of the resolver is run through this reading by `tests/adapters/test_launch_vectors.py` (#2698
+D6), which holds Tender's judgement to the resolver's verdict and stated `effect`.
 
 **What each verdict does** (D2): which verdicts refuse a start, and each one's words, are
 `frontend/src/utils/gameLaunch.ts`'s. A verdict that refuses disables Play with its own sentence, and Steam's own Play

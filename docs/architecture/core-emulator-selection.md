@@ -245,18 +245,20 @@ RomM names a platform by a slug of its own and keeps its games in a folder of it
 system a source declares (`psx` happens to be, `new-nintendo-3ds` is not), so the system a platform's games belong to is
 the **source's own answer**: the resolver's platform question, `systems_for_platforms`, asked with exactly two (source,
 key) pairs — RomM's slug in RomM's source, `("romm", slug)`, and the platform's folder as a bare folder name,
-`("folder", fs_slug)` — taken from the kept platform record below
-([#2217](https://github.com/danielcopper/romm-tender/issues/2217) D16). The same pairs are asked for every question and
-every source; RomM's ids are kept but never sent. A platform kept without its folder (a record from before the folder
-was kept, or one RomM's listing does not name) is asked by its slug alone. The resolver translates the pairs through its
-platform table and answers in the asked source's own systems, so a system the user added to a catalogue by hand is
-answered through its platform tag, and nothing in Tender holds a table of platforms or translates a system name.
-`adapters/atlas_platforms.py` asks the question and reads the answer (`read_platform_answer`): whether the resolver can
-match the platform at all is its translation's intersection, and each matching system's status reads into Tender's own —
-switched on (declared), switched off (disabled) or not set up on this machine (absent).
-`domain/platform_system.py::matched_state` says what the matches come to. An answer carrying a status the adapter does
-not read is never taken as absent: the platform's system is then not established (`unavailable`), as where the question
-raised ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D19).
+`("folder", fs_slug)`. **The folder is the caller's**: the one a game lies in on RomM (its `platform_fs_slug`, kept on
+`roms`), or the one a page is about — never another folder that shares the slug, since RomM folds `megadrive` and
+`megadrivejp` into `genesis` and the two folders are different systems
+([#2217](https://github.com/danielcopper/romm-tender/issues/2217) D16, changed 2026-11-18). `PlatformKeys` carries the
+two from every caller. The same pairs are asked for every question and every source; RomM's ids are kept but never sent.
+A caller with no folder asks by the slug alone. The resolver translates the pairs through its platform table and answers
+in the asked source's own systems, so a system the user added to a catalogue by hand is answered through its platform
+tag, and nothing in Tender holds a table of platforms or translates a system name. `adapters/atlas_platforms.py` asks
+the question and reads the answer (`read_platform_answer`): whether the resolver can match the platform at all is its
+translation's intersection, and each matching system's status reads into Tender's own — switched on (declared), switched
+off (disabled) or not set up on this machine (absent). `domain/platform_system.py::matched_state` says what the matches
+come to. An answer carrying a status the adapter does not read is never taken as absent: the platform's system is then
+not established (`unavailable`), as where the question raised
+([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D19).
 
 **Which answer is taken.** One switched-on system is **found**, and every later question about the platform's games
 names it by the pair the answer named it with — the emulator list, the launch, the BIOS answer, a save's place and the
@@ -270,7 +272,9 @@ into RetroDECK and an adoption, which land in one system's folder, are refused u
 library ([#2223](https://github.com/danielcopper/romm-tender/issues/2223),
 [#2738](https://github.com/danielcopper/romm-tender/issues/2738)), and the refusal, the emulator list and the platform's
 pages say **"_Source_ has several systems for _platform_ (_systems_), so Tender cannot download its games yet."**
-(`platform_systems_several`). Choosing the system for the link is the user's, in a view that comes later.
+(`platform_systems_several`). Its BIOS downloads land in Tender's firmware store and are linked nowhere, since a link
+lands in one system's place, and the platform's BIOS answer says why (`store_only`). Choosing the system for the link is
+the user's, in a view that comes later.
 
 **Where there is none.** A platform with no system to use says which of five cases holds, each in a sentence of its own
 ([#2751](https://github.com/danielcopper/romm-tender/issues/2751) D2):
@@ -284,17 +288,18 @@ pages say **"_Source_ has several systems for _platform_ (_systems_), so Tender 
   cannot download its games."**;
 - it has one, and this machine has not set it up (`platform_system_not_here`): **"_Source_ has a system for _platform_
   (_systems_), but it is not set up on this machine, so Tender cannot download its games."**;
-- every one it has is switched off in the catalogue's comments (`platform_system_off`): **"System _system_ is switched
-  off in _source_."**
+- none it has is switched on, and one or more is switched off in the catalogue's comments — any other it has not set up
+  here (`platform_system_off`): **"System _system_ is switched off in _source_."**
 
 Several switched-on systems are a reason of their own, `platform_systems_several` (above). _platform_ there, and
 wherever else the platform's system names the platform — the pages that show the system, and a download's queue entry
-and every frame and event it sends — is the name the `platform_names` cache holds for the `fs_slug` of the platform kept
-for that slug (for an entry kept before it recorded one, for the slug), else the `name` kept with it (below), else the
-slug itself ([#2573](https://github.com/danielcopper/romm-tender/issues/2573) D1). The emulator list's reason is then
-that case's, nothing is downloaded, and the platform's BIOS download and an adoption's replace are refused the same way.
-Every other use keeps a state it already has: an uninstalled game's save answer is not established, the search for a
-copy already on disk finds nothing, and the launch is not established.
+and every frame and event it sends — is the name the `platform_names` cache holds for the folder it was asked with
+(without one, for the `fs_slug` of the record kept for the slug, or for an entry kept before it recorded one, for the
+slug), else the `name` kept with the record (below), else the folder or the slug itself
+([#2573](https://github.com/danielcopper/romm-tender/issues/2573) D1). The emulator list's reason is then that case's,
+nothing is downloaded, and the platform's BIOS download and an adoption's replace are refused the same way. Every other
+use keeps a state it already has: an uninstalled game's save answer is not established, the search for a copy already on
+disk finds nothing, and the launch is not established.
 
 **Each source is asked for itself.** A download, and every question about where one would land — an uninstalled game's
 save answer, whether the target is taken, the search for a copy already there, an adoption's target — asks
@@ -317,9 +322,9 @@ A platform RomM marks `is_identified: false` is asked the same way, its slug bei
 ([#2217](https://github.com/danielcopper/romm-tender/issues/2217) D18). A listed platform without a folder is not kept.
 The value is replaced at the start of every sync from RomM's listing (`PlatformSystemService.replace_listing`, the
 value's one owner; a failed write is logged and leaves the run alone); one kept before it was keyed by folder is read as
-it stands — each key as the slug it was kept under, the new fields empty — until that sync replaces it. A platform is
-found in it by its slug, the console's identity the question is put by; where several folders share a slug, the last
-listed answers (`domain/platform_system.py::kept_by_slug` says why that changes no question). Where none is kept for a
+it stands — each key as the slug it was kept under, the new fields empty — until that sync replaces it. A platform's
+record is found in it by the folder it is asked with, and only one asked by its slug alone is found by that slug — the
+last listed, of which only the name is read (`domain/platform_system.py::kept_by_slug`). Where none is kept for a
 platform — the first start after an update — `PlatformSystemService` reads the listing once and hands it to the
 refiling, which has it kept beside what was kept (`keep_listing`): an entry for a slug the listing names gives way to
 the listing's. A slug the listing does not name is then kept with nothing but that slug, so it is not read again —

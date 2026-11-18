@@ -371,13 +371,14 @@ settings `~/retrodeck/roms/gba/`, or the same folder on the drive you moved Retr
 folder if it is not there yet, as ES-DE would; it never creates the ROM folder above it.
 
 **A game's system is your emulator source's answer.** Which system — and so which folder — a platform's games belong to
-is asked of the emulator source, with the platform's slug in RomM and its folder in RomM; Tender keeps no table of
+is asked of the emulator source, with the platform's slug in RomM and the folder the game lies in on RomM — two folders
+that share a slug, such as `megadrive` and `megadrivejp` under `genesis`, can be two systems; Tender keeps no table of
 platforms of its own. A download, and everything about where one would land, asks RetroDECK; the game's page and the
 platform's page ask the source that answers, which is RetroDECK while it is switched on. Where the platform has no
 system to use, **Download** is refused and the pages say which case holds:
 
 - **"Tender cannot match _platform_ to a system yet, so it cannot download its games."** — neither the platform's slug
-  nor its folder is one the emulator source's platform table knows.
+  nor its folder is one Tender's platform table knows.
 - **"RomM's slug "_slug_" and folder "_folder_" point to different systems, so Tender cannot match _platform_ to a
   system."** — the platform's folder in RomM is named after another system than its slug; renaming the folder in RomM
   resolves it.
@@ -385,7 +386,8 @@ system to use, **Download** is refused and the pages say which case holds:
   is the platform.
 - **"_Source_ has a system for _platform_ (_system_), but it is not set up on this machine, so Tender cannot download
   its games."** — the frontend knows the system, and your installation does not have it.
-- **"System _system_ is switched off in _source_."** — the platform's only systems are switched off in the source.
+- **"System _system_ is switched off in _source_."** — none of the platform's systems is switched on in the source, and
+  this one is switched off there.
 
 Where the platform's slug and folder leave several systems of the source — RetroDECK keeps `mark3` and `mastersystem`
 for the Master System — Tender picks none of them: until downloads land in Tender's own library, **Download** is

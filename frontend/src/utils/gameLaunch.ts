@@ -7,13 +7,15 @@
  * first, or the entry does not start it, with the resolver's reason where it
  * states one. The other two let it go ahead: it starts, which says nothing
  * unless the resolver states something beside it — the file is an archive whose
- * contents were not read, the start goes on without a file it opens, or the
- * emulator does not read every disc a playlist lists; or whether it starts could
- * not be established, which names what could not be — the reading of the file
- * stopping short, its format included — and never says it can start (#2195 D2,
- * D40, D41; #2698 D7, D8). Beside a start or a verdict not established stands a
- * name the frontend would not list the file under. Each is said in its own words; this is the one home
- * of that rule.
+ * contents were not read, the start goes on without a file it opens, the
+ * emulator does not read every disc a playlist lists, or the reading of the file
+ * stopped short of something, its format included; or whether it starts could
+ * not be established, which says so first, with its reason, names what could not
+ * be — the reading stopping short among it — and never says it can start
+ * (#2195 D2, D40, D41; #2698 D7, D8). Beside a start or a verdict not
+ * established stands a name the frontend would not list the file under, after
+ * that first sentence. Each is said in its own words; this is the one home of
+ * that rule.
  *
  * Beside them are the notifications for a page whose check of whether the game
  * can start went wrong, and for a start pressed after it that then fails.

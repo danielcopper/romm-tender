@@ -396,11 +396,10 @@ def _established(answer: Any) -> bool:
     """Whether *answer* states the system's demand at all.
 
     Not where the system resolved to none or several of the source's systems,
-    nor where it lists no emulator and says what is declared could not be
-    looked up (``firmware-declaration-unknown``): that empty list is a look
-    that found nothing to read, never "nothing needed". Beside emulators the
-    same code speaks only of the empty requirement list; each emulator's own
-    verdict stands.
+    nor where it lists no emulator beside ``firmware-declaration-unknown`` —
+    the rule is ``docs/architecture/invariants/resolver.md``'s. Beside
+    emulators the same code speaks only of the empty requirement list; each
+    emulator's own verdict stands.
     """
     if not resolved(answer):
         return False

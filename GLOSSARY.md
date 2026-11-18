@@ -648,7 +648,8 @@ folder is the resolver's answer.
 ### Platform system
 
 The system a RomM platform's games belong to in one emulator source — `snes`, `psx` — as that source answers the
-resolver's platform question asked with RomM's slug and the platform's folder in RomM as two (source, key) pairs
+resolver's platform question asked with RomM's slug and the platform's folder in RomM as two (source, key) pairs — the
+folder a game lies in, or the one a page is about, never another folder of the same slug
 ([#2217](https://github.com/danielcopper/romm-tender/issues/2217) D16). Never RomM's slug or folder taken as a system's
 name, and never Tender's own table; a platform can be one system in RetroDECK and another in EmuDeck, and every later
 question names it as the answer named it. Only one switched-on system is taken; where the pairs leave **several**,
