@@ -4,7 +4,7 @@ pnpm = "10.29.3" # exact — must match frontend/package.json "packageManager"; 
 python = "3.14"  # why 3.14, and every other copy: docs/contributing/dependency-management.md
 uv = "0.10.2"    # exact — uv creates the venv AND compiles the dependency locks; pin so the local resolver == the lock author
 deno = "2.8"     # minor pin — deno fmt is a formatter; a version jump can reformat Markdown (the CI drift we're killing)
-"aqua:koalaman/shellcheck" = "0.11.0" # exact — `mise run lint` shellchecks the scripts that run outside this repository
+"aqua:koalaman/shellcheck" = "0.11.0" # exact — CI's lint job installs the same release; bump both together
 
 [env]
 _.python.venv = { path = ".venv", create = true }

@@ -57,11 +57,11 @@ Actions, and in-range minor/patch updates auto-merge once CI is green. For the f
 lives, what's coupled, what auto-merges, and how to bump things by hand** — see
 [Dependency management](dependency-management.md).
 
-The toolchain versions — `node`, `pnpm`, `python`, `uv`, `deno` — are **excluded** from Renovate: they are pinned and
-cross-file-coupled (each appears in `mise.toml` and in `frontend/package.json`'s `packageManager` and/or the workflow
-`setup-*` version inputs, and all copies must match; Dependency management's table says why for each). Renovate is
-disabled for these by dependency name so a bot bump can't desync one copy; bump them by hand, together. The `setup-*`
-action SHAs themselves stay auto-updated.
+The toolchain versions — `node`, `pnpm`, `python`, `uv`, `deno`, `shellcheck` — are **excluded** from Renovate: they are
+pinned and cross-file-coupled (each appears in `mise.toml` and in `frontend/package.json`'s `packageManager` and/or the
+workflow `setup-*` version inputs or, for shellcheck, the lint job's install step, and all copies must match; Dependency
+management's table says why for each). Renovate is disabled for these by dependency name so a bot bump can't desync one
+copy; bump them by hand, together. The `setup-*` action SHAs themselves stay auto-updated.
 
 ## Building
 
