@@ -1193,6 +1193,21 @@ class TestASystemThatResolvedToNoOneSystem:
         assert answer.unestablished == UNESTABLISHED_NOTHING
         assert entry.asked == []
 
+    def test_no_savestate_place_is_asked_of_any_entry(self, traces):
+        entry = _Entry(
+            "mGBA",
+            _placement(files=("Game Title.srm",)),
+            states=SavestateAbsence(token="mgba", citation="none", sources=()),
+        )
+        installation = _Installation((entry,), resolution=SystemResolution(RESOLUTION_UNKNOWN, None, None))
+
+        states = _adapter(installation, traces).resolve_savestate_location(
+            system="gba", content_path=_CONTENT, emulator_label="mGBA"
+        )
+
+        assert states is None
+        assert entry.states_asked == []
+
 
 class TestWhichSourceAnswers:
     """A game's save answer comes from the source it starts through."""

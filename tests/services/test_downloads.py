@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from _factories import (
@@ -426,15 +426,18 @@ class TestStartDownload:
         downloads.service._tasks.spawn = _close_coro_task
         downloads.download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
 
-        from unittest.mock import patch
+        transferred: list[str] = []
 
-        with patch.object(downloads.transfer, "run", side_effect=lambda *_a, **_k: asyncio.sleep(0)) as run:
+        def run(rom_id, rom_detail, target_path, system, file_name, control, *, platform_name, resume=False):
+            transferred.append(system)
+            return asyncio.sleep(0)
+
+        with patch.object(downloads.transfer, "run", new=run):
             result = await downloads.service.start_download(43)
 
         assert result["success"] is True
         assert folders.download_asked == [snes]
-        _rom_id, _detail, _target, system, *_rest = run.call_args.args
-        assert system == "snes"
+        assert transferred == ["snes"]
 
     @pytest.mark.asyncio
     async def test_starts_download_task(self, make_downloads, tmp_path):

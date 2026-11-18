@@ -20,11 +20,13 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from _vendor import atlas
 from _vendor.atlas import (
+    CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_PLATFORM_SOURCE_UNKNOWN,
     INTERSECTION_AGREED,
     PLATFORM_STATUS_ABSENT,
     PLATFORM_STATUS_DECLARED,
     PLATFORM_STATUS_DISABLED,
+    Caveat,
     translate,
 )
 from _vendor.atlas.installations import PlatformSystemMatch, PlatformSystemsAnswer
@@ -232,6 +234,25 @@ class TestACatalogueTheResolverCouldNotRead:
 
         assert (platform.state, platform.named) == (UNASKED, ())
         assert platform.unasked == "unavailable"
+
+    def test_a_retro_deck_never_set_up_leaves_the_platform_unasked_for_that_reason(self, tmp_path, traces):
+        adapter = _real(tmp_path, traces)
+        (
+            tmp_path / "home" / ".var" / "app" / "net.retrodeck.retrodeck" / "config" / "retrodeck" / "retrodeck.json"
+        ).unlink()
+
+        platform = _ask(adapter, "snes", "snes")
+
+        assert (platform.state, platform.unasked, platform.named) == (UNASKED, "not_set_up", ())
+
+    def test_a_sealed_catalogue_leaves_the_platform_unasked_for_that_reason(self, traces):
+        sealed = Caveat(CAVEAT_EMULATOR_CATALOGUE_SEALED, "sealed", {})
+        answer = PlatformSystemsAnswer(translate((("romm", "snes"),)), caveats=(sealed,))
+        adapter, _ = _adapter([_Installation("retrodeck", {"snes": answer})], traces)
+
+        platform = _ask(adapter, "snes", "snes")
+
+        assert (platform.state, platform.unasked) == (UNASKED, "sealed")
 
 
 class _Installation:
