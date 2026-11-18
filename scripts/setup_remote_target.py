@@ -62,13 +62,13 @@ SSH_FAILED = 255
 # in the order they are tested: a host key mismatch also prints "Host key
 # verification failed", and a refused login can end in "Connection closed".
 _HOST_KEY_CHANGED_FOR = re.compile(r"Host key for (\S+) has changed")
-_HOST_KEY_CHANGED = re.compile(r"REMOTE HOST IDENTIFICATION HAS CHANGED|" + _HOST_KEY_CHANGED_FOR.pattern)
+HOST_KEY_CHANGED = re.compile(r"REMOTE HOST IDENTIFICATION HAS CHANGED|" + _HOST_KEY_CHANGED_FOR.pattern)
 _OFFENDING_FILE = re.compile(r"Offending \S+ key in (\S+):\d+")
-_HOST_KEY_NOT_ACCEPTED = re.compile(r"Host key verification failed")
-_KEY_REFUSED = re.compile(r"Permission denied \(")
-_NO_LOGIN = re.compile(_KEY_REFUSED.pattern + r"|Too many authentication failures")
-_UNRESOLVED = re.compile(r"Could not resolve hostname ([^:\s]+)")
-_NO_SERVER = re.compile(
+HOST_KEY_NOT_ACCEPTED = re.compile(r"Host key verification failed")
+KEY_REFUSED = re.compile(r"Permission denied \(")
+NO_LOGIN = re.compile(KEY_REFUSED.pattern + r"|Too many authentication failures")
+UNRESOLVED = re.compile(r"Could not resolve hostname ([^:\s]+)")
+NO_SERVER = re.compile(
     r"Connection refused|Connection timed out|Operation timed out|No route to host|Network is unreachable"
     r"|kex_exchange_identification|Connection closed by|Connection reset"
 )
@@ -76,9 +76,9 @@ _NO_SERVER = re.compile(
 # Where ssh names the host a failure is about: a refused login as user@host, a
 # connection as "connect to host <host> port", a name and a changed key by it.
 _NAMED_HOSTS = (
-    re.compile(r"\S+@(\S+): " + _KEY_REFUSED.pattern),
+    re.compile(r"\S+@(\S+): " + KEY_REFUSED.pattern),
     re.compile(r"connect to host (\S+) port"),
-    _UNRESOLVED,
+    UNRESOLVED,
     _HOST_KEY_CHANGED_FOR,
 )
 
@@ -322,7 +322,7 @@ def classify(
     host = destination.hostname
     where = failed_where(stderr, name=name, destination=destination)
     hop = f"the hop {destination.via}"
-    if _HOST_KEY_CHANGED.search(stderr):
+    if HOST_KEY_CHANGED.search(stderr):
         offending = _OFFENDING_FILE.search(stderr)
         ours = (str(known_hosts), str(trial_known_hosts))
         if offending is None or offending.group(1) in ours:
@@ -337,17 +337,17 @@ def classify(
             f" {offending.group(1)} records — another machine may be answering there. No connection was made.\n"
             "  Check that hop with your own ssh."
         )
-    if _HOST_KEY_NOT_ACCEPTED.search(stderr):
+    if HOST_KEY_NOT_ACCEPTED.search(stderr):
         whose = {"target": f"at {host}", "hop": f"of {hop}", "either": f"of {host} or of {hop}"}[where]
         return (
             f"tender-dev: the host key {whose} was not accepted, or ssh could not ask about it — it asks on a"
             " terminal. No connection was made."
         )
-    if _NO_LOGIN.search(stderr):
+    if NO_LOGIN.search(stderr):
         if where == "hop":
             return f"tender-dev: {hop} accepted no login from this machine.\n  Check that hop with your own ssh."
         return None
-    unresolved = _UNRESOLVED.search(stderr)
+    unresolved = UNRESOLVED.search(stderr)
     if unresolved is not None and where == "hop":
         return (
             f"tender-dev: this machine cannot resolve {unresolved.group(1)}, a hop on the way to {name}"
@@ -359,14 +359,14 @@ def classify(
             f"tender-dev: this machine cannot resolve {host}.\n"
             "  Give the target's address instead, or a name the network resolves."
         )
-    if _NO_SERVER.search(stderr) and where == "hop":
+    if NO_SERVER.search(stderr) and where == "hop":
         return f"tender-dev: no SSH server answers at {hop}.\n  Check that hop with your own ssh."
-    if _NO_SERVER.search(stderr) and where == "either":
+    if NO_SERVER.search(stderr) and where == "either":
         return (
             f"tender-dev: no SSH server answers at {host} port {destination.port}, or at {hop}.\n"
             "  Check the address, that the target runs an SSH server, and that hop."
         )
-    if _NO_SERVER.search(stderr):
+    if NO_SERVER.search(stderr):
         return (
             f"tender-dev: no SSH server answers at {host} port {destination.port}.\n"
             "  Check the address, and that the target runs an SSH server."
@@ -375,7 +375,7 @@ def classify(
 
 
 def is_no_login(stderr: str) -> bool:
-    return bool(_NO_LOGIN.search(stderr))
+    return bool(NO_LOGIN.search(stderr))
 
 
 def route_source(destination: Destination) -> str:
@@ -654,9 +654,9 @@ def hand_over(result: subprocess.CompletedProcess[str], *, name: str, destinatio
     if result.returncode != SSH_FAILED:
         return "forced command"
     where = failed_where(result.stderr, name=name, destination=destination)
-    if where == "target" and _KEY_REFUSED.search(result.stderr):
+    if where == "target" and KEY_REFUSED.search(result.stderr):
         return "refused"
-    if where == "hop" and _NO_LOGIN.search(result.stderr):
+    if where == "hop" and NO_LOGIN.search(result.stderr):
         return "hop"
     return None
 
