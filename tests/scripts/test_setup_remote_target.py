@@ -123,10 +123,11 @@ def remote(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Remot
     host_keys.mkdir()
     (host_keys / "ssh_host_ed25519_key.pub").write_text(f"{_HOST_KEY} root@deck\n", encoding="utf-8")
     world = World(
-        targets={_ADDRESS: Target(home=str(target_home), client_address=_SEEN_FROM, host_key=_HOST_KEY)},
+        targets={},
         log=str(tmp_path / "log"),
     )
     path = fake_path(tools)
+    world.targets[_ADDRESS] = Target(home=str(target_home), client_address=_SEEN_FROM, host_key=_HOST_KEY, path=path)
     monkeypatch.setenv("PATH", path)
     monkeypatch.setenv(WORLD_VARIABLE, str(tmp_path / "world.json"))
     monkeypatch.setattr(setup_remote_target, "HOST_KEY_DIR", str(host_keys))
@@ -407,7 +408,9 @@ class TestRunAgain:
     def test_a_second_target_gets_an_entry_beside_the_first(
         self, remote: Remote, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        remote.world.targets[_NEW_ADDRESS] = Target(home=str(remote.target_home), client_address=_SEEN_FROM)
+        remote.world.targets[_NEW_ADDRESS] = Target(
+            home=str(remote.target_home), client_address=_SEEN_FROM, path=remote.tools_path
+        )
         remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
 
         code, _, err = remote.setup(capsys, "other", f"deck@{_NEW_ADDRESS}")
@@ -915,7 +918,9 @@ class TestTheBuildHostsSide:
     def test_a_target_whose_name_another_target_starts_with_still_gets_the_first_contact_notice(
         self, remote: Remote, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        remote.world.targets[_NEW_ADDRESS] = Target(home=str(remote.target_home), client_address=_SEEN_FROM)
+        remote.world.targets[_NEW_ADDRESS] = Target(
+            home=str(remote.target_home), client_address=_SEEN_FROM, path=remote.tools_path
+        )
         remote.setup(capsys, "deck2", f"deck@{_NEW_ADDRESS}")
 
         _, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")

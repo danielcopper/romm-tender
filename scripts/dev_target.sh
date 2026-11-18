@@ -42,17 +42,32 @@ readonly SERVICE_UNIT="romm-tender"
 readonly DEV_UNIT="romm-tender-dev"
 readonly UI_SCALE_UNIT="romm-tender-dev-ui-scale"
 
-# install.sh's interpreter rule, so the dev backend runs on what the installed
-# service runs on.
-PYTHON="${TENDER_PYTHON:-/usr/bin/python3}"
+# Without an installed service, the interpreter install.sh would give one.
+readonly DEFAULT_PYTHON="/usr/bin/python3"
 
 say() {
     printf 'tender-dev: %s\n' "$*" >&2
 }
 
+# Sets PYTHON to the interpreter the installed service runs on, so the dev
+# backend runs on the same one: the path= field of its ExecStart, which install.sh
+# wrote from TENDER_PYTHON or its default. TENDER_PYTHON itself is not read
+# here: sshd hands a forced command none of the installer's environment.
 need_python() {
+    exec_start=$(systemctl --user show -p ExecStart --value "$SERVICE_UNIT" 2>/dev/null || true)
+    case "$exec_start" in
+        *"path="*)
+            PYTHON="${exec_start#*path=}"
+            PYTHON="${PYTHON%% ;*}"
+            source="the installed service's interpreter"
+            ;;
+        *)
+            PYTHON="$DEFAULT_PYTHON"
+            source="the interpreter without an installed service"
+            ;;
+    esac
     if [ ! -x "$PYTHON" ]; then
-        say "no Python at $PYTHON on $name — install python3, or point TENDER_PYTHON at one."
+        say "no Python at $PYTHON on $name ($source) — install python3 there."
         exit 1
     fi
     if ! "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)'; then
@@ -67,10 +82,6 @@ need_python() {
 # those names are taken, and only a plain value: show-environment writes one
 # with special characters in $'...' quoting, which no session address needs.
 import_session() {
-    if [ -z "${XDG_RUNTIME_DIR:-}" ] && [ -d "/run/user/$(id -u)" ]; then
-        XDG_RUNTIME_DIR="/run/user/$(id -u)"
-        export XDG_RUNTIME_DIR
-    fi
     environment=$(systemctl --user show-environment 2>/dev/null) || return 0
     while IFS= read -r line; do
         case "$line" in
@@ -359,6 +370,13 @@ usage() {
     say "usage: dev_target.sh start|frontend|reset|ui-scale|ui-scale-stop|stop|status|running <name> [word ...]"
     exit 2
 }
+
+# systemctl --user finds the user manager through this; a login without
+# pam_systemd sets none.
+if [ -z "${XDG_RUNTIME_DIR:-}" ] && [ -d "/run/user/$(id -u)" ]; then
+    XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    export XDG_RUNTIME_DIR
+fi
 
 [ $# -ge 2 ] || usage
 verb="$1"

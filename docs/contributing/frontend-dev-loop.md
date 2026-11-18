@@ -550,10 +550,11 @@ Without `--target`, every task does what the sections above describe and nothing
 4. **It runs the task on the target**, through `scripts/dev_target.sh` from that copy. The tasks that start a backend
    ask the single-instance lock first and refuse as they do locally — `dev:frontend` the other way round, and stricter
    than locally (below) — and only once the answer lets them on does the copy replace `current/`. Then Steam restarts
-   through `scripts/dev_steam.sh`, as it does locally, and the backend starts as the user unit `romm-tender-dev`, on the
-   Python the installed service runs on (`TENDER_PYTHON`, else `/usr/bin/python3`, 3.12 or newer), so it outlives the
-   connection. The display a task names is one of the target's, and the
-   [remembered window](#why-the-window-is-remembered-rather-than-read) is the target's memory file.
+   through `scripts/dev_steam.sh`, as it does locally, and the backend starts as the user unit `romm-tender-dev`, so it
+   outlives the connection. It runs on the Python the installed service runs on, read from that unit's `ExecStart` —
+   `/usr/bin/python3` where no service is installed — and is refused below 3.12. `TENDER_PYTHON` is not read there: a
+   login over `ssh` carries none of the installer's environment. The display a task names is one of the target's, and
+   the [remembered window](#why-the-window-is-remembered-rather-than-read) is the target's memory file.
 
 On the target everything runs in the user manager's environment: the units do by being units, and the steps between take
 the display and the session bus from it, since a login over `ssh` carries neither. It needs nothing beyond `/usr/bin`.

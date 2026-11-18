@@ -27,12 +27,14 @@ for the parts the setup depends on:
   unless ``BatchMode=yes`` or ``PreferredAuthentications`` leaves it out; every
   refused key counts towards the target's ``MaxAuthTries``;
 - a login runs its command with ``sh -c`` in the target's home, with
-  ``SSH_CLIENT`` set;
+  ``SSH_CLIENT`` set and the target's own ``PATH`` (:attr:`Target.path`) —
+  nothing of the caller's environment reaches it, as nothing does through
+  OpenSSH;
 - a destination behind a ProxyJump fails on its hop when the world says so,
   with what OpenSSH prints for that failure;
-- a login hands the command it runs the target's home, ``XDG_RUNTIME_DIR``
-  as ``pam_systemd`` sets it, and every ``FAKE_*`` variable, so the stand-ins
-  on the far side find the world too.
+- a login also sets ``XDG_RUNTIME_DIR`` as ``pam_systemd`` does, and — the one
+  departure from OpenSSH — hands on every ``FAKE_*`` variable, so the
+  stand-ins on the far side find the world too.
 
 ``rsync`` as the client asks its ``-e`` remote shell for the server command
 rsync 3.2.7 sends (``server_options`` in its ``options.c``) for the options
@@ -119,6 +121,8 @@ class Target:
     """Keys in the user's agent this target does not accept, offered before anything else."""
     max_auth_tries: int = 6
     """sshd's MaxAuthTries: the refused keys after which it ends the login."""
+    path: str = ""
+    """The ``PATH`` a login on this target runs with, as sshd sets it there; a test names it."""
 
 
 @dataclass
@@ -160,6 +164,8 @@ class World:
     """Whether ``tail -F`` without ``--pid`` and ``journalctl -f`` keep following, or print once and end."""
     journal: list[str] = field(default_factory=list)
     """What ``journalctl`` prints."""
+    service_python: str | None = None
+    """The interpreter the installed service's ``ExecStart`` runs, or ``None`` for no service installed."""
 
     def save(self, path: Path) -> None:
         path.write_text(json.dumps(asdict(self)), encoding="utf-8")
@@ -520,15 +526,14 @@ def _ssh(argv: list[str]) -> int:
     if not _check_host_key(world, target, options, resolved, host):
         return 255
 
+    assert target.path, "a Target names the PATH a login on it runs with"
     env = {
         "HOME": target.home,
-        "PATH": os.environ["PATH"],
+        "PATH": target.path,
         "SSH_CLIENT": f"{target.client_address} 50022 22",
         "XDG_RUNTIME_DIR": os.path.join(target.home, ".run"),
         **{name: value for name, value in os.environ.items() if name.startswith("FAKE_")},
     }
-    if "TENDER_PYTHON" in os.environ:
-        env["TENDER_PYTHON"] = os.environ["TENDER_PYTHON"]
     login = _authenticate(world, target, options, resolved, host)
     if login is None:
         print(f"{user}@{host}: Permission denied (publickey,password).", file=sys.stderr)
@@ -729,6 +734,17 @@ def _systemctl(argv: list[str]) -> int:
         return 0 if active else 3
     if words[:1] == ["show"] and "MainPID" in words:
         print(_unit_pid(world, words[-1]))
+        return 0
+    if words[:1] == ["show"] and "ExecStart" in words:
+        # systemd 257's spelling; a unit that is not installed has the property empty.
+        python = world.service_python if words[-1] == "romm-tender" else None
+        if python is not None:
+            print(
+                f"{{ path={python} ; argv[]={python} /home/deck/.local/lib/romm-tender/backend/main.py ;"
+                " ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }"
+            )
+        else:
+            print()
         return 0
     if words[:1] == ["stop"]:
         for name in words[1:]:

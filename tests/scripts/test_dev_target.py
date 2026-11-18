@@ -101,8 +101,6 @@ class Loop:
     repo: Path
     build_home: Path
     target_home: Path
-    python: str = sys.executable
-    """The target's ``TENDER_PYTHON``."""
     running: list[subprocess.Popen[str]] = field(default_factory=list)
     """The tasks :meth:`start` started, ended at teardown if they still run."""
 
@@ -114,7 +112,6 @@ class Loop:
             "HOME": str(self.build_home),
             "PATH": self.tools_path,
             WORLD_VARIABLE: str(self.world_file),
-            "TENDER_PYTHON": self.python,
         }
 
     def argv(self, task: str, *words: str, target: str = "deck") -> list[str]:
@@ -236,11 +233,12 @@ def loop(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     tools.mkdir()
     target_home = tmp_path / "target"
     target_home.mkdir()
-    world = World(
-        targets={_ADDRESS: Target(home=str(target_home), client_address=_SEEN_FROM, host_key=_HOST_KEY)},
-        log=str(tmp_path / "log"),
-    )
     path = fake_path(tools)
+    world = World(
+        targets={_ADDRESS: Target(home=str(target_home), client_address=_SEEN_FROM, host_key=_HOST_KEY, path=path)},
+        log=str(tmp_path / "log"),
+        service_python=sys.executable,
+    )
     world_file = tmp_path / "world.json"
     monkeypatch.setenv("PATH", path)
     monkeypatch.setenv(WORLD_VARIABLE, str(world_file))
@@ -740,19 +738,48 @@ class TestWhenATargetCannotBeUsed:
 
 
 class TestTheTargetsHalf:
-    def test_no_python_at_tender_python_is_refused(self, loop: Loop) -> None:
-        loop.python = str(loop.target_home / "no-python")
+    def test_the_dev_backend_runs_on_the_interpreter_the_installed_service_runs_on(
+        self, loop: Loop, tmp_path: Path
+    ) -> None:
+        """#2844 D8: read from the service's ExecStart."""
+        other = tmp_path / "python-of-the-service"
+        other.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+        other.chmod(0o755)
+        loop.world.service_python = str(other)
+        loop.world.backend_exits = True
+
+        loop.run("dev:backend")
+
+        started = [call for call in commands(loop.world, "systemd-run") if "--unit=romm-tender-dev" in call["argv"]]
+        assert [call["argv"][-2:] for call in started] == [[str(other), str(loop.root / "current/backend/main.py")]]
+
+    def test_with_no_service_installed_the_dev_backend_runs_on_usr_bin_python3(self, loop: Loop) -> None:
+        """#2844 D8. The lock is read with /usr/bin/python3 itself, so this machine needs one of 3.12 or newer."""
+        loop.world.service_python = None
+        loop.world.backend_exits = True
+
+        result = loop.run("dev:backend")
+
+        assert "older than 3.12" not in result.stderr, result.stderr
+        started = [call for call in commands(loop.world, "systemd-run") if "--unit=romm-tender-dev" in call["argv"]]
+        assert [call["argv"][-2:] for call in started] == [
+            ["/usr/bin/python3", str(loop.root / "current/backend/main.py")]
+        ]
+
+    def test_an_interpreter_that_is_not_there_is_refused(self, loop: Loop) -> None:
+        loop.world.service_python = str(loop.target_home / "no-python")
 
         result = loop.run("dev:status")
 
         assert result.returncode == 1
-        assert f"no Python at {loop.python} on deck" in result.stderr
+        assert f"no Python at {loop.world.service_python} on deck" in result.stderr
+        assert "TENDER_PYTHON" not in result.stderr
 
-    def test_a_python_older_than_3_12_is_refused(self, loop: Loop, tmp_path: Path) -> None:
+    def test_an_interpreter_older_than_3_12_is_refused(self, loop: Loop, tmp_path: Path) -> None:
         old = tmp_path / "python3.11"
         old.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
         old.chmod(0o755)
-        loop.python = str(old)
+        loop.world.service_python = str(old)
         (loop.root / "current/sentinel").write_text("running\n", encoding="utf-8")
 
         result = loop.run("dev")
