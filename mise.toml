@@ -242,7 +242,7 @@ usage = '''
 arg "[mode]" help="'deck' (1.5, = Game Mode metrics), a bare factor (2.0-2.4 = 'Larger text', ~1.28 = docked 1080p, ~1.71 = docked 1440p), 'steam' (adopt the UI Scale set in Steam), or 'auto' (restore automatic scaling and exit)" default="deck"
 complete "mode" run="printf 'deck\\nsteam\\nauto\\n'"
 flag "--stop" help="With --target: stop the dev:ui-scale running there, which restores the scale and the window."
-flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>: built here, Steam and the backend there."
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
 '''
 # Holds until Ctrl-C, then restores BOTH halves as they were BEFORE the run: the
 # scale (auto stays auto; a manual UI Scale is put back as it was, never flipped to
@@ -365,7 +365,7 @@ raw = true
 usage = '''
 arg "[display]" help="Monitor for the Big Picture window: 'internal' or an output name (dp2, DP-3, ...). Omitted, the window is placed nowhere and dev remembers that."
 complete "display" run="bash scripts/dev_place_window.sh --list"
-flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>: built here, Steam and the backend there."
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
 '''
 # Beside Decky Loader the restart also brings back Decky's own QAM, which
 # survives only the first Big Picture entry per Steam process.
@@ -382,7 +382,7 @@ raw = true
 usage = '''
 arg "[display]" help="Monitor for the desktop client's window: 'internal' or an output name (dp2, DP-3, ...). Omitted, the window is placed nowhere and dev remembers that."
 complete "display" run="bash scripts/dev_place_window.sh --list"
-flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>: built here, Steam and the backend there."
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
 '''
 run = '''
 if [ -n "${usage_target:-}" ]; then
@@ -395,7 +395,7 @@ bash scripts/dev_steam.sh restart desktop "${usage_display:-}"
 description = "Stop the backend on a target — the dev backend or the installed service, whichever holds the lock there — and leave Steam and a dev:ui-scale running (--target only)"
 raw = true
 usage = '''
-flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>: built here, Steam and the backend there."
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
 '''
 # The tasks with --target start the backend as a user unit on the target, which
 # the build host's Ctrl-C does not reach; locally, Ctrl-C is the stop.
@@ -412,7 +412,7 @@ description = "Show the backend's log on a target, or follow it with --follow (-
 raw = true
 usage = '''
 flag "--follow" help="Follow the log until Ctrl-C, which ends only the following."
-flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>: built here, Steam and the backend there."
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
 '''
 run = '''
 if [ -z "${usage_target:-}" ]; then
@@ -426,7 +426,7 @@ exec python scripts/dev_target.py --target "$usage_target" ${usage_follow:+--fol
 description = "Say what holds the single-instance lock on a target and whether a dev:ui-scale runs there (--target only)"
 raw = true
 usage = '''
-flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>: built here, Steam and the backend there."
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
 '''
 run = '''
 if [ -z "${usage_target:-}" ]; then

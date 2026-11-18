@@ -1126,6 +1126,11 @@ class TestTheTargetsHalf:
         assert "a target's name is letters, digits" in result.stderr
         assert commands(loop.world, "mise") == []
 
+    @pytest.mark.parametrize("words", ["COULD NOT RESTORE", "The restore did not land"])
+    def test_the_words_of_a_failed_restore_it_looks_for_are_dev_ui_scales(self, words: str) -> None:
+        assert words in (_SCRIPTS / "dev_ui_scale.py").read_text(encoding="utf-8")
+        assert f'*"{words}"*' in (_SCRIPTS / "dev_target.sh").read_text(encoding="utf-8")
+
     def test_the_python_floor_is_the_installers(self) -> None:
         script = (_SCRIPTS / "dev_target.sh").read_text(encoding="utf-8")
         installer = (_REPO / "install.sh").read_text(encoding="utf-8")
@@ -1251,6 +1256,9 @@ class TestTheTasks:
         for name in dev_tasks:
             assert 'flag "--target <name>"' in tasks[name]["usage"], name
             assert tasks[name]["raw"] is True, name
+            builds = name in ("dev", "dev:bpm", "dev:desktop", "dev:backend", "dev:frontend")
+            assert ("built here, Steam and the backend there" in tasks[name]["usage"]) is builds, name
+        assert "--target" not in tasks["dev:fake-github"].get("usage", "")
 
 
 class TestTheGuide:

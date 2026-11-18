@@ -21,8 +21,9 @@
 #       the backend's log, and its database dumped as SQL through Python's
 #       sqlite3, opened read-only
 #   follow log
-#       the backend's log followed by name until the connection ends, so that a
-#       log rotated away or not written yet is picked up when it appears
+#       the backend's log followed by name, so that a log rotated away or not
+#       written yet is picked up when it appears, until a write finds the
+#       connection gone
 #
 # Everything else is refused with REFUSED, an empty request (a login) among it.
 #
@@ -67,7 +68,10 @@ refuse() {
 # `e` is the protocol's capability string, not options. Among the letters left
 # out are `s`, which sends the arguments inside the protocol where this script
 # cannot see the destination, and `K` (--keep-dirlinks), which has the receiver
-# follow a symlinked directory out of the incoming copy.
+# follow a symlinked directory out of the incoming copy. The lists below are
+# wider than what the dev tasks' rsync sends; they turn away a request nobody
+# expects, and bound nothing: the copy feeds dev_target.sh, which runs what it
+# was sent, so the key's from= is the bound.
 check_rsync() {
     [ "${1:-}" = --server ] || refuse
     shift

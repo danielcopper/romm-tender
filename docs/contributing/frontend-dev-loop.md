@@ -518,8 +518,8 @@ because `from=` bounds the build host's address, not the target's.
 
 ### The dev tasks on a target
 
-Every dev task takes `--target <name>`, a name `setup:remote-target` recorded. What is built is built here; Steam and
-the backend are the target's:
+Every dev task but `dev:fake-github` takes `--target <name>`, a name `setup:remote-target` recorded. What is built is
+built here; Steam and the backend are the target's:
 
 ```bash
 mise run dev --target <name> [--surface]                      # build here, restart Steam there, run the backend there
@@ -546,18 +546,26 @@ Without `--target`, every task does what the sections above describe and nothing
 3. **It copies the tree to the target's `incoming/`**, for every task but `dev:log`: the paths a release ships —
    `SHIPPED` in `scripts/package.sh`, read from that list — plus `scripts/`, without this machine's compiled modules.
    The copy is a mirror that `rsync` keeps up to date, so only what changed travels. It lands beside the running tree,
-   `current/`, not over it, and a task that builds nothing leaves `current/` alone.
+   `current/`, not over it, and a task that builds nothing leaves `current/` alone. A path that list names and the
+   checkout lacks — `dist/` before any build, say — stops the task before the copy, as it stops `scripts/package.sh`.
+   The lock is asked only after the build and the copy, by the copy's own scripts, so a refusal costs both; asking it
+   earlier would have to go through the previous copy's scripts, and a first run has none.
 4. **It runs the task on the target**, through `scripts/dev_target.sh` from that copy. The tasks that start a backend
    ask the single-instance lock first and refuse as they do locally — `dev:frontend` the other way round, and stricter
-   than locally (below) — and only once the answer lets them on does the copy replace `current/`. Then Steam restarts
-   through `scripts/dev_steam.sh`, as it does locally, and the backend starts as the user unit `romm-tender-dev`, so it
-   outlives the connection. It runs on the Python the installed service runs on, read from that unit's `ExecStart` —
-   `/usr/bin/python3` where no service is installed — and is refused below 3.12. `TENDER_PYTHON` is not read there: a
-   login over `ssh` carries none of the installer's environment. The display a task names is one of the target's, and
-   the [remembered window](#why-the-window-is-remembered-rather-than-read) is the target's memory file.
+   than locally (below) — and only once the answer lets them on does the copy replace `current/`. A lock that cannot be
+   read refuses too, where locally the task carries on, and so does a `romm-tender-dev` unit that runs without holding
+   the lock: `dev:stop` stops it. Then Steam restarts through `scripts/dev_steam.sh`, as it does locally, and the
+   backend starts as the user unit `romm-tender-dev`, so it outlives the connection. It runs on the Python the installed
+   service runs on, read from that unit's `ExecStart` — `/usr/bin/python3` where no service is installed — and is
+   refused below 3.12. `TENDER_PYTHON` is not read there: a login over `ssh` carries none of the installer's
+   environment. The display a task names is one of the target's, and the
+   [remembered window](#why-the-window-is-remembered-rather-than-read) is the target's memory file.
 
 On the target everything runs in the user manager's environment: the units do by being units, and the steps between take
-the display and the session bus from it, since a login over `ssh` carries neither. It needs nothing beyond `/usr/bin`.
+the display and the session bus from it, since a login over `ssh` carries neither. It needs nothing beyond `/usr/bin`. A
+user manager that cannot be asked — no session of the user running there — stops the task before anything is touched,
+and one that names no display gets a warning: placing Steam's window and `dev:ui-scale` need one. The hints the scripts
+there give name the task to run here, with `--target <name>`.
 
 **The tasks that start a backend follow its `backend.log` until Ctrl-C.** The log shows from where it stood before the
 start, so a start that fails is seen: when the backend stops, the following ends and shows what the backend wrote to
@@ -566,10 +574,10 @@ since it does not reach the target. The task then asks the target whether the ba
 does, the message names `dev:stop`.
 
 **`dev:stop` stops whichever holds the lock on the target**: the dev backend, or the installed service. It leaves Steam
-as it is — the next task that starts a backend restarts it anyway — and leaves the installed service enabled, so it
-starts again at the next login; the message names `systemctl --user start romm-tender` to start it now. A lock held by
-any other process is named and left alone. When the installed service holds the lock, a task that starts a backend
-refuses with `mise run dev:stop --target <name>` in its message.
+as it is — the next task that starts a backend restarts it, or has it reload its JS context, anyway — and leaves the
+installed service enabled, so it starts again at the next login; the message names `systemctl --user start romm-tender`
+to start it now. A lock held by any other process is named and left alone. When the installed service holds the lock, a
+task that starts a backend refuses with `mise run dev:stop --target <name>` in its message.
 
 **`dev:frontend --target` needs the dev backend to hold the lock**, not just any backend: on a target the installed
 service is the likely holder, and it loads the panel it was installed with, never the copy. So beside the installed
@@ -580,8 +588,8 @@ the lock, as above.
 **`dev:ui-scale` runs on the target as the user unit `romm-tender-dev-ui-scale`**, and the task follows what it prints
 until the unit stops, which the task then says, or until Ctrl-C, which ends only the following; the task then asks
 whether the unit still runs, and says so. `dev:ui-scale --stop --target <name>` stops the unit, which restores the scale
-and the window as Ctrl-C does locally, and shows what it said doing so; `dev:stop` leaves it running. `auto`, the
-rescue, runs once and ends, as it does locally.
+and the window as Ctrl-C does locally, and shows what it said doing so — a restore that did not land ends the task with
+1 and says so; `dev:stop` leaves it running. `auto`, the rescue, runs once and ends, as it does locally.
 
 **`dev:log`** shows the target's `backend.log` once; with `--follow` it shows its end and follows it, by name, so a log
 rotated away or not written yet is picked up. **`dev:status`** says what holds the lock — the dev backend, the installed
@@ -609,7 +617,10 @@ A task that cannot reach the target says why and what to do, and nothing is done
 | a host key not the recorded one | another machine answers there: no connection; reinstalled, remove its record and run the setup |
 | the build host's key refused    | this machine's address may have changed: run the setup again                                   |
 
-No such target is found before the build; the other three at the first connection, the copy, after it.
+No such target is found before the build; the other three at the first connection — the copy, or for `dev:log` the read.
+
+A Ctrl-C before a task follows anything ends only this side: `ssh` gives the far side no terminal, so what the task does
+there most likely goes on, and the message says so and names `dev:status`.
 
 ## DevTools
 
