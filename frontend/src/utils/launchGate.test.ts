@@ -13,11 +13,12 @@ import * as backend from "../api/backend";
 import type { LocalDriftAnswer } from "../api/backend";
 import type { SyncConflict } from "../types";
 
-// Only the local-save check is replaced: the offline branch below runs the
-// real op that reads its answer.
+// Only the local-save check and the sync before a start are replaced: the
+// branches below that use them run the real ops that read their answers.
 vi.mock("../api/backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/backend")>()),
   checkLocalDrift: vi.fn(),
+  preLaunchSync: vi.fn(),
 }));
 
 function conflict(overrides: Partial<SyncConflict> = {}): SyncConflict {
@@ -152,6 +153,27 @@ describe("runLaunchGate — verdict branches", () => {
       decision: "sync_failed",
       message: "device not registered",
     });
+  });
+
+  it("asks with RomM's sentence when the sync refuses because RomM no longer has the game", async () => {
+    const gone = "RomM no longer has this game — its saves stay on this device";
+    vi.mocked(backend.preLaunchSync).mockResolvedValueOnce({
+      success: false,
+      reason: "gone_from_romm",
+      message: gone,
+      synced: 0,
+    });
+    const real = makeLaunchGateOps(42, {
+      tag: "LaunchGateTest",
+      toastSyncResult: false,
+      ensureTrackingConfigured: vi.fn(async (): Promise<"proceed" | "abort"> => "proceed"),
+      confirmCoreChange: vi.fn(async () => true),
+      confirmUncheckedStartingSource: vi.fn(async () => true),
+      askSyncWait: vi.fn(),
+    });
+    const ops = makeOps({ checkReachability: vi.fn(async () => true), preLaunchSync: real.preLaunchSync });
+
+    await expect(runLaunchGate(100, 42, ops)).resolves.toEqual({ decision: "sync_failed", message: gone });
   });
 
   it("allows when online sync succeeds with no conflicts", async () => {
