@@ -21,7 +21,12 @@ import type {
   PlatformSystemReason,
   StoreOnly,
 } from "../types";
-import { emulatorDataReasonSentence, isPlatformSystemReason, sourceName } from "./emulatorSourceWording";
+import {
+  emulatorDataReasonSentence,
+  isPlatformSystemReason,
+  PLATFORM_SYSTEM_FACTS,
+  sourceName,
+} from "./emulatorSourceWording";
 
 /** The fields the lines are read off — both surfaces' row shapes carry them. */
 export type PlaceRow = Pick<
@@ -130,23 +135,15 @@ export interface StoreOnlyAnswer {
 
 const KEPT = "Downloads are kept in Tender's firmware store and linked";
 
-// The store-only line for each reason a platform has no system to use, worded
-// from the platform's answer: a `Record` so that a reason added to
-// {@link PlatformSystemReason} must be worded here.
-const NO_SYSTEM_STORE_ONLY: Record<PlatformSystemReason, (answer: PlatformSystemAnswer) => string | null> = {
-  no_platform_system: (answer) =>
-    `${sourceName(answer.source)} has no system for ${answer.platform}. ${KEPT} once it has one.`,
-  platform_unmatched: (answer) => `Tender cannot match ${answer.platform} to a system yet. ${KEPT} once it can.`,
-  platform_pairs_contradict: (answer) =>
-    `RomM's slug "${answer.slug}" and folder "${answer.folder ?? ""}" point to different systems. ${KEPT} once they agree.`,
-  platform_system_not_here: (answer) =>
-    `${sourceName(answer.source)} has a system for ${answer.platform} (${answer.systems.join(", ")}), but it is not set up on this machine. ${KEPT} once it is.`,
-  platform_system_off: (answer) =>
-    answer.systems.length === 0
-      ? null
-      : `System ${answer.systems.join(", ")} is switched off in ${sourceName(answer.source)}. ${KEPT} once it is switched on.`,
-  platform_systems_several: (answer) =>
-    `${sourceName(answer.source)} has several systems for ${answer.platform} (${answer.systems.join(", ")}). ${KEPT} into none of them.`,
+// When each reason's files are linked, after the fact it states (PLATFORM_SYSTEM_FACTS): a `Record` so that a reason
+// added to {@link PlatformSystemReason} must be worded here.
+const LINKED_ONCE: Record<PlatformSystemReason, string> = {
+  no_platform_system: "once it has one",
+  platform_unmatched: "once it can",
+  platform_pairs_contradict: "once they agree",
+  platform_system_not_here: "once it is",
+  platform_system_off: "once it is switched on",
+  platform_systems_several: "into none of them",
 };
 
 /**
@@ -169,7 +166,8 @@ export function storeOnlySentence(
   }
   if (storeOnly === null || storeOnly === undefined) return null;
   if (isPlatformSystemReason(storeOnly)) {
-    return answer.platformSystem === null ? null : NO_SYSTEM_STORE_ONLY[storeOnly](answer.platformSystem);
+    const fact = answer.platformSystem === null ? null : PLATFORM_SYSTEM_FACTS[storeOnly](answer.platformSystem);
+    return fact === null ? null : `${fact}. ${KEPT} ${LINKED_ONCE[storeOnly]}.`;
   }
   // Every source switched off is said with no source named; any other reason needs the one that would answer.
   if (answer.source === null && storeOnly !== "switched_off") return null;

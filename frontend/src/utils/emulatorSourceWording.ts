@@ -350,29 +350,56 @@ const ROMM_READ_FAILURES: Record<RommErrorReason, true> = {
 };
 const ROMM_READ_FAILURE_CODES: ReadonlySet<string> = new Set(Object.keys(ROMM_READ_FAILURES));
 
+/**
+ * The fact each reason a platform has no system to use states, worded from the platform's answer — the clause the
+ * pages' sentence and the BIOS store-only line both begin with (#2751 D2, #2225 D8); `null` for a switched-off
+ * system the answer does not name.
+ */
+export const PLATFORM_SYSTEM_FACTS: Record<PlatformSystemReason, (answer: PlatformSystemAnswer) => string | null> = {
+  platform_unmatched: (answer) => `Tender cannot match ${answer.platform} to a system yet`,
+  platform_pairs_contradict: (answer) =>
+    `RomM's slug "${answer.slug}" and folder "${answer.folder ?? ""}" point to different systems`,
+  no_platform_system: (answer) => `${sourceName(answer.source)} has no system for ${answer.platform}`,
+  platform_system_not_here: (answer) =>
+    `${sourceName(answer.source)} has a system for ${answer.platform} (${answer.systems.join(", ")}), but it is not set up on this machine`,
+  platform_system_off: (answer) =>
+    answer.systems.length === 0
+      ? null
+      : `System ${answer.systems.join(", ")} is switched off in ${sourceName(answer.source)}`,
+  platform_systems_several: (answer) =>
+    `${sourceName(answer.source)} has several systems for ${answer.platform} (${answer.systems.join(", ")})`,
+};
+
+/** An answer naming a platform with no system to use, for the sentences below that are worded from its parts. */
+function answerOf(source: string, platform: string, systems: readonly string[] = []): PlatformSystemAnswer {
+  return { state: "no_system", source, systems: [...systems], platform, slug: "", folder: null };
+}
+
 /** Why a platform's games cannot be downloaded: the resolver cannot match the platform to a system (#2751 D2). */
 export function unmatchedPlatformSentence(platform: string): string {
-  return `Tender cannot match ${platform} to a system yet, so it cannot download its games.`;
+  return `${PLATFORM_SYSTEM_FACTS.platform_unmatched(answerOf("", platform))}, so it cannot download its games.`;
 }
 
 /** Why a platform has no system: RomM's slug and its folder name different systems (#2751 D2). */
 export function contradictedPlatformSentence(platform: string, slug: string, folder: string): string {
-  return `RomM's slug "${slug}" and folder "${folder}" point to different systems, so Tender cannot match ${platform} to a system.`;
+  const fact = PLATFORM_SYSTEM_FACTS.platform_pairs_contradict({ ...answerOf("", platform), slug, folder });
+  return `${fact}, so Tender cannot match ${platform} to a system.`;
 }
 
 /** Why a platform's games cannot be downloaded: the source asked has no system for it. */
 export function noPlatformSystemSentence(kind: string, platform: string): string {
-  return `${sourceName(kind)} has no system for ${platform}, so Tender cannot download its games.`;
+  return `${PLATFORM_SYSTEM_FACTS.no_platform_system(answerOf(kind, platform))}, so Tender cannot download its games.`;
 }
 
 /** Why a platform's games cannot be downloaded: the source has systems for it that this machine has not set up. */
 export function platformSystemNotHereSentence(kind: string, platform: string, systems: readonly string[]): string {
-  return `${sourceName(kind)} has a system for ${platform} (${systems.join(", ")}), but it is not set up on this machine, so Tender cannot download its games.`;
+  const fact = PLATFORM_SYSTEM_FACTS.platform_system_not_here(answerOf(kind, platform, systems));
+  return `${fact}, so Tender cannot download its games.`;
 }
 
 /** Why a platform's games cannot be downloaded: every system it has in the source asked is switched off there. */
 export function platformSystemOffSentence(kind: string, system: string): string {
-  return `System ${system} is switched off in ${sourceName(kind)}.`;
+  return `${PLATFORM_SYSTEM_FACTS.platform_system_off(answerOf(kind, "", [system]))}.`;
 }
 
 /** Why a game is linked into no frontend folder: several of the source's systems answer its platform (#2225 D8). */
@@ -386,7 +413,8 @@ export function severalPlatformSystemsDownloadSentence(
   platform: string,
   systems: readonly string[],
 ): string {
-  return `${sourceName(kind)} has several systems for ${platform} (${systems.join(", ")}), so Tender cannot download its games yet.`;
+  const fact = PLATFORM_SYSTEM_FACTS.platform_systems_several(answerOf(kind, platform, systems));
+  return `${fact}, so Tender cannot download its games yet.`;
 }
 
 /** The sentence for a platform with no system to use, or `null` for any other answer. */
