@@ -18,8 +18,8 @@ reason the domain may hold those literals at all.
 over whatever RetroDECK this machine has, because no fabricated tree can reach a
 rule-card answer — atlas loads the core's own ``.so`` to ask it, so a seeded
 placeholder answers ``core-unqueryable``. Those cases skip where no installation
-is detected, which means CI does not run them and a developer's pre-push gate
-does.
+is detected, or the resolver finds it not set up, which means CI does not run
+them and a developer's pre-push gate on a machine with RetroDECK set up does.
 """
 
 from __future__ import annotations
@@ -1683,14 +1683,23 @@ def machine() -> Any:
     installations = detect(pwd.getpwuid(os.getuid()).pw_dir)
     if not installations:
         pytest.skip("no emulator installation on this machine — the real-resolver tier cannot run")
-    return installations[0]
+    installation = installations[0]
+    # The resolver's own finding decides, never a path of Tender's: an
+    # installation never set up answers every question "not set up".
+    if any(issue.code == HEALTH_ISSUE_NOT_SET_UP for issue in installation.health().issues):
+        pytest.skip(
+            f"{installation.kind} is installed here but not set up (the resolver's {HEALTH_ISSUE_NOT_SET_UP} finding)"
+            " — the real-resolver tier cannot run"
+        )
+    return installation
 
 
 class TestTheRealMachineAnswers:
     """The pinned per-system answers.
 
-    Skipped where no RetroDECK is installed, so CI does not run this and a
-    developer's pre-push gate does. No fabricated tree can stand in: atlas loads
+    Skipped where no RetroDECK is installed, or one is installed but not set
+    up, so CI does not run this and a developer's pre-push gate on a machine
+    with RetroDECK set up does. No fabricated tree can stand in: atlas loads
     a core's own ``.so`` to ask it what it writes, and a seeded placeholder
     answers ``core-unqueryable``.
     """
