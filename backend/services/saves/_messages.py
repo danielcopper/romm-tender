@@ -19,6 +19,9 @@ ROM_GONE_FROM_ROMM = "RomM no longer has this game — its saves stay on this de
 # Sync All Saves Now's clause naming the games RomM no longer has: one, then several.
 GONE_FROM_ROMM_ONE = "{name} is no longer on RomM — its saves stay on this device"
 GONE_FROM_ROMM_SEVERAL = "{names} are no longer on RomM — their saves stay on this device"
+# The clause naming the games a run over several ROMs passed over because they were running: one, then several.
+RUNNING_SKIPPED_ONE = "{name} was skipped because it is running"
+RUNNING_SKIPPED_SEVERAL = "{names} were skipped because they are running"
 # A save Tender could otherwise sync sits beside the content file
 # (``SaveAnswer.in_content_directory``; RetroArch's ``savefiles_in_content_dir``
 # is the usual cause), outside what Tender syncs. Neutral phrasing that
