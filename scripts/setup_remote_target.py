@@ -68,6 +68,12 @@ HOST_KEY_NOT_ACCEPTED = re.compile(r"Host key verification failed")
 KEY_REFUSED = re.compile(r"Permission denied \(")
 NO_LOGIN = re.compile(KEY_REFUSED.pattern + r"|Too many authentication failures")
 UNRESOLVED = re.compile(r"Could not resolve hostname ([^:\s]+)")
+# What ssh says when a connection it had logged in on is lost — the far side
+# gone to sleep, a network gone. "Connection reset" and "closed by" in NO_SERVER
+# match these too, so a line of these is read as no failure before the login.
+LOST_AFTER_LOGIN = re.compile(
+    r"client_loop: |packet_write_wait: |Timeout, server \S+ not responding|Connection to \S+ closed by remote host"
+)
 NO_SERVER = re.compile(
     r"Connection refused|Connection timed out|Operation timed out|No route to host|Network is unreachable"
     r"|kex_exchange_identification|Connection closed by|Connection reset"
@@ -102,11 +108,7 @@ class SetupError(Exception):
 
 @dataclass(frozen=True)
 class Destination:
-    """Where a target is: what ``ssh -G`` resolved :attr:`text` to, or a target's entry read back.
-
-    :func:`read_entries` builds one from the dev loop's config, where
-    :attr:`text` is the target's name and a ProxyJump is already resolved.
-    """
+    """Where a target is: what ``ssh -G`` resolved :attr:`text` to, or an entry :func:`read_entries` read back."""
 
     text: str
     user: str
@@ -115,8 +117,7 @@ class Destination:
     proxy_jump: str | None
     proxy_command: str | None
     jump: str | None = None
-    """:attr:`proxy_jump` with every hop spelled out (:func:`resolve_jump`): once :func:`with_jump` has run, or
-    as the entry :func:`read_entries` read back recorded it."""
+    """:attr:`proxy_jump` with every hop spelled out (:func:`resolve_jump`), once :func:`with_jump` has run."""
 
     @property
     def via(self) -> str | None:
@@ -326,22 +327,35 @@ class SshFailure:
     unresolved: str | None = None
     """The name ssh could not resolve, for ``unresolved``."""
     offending: str | None = None
-    """The known-hosts file that records another key, for ``host key changed`` where ssh names one."""
+    """The known-hosts file that records another key, for ``host key changed`` on a hop."""
     key_refused: bool = False
     """For ``no login``: a key was refused ("Permission denied"), not the login ended for too many tries."""
+
+    def __post_init__(self) -> None:
+        own = {
+            "unresolved": self.kind == "unresolved",
+            "offending": self.kind == "host key changed",
+            "key_refused": self.kind == "no login",
+        }
+        for field_name, allowed in own.items():
+            if getattr(self, field_name) not in (None, False) and not allowed:
+                raise ValueError(f"a {self.kind!r} failure carries no {field_name}")
 
 
 def ssh_failure(
     stderr: str, *, name: str, destination: Destination, known_hosts: tuple[pathlib.Path, ...] = ()
 ) -> SshFailure | None:
-    """The failure *stderr* reports, or ``None`` for one no pattern here knows.
+    """The failure *stderr* reports before the login, or ``None`` for one no pattern here knows.
 
+    A connection lost after the login (:data:`LOST_AFTER_LOGIN`) is none.
     Tested in this order: a changed host key also prints "Host key verification
     failed", and a refused login can end in "Connection closed". A changed host
-    key is the target's when ssh names no file or one of *known_hosts*, and a
-    hop's otherwise; every other failure is placed by :func:`failed_where`.
-    Each tool words the message itself.
+    key is the target's when there is no hop on the way, or ssh names no file
+    or one of *known_hosts*, and a hop's otherwise; every other failure is
+    placed by :func:`failed_where`. Each tool words the message itself.
     """
+    if LOST_AFTER_LOGIN.search(stderr):
+        return None
     where = failed_where(stderr, name=name, destination=destination)
     if HOST_KEY_CHANGED.search(stderr):
         offending = _OFFENDING_FILE.search(stderr)
@@ -372,8 +386,13 @@ def classify(
     is worded as the hop's; one it names on no host, as the target's or the hop's.
     """
     failure = ssh_failure(stderr, name=name, destination=destination, known_hosts=(known_hosts, trial_known_hosts))
-    if failure is None:
-        return None
+    return (
+        None if failure is None else word_failure(failure, name=name, destination=destination, known_hosts=known_hosts)
+    )
+
+
+def word_failure(failure: SshFailure, *, name: str, destination: Destination, known_hosts: pathlib.Path) -> str | None:
+    """The setup's message for *failure*, as :func:`classify` gives it."""
     host = destination.hostname
     hop = f"the hop {destination.via}"
     match failure.kind:
@@ -480,14 +499,11 @@ def failure_message(
     else:
         failure = None
         if result.returncode == SSH_FAILED:
-            failure = classify(
-                result.stderr,
-                name=name,
-                destination=destination,
-                known_hosts=known_hosts,
-                trial_known_hosts=trial_known_hosts,
+            read = ssh_failure(
+                result.stderr, name=name, destination=destination, known_hosts=(known_hosts, trial_known_hosts)
             )
-            read = ssh_failure(result.stderr, name=name, destination=destination)
+            if read is not None:
+                failure = word_failure(read, name=name, destination=destination, known_hosts=known_hosts)
             if failure is None and read is not None and read.kind == "no login":
                 failure = no_login_message(destination, key_refused=handed_over == "refused")
         if failure is None:
@@ -746,11 +762,11 @@ def hand_over(result: subprocess.CompletedProcess[str], *, name: str, destinatio
     if result.returncode != SSH_FAILED:
         return "forced command"
     failure = ssh_failure(result.stderr, name=name, destination=destination)
-    if failure is None or failure.kind != "no login":
+    if failure is None:
         return None
     if failure.where == "target" and failure.key_refused:
         return "refused"
-    if failure.where == "hop":
+    if failure.where == "hop" and failure.kind == "no login":
         return "hop"
     return None
 

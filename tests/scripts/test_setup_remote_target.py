@@ -25,6 +25,7 @@ import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import _remote_target
 import pytest
@@ -1060,6 +1061,52 @@ class TestReadingWhatSshSaid:
         assert (self._classify(_STDERR["unresolved"]) or "").startswith(
             "tender-dev: this machine cannot resolve 192.168.1.20"
         )
+
+    def test_a_changed_host_key_with_no_hop_on_the_way_is_the_targets_whatever_file_ssh_names(self) -> None:
+        stderr = (
+            "@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\n"
+            "Offending ED25519 key in /home/u/.ssh/known_hosts:3\n"
+            "Host key for 192.168.1.20 has changed and you have requested strict checking.\n"
+            "Host key verification failed."
+        )
+
+        failure = setup_remote_target.ssh_failure(stderr, name="deck", destination=self._DESTINATION)
+
+        assert failure is not None
+        assert (failure.kind, failure.where) == ("host key changed", "target")
+
+    @pytest.mark.parametrize(
+        "stderr",
+        [
+            "client_loop: send disconnect: Connection reset by peer",
+            "Connection to 192.168.1.20 closed by remote host.",
+            "Timeout, server 192.168.1.20 not responding.",
+            "packet_write_wait: Connection to 192.168.1.20 port 22: Broken pipe",
+        ],
+        ids=["reset", "closed", "timeout", "broken pipe"],
+    )
+    def test_a_connection_lost_after_the_login_is_no_failure_before_it(self, stderr: str) -> None:
+        assert setup_remote_target.ssh_failure(stderr, name="deck", destination=self._DESTINATION) is None
+
+    def test_too_many_authentication_failures_hands_nothing_over(self) -> None:
+        """The key was not refused: the login ended before it was tried, and the user's own login is not tried."""
+        result = subprocess.CompletedProcess(
+            ["ssh"],
+            255,
+            "",
+            "Received disconnect from 192.168.1.20 port 22:2: Too many authentication failures\n"
+            "Disconnected from 192.168.1.20 port 22",
+        )
+
+        assert setup_remote_target.hand_over(result, name="deck", destination=self._DESTINATION) is None
+
+    @pytest.mark.parametrize(
+        ("kind", "field"),
+        [("no server", {"key_refused": True}), ("no login", {"offending": "/x"}), ("no server", {"unresolved": "x"})],
+    )
+    def test_a_failure_carries_only_its_own_kinds_fields(self, kind: Any, field: dict[str, Any]) -> None:
+        with pytest.raises(ValueError, match="carries"):
+            setup_remote_target.SshFailure(kind, "target", **field)
 
     @pytest.mark.parametrize("case", ["too many", "denied", "denied then closed"])
     def test_no_login_accepted(self, case: str) -> None:
