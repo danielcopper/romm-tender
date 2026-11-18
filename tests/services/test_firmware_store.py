@@ -26,7 +26,7 @@ from fakes.fake_core_info_provider import FakeCoreInfoProvider, libretro_option,
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
-from fakes.fake_platform_systems import FakePlatformSystems, platform_answer
+from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems, platform_answer
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
@@ -34,7 +34,7 @@ from fakes.system_time import FakeClock
 
 from adapters.firmware_file import FirmwareFileAdapter
 from domain.bios_file import BiosFile
-from domain.emulator_sources import NO_SOURCE_DETECTED
+from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, NO_SOURCE_DETECTED
 from domain.firmware_wants import IDENTITY_ARCHIVE, IDENTITY_FILE, FolderFile
 from domain.platform_system import (
     CONTRADICTED,
@@ -1277,6 +1277,23 @@ class TestOnlyTheStore:
         assert entry["store_only"] == "no_source"
 
     @pytest.mark.parametrize(
+        ("unasked", "source", "reason"),
+        [
+            (ALL_SOURCES_SWITCHED_OFF, None, "switched_off"),
+            ("catalogue_invalid", RETRODECK_SOURCE, "catalogue_invalid"),
+            ("server_unreachable", RETRODECK_SOURCE, "server_unreachable"),
+        ],
+    )
+    async def test_a_platform_no_source_was_asked_for_says_why_it_was_not(self, machine, unasked, source, reason):
+        machine.platform_systems.answers["switch"] = platform_answer(
+            UNASKED, "switch", name="switch", source=source, unasked=unasked
+        )
+
+        entry = (await machine.service.get_platform_firmware_status("switch", "switch"))["platform"]
+
+        assert entry["store_only"] == reason
+
+    @pytest.mark.parametrize(
         ("state", "system", "reason"),
         [
             (NO_SYSTEM, None, "no_platform_system"),
@@ -1314,6 +1331,16 @@ class TestOnlyTheStore:
         assert [path for path in machine.bios.rglob("*") if path.is_symlink()] == []
         assert (result["placed"], links["placed"]) == (0, 0)
         assert entry["store_only"] == "platform_systems_several"
+
+    async def test_a_game_s_answer_carries_what_its_store_only_line_is_worded_from(self, machine):
+        several = (SystemPair("esde", "saturn"), SystemPair("esde", "saturnjp"))
+        machine.platform_systems.answers["saturn"] = platform_answer(SEVERAL, "saturn", several, name="Saturn")
+
+        answer = await machine.service.check_platform_bios("saturn", "saturn")
+
+        assert answer["store_only"] == "platform_systems_several"
+        assert answer["platform_system"]["systems"] == ["saturn", "saturnjp"]
+        assert answer["emulator_source"] == {"kind": "retrodeck", "starts_games": True}
 
     async def test_download_all_fetches_a_file_no_emulator_asks_for_and_lists_it_as_used_by_none(self, machine):
         _saturn(machine)

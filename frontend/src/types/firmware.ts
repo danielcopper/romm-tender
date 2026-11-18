@@ -1005,6 +1005,9 @@ export interface BiosStatus extends EmulatorAnswer {
   bios_status_unknown?: boolean;
   /** See {@link StoreOnly}. */
   store_only?: StoreOnly | null;
+  /** What the store-only line is worded from: the platform's system and the source that answered. */
+  platform_system?: PlatformSystemAnswer | null;
+  emulator_source?: AnsweringSource | null;
   /** As on {@link FirmwarePlatformExt}. */
   backup_root?: string;
   /** As on {@link FirmwarePlatformExt}. */

@@ -133,7 +133,7 @@ const KEPT = "Downloads are kept in Tender's firmware store and linked";
 // The store-only line for each reason a platform has no system to use, worded
 // from the platform's answer: a `Record` so that a reason added to
 // {@link PlatformSystemReason} must be worded here.
-const NO_SYSTEM_STORE_ONLY: Record<PlatformSystemReason, (answer: PlatformSystemAnswer) => string> = {
+const NO_SYSTEM_STORE_ONLY: Record<PlatformSystemReason, (answer: PlatformSystemAnswer) => string | null> = {
   no_platform_system: (answer) =>
     `${sourceName(answer.source)} has no system for ${answer.platform}. ${KEPT} once it has one.`,
   platform_unmatched: (answer) => `Tender cannot match ${answer.platform} to a system yet. ${KEPT} once it can.`,
@@ -142,7 +142,9 @@ const NO_SYSTEM_STORE_ONLY: Record<PlatformSystemReason, (answer: PlatformSystem
   platform_system_not_here: (answer) =>
     `${sourceName(answer.source)} has a system for ${answer.platform} (${answer.systems.join(", ")}), but it is not set up on this machine. ${KEPT} once it is.`,
   platform_system_off: (answer) =>
-    `System ${answer.systems.join(", ")} is switched off in ${sourceName(answer.source)}. ${KEPT} once it is switched on.`,
+    answer.systems.length === 0
+      ? null
+      : `System ${answer.systems.join(", ")} is switched off in ${sourceName(answer.source)}. ${KEPT} once it is switched on.`,
   platform_systems_several: (answer) =>
     `${sourceName(answer.source)} has several systems for ${answer.platform} (${answer.systems.join(", ")}). ${KEPT} into none of them.`,
 };
@@ -169,7 +171,8 @@ export function storeOnlySentence(
   if (isPlatformSystemReason(storeOnly)) {
     return answer.platformSystem === null ? null : NO_SYSTEM_STORE_ONLY[storeOnly](answer.platformSystem);
   }
-  if (answer.source === null) return null;
+  // Every source switched off is said with no source named; any other reason needs the one that would answer.
+  if (answer.source === null && storeOnly !== "switched_off") return null;
   const why = emulatorDataReasonSentence(storeOnly, answer.source, answer.platformSystem);
   return `${why} ${KEPT} once the platform's system is known.`;
 }

@@ -170,7 +170,11 @@ function buildBiosHeader(
     bios.store_only,
     bios.active_core_label ?? coreInfo?.active_core_label ?? null,
     platformName ?? "this platform",
-    { source: coreInfo?.emulator_source ?? null, platformSystem: coreInfo?.platform_system ?? null },
+    // The BIOS answer carries what its own line is worded from; the core read stands in where it does not.
+    {
+      source: bios.emulator_source ?? coreInfo?.emulator_source ?? null,
+      platformSystem: bios.platform_system ?? coreInfo?.platform_system ?? null,
+    },
   );
 
   const biosColor = biosColorForLevel(biosLevel);

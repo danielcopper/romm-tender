@@ -42,7 +42,7 @@ from domain.bios_status import (
 )
 from domain.emulator_commands import options_to_payload, resolve_firmware_option
 from domain.emulator_pick import pick_for, source_kind
-from domain.emulator_sources import unlisted_system
+from domain.emulator_sources import NO_SOURCE_DETECTED, unlisted_system
 from domain.firmware_groups import console_regions_of, judge_groups
 from domain.firmware_rows import leaves_its_folder, library_file
 from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
@@ -588,7 +588,8 @@ class FirmwareStatusReader:
 
         Every answer, that one included, carries what the game page's BIOS part
         stands on, as the platform entry does: the emulator entries, where a
-        download lands (``store_only``, ``backup_root``), the delete counts
+        download lands (``store_only``, ``backup_root``) and what the line
+        saying so is worded from (``platform_system``, ``emulator_source``), the delete counts
         (:meth:`_stamp_deletable`) and ``server_offline``, whether the library's
         listing could be read.
         """
@@ -624,6 +625,9 @@ class FirmwareStatusReader:
             if not files and met is True:
                 payload["needs_bios"] = False
         payload["store_only"] = _store_only(platform, catalogue, identity)
+        # What the store-only line is worded from, carried by this answer itself.
+        payload["platform_system"] = platform.payload()
+        payload["emulator_source"] = options["source"]
         payload["backup_root"] = self._store.backup_root()
         payload["emulator_tabs"] = emulator_tabs(
             catalogue, identity, pick.label if pick is not None else None, options["options"], others
@@ -669,17 +673,17 @@ def _overview_payload(entry: BiosFileEntry) -> dict[str, Any]:
 def _store_only(platform: PlatformSystem, catalogue: FirmwareCatalogue, emulator: str | None) -> str | None:
     """Why a download here lands in the store and is linked nowhere, or ``None`` where it may be linked.
 
-    ``no_source`` where no emulator source answers for the platform; why the
-    one that would answer was not asked, where it was not (RomM's list of
-    platforms could not be read, its catalogue refused); the
-    platform's own reason where the source that answered has no one system
-    for it — none, several (a link lands in one system's place), a
-    switched-off one, one this machine has not set up, or a platform it cannot
-    match; ``unsupported`` where the resolver does not cover the launching
-    emulator — it states it so, or a reading that happened holds no entry for it.
+    Where no source was asked, why: ``no_source`` where none is detected,
+    ``switched_off`` where every one is switched off, or the reason the one
+    that would answer was not asked (RomM's list of platforms could not be
+    read, its catalogue refused). Where the source that answered has no one
+    system for the platform, its :class:`~domain.platform_system.PlatformRefusal`
+    — several among them, since a link lands in one system's place.
+    ``unsupported`` where the resolver does not cover the launching emulator —
+    it states it so, or a reading that happened holds no entry for it.
     """
     if platform.state == UNASKED:
-        return platform.unasked if platform.source is not None and platform.unasked is not None else "no_source"
+        return platform.unasked or NO_SOURCE_DETECTED
     reason = platform.no_system_reason
     if reason is not None:
         return reason

@@ -221,6 +221,32 @@ describe("BiosTab", () => {
     );
   });
 
+  it("words the store-only line from the BIOS answer's own platform system", () => {
+    const { container } = render(
+      <BiosTabWithState
+        biosStatus={{
+          needs_bios: false,
+          bios_status_unknown: true,
+          store_only: "no_platform_system",
+          emulator_source: { kind: "retrodeck", starts_games: true },
+          platform_system: {
+            state: "no_system",
+            source: "retrodeck",
+            systems: [],
+            platform: "PC-98",
+            slug: "pc-9800-series",
+            folder: "pc98",
+          },
+        }}
+        biosLevel="unknown"
+        coreInfo={{ ...coreInfo, platform_system: null }}
+      />,
+    );
+    expect(container.querySelector('[data-testid="bios-store-only"]')?.textContent).toBe(
+      "RetroDECK has no system for PC-98. Downloads are kept in Tender's firmware store and linked once it has one.",
+    );
+  });
+
   it("puts the reason line between the BIOS heading and the state", () => {
     const { container } = render(
       <BiosTabWithState

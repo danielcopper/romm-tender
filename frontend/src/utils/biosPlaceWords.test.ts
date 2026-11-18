@@ -229,6 +229,21 @@ describe("storeOnlySentence", () => {
     ).toBe(sentence);
   });
 
+  it("says every source is switched off, with no source to name", () => {
+    expect(storeOnlySentence("switched_off", null, "Master System", { source: null, platformSystem: null })).toBe(
+      "Every emulator source is switched off in Settings › Emulator sources. Downloads are kept in Tender's firmware store and linked once the platform's system is known.",
+    );
+  });
+
+  it("says nothing of a switched-off system it cannot name", () => {
+    expect(
+      storeOnlySentence("platform_system_off", null, "Master System", {
+        source: RETRODECK,
+        platformSystem: answer([]),
+      }),
+    ).toBeNull();
+  });
+
   it("says why the source that would answer was not asked, then that the files wait for the system", () => {
     expect(
       storeOnlySentence("server_unreachable", null, "Master System", { source: RETRODECK, platformSystem: null }),
