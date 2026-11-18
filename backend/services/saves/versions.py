@@ -27,6 +27,7 @@ from domain.save_status import compute_multi_file_slot
 from domain.save_status_builders import shown_device_syncs
 from lib.errors import Refused, RommApiError, RommNotFoundError, classify_error, with_system_text
 from services.saves._helpers import local_save_target
+from services.saves._refusals import GoneFromRomm
 from services.saves._save_state import read_save_state_or_new, write_save_state
 from services.saves._settings import resolve_default_slot
 
@@ -378,6 +379,9 @@ class VersionsService:
         - ``{"status": "preflight_failed", "errors": [...]}`` if the
           pre-flight hit non-conflict errors (network, server, etc.).
           No switch was attempted.
+        - ``gone_from_romm`` is raised, after the save state is written, if
+          the pre-flight found RomM no longer has the ROM. No switch was
+          attempted.
         - ``{"status": "put_failed", "message": ...}`` if the local
           download succeeded but the server-side ``updated_at`` bump
           failed. Local file and state already point at the target;
@@ -433,9 +437,13 @@ class VersionsService:
 
             # Matrix pre-flight: get the tracked save in sync first, or surface
             # a conflict that the user must resolve before any switch can run.
-            _uploaded, _downloaded, errors, conflicts = await self._loop.run_in_executor(
-                None, self._matrix.sync_rom_saves, rom_id, save_state, device_id, core_so, default_slot
-            )
+            try:
+                _uploaded, _downloaded, errors, conflicts = await self._loop.run_in_executor(
+                    None, self._matrix.sync_rom_saves, rom_id, save_state, device_id, core_so, default_slot
+                )
+            except GoneFromRomm:
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
+                raise
             if conflicts:
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {
