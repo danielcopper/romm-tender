@@ -17,9 +17,7 @@ import {
   startingSourceOffSentence,
   withFindingSentence,
   withPlatformSystemSentence,
-  platformSystemNotHereSentence,
   platformSystemNotes,
-  severalPlatformSystemsSentence,
   unmatchedPlatformSentence,
 } from "./emulatorSourceWording";
 
@@ -403,7 +401,7 @@ describe("emulatorDataReasonSentence", () => {
     "unknown",
     "platform_listing_unreadable",
   ] as const)("says RomM did not give the platform's ids where the read that gives them failed with %s", (reason) => {
-    const sentence = "RomM did not give this platform's ids, so Tender does not know its system yet.";
+    const sentence = "RomM did not give its list of platforms, so Tender does not know this platform's system yet.";
     expect(emulatorDataReasonSentence(reason, RETRODECK, null)).toBe(sentence);
     expect(emulatorDataReasonSentence(reason, null, null)).toBe(sentence);
   });
@@ -428,24 +426,39 @@ describe("each case of a platform with no system to use says which it is (#2751 
     system: systems.length === 1 ? systems[0]! : null,
     systems,
     platform: "Sega Master System",
+    slug: "sms",
+    folder: "megadrive",
   });
   const cases: [EmulatorDataReason, PlatformSystemAnswer, string][] = [
-    ["platform_unmatched", answer("unmatched", []), unmatchedPlatformSentence("Sega Master System")],
-    ["no_platform_system", answer("no_system", []), noPlatformSystemSentence("retrodeck", "Sega Master System")],
+    [
+      "platform_unmatched",
+      answer("unmatched", []),
+      "Tender cannot match Sega Master System to a system yet, so it cannot download its games.",
+    ],
+    [
+      "platform_pairs_contradict",
+      answer("contradicted", []),
+      'RomM\'s slug "sms" and folder "megadrive" point to different systems, so Tender cannot match Sega Master System to a system.',
+    ],
+    [
+      "no_platform_system",
+      answer("no_system", []),
+      "RetroDECK has no system for Sega Master System, so Tender cannot download its games.",
+    ],
     [
       "platform_system_not_here",
       answer("not_here", ["mastersystem"]),
-      platformSystemNotHereSentence("retrodeck", "Sega Master System", ["mastersystem"]),
+      "RetroDECK has a system for Sega Master System (mastersystem), but it is not set up on this machine, so Tender cannot download its games.",
     ],
     [
       "platform_system_off",
       answer("switched_off", ["mastersystem"]),
-      platformSystemOffSentence("retrodeck", "mastersystem"),
+      "System mastersystem is switched off in RetroDECK.",
     ],
     [
       "platform_systems_several",
       answer("several", ["mark3", "mastersystem"]),
-      severalPlatformSystemsSentence("retrodeck", "Sega Master System", ["mark3", "mastersystem"]),
+      "RetroDECK has several systems for Sega Master System (mark3, mastersystem), so Tender cannot download its games yet.",
     ],
   ];
 
@@ -470,13 +483,13 @@ describe("each case of a platform with no system to use says which it is (#2751 
 
   it("names every switched-off system where several are", () => {
     expect(emulatorDataReasonSentence("platform_system_off", RETRODECK, answer("switched_off", ["mark3", "sms"]))).toBe(
-      platformSystemOffSentence("retrodeck", "mark3, sms"),
+      "System mark3, sms is switched off in RetroDECK.",
     );
   });
 
   it("says on a game's page why a platform of several systems gets no frontend link, and nothing otherwise", () => {
     expect(platformSystemNotes(answer("several", ["mark3", "mastersystem"]))).toEqual([
-      severalPlatformSystemsSentence("retrodeck", "Sega Master System", ["mark3", "mastersystem"]),
+      "RetroDECK has several systems for Sega Master System (mark3, mastersystem), and Tender links its games into none of them.",
     ]);
     expect(platformSystemNotes(answer("found", ["mastersystem"]))).toEqual([]);
     expect(platformSystemNotes(null)).toEqual([]);
@@ -490,6 +503,8 @@ describe("a platform with no switched-on system", () => {
     system: null,
     systems: [],
     platform: "Commodore VIC-20",
+    slug: "vic-20",
+    folder: "vic20",
   };
   const SWITCHED_OFF: PlatformSystemAnswer = {
     state: "switched_off",
@@ -497,6 +512,8 @@ describe("a platform with no switched-on system", () => {
     system: "xbox360",
     systems: ["xbox360"],
     platform: "Xbox 360",
+    slug: "xbox360",
+    folder: "xbox360",
   };
 
   it("says the source has no system for the platform, by the source's and the platform's names", () => {
@@ -533,6 +550,8 @@ describe("a platform with no switched-on system", () => {
       platform: "Commodore VIC-20",
       system: null,
       systems: [],
+      slug: "vic-20",
+      folder: "vic20",
     };
     expect(withPlatformSystemSentence(refused)).toEqual({
       ...refused,

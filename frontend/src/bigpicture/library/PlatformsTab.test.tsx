@@ -1278,7 +1278,15 @@ describe("Library › Platforms", () => {
     it("keeps every part of that line on one line, so it wraps only between parts", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          platform_system: { state: "found", source: "retrodeck", system: "gba", systems: ["gba"], platform: "GBA" },
+          platform_system: {
+            state: "found",
+            source: "retrodeck",
+            system: "gba",
+            systems: ["gba"],
+            platform: "GBA",
+            slug: "gba",
+            folder: "gba",
+          },
         }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
@@ -1344,7 +1352,15 @@ describe("Library › Platforms", () => {
     it("names no system while one is found", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          platform_system: { state: "found", source: "retrodeck", system: "gba", systems: ["gba"], platform: "GBA" },
+          platform_system: {
+            state: "found",
+            source: "retrodeck",
+            system: "gba",
+            systems: ["gba"],
+            platform: "GBA",
+            slug: "gba",
+            folder: "gba",
+          },
         }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
@@ -1367,6 +1383,8 @@ describe("Library › Platforms", () => {
             system: null,
             systems: [],
             platform: "Game Boy Advance",
+            slug: "gba",
+            folder: "gba",
           },
           active_core_label: null,
         }),
@@ -1412,7 +1430,7 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(container.textContent).toContain(
-        "RomM did not give this platform's ids, so Tender does not know its system yet.",
+        "RomM did not give its list of platforms, so Tender does not know this platform's system yet.",
       );
       expect(container.textContent).not.toContain("emulator list is not established");
     });
@@ -1429,6 +1447,8 @@ describe("Library › Platforms", () => {
             system: "gbaoff",
             systems: ["gbaoff"],
             platform: "GBA",
+            slug: "gba",
+            folder: "gba",
           },
           active_core_label: null,
         }),

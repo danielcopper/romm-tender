@@ -230,6 +230,7 @@ export function withFindingSentence<T>(answer: T): T {
 /** The reasons a press is refused with for a platform that has no system to use in its source (#2751 D2). */
 const PLATFORM_SYSTEM_REASONS: ReadonlySet<string> = new Set([
   "platform_unmatched",
+  "platform_pairs_contradict",
   "no_platform_system",
   "platform_system_not_here",
   "platform_system_off",
@@ -237,14 +238,16 @@ const PLATFORM_SYSTEM_REASONS: ReadonlySet<string> = new Set([
 ]);
 
 function isPlatformSystemRefusal(answer: object): answer is { reason: EmulatorDataReason } & PlatformSystemAnswer {
-  const { reason, source, platform, system, systems } = answer as Record<string, unknown>;
+  const { reason, source, platform, system, systems, slug, folder } = answer as Record<string, unknown>;
   return (
     typeof reason === "string" &&
     PLATFORM_SYSTEM_REASONS.has(reason) &&
     typeof source === "string" &&
     typeof platform === "string" &&
     (system === null || typeof system === "string") &&
-    Array.isArray(systems)
+    Array.isArray(systems) &&
+    typeof slug === "string" &&
+    (folder === null || typeof folder === "string")
   );
 }
 
@@ -314,11 +317,12 @@ export function sealedCatalogueSentence(kind: string): string {
   return `${sourceName(kind)}'s emulator list cannot be read yet.`;
 }
 
-/** Why a platform has no system yet: its ids are not kept, and RomM, which gives them, cannot be reached. */
+/** Why a platform has no system yet: nothing is kept for it, and RomM, whose list of platforms gives it, cannot be reached. */
 const ROMM_UNREACHABLE_SENTENCE = "RomM cannot be reached, so Tender does not know this platform's system yet.";
 
-/** Why a platform has no system yet: its ids are not kept, and the RomM read that gives them failed. */
-const ROMM_REFUSED_SENTENCE = "RomM did not give this platform's ids, so Tender does not know its system yet.";
+/** Why a platform has no system yet: nothing is kept for it, and the read of RomM's list of platforms failed. */
+const ROMM_REFUSED_SENTENCE =
+  "RomM did not give its list of platforms, so Tender does not know this platform's system yet.";
 
 /** Every reason a RomM read can fail with: a `Record` so that a reason added to {@link RommErrorReason} must be added here. */
 const ROMM_READ_FAILURES: Record<RommErrorReason, true> = {
@@ -335,13 +339,14 @@ const ROMM_READ_FAILURES: Record<RommErrorReason, true> = {
 };
 const ROMM_READ_FAILURE_CODES: ReadonlySet<string> = new Set(Object.keys(ROMM_READ_FAILURES));
 
-// PLACEHOLDER WORDING — the sentences for a platform with no system to use
-// (#2751 D2) and for one with several (#2225 D8) wait for the owner's wording;
-// each below is a draft, built in so the states can be tested.
-
 /** Why a platform's games cannot be downloaded: the resolver cannot match the platform to a system (#2751 D2). */
 export function unmatchedPlatformSentence(platform: string): string {
   return `Tender cannot match ${platform} to a system yet, so it cannot download its games.`;
+}
+
+/** Why a platform has no system: RomM's slug and its folder name different systems (#2751 D2). */
+export function contradictedPlatformSentence(platform: string, slug: string, folder: string): string {
+  return `RomM's slug "${slug}" and folder "${folder}" point to different systems, so Tender cannot match ${platform} to a system.`;
 }
 
 /** Why a platform's games cannot be downloaded: the source asked has no system for it. */
@@ -359,9 +364,18 @@ export function platformSystemOffSentence(kind: string, system: string): string 
   return `System ${system} is switched off in ${sourceName(kind)}.`;
 }
 
-/** Why a platform's games are linked into no frontend folder: several of the source's systems answer it (#2225 D8). */
+/** Why a game is linked into no frontend folder: several of the source's systems answer its platform (#2225 D8). */
 export function severalPlatformSystemsSentence(kind: string, platform: string, systems: readonly string[]): string {
   return `${sourceName(kind)} has several systems for ${platform} (${systems.join(", ")}), and Tender links its games into none of them.`;
+}
+
+/** Why a platform's games cannot be downloaded: several of the source's systems answer it (#2225 D8). */
+export function severalPlatformSystemsDownloadSentence(
+  kind: string,
+  platform: string,
+  systems: readonly string[],
+): string {
+  return `${sourceName(kind)} has several systems for ${platform} (${systems.join(", ")}), so Tender cannot download its games yet.`;
 }
 
 /** The sentence for a platform with no system to use, or `null` for any other answer. */
@@ -371,6 +385,8 @@ function platformSystemSentence(reason: EmulatorDataReason | null, answer: Platf
   switch (reason) {
     case "platform_unmatched":
       return unmatchedPlatformSentence(answer.platform);
+    case "platform_pairs_contradict":
+      return contradictedPlatformSentence(answer.platform, answer.slug, answer.folder ?? "");
     case "no_platform_system":
       return noPlatformSystemSentence(answer.source, answer.platform);
     case "platform_system_not_here":
@@ -378,7 +394,7 @@ function platformSystemSentence(reason: EmulatorDataReason | null, answer: Platf
     case "platform_system_off":
       return systems.length === 0 ? null : platformSystemOffSentence(answer.source, systems.join(", "));
     case "platform_systems_several":
-      return severalPlatformSystemsSentence(answer.source, answer.platform, systems);
+      return severalPlatformSystemsDownloadSentence(answer.source, answer.platform, systems);
     default:
       return null;
   }

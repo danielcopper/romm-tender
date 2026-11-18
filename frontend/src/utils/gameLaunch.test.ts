@@ -635,7 +635,13 @@ describe("a launch the resolver could not establish (#2195 D2, D40, D41 changed)
   });
 
   it("names each thing that could not be established, one note each", () => {
-    expect(launchNotes(UNESTABLISHED, RETRODECK)).toHaveLength(5);
+    expect(launchNotes(UNESTABLISHED, RETRODECK)).toEqual([
+      "Whether Genesis Plus GX starts this game cannot be established: the path of Game.cue is too long for it to read in full, and what it does then was not checked.",
+      "Whether Genesis Plus GX starts this game cannot be established; it would go on without Track 02.bin: it is missing.",
+      "Whether Genesis Plus GX starts this game cannot be established; it does not read every disc Game.m3u lists.",
+      "Whether Genesis Plus GX reads .cue files is not established.",
+      "Whether Genesis Plus GX starts this game cannot be established: how Genesis Plus GX takes a game installed as a folder was not checked.",
+    ]);
   });
 
   it("nowhere says the game can start", () => {
@@ -661,7 +667,9 @@ describe("a launch the resolver could not establish (#2195 D2, D40, D41 changed)
       platform_name: "Sega Master System",
     });
 
-    expect(launchNotes(several, RETRODECK)[0]).toContain("several systems for Sega Master System");
+    expect(launchNotes(several, RETRODECK)).toEqual([
+      "Whether RPCS3 Directory (Standalone) starts this game cannot be established: RetroDECK has several systems for Sega Master System and names none of them.",
+    ]);
   });
 });
 
@@ -675,12 +683,13 @@ describe("a name the frontend would not list the file under (#2195 D2)", () => {
 
   it("is a note beside a start, which it does not refuse", () => {
     expect(launchRefused(UNLISTED)).toBe(false);
-    expect(launchNotes(UNLISTED, RETRODECK)).toHaveLength(1);
-    expect(launchNotes(UNLISTED, RETRODECK)[0]).toContain("Game.GBA");
+    expect(launchNotes(UNLISTED, RETRODECK)).toEqual([
+      "ES-DE would not list Game.GBA under this name; it lists files ending in .gba.",
+    ]);
   });
 
   it("is the emulator menu's line too", () => {
-    expect(entryLaunchLine(UNLISTED, RETRODECK)).toContain("Game.GBA");
+    expect(entryLaunchLine(UNLISTED, RETRODECK)).toBe("ES-DE would not list Game.GBA under this name");
   });
 });
 
@@ -688,6 +697,9 @@ describe("a folder holding files the entry takes as games of their own", () => {
   it("names those files", () => {
     const holds = launch({ statements: [{ reason: "folder_holds_games", file: "Game.iso, Other.iso" }] });
 
-    expect(launchNotes(holds, RETRODECK)[0]).toContain("Game.iso, Other.iso");
+    expect(launchNotes(holds, RETRODECK)).toEqual([
+      "Game.ps3 holds files RPCS3 Directory (Standalone) would take as games of their own: Game.iso, Other.iso.",
+    ]);
+    expect(entryLaunchLine(holds, RETRODECK)).toBe("the folder holds games of their own: Game.iso, Other.iso");
   });
 });

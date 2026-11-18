@@ -14,6 +14,7 @@ import os
 import pytest
 
 from domain.platform_system import (
+    CONTRADICTED,
     FOUND,
     NO_SYSTEM,
     NOT_HERE,
@@ -102,6 +103,7 @@ async def test_the_download_the_emulator_choice_and_the_bios_answer_ask_one_syst
         (SWITCHED_OFF, "gbaoff", "platform_system_off"),
         (UNMATCHED, None, "platform_unmatched"),
         (NOT_HERE, "gbanothere", "platform_system_not_here"),
+        (CONTRADICTED, None, "platform_pairs_contradict"),
     ],
 )
 async def test_a_platform_with_no_switched_on_system_downloads_nothing_and_says_why(harness, state, system, reason):
@@ -121,6 +123,8 @@ async def test_a_platform_with_no_switched_on_system_downloads_nothing_and_says_
         "platform": "Game Boy Advance",
         "system": system,
         "systems": [] if system is None else [system],
+        "slug": _SLUG,
+        "folder": "gba",
     }
     assert not os.path.exists(os.path.join(harness.roms_root, _SLUG))
     with harness.uow_factory() as uow:
@@ -133,6 +137,8 @@ async def test_a_platform_with_no_switched_on_system_downloads_nothing_and_says_
             "source": "retrodeck",
             "system": system,
             "systems": [] if system is None else [system],
+            "slug": _SLUG,
+            "folder": "gba",
             "platform": "Game Boy Advance",
         }
 

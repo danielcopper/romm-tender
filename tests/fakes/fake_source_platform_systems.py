@@ -39,7 +39,9 @@ class FakeSourcePlatformSystems:
     ) -> PlatformSystem:
         self.asked.append((keys, source))
         state, system = self.answers.get(keys.slug, (FOUND, keys.slug))
-        return PlatformSystem(state, keys.slug, platform_name, system=system, source=RETRODECK_SOURCE)
+        return PlatformSystem(
+            state, keys.slug, platform_name, system=system, source=RETRODECK_SOURCE, platform_folder=keys.folder
+        )
 
     def asked_source(self, *, source: str | None = None, reading: SourcesReading | None = None) -> ArrangedSource:
         return RETRODECK_SOURCE

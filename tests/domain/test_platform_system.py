@@ -9,6 +9,7 @@ from _romm_platforms import LISTED_GAMECUBE
 
 from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, CATALOGUE_UNAVAILABLE, NO_SOURCE_DETECTED, ArrangedSource
 from domain.platform_system import (
+    CONTRADICTED,
     FOUND,
     NO_SYSTEM,
     NOT_HERE,
@@ -236,7 +237,14 @@ class TestPlatformSystem:
 
         assert isinstance(refusal, FolderRefused)
         assert refusal.reason == "no_platform_system"
-        assert refusal.details == {"source": "retrodeck", "platform": "Commodore VIC-20", "system": None, "systems": []}
+        assert refusal.details == {
+            "source": "retrodeck",
+            "platform": "Commodore VIC-20",
+            "system": None,
+            "systems": [],
+            "slug": "vic-20",
+            "folder": None,
+        }
 
     def test_a_switched_off_system_refuses_naming_it(self):
         refusal = _platform(SWITCHED_OFF, system="xbox360").refusal(GAME_DOWNLOAD)
@@ -247,6 +255,8 @@ class TestPlatformSystem:
             "platform": "Commodore VIC-20",
             "system": "xbox360",
             "systems": ["xbox360"],
+            "slug": "vic-20",
+            "folder": None,
         }
 
     @pytest.mark.parametrize(
@@ -256,6 +266,7 @@ class TestPlatformSystem:
             (NOT_HERE, (_MARK3,), "platform_system_not_here", "mark3", ["mark3"]),
             (SEVERAL, (_MARK3, _MASTERSYSTEM), "platform_systems_several", None, ["mark3", "mastersystem"]),
             (SWITCHED_OFF, (_SNES, _SNESNA), "platform_system_off", None, ["snes", "snesna"]),
+            (CONTRADICTED, (), "platform_pairs_contradict", None, []),
         ],
     )
     def test_each_case_with_no_system_to_use_refuses_with_its_own_reason(self, state, named, reason, system, systems):
@@ -268,6 +279,8 @@ class TestPlatformSystem:
             "platform": "Commodore VIC-20",
             "system": system,
             "systems": systems,
+            "slug": "vic-20",
+            "folder": None,
         }
 
     @pytest.mark.parametrize(
@@ -328,8 +341,19 @@ class TestPlatformSystem:
             "source": "retrodeck",
             "system": "xbox360",
             "systems": ["xbox360"],
+            "slug": "vic-20",
+            "folder": None,
             "platform": "Commodore VIC-20",
         }
+
+    def test_a_contradiction_names_rom_ms_slug_and_folder(self):
+        """#2751 D2 (changed): the sentence names both, so the user can rename the folder."""
+        contradicted = PlatformSystem(CONTRADICTED, "snes", "SNES", source=RETRODECK, platform_folder="xbox360")
+
+        assert contradicted.refusal(GAME_DOWNLOAD).details["folder"] == "xbox360"
+        assert (contradicted.payload() or {})["slug"] == "snes"
+        assert (contradicted.payload() or {})["folder"] == "xbox360"
+        assert contradicted.unavailable_options()["reason"] == "platform_pairs_contradict"
 
     def test_the_pages_read_every_system_of_several_and_none_as_the_one(self):
         """#2225 D8: the page says why a platform of several systems gets no link, naming them."""
@@ -338,6 +362,8 @@ class TestPlatformSystem:
             "source": "retrodeck",
             "system": None,
             "systems": ["mark3", "mastersystem"],
+            "slug": "vic-20",
+            "folder": None,
             "platform": "Commodore VIC-20",
         }
 

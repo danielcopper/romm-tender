@@ -137,6 +137,7 @@ export type WireReason =
   | "place_is_current_folder"
   | "place_not_absolute"
   | "place_not_writable"
+  | "platform_pairs_contradict"
   | "platform_system_not_here"
   | "platform_system_off"
   | "platform_systems_several"

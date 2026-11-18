@@ -72,8 +72,10 @@ SWITCHED_OFF = "switched_off"
 NOT_HERE = "not_here"
 # The resolver knows the platform, and the source's frontend has no system for it.
 NO_SYSTEM = "no_system"
-# The resolver cannot match the platform to a system: it knows neither pair, or the pairs disagree.
+# The resolver cannot match the platform to a system: it knows neither pair.
 UNMATCHED = "unmatched"
+# RomM's slug and the platform's folder name different systems, so the resolver names none (#2751 D2).
+CONTRADICTED = "contradicted"
 # No source was asked: none answers, the one named is not detected, or the
 # question raised. ``PlatformSystem.unasked`` says why.
 UNASKED = "unasked"
@@ -82,6 +84,7 @@ NO_PLATFORM_SYSTEM = "no_platform_system"
 PLATFORM_SYSTEM_OFF = "platform_system_off"
 PLATFORM_SYSTEM_NOT_HERE = "platform_system_not_here"
 PLATFORM_UNMATCHED = "platform_unmatched"
+PLATFORM_PAIRS_CONTRADICT = "platform_pairs_contradict"
 PLATFORM_SYSTEMS_SEVERAL = "platform_systems_several"
 
 _REASON_OF_STATE = {
@@ -89,6 +92,7 @@ _REASON_OF_STATE = {
     SWITCHED_OFF: PLATFORM_SYSTEM_OFF,
     NOT_HERE: PLATFORM_SYSTEM_NOT_HERE,
     UNMATCHED: PLATFORM_UNMATCHED,
+    CONTRADICTED: PLATFORM_PAIRS_CONTRADICT,
     SEVERAL: PLATFORM_SYSTEMS_SEVERAL,
 }
 
@@ -252,7 +256,9 @@ class PlatformSystem:
     an install record holds, which no source was asked for. ``unasked`` says
     why none was asked, in the vocabulary of :mod:`domain.emulator_sources` —
     or, where RomM's listing could not be read, the reason that read failed
-    with, and ``unasked_message`` its message.
+    with, and ``unasked_message`` its message. ``platform_folder`` is the
+    platform's folder in RomM it was asked with, ``None`` where none was kept;
+    the sentence for a slug and a folder that contradict each other names both.
     """
 
     state: str
@@ -263,6 +269,7 @@ class PlatformSystem:
     unasked: str | None = None
     unasked_message: str | None = None
     named: tuple[SystemPair, ...] = ()
+    platform_folder: str | None = None
 
     @property
     def taken(self) -> SystemArgument | None:
@@ -294,8 +301,10 @@ class PlatformSystem:
             "platform": self.platform_name,
             "system": shown[0] if len(shown) == 1 else None,
             "systems": list(shown),
+            "slug": self.platform_slug,
+            "folder": self.platform_folder,
         }
-        message = _refusal_message(self.state, kind, self.platform_name, shown)
+        message = _refusal_message(self, kind, shown)
         if self.state == NO_SYSTEM:
             return FolderRefused(NO_PLATFORM_SYSTEM, message, **details)
         if self.state == SWITCHED_OFF:
@@ -304,6 +313,8 @@ class PlatformSystem:
             return FolderRefused(PLATFORM_SYSTEM_NOT_HERE, message, **details)
         if self.state == UNMATCHED:
             return FolderRefused(PLATFORM_UNMATCHED, message, **details)
+        if self.state == CONTRADICTED:
+            return FolderRefused(PLATFORM_PAIRS_CONTRADICT, message, **details)
         if self.state == SEVERAL:
             return FolderRefused(PLATFORM_SYSTEMS_SEVERAL, message, **details)
         if self.state != UNASKED:
@@ -333,18 +344,32 @@ class PlatformSystem:
             "system": shown[0] if len(shown) == 1 else None,
             "systems": list(shown),
             "platform": self.platform_name,
+            "slug": self.platform_slug,
+            "folder": self.platform_folder,
         }
 
 
-def _refusal_message(state: str, kind: str | None, platform: str, shown: tuple[str, ...]) -> str:
-    """The message a refusal for a platform with no system to use carries where the panel words none of its own."""
+def _refusal_message(platform: PlatformSystem, kind: str | None, shown: tuple[str, ...]) -> str:
+    """The message a refusal for a platform with no system to use carries where the panel words none of its own.
+
+    The panel's own sentences name the source as the user knows it; these name it by its kind.
+    """
     systems = ", ".join(shown)
-    if state == SWITCHED_OFF:
+    name = platform.platform_name
+    if platform.state == SWITCHED_OFF:
         return f"System {systems} is switched off in {kind}."
-    if state == NOT_HERE:
-        return f"{kind} has a system for {platform}, but it is not set up on this machine."
-    if state == UNMATCHED:
-        return f"Tender cannot match {platform} to a system yet."
-    if state == SEVERAL:
-        return f"{kind} has several systems for {platform} ({systems}), so Tender links its games to none."
-    return f"{kind} has no system for {platform}."
+    if platform.state == NOT_HERE:
+        return (
+            f"{kind} has a system for {name} ({systems}), but it is not set up on this machine, "
+            "so Tender cannot download its games."
+        )
+    if platform.state == UNMATCHED:
+        return f"Tender cannot match {name} to a system yet, so it cannot download its games."
+    if platform.state == CONTRADICTED:
+        return (
+            f'RomM\'s slug "{platform.platform_slug}" and folder "{platform.platform_folder}" point to different '
+            f"systems, so Tender cannot match {name} to a system."
+        )
+    if platform.state == SEVERAL:
+        return f"{kind} has several systems for {name} ({systems}), so Tender cannot download its games yet."
+    return f"{kind} has no system for {name}, so Tender cannot download its games."

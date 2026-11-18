@@ -36,7 +36,15 @@ from _vendor.atlas import (
 )
 
 from domain.emulator_sources import CATALOGUE_UNAVAILABLE, NO_SOURCE_DETECTED
-from domain.platform_system import UNASKED, UNMATCHED, PlatformSystem, SystemPair, SystemStatus, matched_state
+from domain.platform_system import (
+    CONTRADICTED,
+    UNASKED,
+    UNMATCHED,
+    PlatformSystem,
+    SystemPair,
+    SystemStatus,
+    matched_state,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -56,9 +64,6 @@ _STATUS_OF = {
     PLATFORM_STATUS_ABSENT: SystemStatus.NOT_HERE,
 }
 
-# Where the resolver cannot match the platform: it knows neither pair, or the
-# two name different systems, and it picks neither.
-_UNMATCHED = frozenset({INTERSECTION_UNKNOWN, INTERSECTION_CONFLICT})
 
 # Why an asked pair is one the resolver's platform table does not hold, one
 # code per such pair: a key its source does not have, one the table places on
@@ -87,15 +92,18 @@ class UnreadAnswer(Exception):
 def read_platform_answer(answer: Any) -> tuple[str, tuple[SystemPair, ...]]:
     """A platform answer in Tender's words: the state its matches come to, and the systems that state names.
 
-    Where the resolver cannot match the platform — it knows none of the pairs,
-    or they name different systems — the state is
-    :data:`~domain.platform_system.UNMATCHED`, whatever matches it would list.
+    Where the resolver knows none of the pairs the state is
+    :data:`~domain.platform_system.UNMATCHED`, and where they name different
+    systems, of which it picks neither,
+    :data:`~domain.platform_system.CONTRADICTED` (#2751 D2).
     Raises :class:`UnreadAnswer` for a status Tender does not read, which
     establishes no system rather than reading as none (#2195 D19).
     """
     intersection = answer.translation.intersection_status
-    if intersection in _UNMATCHED:
+    if intersection == INTERSECTION_UNKNOWN:
         return UNMATCHED, ()
+    if intersection == INTERSECTION_CONFLICT:
+        return CONTRADICTED, ()
     unread = sorted({match.status for match in answer.matches} - set(_STATUS_OF))
     if intersection != INTERSECTION_AGREED or unread:
         raise UnreadAnswer(f"intersection {intersection!r}, match statuses {unread}")
@@ -153,7 +161,9 @@ class AtlasPlatformSystemsAdapter:
         state, named = answer
         self._log_debug(f"[platforms] {pairs} in {arranged.kind}: {state} {[tuple(n) for n in named]}")
         system = named[0] if len(named) == 1 else (pairs if len(named) > 1 else None)
-        return PlatformSystem(state, keys.slug, platform_name, system=system, source=arranged, named=named)
+        return PlatformSystem(
+            state, keys.slug, platform_name, system=system, source=arranged, named=named, platform_folder=keys.folder
+        )
 
     def asked_source(
         self, *, source: str | None = None, reading: SourcesReading | None = None

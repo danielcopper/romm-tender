@@ -32,6 +32,7 @@ from adapters.atlas_platforms import _STATUS_OF, AtlasPlatformSystemsAdapter, pl
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.emulator_sources import CATALOGUE_UNAVAILABLE, NO_SOURCE_DETECTED, SWITCHED_OFF_SETTING
 from domain.platform_system import (
+    CONTRADICTED,
     FOUND,
     NO_SYSTEM,
     NOT_HERE,
@@ -177,10 +178,12 @@ class TestTheRealResolverOverARealTree:
 
         assert (platform.state, platform.system) == (UNMATCHED, None)
 
-    def test_a_slug_and_a_folder_that_name_different_systems_are_unmatched(self, tmp_path, traces):
+    def test_a_slug_and_a_folder_that_name_different_systems_contradict_each_other(self, tmp_path, traces):
+        """#2751 D2 (changed): its own case, naming the slug and the folder, never case one."""
         platform = _ask(_real(tmp_path, traces), "snes", "xbox360")
 
-        assert (platform.state, platform.system) == (UNMATCHED, None)
+        assert (platform.state, platform.system) == (CONTRADICTED, None)
+        assert (platform.platform_slug, platform.platform_folder) == ("snes", "xbox360")
 
     def test_the_system_the_catalogue_declares_is_taken_whatever_rom_m_calls_it(self, tmp_path, traces):
         platform = _ask(_real(tmp_path, traces), "philips-cd-i", "cdimono1")

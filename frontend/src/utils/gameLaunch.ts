@@ -45,7 +45,6 @@ function notEstablishedBecause(launch: GameLaunch, source: AnsweringSource | nul
   switch (launch.reason) {
     case "system_unknown":
       return `${named} does not list the system ${launch.platform_name}`;
-    // PLACEHOLDER WORDING (#2225 D8): awaits the owner's sentence.
     case "systems_several":
       return `${named} has several systems for ${launch.platform_name} and names none of them`;
     case "entry_unknown":
@@ -153,7 +152,6 @@ const STOPPED_SHORT_BECAUSE: Record<LaunchStoppedShortReason, (launch: GameLaunc
     `the check stopped at one of its limits at ${file}, so what it opens past that was not checked`,
   path_too_long_unchecked: (_launch, file) =>
     `the path of ${file} is too long for it to read in full, and what it does then was not checked`,
-  // PLACEHOLDER WORDING (#2195 D40): awaits the owner's sentence.
   folder_route_unread: (launch) => `how ${launch.entry} takes a game installed as a folder was not checked`,
 };
 
@@ -206,7 +204,6 @@ function said(launch: GameLaunch, statement: LaunchStatement, tenderStarts: bool
       line: `whether it starts the game is not established; it ${note}`,
     };
   }
-  // PLACEHOLDER WORDING (#2195 D2, D40): the two notes below await the owner's sentences.
   if (reason === "frontend_would_not_list") {
     return {
       note: `ES-DE would not list ${launch.file} under this name; it lists files ending in ${listedExtensions(launch.starts_from)}.`,
@@ -408,6 +405,11 @@ export function launchNotes(launch: GameLaunch | null, source: AnsweringSource |
   if (launch.state === "not_established") {
     const notes = allSaid(launch, true).map((each) => each.note);
     if (notes.length > 0) return notes;
+    if (launch.reason === "systems_several") {
+      return [
+        `Whether ${launch.entry} starts this game cannot be established: ${notEstablishedBecause(launch, source)}.`,
+      ];
+    }
     return [`Whether ${launch.file} starts cannot be established: ${notEstablishedBecause(launch, source)}.`];
   }
   if (launch.state !== "starts") return [];

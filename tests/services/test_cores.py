@@ -224,6 +224,8 @@ class TestGetPlatformCoreInfo:
                 "source": "retrodeck",
                 "system": "snes",
                 "systems": ["snes"],
+                "slug": "snes",
+                "folder": None,
                 "platform": "snes",
             },
             "active_core": "snes9x_libretro.so",
@@ -381,6 +383,8 @@ class TestGetSystemCoreInfo:
                 "source": "retrodeck",
                 "system": "snes",
                 "systems": ["snes"],
+                "slug": "snes",
+                "folder": None,
                 "platform": "snes",
             },
             "active_core_label": "Snes9x",
@@ -467,6 +471,8 @@ class TestAPlatformWithNoSystem:
             "source": "retrodeck",
             "system": system,
             "systems": [] if system is None else [system],
+            "slug": "xbox-360",
+            "folder": None,
             "platform": "Xbox 360",
         }
         assert core_info.emulator_options_calls == []
@@ -489,6 +495,8 @@ class TestAPlatformWithNoSystem:
             "source": "retrodeck",
             "system": "dreamcast",
             "systems": ["dreamcast"],
+            "slug": "dc",
+            "folder": None,
             "platform": "dc",
         }
 

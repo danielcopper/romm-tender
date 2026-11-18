@@ -3723,6 +3723,8 @@ class TestAPlatformWithNoSystemDownloadsNothing:
             "platform": "Xbox 360",
             "system": system,
             "systems": [] if system is None else [system],
+            "slug": "xbox-360",
+            "folder": None,
         }
         assert made_dirs == []
         assert 78 not in downloads.queue.entries
@@ -3759,6 +3761,8 @@ class TestAPlatformWithNoSystemDownloadsNothing:
             "platform": "Master System",
             "system": None,
             "systems": ["mark3", "mastersystem"],
+            "slug": "sms",
+            "folder": None,
         }
         assert made_dirs == []
         assert 79 not in downloads.queue.entries

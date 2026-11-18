@@ -7217,6 +7217,8 @@ class TestThePlatformsSystem:
             "source": "retrodeck",
             "system": None,
             "systems": [],
+            "slug": "dc",
+            "folder": None,
             "platform": "Dreamcast",
         }
 

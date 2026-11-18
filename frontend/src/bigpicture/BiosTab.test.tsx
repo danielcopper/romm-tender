@@ -188,6 +188,8 @@ describe("BiosTab", () => {
             system: null,
             systems: [],
             platform: "Commodore VIC-20",
+            slug: "vic-20",
+            folder: "vic20",
           },
         }}
       />,

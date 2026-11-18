@@ -11,8 +11,9 @@ through :func:`adapters.atlas_platforms.read_platform_answer`, the one reading
 of the platform question Tender has.
 
 Tender's reading is held against what the recorded answer states as data: a
-translation whose pairs share no system, or none of whose pairs the table
-holds, is a platform Tender cannot match; an agreed one comes to the systems
+translation none of whose pairs the table holds is a platform Tender cannot
+match, one whose pairs share no system a contradiction (#2751 D2); an agreed
+one comes to the systems
 the recorded answer lists under the status that decides — one or several
 switched on, else the switched-off ones, else the ones the machine has not set
 up — and to no system where it lists none. Nothing is picked among several.
@@ -31,7 +32,16 @@ from _vendor.atlas.contract import platform_systems_contract, platform_translati
 from _vendor.atlas.installations import PlatformSystemsAnswer
 
 from adapters.atlas_platforms import read_platform_answer
-from domain.platform_system import FOUND, NO_SYSTEM, NOT_HERE, SEVERAL, SWITCHED_OFF, UNMATCHED, SystemPair
+from domain.platform_system import (
+    CONTRADICTED,
+    FOUND,
+    NO_SYSTEM,
+    NOT_HERE,
+    SEVERAL,
+    SWITCHED_OFF,
+    UNMATCHED,
+    SystemPair,
+)
 
 _TRANSLATIONS = MACHINES.parent / "platform-table" / "translations.json"
 
@@ -64,8 +74,10 @@ def _pairs(raw: list[list[str | None]]) -> tuple[tuple[str | None, ...], ...]:
 
 def _expected_reading(translation: dict[str, Any], matches: list[dict[str, Any]]) -> tuple[str, tuple[SystemPair, ...]]:
     """What a recorded answer comes to in Tender's words, read off the data the resolver states."""
-    if translation["intersection_status"] != "agreed":
+    if translation["intersection_status"] == "unknown":
         return UNMATCHED, ()
+    if translation["intersection_status"] == "conflict":
+        return CONTRADICTED, ()
     for status, state in _STATE_OF_STATUS:
         named = tuple(SystemPair(m["system"]["source"], m["system"]["key"]) for m in matches if m["status"] == status)
         if named:
