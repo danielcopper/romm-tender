@@ -404,6 +404,39 @@ def downloads(make_downloads) -> DownloadsHarness:
 
 class TestStartDownload:
     @pytest.mark.asyncio
+    async def test_the_folder_is_asked_with_the_pair_the_platform_named_and_the_transfer_keeps_its_key(
+        self, make_downloads, tmp_path
+    ):
+        """#2217 D16: the folder is asked by the pair the answer named; the install record will keep its key."""
+        snes = SystemPair("esde", "snes")
+        folders = FakeRetroDeckFolders(roms=str(tmp_path / "retrodeck" / "roms"))
+        downloads = make_downloads(
+            retrodeck_folders=folders,
+            removal_folders=FakeRetroDeckFolders(roms=str(tmp_path / "retrodeck" / "roms")),
+            platform_systems=FakePlatformSystems({"snes": snes}),
+            loop=MagicMock(),
+        )
+        rom_detail = {"id": 43, "name": "Mario", "fs_name": "mario.sfc", "fs_size_bytes": 1024, "platform_slug": "snes"}
+        downloads.loop.run_in_executor = _hops_answering(rom_detail)
+
+        def _close_coro_task(coro, _name):
+            coro.close()
+            return MagicMock()
+
+        downloads.service._tasks.spawn = _close_coro_task
+        downloads.download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
+
+        from unittest.mock import patch
+
+        with patch.object(downloads.transfer, "run", side_effect=lambda *_a, **_k: asyncio.sleep(0)) as run:
+            result = await downloads.service.start_download(43)
+
+        assert result["success"] is True
+        assert folders.download_asked == [snes]
+        _rom_id, _detail, _target, system, *_rest = run.call_args.args
+        assert system == "snes"
+
+    @pytest.mark.asyncio
     async def test_starts_download_task(self, make_downloads, tmp_path):
 
         downloads = make_downloads(

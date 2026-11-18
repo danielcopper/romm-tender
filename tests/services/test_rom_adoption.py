@@ -37,7 +37,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
 
 from domain.adoption_rename import RenameCollisions
-from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem, system_key
+from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem, SystemPair, system_key
 from domain.retrodeck_folders import FolderRefused, no_rom_root
 from domain.rom import Rom
 from domain.rom_adoption import TargetOccupied
@@ -524,6 +524,22 @@ class TestAdopt:
         assert install.file_path == "/roms/snes/Game.sfc"
         assert install.rom_dir is None
         assert install.system == "snes"
+
+    async def test_the_folder_is_asked_with_the_pair_the_platform_named_and_the_record_keeps_its_key(self, h):
+        """#2217 D16: a later question names the system as the answer named it; the install record keeps its key."""
+        snes = SystemPair("esde", "snes")
+        h.service._platform_systems = FakePlatformSystems({"snes": snes})
+        h.seed_rom()
+        h.stage_detail(_single_file_detail())
+        h.store.files["/roms/snes/Game.sfc"] = b"x" * 10
+
+        result = await h.service.adopt_existing_rom(_ROM_ID)
+
+        assert result["success"] is True
+        install = h.uow.rom_installs.get(_ROM_ID)
+        assert install is not None
+        assert install.system == "snes"
+        assert snes in h.paths.download_asked
 
     async def test_the_rom_is_read_from_rom_m_s_detail_answer(self, h):
         h.seed_rom()

@@ -15,11 +15,13 @@ import os
 from pathlib import Path
 
 import pytest
-from _vendor.atlas.installations import RetroDeck
+from _vendor.atlas import RESOLUTION_AMBIGUOUS, SystemCandidate, SystemResolution, translate
+from _vendor.atlas.installations import RetroDeck, RomPlacement
 
 from adapters import retrodeck_folders
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from adapters.retrodeck_folders import RetroDeckFoldersAdapter
+from domain.platform_system import SystemPair
 from domain.retrodeck_folders import EveryFolderRefused, FindingRefused, FolderRefused, MoveRoots
 
 _MARKER = Path(".var") / "app" / "net.retrodeck.retrodeck" / "config" / "retrodeck" / "retrodeck.json"
@@ -569,6 +571,47 @@ class TestWhereAQuestionToTheResolverRaises:
             answer = _answer(adapter, question)
             assert isinstance(answer, EveryFolderRefused), question
             assert answer.message == _UNANSWERED, question
+
+
+class TestASystemThatResolvedToNoOneSystem:
+    """A folder RetroDECK states beside a resolution other than resolved is no system's folder (#2751)."""
+
+    def _resolving_to_none(self, monkeypatch, folder: Path) -> None:
+        several = SystemResolution(
+            RESOLUTION_AMBIGUOUS,
+            None,
+            None,
+            candidates=(
+                SystemCandidate(("esde", "mark3"), "declared"),
+                SystemCandidate(("esde", "mastersystem"), "declared"),
+            ),
+            translation=translate((("romm", "sms"),)),
+        )
+
+        def rom_location(_self: object, _system: object) -> RomPlacement:
+            return RomPlacement(dir=str(folder), resolution=several)
+
+        monkeypatch.setattr(RetroDeck, "rom_location", rom_location)
+
+    def test_a_download_is_refused_for_no_rom_folder(self, tree, tmp_path, monkeypatch):
+        rd_home = tree.set_up(tmp_path / "retrodeck")
+        self._resolving_to_none(monkeypatch, rd_home / "roms" / "mastersystem")
+
+        refused = tree.adapter().download_folder((SystemPair("romm", "sms"), SystemPair("folder", "sms")))
+
+        assert isinstance(refused, FolderRefused)
+        assert refused.reason == "no_rom_folder"
+
+    def test_a_removal_is_bounded_by_no_folder(self, tree, tmp_path, monkeypatch):
+        rd_home = tree.set_up(tmp_path / "retrodeck")
+        self._resolving_to_none(monkeypatch, rd_home / "roms" / "mastersystem")
+
+        folders = tree.adapter().rom_folders(["mastersystem"])
+
+        assert isinstance(folders, dict)
+        refused = folders["mastersystem"]
+        assert isinstance(refused, FolderRefused)
+        assert refused.reason == "no_rom_root"
 
 
 def _detection_raises(tree: _Tree, *, switched_off: bool = False) -> RetroDeckFoldersAdapter:

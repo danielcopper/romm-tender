@@ -410,6 +410,25 @@ class TestTheNewStatementsOfALaunch:
         assert (result.state, result.reason) == (NOT_ESTABLISHED, reason)
 
 
+class TestAVerdictBesideASystemResolvedToNone:
+    """Whatever verdict stands beside it, a system that resolved to no one system is not established (#2195 D40)."""
+
+    @pytest.mark.parametrize("verdict", [VERDICT_LAUNCHABLE, VERDICT_NEEDS_INSTALLATION, VERDICT_ENTRY_NOT_ACCEPTED])
+    def test_the_verdict_is_not_read(self, traces, verdict):
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=verdict,
+                extension=".sms",
+                caveats=(_caveat(CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD),),
+                installers=() if verdict == VERDICT_NEEDS_INSTALLATION else None,
+                resolution=SystemResolution(RESOLUTION_UNKNOWN, None, None),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason) == (NOT_ESTABLISHED, SYSTEM_UNKNOWN)
+
+
 class TestEachVerdictInTendersWords:
     def test_the_question_names_the_entry_tender_starts(self, traces):
         _result, installation = _ask(LaunchabilityAnswer(verdict=VERDICT_LAUNCHABLE, extension=".z64"), traces)

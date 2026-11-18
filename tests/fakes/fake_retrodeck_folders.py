@@ -50,8 +50,11 @@ class FakeRetroDeckFolders:
         self.refusal = refusal
         self.download_refusal = download_refusal
         self.system_refusals = system_refusals if system_refusals is not None else {}
+        # Every system a download's folder was asked for, as the caller named it.
+        self.download_asked: list[SystemArgument] = []
 
     def download_folder(self, system: SystemArgument) -> str | FolderRefused:
+        self.download_asked.append(system)
         key = system_key(system) or ""
         refused = self.refusal or self.download_refusal or self.system_refusals.get(key)
         if refused is not None:

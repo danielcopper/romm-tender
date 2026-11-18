@@ -60,6 +60,7 @@ from _vendor.atlas import (
     PLACE_NOT_READ_CODES,
     PROVENANCE_ASSUMED,
     PROVENANCE_READ,
+    RESOLUTION_UNKNOWN,
     ROLE_BATTERY,
     ROLE_HIGH_SCORE,
     ROLE_NOTES,
@@ -72,6 +73,7 @@ from _vendor.atlas import (
     STATE_ROOT_CONTENT_DIRECTORY,
     SavestateAbsence,
     SavestatePlacement,
+    SystemResolution,
     Unresolved,
     detect,
 )
@@ -228,8 +230,10 @@ class _Installation:
         kind: str = "retrodeck",
         health: tuple[str | Caveat, ...] | Exception = (),
         roots: RootsAnswer | Exception | None = None,
+        resolution: Any = None,
     ) -> None:
         self.kind = kind
+        self._resolution = resolution
         self._entries = entries
         self._raises = raises
         self._caveats = caveats
@@ -251,7 +255,9 @@ class _Installation:
         self.asked.append((system, content_path))
         if self._raises is not None:
             raise self._raises
-        return _Catalogue(self._entries, self._caveats)
+        catalogue = _Catalogue(self._entries, self._caveats)
+        catalogue.resolution = self._resolution
+        return catalogue
 
 
 _SAVES_ROOT = "/run/media/sd/saves"
@@ -1168,6 +1174,21 @@ class TestHowTheQuestionIsPut:
             )
 
         assert machines == [held, held, held]
+
+
+class TestASystemThatResolvedToNoOneSystem:
+    """An entry beside a resolution other than resolved is asked nothing: its system is not established (#2751)."""
+
+    def test_no_save_place_is_asked_of_any_entry(self, traces):
+        entry = _Entry("mGBA", _placement(files=("Game Title.srm",)))
+        installation = _Installation((entry,), resolution=SystemResolution(RESOLUTION_UNKNOWN, None, None))
+
+        answer = _adapter(installation, traces).resolve_save_answer(
+            system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+        )
+
+        assert answer.unestablished == UNESTABLISHED_NOT_ASKED
+        assert entry.asked == []
 
 
 class TestWhichSourceAnswers:
