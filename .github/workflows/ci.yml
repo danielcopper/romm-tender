@@ -329,14 +329,12 @@ jobs:
           tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/shellcheck-v0.11.0" >> "$GITHUB_PATH"
 
-      # The scripts that run outside this repository — the installer, the
-      # packager whose tarball it takes, and the dispatcher a dev target runs
-      # for the build host's key. The other scripts here are developer tooling
-      # and stay out of scope.
-      - name: Shellcheck the installer, the packager and the dev dispatcher
+      # Which scripts, and why these: the shellcheck line of the lint task in
+      # mise.toml.
+      - name: Shellcheck the scripts that run outside this repository
         run: |
           shellcheck --version | grep -qx 'version: 0.11.0'
-          shellcheck install.sh scripts/package.sh scripts/dev_dispatch.sh
+          shellcheck install.sh scripts/package.sh scripts/dev_dispatch.sh scripts/dev_target_install.sh
       # shellcheck has no rule for this one: `exit` inside `$(...)` ends the
       # subshell, so a shell function that answers with a value and aborts on a
       # bad input does neither, and the caller runs on with an empty answer.

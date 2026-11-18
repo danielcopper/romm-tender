@@ -18,16 +18,19 @@ for the parts the setup depends on:
   unrecorded one is "shown" (logged) and appended, unless the world declines it
   or ``StrictHostKeyChecking`` — given with ``-o``, else from the destination's
   ``ssh -G`` answer — is ``yes``;
-- the login tries the user's own access first, then each ``IdentityFile``
-  against the target's real ``authorized_keys`` — honouring ``from=`` against
-  the address the target sees and running ``command=`` with
-  ``SSH_ORIGINAL_COMMAND`` — then a password, when the target takes one;
+- authentication runs in OpenSSH's order: the user's agent keys (none with
+  ``IdentitiesOnly=yes``), then each ``IdentityFile`` against the target's real
+  ``authorized_keys`` — honouring ``from=`` against the address the target sees
+  and running ``command=`` with ``SSH_ORIGINAL_COMMAND`` — then a password,
+  unless ``BatchMode=yes`` or ``PreferredAuthentications`` leaves it out; every
+  refused key counts towards the target's ``MaxAuthTries``;
 - a login runs its command with ``sh -c`` in the target's home, with
-  ``SSH_CLIENT`` set.
+  ``SSH_CLIENT`` set;
+- a destination behind a ProxyJump fails on its hop when the world says so.
 
 Every login, password prompt and host key shown is appended to
 :attr:`World.log`, which is how a test tells a run that needed a password from
-one that did not.
+one that did not; every ``ssh`` call's options go to :func:`ssh_calls`.
 """
 
 from __future__ import annotations
@@ -41,18 +44,22 @@ import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Final, Literal
 
 WORLD_VARIABLE = "FAKE_REMOTE_WORLD"
 RSYNC_RECORD_VARIABLE = "FAKE_RSYNC_RECORD"
 
 # What the scripts under test call besides the stand-ins.
-SYSTEM_TOOLS = ("sh", "cat", "mkdir", "chmod", "mv", "rm", "grep", "awk")
+SYSTEM_TOOLS = ("sh", "cat", "mkdir", "chmod", "mv", "rm", "grep", "awk", "tail")
 
-# What a real login offers before any IdentityFile: an agent key the target
-# accepts (``agent``), a password (``password``), or nothing it accepts.
-AGENT = "agent"
-PASSWORD = "password"
-NOTHING = "nothing"
+# What the user's own access to a target is: an agent key it accepts, a
+# password, or nothing it accepts.
+OwnAccess = Literal["agent", "password", "nothing"]
+AGENT: Final = "agent"
+PASSWORD: Final = "password"
+NOTHING: Final = "nothing"
+
+HopFailure = Literal["unresolved", "host-key"]
 
 
 @dataclass
@@ -62,9 +69,13 @@ class Target:
     home: str
     client_address: str
     """The address the target sees the build host at — what ``SSH_CLIENT`` shows."""
-    own_access: str = PASSWORD
+    own_access: OwnAccess = PASSWORD
     host_key: str = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHostKeyOfTheTarget"
     serving: bool = True
+    refused_agent_keys: int = 0
+    """Keys in the user's agent this target does not accept, offered before anything else."""
+    max_auth_tries: int = 6
+    """sshd's MaxAuthTries: the refused keys after which it ends the login."""
 
 
 @dataclass
@@ -78,6 +89,9 @@ class World:
     """What ``ip route get`` names as this machine's source address."""
     drop_after_first_line: bool = False
     """Drop the connection once the login's command has written its first line to stdout."""
+    hop_failure: HopFailure | None = None
+    """How a ProxyJump hop fails, if it does."""
+    keygen_fails: bool = False
 
     def save(self, path: Path) -> None:
         path.write_text(json.dumps(asdict(self)), encoding="utf-8")
@@ -104,6 +118,14 @@ def fake_path(directory: Path) -> str:
         assert found is not None, f"{tool} is needed to run the scripts under test"
         (system / tool).symlink_to(found)
     return f"{fakes}{os.pathsep}{system}"
+
+
+def ssh_calls(world: World) -> list[dict[str, list[str]]]:
+    """The ``-o`` options of every login ``ssh`` was asked for, in order."""
+    path = Path(world.log + ".calls")
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
 def log_lines(world: World) -> list[str]:
@@ -187,12 +209,13 @@ def _check_host_key(
                 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
                 "@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\n"
                 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                f"Offending ED25519 key in {known_hosts}:{lines.index(line) + 1}\n"
                 f"Host key for {alias} has changed and you have requested strict checking.\n"
                 "Host key verification failed.",
                 file=sys.stderr,
             )
             return False
-    if strict == "yes":
+    if strict == "yes" or _option(options, "batchmode") == "yes":
         print(
             f"No ED25519 host key is known for {alias} and you have requested strict checking.\n"
             "Host key verification failed.",
@@ -210,7 +233,10 @@ def _check_host_key(
 
 
 def _forced_command(target: Target, identity_files: list[str]) -> str | None:
-    """The ``command=`` of the first offered key the target accepts from where it sees us."""
+    """The ``command=`` of the first offered key the target accepts from where it sees us.
+
+    ``own`` for a key whose line forces no command: that login runs what it asked for.
+    """
     keys = Path(target.home) / ".ssh" / "authorized_keys"
     try:
         lines = keys.read_text(encoding="utf-8").splitlines()
@@ -228,8 +254,65 @@ def _forced_command(target: Target, identity_files: list[str]) -> str | None:
             if allowed is not None and target.client_address not in allowed.group(1).split(","):
                 continue
             command = re.search(r'command="([^"]*)"', line)
-            return command.group(1) if command is not None else ""
+            return command.group(1) if command is not None else "own"
     return None
+
+
+def _option(options: dict[str, list[str]], name: str) -> str | None:
+    values = options.get(name)
+    return values[0] if values else None
+
+
+def _authenticate(world: World, target: Target, options: dict[str, list[str]], host: str) -> str | None:
+    """``own`` for a login of the user's own, the forced command for one with a key, ``None`` or ``too many``."""
+    refused = 0
+    if _option(options, "identitiesonly") != "yes":
+        refused += target.refused_agent_keys
+        if refused >= target.max_auth_tries:
+            return "too many"
+        if target.own_access == AGENT:
+            _log(world, f"login {host} own")
+            return "own"
+    for identity in options.get("identityfile", []):
+        forced = _forced_command(target, [identity])
+        if forced is not None:
+            _log(world, f"login {host} key")
+            return forced
+        refused += 1
+        if refused >= target.max_auth_tries:
+            return "too many"
+    preferred = _option(options, "preferredauthentications")
+    password_allowed = _option(options, "batchmode") != "yes" and (preferred is None or "password" in preferred)
+    if target.own_access == PASSWORD and password_allowed:
+        _log(world, f"password asked {host}")
+        _log(world, f"login {host} own")
+        return "own"
+    if target.own_access in (AGENT, PASSWORD, NOTHING):
+        return None
+    raise AssertionError(f"no such own access: {target.own_access!r}")
+
+
+def _hop_fails(failure: HopFailure, hop: str) -> int:
+    if failure == "unresolved":
+        print(
+            f"ssh: Could not resolve hostname {hop}: Name or service not known\n"
+            "kex_exchange_identification: Connection closed by remote host\n"
+            "Connection closed by UNKNOWN port 65535",
+            file=sys.stderr,
+        )
+        return 255
+    known_hosts = Path.home() / ".ssh" / "known_hosts"
+    print(
+        "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+        "@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\n"
+        "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+        f"Offending ED25519 key in {known_hosts}:3\n"
+        f"Host key for {hop} has changed and you have requested strict checking.\n"
+        "Host key verification failed.\n"
+        "kex_exchange_identification: Connection closed by remote host",
+        file=sys.stderr,
+    )
+    return 255
 
 
 def _ssh(argv: list[str]) -> int:
@@ -237,7 +320,11 @@ def _ssh(argv: list[str]) -> int:
     if argv[:1] == ["-G"]:
         return _ssh_g(world, argv[1:])
     options, destination, command = _parse_ssh(argv)
+    with open(world.log + ".calls", "a", encoding="utf-8") as calls:
+        calls.write(json.dumps(options) + "\n")
     resolved = _resolve(world, destination)
+    if "proxyjump" in resolved and world.hop_failure is not None:
+        return _hop_fails(world.hop_failure, resolved["proxyjump"][0].rpartition("@")[2].partition(":")[0])
     host = resolved["hostname"][0]
     user = resolved["user"][0]
     target = world.targets.get(host)
@@ -257,20 +344,20 @@ def _ssh(argv: list[str]) -> int:
     }
     if "TENDER_PYTHON" in os.environ:
         env["TENDER_PYTHON"] = os.environ["TENDER_PYTHON"]
-    if target.own_access == AGENT:
-        _log(world, f"login {host} own")
-    else:
-        forced = _forced_command(target, options.get("identityfile", []))
-        if forced is not None:
-            _log(world, f"login {host} key")
-            env["SSH_ORIGINAL_COMMAND"] = command
-            command = forced
-        elif target.own_access == PASSWORD:
-            _log(world, f"password asked {host}")
-            _log(world, f"login {host} own")
-        else:
-            print(f"{user}@{host}: Permission denied (publickey).", file=sys.stderr)
-            return 255
+    login = _authenticate(world, target, options, host)
+    if login is None:
+        print(f"{user}@{host}: Permission denied (publickey,password).", file=sys.stderr)
+        return 255
+    if login == "too many":
+        print(
+            f"Received disconnect from {host} port 22:2: Too many authentication failures\n"
+            f"Disconnected from {host} port 22",
+            file=sys.stderr,
+        )
+        return 255
+    if login != "own":
+        env["SSH_ORIGINAL_COMMAND"] = command
+        command = login
     if not world.drop_after_first_line:
         return subprocess.run(["sh", "-c", command], cwd=target.home, env=env, check=False).returncode
     ran = subprocess.run(["sh", "-c", command], cwd=target.home, env=env, check=False, capture_output=True, text=True)
@@ -280,6 +367,9 @@ def _ssh(argv: list[str]) -> int:
 
 
 def _ssh_keygen(argv: list[str]) -> int:
+    if argv[:1] != ["-lf"] and _world().keygen_fails:
+        print("Saving key failed: No space left on device", file=sys.stderr)
+        return 1
     if argv[:1] == ["-lf"]:
         content = Path(argv[1]).read_text(encoding="utf-8").split()
         print(f"256 SHA256:{hashlib.sha256(content[1].encode()).hexdigest()[:43]} {content[-1]} (ED25519)")
@@ -296,7 +386,8 @@ def _ssh_keygen(argv: list[str]) -> int:
 def _ip(argv: list[str]) -> int:
     world = _world()
     address = argv[2]
-    print(f"{address} dev wlan0 src {world.route_source} uid 1000 \n    cache ")
+    source = f" src {world.route_source}" if world.route_source else ""
+    print(f"{address} dev wlan0{source} uid 1000 \n    cache ")
     return 0
 
 
