@@ -144,8 +144,8 @@ class CoreService:
         instead of showing an empty list; ``emulator_data_reason`` says why and
         ``emulator_source`` names the answering source
         (:meth:`adapters.atlas_catalogue.AtlasCatalogueAdapter.get_emulator_options`);
-        where the platform has no switched-on system there, the reason is
-        ``no_platform_system`` or ``platform_system_off``. ``platform_system`` is
+        where the platform has no system to use there, the reason is that case's
+        (:meth:`domain.platform_system.PlatformSystem.unavailable_options`). ``platform_system`` is
         :meth:`domain.platform_system.PlatformSystem.payload` — the install
         record's system for an installed ROM, which no source was asked for.
         When ``rom_id`` is unknown the emulator list is empty and the active

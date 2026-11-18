@@ -140,7 +140,7 @@ The precedence is the invariant:
 resolve_rom(rom_id):
   rom, install = read roms + rom_installs rows             ── one UoW read
   system = rom_system(rom.platform_slug, install)          ── the install's system, else the platform's (below)
-  if system is None: return None                           ── no switched-on system: no entry
+  if system is None: return None                           ── no system to ask about: no entry
   options = get_emulator_options(system)["options"]        ── every es_systems entry, in the resolver's order
   choice = choose_emulator(options, game=pin, platform=game_platform_pick(fs_slug, slug, …))
                                                            ── the fs_slug's pick; without one, the slug's, else the
@@ -241,45 +241,47 @@ every answer stays live.
 
 ### A platform's system
 
-RomM names a platform by a slug of its own, which only sometimes equals a system a source declares (`psx` does,
-`new-nintendo-3ds` does not), so the system a platform's games belong to is the **source's own answer**:
-`systems_for_platform`, asked through the resolver with the ids RomM holds for the platform — `igdb_id`,
-`libretro_slug`, `ss_id` and `tgdb_id`, the four vocabularies the resolver has a crosswalk for (a numeric id as its
-decimal string), in that order. RomM's other ids (MobyGames, LaunchBox, RetroAchievements, Hasheous, Flashpoint) have
-none and are not asked. The resolver reads the catalogue's own `<platform>` tags, so a system the user added to a
-catalogue by hand is answered as readily as a shipped one, and nothing in Tender holds a table of platforms.
-`adapters/atlas_platforms.py` asks each of RomM's ids in the resolver's vocabulary for it and reads each matching
-system's status into Tender's own — switched on (declared), switched off (disabled) or not here (absent);
-`domain/platform_system.py::pick_system` decides over those. An answer carrying a status the adapter does not read is
-never taken as absent: the platform's system is then not established (`unavailable`), as where the question raised
-([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D19).
+RomM names a platform by a slug of its own and keeps its games in a folder of its own (`fs_slug`), neither of which is a
+system a source declares (`psx` happens to be, `new-nintendo-3ds` is not), so the system a platform's games belong to is
+the **source's own answer**: the resolver's platform question, `systems_for_platforms`, asked with exactly two (source,
+key) pairs — RomM's slug in RomM's source, `("romm", slug)`, and the platform's folder as a bare folder name,
+`("folder", fs_slug)` — taken from the kept platform record below
+([#2217](https://github.com/danielcopper/romm-tender/issues/2217) D16). The same pairs are asked for every question and
+every source; RomM's ids are kept but never sent. A platform kept without its folder (a record from before the folder
+was kept, or one RomM's listing does not name) is asked by its slug alone. The resolver translates the pairs through its
+platform table and answers in the asked source's own systems, so a system the user added to a catalogue by hand is
+answered through its platform tag, and nothing in Tender holds a table of platforms or translates a system name.
+`adapters/atlas_platforms.py` asks the question and reads the answer (`read_platform_answer`): whether the resolver can
+match the platform at all is its translation's intersection, and each matching system's status reads into Tender's own —
+switched on (declared), switched off (disabled) or not set up on this machine (absent).
+`domain/platform_system.py::matched_state` says what the matches come to. An answer carrying a status the adapter does
+not read is never taken as absent: the platform's system is then not established (`unavailable`), as where the question
+raised ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D19).
 
-**Which answer is taken.** Only a **switched-on** system matches — one the catalogue declares; a system present only in
-the catalogue's comments is switched off, and one the source does not have at all is no match. The first id whose answer
-gives a switched-on system decides, and a later id is never asked. Where several systems match one platform (SNES gives
-`sfc`, `snes` and `snesna`), **Tender's own rule** picks one, because the resolver names every match and prefers none:
-its order — switched on, then switched off, then not here, alphabetical within each — states no preference. The one
-named like the platform the id was resolved to is taken — `snes` — else the first the resolver lists; the regional
-systems differ in name and look only, and the user does not pick among them. Which region a regional system stands for
-is not stated by the resolver yet; once it is ([emu-atlas#583](https://github.com/danielcopper/emu-atlas/issues/583)),
-that statement replaces this rule's choice among them. Where one id's answer names several platforms (libretro's
-NES/Famicom entry gives `famicom` and `nes`), only the one equal to RomM's slug with its hyphens dropped decides
-(`nes`), and the slug chooses only among them — it never becomes a system or a folder name itself; where it equals none
-of them, the next id is asked. Another platform is never taken in its place: a Satellaview or Amiga CD32 game is not an
-SNES or Amiga game, and a wrong system would stay in its folder, its link and its saves. So where the slug's platform
-has only switched-off systems, one of them is named, and where no id gives the slug's platform, or it has no system
-here, the platform has none.
+**Which answer is taken.** One switched-on system is **found**, and every later question about the platform's games
+names it by the pair the answer named it with — the emulator list, the launch, the BIOS answer, a save's place and the
+folder a download lands in. **Tender picks no system of its own**: where the two pairs leave several switched-on systems
+(on RetroDECK with emu-atlas 0.35.0 the Amiga CD32, the Atari 8-bit, MSX, the Master System and the TurboGrafx-16 keep
+two each), the platform has **several**, and every later question is asked with the two pairs, which the resolver
+answers for those systems alike or for none ([#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8). Such
+a game is linked into no frontend folder, since the folder is where the systems differ, and its page says why; a
+download into RetroDECK and an adoption, which land in one system's folder, are refused with the same words. Choosing
+the system for the link is the user's, in a view that comes later.
 
-**Where there is none.** Where no id gives a switched-on system but some id gives a switched-off one, the platform's
-pages say **"System _system_ is switched off in _source_."**; where no id gives any, **"_source_ has no system for
-_platform_, so Tender cannot download its games."**. _platform_ there, and wherever else the platform's system names the
-platform — the pages that show the system, and a download's queue entry and every frame and event it sends — is the name
-the `platform_names` cache holds for the `fs_slug` of the platform kept for that slug (for an entry kept before it
-recorded one, for the slug), else the `name` kept with its ids (below), else the slug itself
-([#2573](https://github.com/danielcopper/romm-tender/issues/2573) D1). The emulator list's reason is then
-`platform_system_off` or `no_platform_system`, nothing is downloaded, and the platform's BIOS download and an adoption's
-replace are refused the same way. Every other use keeps a state it already has: an uninstalled game's save answer is not
-established, the search for a copy already on disk finds nothing, and the launch falls back to the plain one.
+**Where there is none.** A platform with no system to use says which of four cases holds, each in a sentence of its own
+([#2751](https://github.com/danielcopper/romm-tender/issues/2751) D2): the resolver cannot match it — it knows neither
+pair, or the slug and the folder name different systems (`platform_unmatched`) — which is never worded as RomM not
+knowing the platform; the source's frontend has no system for it (`no_platform_system`); it has one, and this machine
+has not set it up (`platform_system_not_here`); or every one it has is switched off in the catalogue's comments
+(`platform_system_off`, **"System _system_ is switched off in _source_."**). Several switched-on systems are the fifth
+reason, `platform_systems_several`. _platform_ there, and wherever else the platform's system names the platform — the
+pages that show the system, and a download's queue entry and every frame and event it sends — is the name the
+`platform_names` cache holds for the `fs_slug` of the platform kept for that slug (for an entry kept before it recorded
+one, for the slug), else the `name` kept with it (below), else the slug itself
+([#2573](https://github.com/danielcopper/romm-tender/issues/2573) D1). The emulator list's reason is then that case's,
+nothing is downloaded, and the platform's BIOS download and an adoption's replace are refused the same way. Every other
+use keeps a state it already has: an uninstalled game's save answer is not established, the search for a copy already on
+disk finds nothing, and the launch is not established.
 
 **Each source is asked for itself.** A download, and every question about where one would land — an uninstalled game's
 save answer, whether the target is taken, the search for a copy already there, an adoption's target — asks
@@ -287,35 +289,38 @@ save answer, whether the target is taken, the search for a copy already there, a
 (`adapters/retrodeck_folders.py`). Every other question — the emulator choice, the BIOS answers, the platform page —
 asks the answering source (above), so a platform can be one system in RetroDECK and another in EmuDeck. **An installed
 game keeps the system its install record holds** for its saves, its emulator choice, its BIOS answer, the BIOS download
-started from its page and its launch (`PlatformSystems.rom_system`); only a new download, and the platform page's BIOS
-download, follow the source's current answer. A source that renames, moves or drops a system is not followed yet.
+started from its page and its launch (`PlatformSystems.rom_system`), and every question names it by that stored name — a
+download records the key of the pair its platform's answer named, and is asked by it from the moment its folder is
+taken; only a new download, and the platform page's BIOS download, follow the source's current answer. A source that
+renames, moves or drops a system is not followed yet.
 
-**The ids are kept.** `kv_config`'s `platform_ids` keeps a record of each platform RomM lists, keyed by the platform's
-folder in RomM (`fs_slug`): its slug, its folder, its RomM id, its `name` (none where the listing gives no usable one),
-`is_identified`, the RomM version Tender had detected when the listing was read (none where Tender had detected no
-version), and under `ids` every field of the platform whose name ends in `_id` or `_slug`, as RomM sent it — each read
-through the one reader of a listing entry, `domain/platform_listing.py`. Tender reads only the four ids the question
-above is asked with; the rest are kept for the resolver's platform table, so an id RomM adds is kept at the next sync
-with no change in Tender. A listed platform without a folder is not kept. The value is replaced at the start of every
-sync from RomM's listing (`PlatformSystemService.replace_listing`, the value's one owner; a failed write is logged and
-leaves the run alone); one kept before it was keyed by folder is read as it stands — each key as the slug it was kept
-under, the new fields empty — until that sync replaces it. A platform is found in it by its slug, the console's identity
-the question is put by; where several folders share a slug, the last listed answers
-(`domain/platform_system.py::kept_by_slug` says why that changes no question). Where none is kept for a platform — the
-first start after an update — `PlatformSystemService` reads the listing once and hands it to the refiling, which has it
-kept beside what was kept (`keep_listing`): an entry for a slug the listing names gives way to the listing's. A slug the
-listing does not name is then kept with nothing but that slug, so it is not read again — unless a listed platform's
-folder bears that same name, which keeps the key and leaves the slug to be read from the listing at each ask. Where that
-read fails, the question answers the reason `classify_error` gives it — `server_unreachable` while RomM is offline — as
-every other read that needs RomM does, and keeps nothing; the next read with RomM reachable keeps the ids. A game not
-downloaded then shows the offline state on its page (its save status, its BIOS tab reading unknown), and its emulator
-menu, its BIOS tab and the platform page say **"RomM cannot be reached, so Tender does not know this platform's system
-yet."**; where RomM answered but refused the read for any other reason (`auth_failed`, `not_found`, `config_error`, …),
-they say **"RomM did not give this platform's ids, so Tender does not know its system yet."**, and the cause itself
-shows where Tender's connection state shows it; a downloaded game keeps its recorded system and is not affected. The
-game page's two looks at the disk — whether a download's target is already taken, and whether the game is there under
-another name — must reach no network, so they never read the listing: for them a platform with no kept ids has no
-system, and they go quiet.
+**The platform record is kept.** `kv_config`'s `platform_ids` keeps a record of each platform RomM lists, keyed by the
+platform's folder in RomM (`fs_slug`): its slug, its folder, its RomM id, its `name` (none where the listing gives no
+usable one), `is_identified`, the RomM version Tender had detected when the listing was read (none where Tender had
+detected no version), and under `ids` every field of the platform whose name ends in `_id` or `_slug`, as RomM sent it —
+each read through the one reader of a listing entry, `domain/platform_listing.py`. Tender asks with the slug and the
+folder alone; the ids are kept, so an id RomM adds is kept at the next sync with no change in Tender, and none is read.
+A platform RomM marks `is_identified: false` is asked the same way, its slug being its folder
+([#2217](https://github.com/danielcopper/romm-tender/issues/2217) D18). A listed platform without a folder is not kept.
+The value is replaced at the start of every sync from RomM's listing (`PlatformSystemService.replace_listing`, the
+value's one owner; a failed write is logged and leaves the run alone); one kept before it was keyed by folder is read as
+it stands — each key as the slug it was kept under, the new fields empty — until that sync replaces it. A platform is
+found in it by its slug, the console's identity the question is put by; where several folders share a slug, the last
+listed answers (`domain/platform_system.py::kept_by_slug` says why that changes no question). Where none is kept for a
+platform — the first start after an update — `PlatformSystemService` reads the listing once and hands it to the
+refiling, which has it kept beside what was kept (`keep_listing`): an entry for a slug the listing names gives way to
+the listing's. A slug the listing does not name is then kept with nothing but that slug, so it is not read again —
+unless a listed platform's folder bears that same name, which keeps the key and leaves the slug to be read from the
+listing at each ask. Where that read fails, the question answers the reason `classify_error` gives it —
+`server_unreachable` while RomM is offline — as every other read that needs RomM does, and keeps nothing; the next read
+with RomM reachable keeps the record. A game not downloaded then shows the offline state on its page (its save status,
+its BIOS tab reading unknown), and its emulator menu, its BIOS tab and the platform page say **"RomM cannot be reached,
+so Tender does not know this platform's system yet."**; where RomM answered but refused the read for any other reason
+(`auth_failed`, `not_found`, `config_error`, …), they say **"RomM did not give this platform's ids, so Tender does not
+know its system yet."**, and the cause itself shows where Tender's connection state shows it; a downloaded game keeps
+its recorded system and is not affected. The game page's two looks at the disk — whether a download's target is already
+taken, and whether the game is there under another name — must reach no network, so they never read the listing: for
+them a platform with nothing kept is asked by its slug alone.
 
 The platform page names the system taken with its source in its header line ([qam-panel.md](qam-panel.md#library)).
 
@@ -443,18 +448,24 @@ one request that answers them all; an answer that lands after the page moved to 
 closed, is dropped (`utils/emulatorLaunches.ts`). Each line says what the resolver states: an entry that refuses the
 file names the resolver's reason where it gives one — RPCS3 Shortcut "cannot start a game installed as a folder" for a
 game kept as a `<game>.ps3` folder, Beetle PCE "it starts no game from a playlist" for a `.m3u`
-([#2698](https://github.com/danielcopper/romm-tender/issues/2698) D7) — and an entry that starts it says what the
-resolver's reading of the file could not establish, where it stopped short (D40), a file its start goes on without, with
+([#2698](https://github.com/danielcopper/romm-tender/issues/2698) D7). Where the resolver could not establish whether
+the entry starts the file — its verdict `unestablished`, an entry reading that ended without a take or a refusal — the
+line names what could not be established, where the reading stopped short (D40), and never says the entry can start the
+game ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D2, D40, D41 as changed for emu-atlas 0.35.0):
+"whether it starts the game is not established: …". An entry that starts it says a file its start goes on without, with
 "can start it, without _file_: …", or what else it is established to do short of the whole start, with "can start it,
-but …". Where the answer says more than one thing, the line is the first with "+_N_ more" (#2698 D8). The same request
-asks each installed entry's command for the game (`start_verdict`), and an entry the resolver gives no complete command
-for gets no "can start it" under it: its row says "Tender cannot start it yet: _reason_", after the file's statements
-and counted among them ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D20). An entry whose
-installation could not be established says nothing there beyond its row's own note, and where the answering source is
-one Tender starts no game through yet, every row says so in that source's sentence (D21). The menu's answer never moves
-the pick; a pick of an entry that cannot start the game is the user's, and Play is then off with the verdict's sentence
-— the resolver's refusal of the file where it states one, then "Tender cannot start _entry_ yet: _reason_.", or, for an
-entry whose installation could not be established, the sentence a page says under such an emulator
+but …". Beside any verdict, a file the emulator is judged on but the frontend's scan would not list under its name
+(`frontend-name-unscanned`) gets a note of its own; the resolver judges a file by what the emulator starts, and the
+former "not a launch file" verdict is gone. Where the answer says more than one thing, the line is the first with "+_N_
+more" (#2698 D8). The same request asks each installed entry's command for the game (`start_verdict`), and an entry the
+resolver gives no complete command for gets no "can start it" under it: its row says "Tender cannot start it yet:
+_reason_", after the file's statements and counted among them
+([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D20). An entry whose installation could not be
+established says nothing there beyond its row's own note, and where the answering source is one Tender starts no game
+through yet, every row says so in that source's sentence (D21). The menu's answer never moves the pick; a pick of an
+entry that cannot start the game is the user's, and Play is then off with the verdict's sentence — the resolver's
+refusal of the file where it states one, then "Tender cannot start _entry_ yet: _reason_.", or, for an entry whose
+installation could not be established, the sentence a page says under such an emulator
 (`frontend/src/utils/emulatorStart.ts::startRefusal`). What a game's own entry answers, and what each answer does to a
 start, is [Launch-target validation](backend-architecture.md#launch-target-validation).
 

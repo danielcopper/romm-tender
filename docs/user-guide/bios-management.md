@@ -327,13 +327,14 @@ holds every platform your RomM server reports with at least one ROM, or whose co
    nothing to choose — no emulator for the platform, or an emulator list that could not be established (no emulator
    source found, every source switched off, a broken ES-DE systems file, a RetroDECK that has not been set up yet, a
    list that cannot be read yet, or not established for another reason) — a line under the header says so as well, since
-   a tooltip needs a mouse. A platform your emulator source has no system for says **"_Source_ has no system for
-   _platform_, so Tender cannot download its games."**, and one whose only systems are switched off there says **"System
-   _system_ is switched off in _source_."**, naming the source that answers — see
-   [Managing Games](managing-games.md#downloading-roms). Where Tender has not learned a platform's system yet and RomM
-   cannot be reached to tell it, the line, a game's BIOS tab and its emulator menu say **"RomM cannot be reached, so
-   Tender does not know this platform's system yet."**; where RomM answers but does not give it — a failed sign-in, say
-   — they say **"RomM did not give this platform's ids, so Tender does not know its system yet."**
+   a tooltip needs a mouse. A platform with no system to use in your emulator source says which case holds — Tender
+   cannot match it to a system yet, the source has no system for it, the source has one that is not set up on this
+   machine, its only systems are switched off, or several systems fit it and Tender picks none — naming the source that
+   answers; the sentences are in [Managing Games](managing-games.md#downloading-roms). Where Tender has not learned a
+   platform's system yet and RomM cannot be reached to tell it, the line, a game's BIOS tab and its emulator menu say
+   **"RomM cannot be reached, so Tender does not know this platform's system yet."**; where RomM answers but does not
+   give it — a failed sign-in, say — they say **"RomM did not give this platform's ids, so Tender does not know its
+   system yet."**
 7. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
    otherwise names the emulator and says it marks none of its BIOS files as required. Under that heading is the same
    sentence the game page shows, with your RomM library's own inventory behind it (e.g. "(3/5 RomM library files)").

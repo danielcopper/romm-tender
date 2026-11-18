@@ -250,8 +250,8 @@ function isPlatformSystemRefusal(answer: object): answer is { reason: EmulatorDa
 
 /**
  * An endpoint's answer, with the message of a refusal for a platform that has
- * no switched-on system replaced by the sentence the platform's pages show for
- * it, so a refused download and the page say the same thing. Every other
+ * no system to use replaced by the sentence the platform's pages show for it,
+ * so a refused download and the page say the same thing. Every other
  * answer comes back as it is.
  */
 export function withPlatformSystemSentence<T>(answer: T): T {
@@ -400,7 +400,7 @@ export function platformSystemNotes(platformSystem: PlatformSystemAnswer | null)
  * there. Never "no emulator": every one of these is a list that could not be
  * established. An answer with no source is one no source answered, whatever
  * its reason says, so it reads as no source found — except a failed read of
- * RomM for the platform's ids, which stands whether or not a source answers.
+ * RomM's listing for the platform, which stands whether or not a source answers.
  */
 export function emulatorDataReasonSentence(
   reason: EmulatorDataReason | null,

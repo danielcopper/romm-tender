@@ -133,6 +133,20 @@ identity field that stands on both kinds and on both the catalogue answer and th
 (one `pcsx2_libretro.so` under two of them), a caveat's `token` is a third vocabulary again, and a caveat's `core` a
 fourth — the libretro short name (`pcsx2`), which equals no identity.
 
+**An answer about a system says how it resolved it.** Since emu-atlas 0.35.0 every answer to a question that names a
+system — the catalogue, the ROM location, the launch, the launch command, the firmware answer — carries
+`resolution.status`: `resolved` where the asked system or pairs named one system the source holds, else `unknown`,
+`ambiguous` (several systems answer, the resolver names none) or `conflict`. Anything but `resolved` is the question's
+own empty or unknown form, so a reading module reads the status before the answer and reads it as not established, never
+as "nothing" — an empty emulator list under `ambiguous` is no list
+([#2751](https://github.com/danielcopper/romm-tender/issues/2751)). An answer to a question that names no system states
+no resolution and reads as resolved (`adapters/atlas_catalogue.py::resolution_status`). The platform question itself
+carries none: whether the resolver can match a platform is its translation's `intersection_status`, and a match's
+`status` says how firmly the system is here (`adapters/atlas_platforms.py::read_platform_answer`). An answer names a
+system as a `(source, key)` pair; Tender forwards that pair to the next question and compares no system name of its own.
+A firmware answer listing no emulator beside `firmware-declaration-unknown` is a look that found nothing to read, not
+"nothing needed".
+
 **The answer is entry-shaped**, and `answer.requirements` is a flattening that has already discarded `declaration`,
 `requirements_met`, `caveats`, `unread` and `refused` — so an entry-level question answered from it is answered from
 evidence thrown away before the question was put. Separately, `description` is outside the resolver's contract (the

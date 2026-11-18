@@ -1,9 +1,9 @@
 """Contract tests for a RomM platform's system — the download, the emulator choice and the BIOS answers.
 
 Driven frontend-shaped through the real ``Endpoints`` over the real
-``PlatformSystemService`` (the kept ids and their one live read from the fake
-RomM); what the platform's ids give in a source is the harness's
-``platform_systems`` fake, set per test.
+``PlatformSystemService`` (the kept platforms and their one live read from the
+fake RomM); what the platform's slug and folder give in a source is the
+harness's ``platform_systems`` fake, set per test.
 """
 
 from __future__ import annotations
