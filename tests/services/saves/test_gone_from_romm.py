@@ -262,7 +262,8 @@ class TestAnUnconfirmed404StaysAnError:
         # One lookup per run: its verdict holds for the second file's 404 too.
         assert _calls(fake, "get_rom", 1) == 1
         [record] = [r for r in caplog.records if r.levelno == level and logged in r.getMessage()]
-        # A lookup that broke carries its traceback; one RomM or a proxy answered does not need one.
+        # A failure outside RomM's errors carries its traceback; a RomM error — an answer, or a request the
+        # transport could not complete — is named by its type.
         assert (record.exc_info[1] if record.exc_info else None) is (lookup if level == logging.WARNING else None)
 
 
