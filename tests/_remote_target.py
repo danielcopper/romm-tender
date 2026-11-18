@@ -76,6 +76,8 @@ class World:
     accept_host_key: bool = True
     route_source: str = "192.168.1.10"
     """What ``ip route get`` names as this machine's source address."""
+    drop_after_first_line: bool = False
+    """Drop the connection once the login's command has written its first line to stdout."""
 
     def save(self, path: Path) -> None:
         path.write_text(json.dumps(asdict(self)), encoding="utf-8")
@@ -134,8 +136,16 @@ def _resolve(world: World, destination: str) -> dict[str, list[str]]:
     }
 
 
-def _ssh_g(world: World, destination: str) -> int:
-    for key, values in _resolve(world, destination).items():
+def _ssh_g(world: World, argv: list[str]) -> int:
+    """``ssh -G [-p port] destination``: a port given here wins over the config's, as in ssh."""
+    port = argv[argv.index("-p") + 1] if "-p" in argv else None
+    user, _, host = argv[-1].rpartition("@")
+    answer = dict(_resolve(world, host))
+    if user:
+        answer["user"] = [user]
+    if port is not None:
+        answer["port"] = [port]
+    for key, values in answer.items():
         for value in values:
             print(f"{key} {value}")
     return 0
@@ -202,9 +212,10 @@ def _check_host_key(
 def _forced_command(target: Target, identity_files: list[str]) -> str | None:
     """The ``command=`` of the first offered key the target accepts from where it sees us."""
     keys = Path(target.home) / ".ssh" / "authorized_keys"
-    if not keys.exists():
+    try:
+        lines = keys.read_text(encoding="utf-8").splitlines()
+    except OSError:
         return None
-    lines = keys.read_text(encoding="utf-8").splitlines()
     for identity in identity_files:
         public = Path(os.path.expanduser(identity) + ".pub")
         if not public.exists():
@@ -224,7 +235,7 @@ def _forced_command(target: Target, identity_files: list[str]) -> str | None:
 def _ssh(argv: list[str]) -> int:
     world = _world()
     if argv[:1] == ["-G"]:
-        return _ssh_g(world, argv[1])
+        return _ssh_g(world, argv[1:])
     options, destination, command = _parse_ssh(argv)
     resolved = _resolve(world, destination)
     host = resolved["hostname"][0]
@@ -260,7 +271,12 @@ def _ssh(argv: list[str]) -> int:
         else:
             print(f"{user}@{host}: Permission denied (publickey).", file=sys.stderr)
             return 255
-    return subprocess.run(["sh", "-c", command], cwd=target.home, env=env, check=False).returncode
+    if not world.drop_after_first_line:
+        return subprocess.run(["sh", "-c", command], cwd=target.home, env=env, check=False).returncode
+    ran = subprocess.run(["sh", "-c", command], cwd=target.home, env=env, check=False, capture_output=True, text=True)
+    print(ran.stdout.splitlines()[0] if ran.stdout else "")
+    print("client_loop: send disconnect: Connection reset by peer", file=sys.stderr)
+    return 255
 
 
 def _ssh_keygen(argv: list[str]) -> int:

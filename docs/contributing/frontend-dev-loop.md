@@ -473,8 +473,12 @@ Each way the login can fail ends the setup with what to do next, and **nothing c
 | ------------------------------- | -------------------------------------------------------------------------------------------- |
 | a name it cannot resolve        | give the target's address, or a name the network resolves                                    |
 | no SSH server answering         | check the address, and that the target runs an SSH server                                    |
-| no login accepted               | `--print`, as above                                                                          |
+| no login accepted               | `--print`, as above — behind a jump host or proxy command, a login of yours on the target    |
 | a host key not the recorded one | another machine may answer at that address; if the target was reinstalled, remove its record |
+
+A failure once the login holds is the target's, not the login's: the install builds its files first and moves them into
+place last, so whatever stopped it, the setup says it stopped part-way, this machine is unchanged, and running it again
+finishes it.
 
 A target whose address changed is set up again with the new one, and needs no password for it: the key still holds,
 because `from=` bounds the build host's address, not the target's.

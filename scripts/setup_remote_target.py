@@ -20,7 +20,10 @@ Nothing is written on either machine before the login holds: a key this run
 creates waits in a temporary directory, and the host key ``ssh`` records at
 first contact goes to a temporary copy of the dev loop's known-hosts file. Each
 way ``ssh`` can fail before the login is told apart by what ``ssh`` writes on
-stderr, and ends the run with what to do next.
+stderr, and ends the run with what to do next. Once the install script has
+started, a failure is the target's: the script builds its files first and moves
+them into place last, and the run says it stopped part-way and that running it
+again finishes it.
 
 With ``--print`` it contacts nothing: it prints the same install script for the
 target, restricted to the address this machine sends from towards it
@@ -54,9 +57,15 @@ KNOWN_HOSTS_NAME = "known_hosts"
 # OpenSSH's default HostKey paths.
 HOST_KEY_DIR = "/etc/ssh"
 
-# The install script's last line on stdout. Searched for rather than expected
-# alone: a login shell may print its own lines first.
+# The install script's first and last lines on stdout, searched for rather than
+# expected alone: a login shell may print its own lines first. Without STARTED
+# the script never ran, and only then did a failure change nothing on the target.
+STARTED = "tender-dev-setup: started"
 INSTALLED = "tender-dev-setup: installed from="
+
+# What ssh exits with when it fails itself, rather than handing on the remote
+# command's status (ssh(1), EXIT STATUS).
+SSH_FAILED = 255
 
 # What ssh says on stderr for each failure that ends a login before it starts,
 # in the order they are tested: a host key mismatch also prints "Host key
@@ -127,9 +136,10 @@ def stamp() -> str:
     return datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M UTC")
 
 
-def ssh_resolve(destination: str) -> dict[str, list[str]]:
+def ssh_resolve(destination: str, port: str | None = None) -> dict[str, list[str]]:
     """``ssh -G``'s answer for *destination*: each key with every value it printed."""
-    result = subprocess.run(["ssh", "-G", destination], capture_output=True, text=True, check=False)
+    command = ["ssh", "-G", *(["-p", port] if port else []), destination]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise SetupError(
             f"tender-dev: ssh could not read its configuration for {destination}:\n{result.stderr.rstrip()}"
@@ -148,8 +158,8 @@ def _single(answer: dict[str, list[str]], key: str) -> str | None:
     return values[0]
 
 
-def resolve(destination: str) -> Destination:
-    answer = ssh_resolve(destination)
+def resolve(destination: str, port: str | None = None) -> Destination:
+    answer = ssh_resolve(destination, port)
     hostname = _single(answer, _HOSTNAME)
     user = _single(answer, _USER)
     if hostname is None or user is None:
@@ -172,10 +182,30 @@ def resolve_jump(proxy_jump: str) -> str:
     """
     hops = []
     for hop in proxy_jump.split(","):
-        resolved = resolve(hop)
-        host = f"[{resolved.hostname}]" if ":" in resolved.hostname else resolved.hostname
-        hops.append(f"{resolved.user}@{host}:{resolved.port}")
+        user, host, port = split_hop(hop)
+        resolved = resolve(f"{user}@{host}" if user else host, port=port)
+        address = f"[{resolved.hostname}]" if ":" in resolved.hostname else resolved.hostname
+        hops.append(f"{resolved.user}@{address}:{resolved.port}")
     return ",".join(hops)
+
+
+def split_hop(hop: str) -> tuple[str | None, str, str | None]:
+    """One ProxyJump hop, ``[ssh://][user@]host[:port]``, as its user, host and port.
+
+    Split here rather than handed to ``ssh -G`` whole: ``ssh -G`` takes a
+    ``host:port`` for a host name, and an IPv6 address in brackets for one too.
+    """
+    rest = hop.removeprefix("ssh://")
+    user, _, rest = rest.rpartition("@")
+    if rest.startswith("["):
+        host, _, after = rest[1:].partition("]")
+        port = after.removeprefix(":") or None
+    elif rest.count(":") == 1:
+        host, _, port_text = rest.partition(":")
+        port = port_text or None
+    else:
+        host, port = rest, None
+    return user or None, host, port
 
 
 def generate_key(directory: pathlib.Path, comment: str) -> pathlib.Path:
@@ -210,7 +240,12 @@ def install_script(*, public_key: str, build_host: str, written: str, default_fr
             ("host_key_dir", HOST_KEY_DIR),
         )
     )
-    return _INSTALL_TEMPLATE.replace("@VALUES@", values).replace("@DISPATCHER@", dispatcher.rstrip("\n"))
+    return (
+        _INSTALL_TEMPLATE.replace("@VALUES@", values)
+        .replace("@STARTED@", STARTED)
+        .replace("@INSTALLED@", INSTALLED)
+        .replace("@DISPATCHER@", dispatcher.rstrip("\n"))
+    )
 
 
 _INSTALL_TEMPLATE = """\
@@ -225,12 +260,14 @@ _INSTALL_TEMPLATE = """\
 # written. Running it again changes what changed.
 set -eu
 umask 077
+printf '%s\\n' '@STARTED@'
 
 @VALUES@
 
 from_address="${1:-$default_from}"
 if [ -z "$from_address" ]; then
-    from_address="${SSH_CLIENT%% *}"
+    client="${SSH_CLIENT:-}"
+    from_address="${client%% *}"
 fi
 case "$from_address" in
     '' | *[!0-9A-Fa-f.:]*)
@@ -241,36 +278,48 @@ esac
 printf 'tender-dev-setup: the key from %s will be accepted from %s only.\\n' "$build_host" "$from_address" >&2
 
 root="$HOME/.local/lib/romm-tender-dev"
-mkdir -p "$root/current" "$root/incoming"
-cat > "$root/.dispatch.sh.new" <<'TENDER_DEV_DISPATCHER'
+keys="$HOME/.ssh/authorized_keys"
+new_dispatcher="$root/.dispatch.sh.new"
+new_keys="$keys.tender-dev.new"
+# Both files are built beside their places first and moved there last, so a
+# step that fails moves nothing into place and leaves no half-built file.
+trap 'rm -f "$new_dispatcher" "$new_keys"' EXIT
+mkdir -p "$root" "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+
+cat > "$new_dispatcher" <<'TENDER_DEV_DISPATCHER'
 @DISPATCHER@
 TENDER_DEV_DISPATCHER
-chmod 755 "$root/.dispatch.sh.new"
-mv -f "$root/.dispatch.sh.new" "$root/dispatch.sh"
+chmod 755 "$new_dispatcher"
 
 key_comment="${public_key##* }"
 key_blob="${public_key#* }"
 key_blob="${key_blob%% *}"
 line="from=\\"$from_address\\",command=\\"$root/dispatch.sh\\",restrict $public_key"
-mkdir -p "$HOME/.ssh"
-chmod 700 "$HOME/.ssh"
-keys="$HOME/.ssh/authorized_keys"
-[ -f "$keys" ] || : > "$keys"
-if grep -qxF -- "$line" "$keys"; then
+if [ -f "$keys" ] && grep -qxF -- "$line" "$keys"; then
     printf 'tender-dev-setup: %s already holds this line; left as it was.\\n' "$keys" >&2
 else
     # Every line of this build host's key goes — by its key, by its comment, and
     # the comment line written above it — and every other line stays.
-    awk -v blob="$key_blob" -v comment="$key_comment" '
-        index($0, blob) { next }
-        $NF == comment { next }
-        $1 == "#" && $2 == comment ":" { next }
-        { print }
-    ' "$keys" > "$keys.tender-dev.new"
+    if [ -f "$keys" ]; then
+        awk -v blob="$key_blob" -v comment="$key_comment" '
+            index($0, blob) { next }
+            $NF == comment { next }
+            $1 == "#" && $2 == comment ":" { next }
+            { print }
+        ' "$keys" > "$new_keys"
+    else
+        : > "$new_keys"
+    fi
     printf '# %s: written by setup:remote-target from %s, %s. Running it again changes it.\\n%s\\n' \\
-        "$key_comment" "$build_host" "$written" "$line" >> "$keys.tender-dev.new"
-    chmod 600 "$keys.tender-dev.new"
-    mv -f "$keys.tender-dev.new" "$keys"
+        "$key_comment" "$build_host" "$written" "$line" >> "$new_keys"
+    chmod 600 "$new_keys"
+fi
+
+mkdir -p "$root/current" "$root/incoming"
+mv -f "$new_dispatcher" "$root/dispatch.sh"
+if [ -f "$new_keys" ]; then
+    mv -f "$new_keys" "$keys"
 fi
 
 if [ "$show_host_keys" = yes ]; then
@@ -285,7 +334,7 @@ if [ "$show_host_keys" = yes ]; then
     [ "$shown" = yes ] || printf '  none found in %s — is an SSH server set up here?\\n' "$host_key_dir"
     printf '\\n'
 fi
-printf 'tender-dev-setup: installed from=%s\\n' "$from_address"
+printf '%s%s\\n' '@INSTALLED@' "$from_address"
 """
 
 
@@ -344,12 +393,46 @@ def route_source(hostname: str, port: str) -> str:
     return words[words.index("src") + 1]
 
 
+def failure_message(
+    result: subprocess.CompletedProcess[str],
+    name: str,
+    destination_text: str,
+    destination: Destination,
+    key: pathlib.Path,
+    known_hosts: pathlib.Path,
+) -> str:
+    """What to tell the user for a setup login that did not end with the install done."""
+    ssh_said = result.stderr.rstrip()
+    if STARTED in result.stdout.splitlines():
+        return (
+            f"tender-dev: the setup stopped part-way on {name} (ssh ended with {result.returncode}):\n{ssh_said}\n"
+            "  This machine is unchanged; run the setup again to finish it."
+        )
+    if result.returncode == SSH_FAILED:
+        failure = classify(result.stderr, name=name, destination=destination, known_hosts=known_hosts)
+        if failure is None and is_no_login(result.stderr):
+            failure = no_login_message(destination_text, destination, key)
+        if failure is not None:
+            return failure + "\n  Nothing was changed, here or on the target."
+    return (
+        f"tender-dev: the setup did not start on {name} (ssh ended with {result.returncode}):\n{ssh_said}\n"
+        "  Nothing was changed, here or on the target."
+    )
+
+
 def no_login_message(destination_text: str, destination: Destination, key: pathlib.Path) -> str:
+    hop = destination.proxy_jump or destination.proxy_command
+    if hop:
+        return (
+            f"tender-dev: {destination_text} accepted no login from this machine.\n"
+            f"  --print cannot set up a target reached through {hop}. Give the target a login of yours first —"
+            " a key of yours in its ~/.ssh/authorized_keys, or a password — then run the setup here again."
+        )
     message = (
         f"tender-dev: {destination_text} accepted no login from this machine.\n"
         "  Run the setup with --print, run the script it prints on the target, then run the setup here again."
     )
-    if not key.exists() or destination.proxy_jump or destination.proxy_command:
+    if not key.exists():
         return message
     try:
         address = route_source(destination.hostname, destination.port)
@@ -529,20 +612,10 @@ def run_setup(name: str, destination_text: str) -> int:
             key=None if new_key else key,
         )
 
-        installed = next(
-            (line[len(INSTALLED) :] for line in result.stdout.splitlines() if line.startswith(INSTALLED)), None
-        )
+        lines = result.stdout.splitlines()
+        installed = next((line[len(INSTALLED) :] for line in lines if line.startswith(INSTALLED)), None)
         if installed is None:
-            failure = classify(result.stderr, name=name, destination=destination, known_hosts=known_hosts)
-            if failure is None and is_no_login(result.stderr):
-                failure = no_login_message(destination_text, destination, key)
-            if failure is not None:
-                raise SetupError(failure + "\n  Nothing was changed, here or on the target.")
-            raise SetupError(
-                f"tender-dev: the setup on {name} failed (ssh ended with {result.returncode}):\n"
-                f"{result.stderr.rstrip()}\n"
-                "  Nothing was changed on this machine."
-            )
+            raise SetupError(failure_message(result, name, destination_text, destination, key, known_hosts))
 
         if new_key is not None:
             directory.mkdir(mode=0o700, parents=True, exist_ok=True)

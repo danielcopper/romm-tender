@@ -212,6 +212,30 @@ class TestTheSetupLogin:
         assert "    HostName 192.168.1.20\n    Port 2222\n    User deck\n" in remote.config()
         assert "    ProxyJump jumper@203.0.113.5:22022\n" in remote.config()
 
+    @pytest.mark.parametrize(
+        ("hop", "written"),
+        [
+            ("bastion:2222", "jumper@203.0.113.5:2222"),
+            ("ops@bastion:2222", "ops@203.0.113.5:2222"),
+            ("ssh://bastion:2222", "jumper@203.0.113.5:2222"),
+            ("[fd00::5]:2200", "builder@[fd00::5]:2200"),
+            ("ops@[fd00::5]", "ops@[fd00::5]:22"),
+            ("bastion,ops@[fd00::5]:2200", "jumper@203.0.113.5:22022,ops@[fd00::5]:2200"),
+        ],
+    )
+    def test_each_hop_is_resolved_with_its_own_user_and_port(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str], hop: str, written: str
+    ) -> None:
+        remote.world.configs = {
+            "deck": {"user": ["deck"], "hostname": [_ADDRESS], "proxyjump": [hop]},
+            "bastion": {"user": ["jumper"], "hostname": ["203.0.113.5"], "port": ["22022"]},
+        }
+
+        code, _, err = remote.setup(capsys, "deck", "deck")
+
+        assert code == 0, err
+        assert f"    ProxyJump {written}\n" in remote.config()
+
     def test_a_proxy_command_from_the_users_config_is_written_into_the_entry(
         self, remote: Remote, capsys: pytest.CaptureFixture[str]
     ) -> None:
@@ -510,6 +534,21 @@ class TestTheFourFailures:
         assert "Run the setup with --print" in err
         assert "likely cause" not in err
 
+    @pytest.mark.parametrize(
+        "hop", [{"proxyjump": ["jumper@203.0.113.5:22"]}, {"proxycommand": ["nc %h %p"]}], ids=["jump", "proxy"]
+    )
+    def test_no_login_behind_a_hop_names_a_step_that_works_there(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str], hop: dict[str, list[str]]
+    ) -> None:
+        remote.target().own_access = NOTHING
+        remote.world.configs = {"deck": {"user": ["deck"], "hostname": [_ADDRESS], **hop}}
+
+        err = self._fails(remote, capsys, "deck")
+
+        assert "deck accepted no login from this machine" in err
+        assert "Run the setup with --print" not in err
+        assert "a key of yours in its ~/.ssh/authorized_keys, or a password" in err
+
     def test_a_host_key_that_is_not_the_recorded_one(self, remote: Remote, capsys: pytest.CaptureFixture[str]) -> None:
         first, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
         assert first == 0, err
@@ -536,6 +575,84 @@ class TestTheFourFailures:
         err = self._fails(remote, capsys, f"deck@{_ADDRESS}")
 
         assert f"the host key at {_ADDRESS} was not accepted" in err
+
+
+class TestAFailureOnTheTarget:
+    """The login held and the install started: no pre-login message, and this machine unchanged."""
+
+    def test_a_connection_dropped_after_the_install_started_says_it_stopped_part_way(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        remote.world.drop_after_first_line = True
+        build_before = _snapshot(remote.build_home)
+
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        assert code == 1
+        assert "stopped part-way on deck" in err
+        assert "Connection reset by peer" in err
+        assert "This machine is unchanged; run the setup again to finish it." in err
+        assert "no SSH server answers" not in err
+        assert "Nothing was changed, here or on the target" not in err
+        assert _snapshot(remote.build_home) == build_before
+
+    @pytest.mark.skipif(os.geteuid() == 0, reason="root reads a file whatever its mode")
+    def test_a_step_failing_after_the_dispatcher_is_built_moves_nothing_into_place(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        remote.authorized_keys.parent.mkdir()
+        remote.authorized_keys.write_text("ssh-ed25519 AAAAothersKey someone@laptop\n", encoding="utf-8")
+        remote.authorized_keys.chmod(0o000)
+        build_before = _snapshot(remote.build_home)
+
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        remote.authorized_keys.chmod(0o600)
+        assert code == 1
+        assert "stopped part-way on deck" in err
+        assert remote.authorized_keys.read_text(encoding="utf-8") == "ssh-ed25519 AAAAothersKey someone@laptop\n"
+        root = remote.target_home / ".local/lib/romm-tender-dev"
+        assert sorted(path.name for path in root.iterdir()) == []
+        assert sorted(path.name for path in remote.authorized_keys.parent.iterdir()) == ["authorized_keys"]
+        assert _snapshot(remote.build_home) == build_before
+
+
+class TestTheAddressCheck:
+    """The printed script's address is the one guard against key options smuggled into ``from="…"``."""
+
+    @pytest.mark.parametrize(
+        "address", ['1.2.3.4",no-restrict', "1.2.3.4 5.6.7.8", "1.2.3.4/24", "*", "deck.local", "1.2.3.4,5.6.7.8"]
+    )
+    def test_an_address_that_is_not_one_is_refused_and_writes_nothing(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str], address: str
+    ) -> None:
+        _, script, _ = remote.setup(capsys, "deck", f"deck@{_ADDRESS}", "--print")
+
+        on_target = remote.run_on_target(script, address)
+
+        assert on_target.returncode == 1
+        assert "no address to restrict the key to" in on_target.stderr
+        assert _snapshot(remote.target_home) == {}
+
+    def test_a_login_without_ssh_client_is_refused_and_writes_nothing(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _, script, _ = remote.setup(capsys, "deck", f"deck@{_ADDRESS}", "--print")
+        script = script.replace("default_from=192.168.1.10", "default_from=''")
+
+        on_target = remote.run_on_target(script)
+
+        assert on_target.returncode == 1
+        assert 'no address to restrict the key to (got "")' in on_target.stderr
+        assert _snapshot(remote.target_home) == {}
+
+    def test_an_ipv6_address_is_taken(self, remote: Remote, capsys: pytest.CaptureFixture[str]) -> None:
+        _, script, _ = remote.setup(capsys, "deck", f"deck@{_ADDRESS}", "--print")
+
+        on_target = remote.run_on_target(script, "fd00::6")
+
+        assert on_target.returncode == 0, on_target.stderr
+        assert remote.key_lines()[1] == _dispatcher_line(remote, "fd00::6")
 
 
 class TestArguments:
