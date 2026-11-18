@@ -351,6 +351,21 @@ class TestStartingABackend:
         unit = [call for call in commands(loop.world, "systemd-run") if "--unit=romm-tender-dev" in call["argv"]]
         assert [call["argv"][-2:] for call in unit] == [[sys.executable, str(loop.root / "current/backend/main.py")]]
 
+    def test_ctrl_c_where_the_target_cannot_say_what_runs_says_so(self, loop: Loop) -> None:
+        process = loop.start("dev:backend")
+        assert process.stdout is not None
+        while "backend started" not in process.stdout.readline():
+            assert process.poll() is None, process.communicate()
+        loop.world.manager_unreachable = True
+        loop.save()
+
+        os.killpg(process.pid, signal.SIGINT)
+        _, err = process.communicate(timeout=_TIMEOUT)
+
+        assert process.returncode == 0, err
+        assert "Whether it still runs could not be asked" in err
+        assert "keeps running" not in err
+
     def test_ctrl_c_after_the_backend_ended_says_it_no_longer_runs(self, loop: Loop) -> None:
         process = loop.start("dev:backend")
         assert process.stdout is not None
@@ -364,7 +379,7 @@ class TestStartingABackend:
         _, err = process.communicate(timeout=_TIMEOUT)
 
         assert "keeps running" not in err
-        assert "The backend no longer runs on deck" in err or "the backend on deck has stopped" in err
+        assert "The backend no longer runs on deck" in err
 
     def test_dev_bpm_restarts_into_big_picture_and_the_choice_is_remembered_on_the_target(self, loop: Loop) -> None:
         loop.world.backend_exits = True
@@ -542,7 +557,10 @@ class TestTheTasksThatStartNothing:
         assert _alive(scale)
 
     def test_dev_ui_scale_runs_as_a_unit_and_stop_ends_it_and_the_following(self, loop: Loop) -> None:
-        loop.world.journal = ["Restored: AUTOMATIC scaling (the state captured before this run)."]
+        loop.world.journal = [
+            "Restored: AUTOMATIC scaling (the state captured before this run).",
+            "Restore done: the scale and the window are as they were before this run.",
+        ]
         started, scale = loop.start_ui_scale("1.5")
 
         stopped = loop.run("dev:ui-scale", "--stop")
@@ -587,7 +605,7 @@ class TestTheTasksThatStartNothing:
         _, err = started.communicate(timeout=_TIMEOUT)
 
         assert "keeps running" not in err
-        assert "dev:ui-scale no longer runs on deck" in err or "dev:ui-scale on deck has stopped" in err
+        assert "dev:ui-scale no longer runs on deck." in err
 
     def test_dev_ui_scale_stop_with_none_running_says_so(self, loop: Loop) -> None:
         result = loop.run("dev:ui-scale", "--stop")
@@ -653,7 +671,7 @@ class TestTheLog:
 
 class TestTheConnection:
     def test_every_ssh_call_gives_up_on_a_target_that_stops_answering(self, loop: Loop) -> None:
-        """Keepalive and connect timeout on the command line, so targets set up before them get them too."""
+        """Keepalive and connect timeout on every call's command line."""
         before = len(ssh_calls(loop.world))
         loop.hold_lock("romm-tender-dev")
 
@@ -673,6 +691,39 @@ class TestTheConnection:
         assert result.returncode == 0, result.stderr
         assert "tender-dev: copying to deck" in result.stderr
 
+    def test_dev_log_follow_to_a_target_that_does_not_answer_gives_the_no_answer_hint(self, loop: Loop) -> None:
+        loop.world.targets[_ADDRESS].serving = False
+
+        result = loop.run("dev:log", "--follow")
+
+        assert result.returncode == 255
+        assert f"no answer from deck at {_ADDRESS} port 22" in result.stderr
+        assert "ended while following" not in result.stderr
+
+    def test_a_connection_that_ends_before_the_following_says_the_task_may_have_stopped(self, loop: Loop) -> None:
+        loop.world.fail_with = "Timeout, server 192.168.1.20 not responding."
+
+        result = loop.run("dev:log")
+
+        assert result.returncode == 255
+        assert "the connection to deck ended; what the task was doing on deck may have stopped part-way" in (
+            result.stderr
+        )
+
+    @pytest.mark.parametrize(
+        ("task", "follows"),
+        [("dev:backend", "the log. The backend may still run there"), ("dev:ui-scale", "dev:ui-scale, which may")],
+    )
+    def test_a_connection_that_ends_while_a_task_follows_is_said(self, loop: Loop, task: str, follows: str) -> None:
+        loop.world.backend_exits = True
+        loop.world.processes_exit = True
+        loop.world.drop_after_line = "tender-dev-target: following"
+
+        result = loop.run(task, *(["deck"] if task == "dev:ui-scale" else []))
+
+        assert result.returncode == 255
+        assert f"the connection to deck ended while following {follows}" in result.stderr
+
     def test_a_connection_that_ends_while_following_is_said(self, loop: Loop) -> None:
         loop.log.parent.mkdir(parents=True)
         loop.log.write_text("one\ntwo\n", encoding="utf-8")
@@ -686,7 +737,7 @@ class TestTheConnection:
 
 
 class TestWhenTheTargetCannotAnswer:
-    """Every question on the target that gets no answer refuses before anything there is touched."""
+    """A question on the target that gets no answer ends the task, saying so — before a start, nothing started."""
 
     def test_a_user_manager_that_cannot_be_reached_is_refused_before_anything_is_touched(self, loop: Loop) -> None:
         loop.world.manager_unreachable = True
@@ -730,6 +781,23 @@ class TestWhenTheTargetCannotAnswer:
         assert "could not read the single-instance lock on deck" in result.stderr
         assert [entry.name for entry in (loop.root / "current").iterdir()] == ["sentinel"]
         assert _steam_calls(loop.world) == []
+
+    @pytest.mark.parametrize(
+        ("task", "names"),
+        [
+            ("dev:backend", "`mise run dev:stop --target deck` stops it"),
+            ("dev:ui-scale", "`mise run dev:ui-scale --stop --target deck` stops it"),
+        ],
+    )
+    def test_a_user_manager_lost_after_a_start_says_what_was_started(self, loop: Loop, task: str, names: str) -> None:
+        loop.world.main_pid_fails_while_running = True
+
+        result = loop.run(task, *(["deck"] if task == "dev:ui-scale" else []))
+
+        assert result.returncode == 1
+        assert "could not ask the user manager on deck after starting" in result.stderr
+        assert names in result.stderr
+        assert "Nothing was started" not in result.stderr
 
     def test_a_broken_interpreter_is_named_as_broken_not_as_old(self, loop: Loop, tmp_path: Path) -> None:
         broken = tmp_path / "python-broken"
@@ -775,6 +843,7 @@ class TestADevUnitThatHoldsNoLock:
 
         assert result.returncode == 0, result.stderr
         assert "romm-tender-dev.service runs on deck but holds no lock" in result.stdout
+        assert "no backend runs" not in result.stdout
 
 
 class TestAnotherProcessHoldingTheLock:
@@ -842,9 +911,9 @@ class TestReplacingTheRunningTree:
 class TestWhatTheScriptsOnTheTargetSay:
     def test_a_restore_that_did_not_land_is_reported_by_ui_scale_stop(self, loop: Loop) -> None:
         loop.world.journal = [
-            "COULD NOT RESTORE automatic scaling (the debugger did not answer).",
-            "Steam is STILL on the forced scale, and Steam persists it — fix it with:",
-            "  mise run dev:ui-scale auto --target deck",
+            "Restored: AUTOMATIC scaling (the state captured before this run).",
+            "WARNING: that is NOT the window state captured before this run (fullscreen 2560x1440 on DP-2).",
+            "Restore incomplete: see the lines above.",
         ]
         loop.start_ui_scale()
 
@@ -852,6 +921,16 @@ class TestWhatTheScriptsOnTheTargetSay:
 
         assert result.returncode == 1
         assert "the restore on deck did not land" in result.stderr
+
+    def test_a_restore_that_says_nothing_is_not_confirmed(self, loop: Loop) -> None:
+        """The unit was ended without its last line — killed after systemd's stop timeout, say."""
+        loop.world.journal = ["Restored: AUTOMATIC scaling (the state captured before this run)."]
+        loop.start_ui_scale()
+
+        result = loop.run("dev:ui-scale", "--stop")
+
+        assert result.returncode == 1
+        assert "its restore is not confirmed" in result.stderr
 
     def test_the_scripts_on_the_target_name_the_target_in_their_hints(self, loop: Loop) -> None:
         loop.start_ui_scale()
@@ -892,16 +971,30 @@ class TestWhatTheScriptsOnTheTargetSay:
         assert "`mise run dev:bpm <display> --target deck`" in result.stderr
 
 
-class TestTheCopyRefuses:
-    def test_a_shipped_entry_missing_here_is_refused_before_the_copy(self, loop: Loop) -> None:
-        shutil.rmtree(loop.repo / "dist")
+class TestAMissingShippedPath:
+    """A task that builds copies the tree whole; the others mirror what there is."""
+
+    def test_a_task_that_builds_refuses_it_before_the_copy(self, loop: Loop) -> None:
+        shutil.rmtree(loop.repo / "defaults")
         before = _snapshot(loop.target_home)
 
-        result = loop.run("dev:status")
+        result = loop.run("dev")
 
         assert result.returncode == 1
-        assert "has no dist" in result.stderr
+        assert "has no defaults" in result.stderr
         assert _snapshot(loop.target_home) == before
+
+    @pytest.mark.parametrize("words", [("dev:status",), ("dev:ui-scale", "--stop")])
+    def test_a_task_that_builds_nothing_goes_through_in_a_checkout_never_built(
+        self, loop: Loop, words: tuple[str, ...]
+    ) -> None:
+        shutil.rmtree(loop.repo / "dist")
+
+        result = loop.run(*words)
+
+        assert result.returncode == 0, result.stderr
+        assert (loop.root / "incoming/scripts/dev_target.sh").exists()
+        assert not (loop.root / "incoming/dist").exists()
 
 
 class TestHopsAndDisplays:
@@ -919,6 +1012,18 @@ class TestHopsAndDisplays:
         assert "jumper@203.0.113.5: Permission denied" in result.stderr
         assert _snapshot(loop.target_home) == before
 
+    def test_a_hop_whose_host_key_changed_is_named_as_the_hop(self, loop: Loop) -> None:
+        """ssh names a known-hosts file that is not the dev loop's: the key is the hop's."""
+        config = loop.build_home / ".config/romm-tender-dev/ssh_config"
+        text = config.read_text(encoding="utf-8")
+        config.write_text(text.replace("    User deck\n", "    User deck\n    ProxyJump jumper@203.0.113.5:22\n"))
+        loop.world.hop_failure = "host-key"
+
+        result = loop.run("dev:status")
+
+        assert result.returncode == 1
+        assert "a hop on the way to deck (jumper@203.0.113.5:22) failed" in result.stderr
+
     def test_a_display_reaches_the_target(self, loop: Loop) -> None:
         loop.world.outputs = ["eDP-1", "DP-2"]
 
@@ -930,7 +1035,7 @@ class TestHopsAndDisplays:
 
 
 class TestCtrlCBeforeTheFollowing:
-    def test_it_says_the_task_most_likely_goes_on_there(self, loop: Loop) -> None:
+    def test_it_says_the_task_there_may_have_stopped_part_way(self, loop: Loop) -> None:
         loop.world.steam_running = True
         process = loop.start("dev:bpm-reset")
         _wait_for(lambda: bool(commands(loop.world, "pgrep")))
@@ -939,8 +1044,8 @@ class TestCtrlCBeforeTheFollowing:
         _, err = process.communicate(timeout=_TIMEOUT)
 
         assert process.returncode == 130
-        assert "most likely goes on on deck" in err
-        assert "mise run dev:status --target deck" in err
+        assert "interrupted here; what the task was doing on deck may have stopped part-way" in err
+        assert "`mise run dev:status --target deck` says what holds the lock; check Steam there." in err
 
     def test_no_follower_is_left_on_the_target_after_ctrl_c(self, loop: Loop) -> None:
         process = loop.start("dev:backend")
@@ -1119,6 +1224,23 @@ class TestTheTargetsHalf:
         name_characters = re.findall(r"\[([^\]]+)\]", setup_remote_target._NAME.pattern)[-1]
         assert set(_expand(name_characters)) <= set(_expand(word.group(1)))
 
+    def test_dev_ui_scale_without_a_mode_is_refused_here(self, loop: Loop) -> None:
+        result = loop.run("dev:ui-scale")
+
+        assert result.returncode == 1
+        assert "dev:ui-scale needs a mode" in result.stderr
+        assert commands(loop.world, "systemd-run") == []
+
+    def test_every_task_but_dev_log_has_its_spec(self) -> None:
+        spec = importlib.util.spec_from_file_location("dev_target_module", _SCRIPTS / "dev_target.py")
+        assert spec is not None
+        assert spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["dev_target_module"] = module
+        spec.loader.exec_module(module)
+
+        assert set(module.SPECS) == set(module.TASKS) - {"dev:log"}
+
     def test_a_target_name_ssh_could_not_carry_is_refused(self, loop: Loop) -> None:
         result = loop.run("dev:status", target="de:ck")
 
@@ -1126,10 +1248,22 @@ class TestTheTargetsHalf:
         assert "a target's name is letters, digits" in result.stderr
         assert commands(loop.world, "mise") == []
 
-    @pytest.mark.parametrize("words", ["COULD NOT RESTORE", "The restore did not land"])
-    def test_the_words_of_a_failed_restore_it_looks_for_are_dev_ui_scales(self, words: str) -> None:
-        assert words in (_SCRIPTS / "dev_ui_scale.py").read_text(encoding="utf-8")
-        assert f'*"{words}"*' in (_SCRIPTS / "dev_target.sh").read_text(encoding="utf-8")
+    @pytest.mark.parametrize("name", ["RESTORE_DONE", "RESTORE_INCOMPLETE"])
+    def test_the_restore_lines_it_waits_for_are_dev_ui_scales(self, name: str) -> None:
+        source = (_SCRIPTS / "dev_ui_scale.py").read_text(encoding="utf-8")
+        line = re.search(rf'^{name} = "([^"]+)"$', source, re.MULTILINE)
+        assert line is not None
+        opening = line.group(1).split(":")[0] + ":"
+
+        assert f'*"{opening}"*' in (_SCRIPTS / "dev_target.sh").read_text(encoding="utf-8")
+
+    def test_the_default_python_is_the_installers(self) -> None:
+        installer = re.search(
+            r'^PYTHON="\$\{TENDER_PYTHON:-([^}]+)\}"$', (_REPO / "install.sh").read_text(), re.MULTILINE
+        )
+        assert installer is not None
+
+        assert f'readonly DEFAULT_PYTHON="{installer.group(1)}"' in (_SCRIPTS / "dev_target.sh").read_text()
 
     def test_the_python_floor_is_the_installers(self) -> None:
         script = (_SCRIPTS / "dev_target.sh").read_text(encoding="utf-8")

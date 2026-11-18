@@ -546,10 +546,11 @@ Without `--target`, every task does what the sections above describe and nothing
 3. **It copies the tree to the target's `incoming/`**, for every task but `dev:log`: the paths a release ships —
    `SHIPPED` in `scripts/package.sh`, read from that list — plus `scripts/`, without this machine's compiled modules.
    The copy is a mirror that `rsync` keeps up to date, so only what changed travels. It lands beside the running tree,
-   `current/`, not over it, and a task that builds nothing leaves `current/` alone. A path that list names and the
-   checkout lacks — `dist/` before any build, say — stops the task before the copy, as it stops `scripts/package.sh`.
-   The lock is asked only after the build and the copy, by the copy's own scripts, so a refusal costs both; asking it
-   earlier would have to go through the previous copy's scripts, and a first run has none.
+   `current/`, not over it, and a task that builds nothing leaves `current/` alone. A task that builds copies the tree
+   whole: a path that list names and the checkout lacks stops it before the copy, as it stops `scripts/package.sh`. The
+   others copy what there is, so a checkout never built can still stop or ask a target. The lock is asked only after the
+   build and the copy, by the copy's own scripts, so a refusal costs both; asking it earlier would have to go through
+   the previous copy's scripts, and a first run has none.
 4. **It runs the task on the target**, through `scripts/dev_target.sh` from that copy. The tasks that start a backend
    ask the single-instance lock first and refuse as they do locally — `dev:frontend` the other way round, and stricter
    than locally (below) — and only once the answer lets them on does the copy replace `current/`. A lock that cannot be
@@ -563,9 +564,10 @@ Without `--target`, every task does what the sections above describe and nothing
 
 On the target everything runs in the user manager's environment: the units do by being units, and the steps between take
 the display and the session bus from it, since a login over `ssh` carries neither. It needs nothing beyond `/usr/bin`. A
-user manager that cannot be asked — no session of the user running there — stops the task before anything is touched,
-and one that names no display gets a warning: placing Steam's window and `dev:ui-scale` need one. The hints the scripts
-there give name the task to run here, with `--target <name>`.
+user manager that cannot be asked — no session of the user running there — stops the task before it starts anything or
+replaces the running tree; lost after a start, the message names what was started and how to stop it. One that names no
+display gets a warning: placing Steam's window and `dev:ui-scale` need one. The hints the scripts there give name the
+task to run here, with `--target <name>`.
 
 **The tasks that start a backend follow its `backend.log` until Ctrl-C.** The log shows from where it stood before the
 start, so a start that fails is seen: when the backend stops, the following ends and shows what the backend wrote to
@@ -588,12 +590,14 @@ the lock, as above.
 **`dev:ui-scale` runs on the target as the user unit `romm-tender-dev-ui-scale`**, and the task follows what it prints
 until the unit stops, which the task then says, or until Ctrl-C, which ends only the following; the task then asks
 whether the unit still runs, and says so. `dev:ui-scale --stop --target <name>` stops the unit, which restores the scale
-and the window as Ctrl-C does locally, and shows what it said doing so — a restore that did not land ends the task with
-1 and says so; `dev:stop` leaves it running. `auto`, the rescue, runs once and ends, as it does locally.
+and the window as Ctrl-C does locally, and shows what it said doing so. The task waits for the restore's last line,
+which says whether all of it landed; a restore that did not land, or one that ends without saying, ends the task with 1
+and says so. `dev:stop` leaves it running. `auto`, the rescue, runs once and ends, as it does locally.
 
 **`dev:log`** shows the target's `backend.log` once; with `--follow` it shows its end and follows it, by name, so a log
 rotated away or not written yet is picked up. **`dev:status`** says what holds the lock — the dev backend, the installed
-service, another process, or nothing — and whether a `dev:ui-scale` runs.
+service, another process, or nothing — whether `romm-tender-dev` runs without holding it, and whether a `dev:ui-scale`
+runs.
 
 The calls run `ssh` and `rsync` with the dev loop's config alone. The target's leg asks nothing; a jump host on the way
 may ask as your own `ssh` would, about its host key or a key's passphrase, and the task waits for the answer. A target
@@ -619,8 +623,9 @@ A task that cannot reach the target says why and what to do, and nothing is done
 
 No such target is found before the build; the other three at the first connection — the copy, or for `dev:log` the read.
 
-A Ctrl-C before a task follows anything ends only this side: `ssh` gives the far side no terminal, so what the task does
-there most likely goes on, and the message says so and names `dev:status`.
+A Ctrl-C before a task follows anything, or a connection lost then, ends this side, and with it the far side's output:
+`ssh` gives it no terminal, so what the task was doing there stops at its next write, possibly part-way — a Steam
+restart among it. The message says so: `dev:status` says what holds the lock, and Steam there is to be checked by eye.
 
 ## DevTools
 

@@ -138,6 +138,11 @@ class World:
     """What ``ip route get`` names as this machine's source address."""
     drop_after_first_line: bool = False
     """Drop the connection once the login's command has written its first line to stdout."""
+    drop_after_line: str | None = None
+    """Drop the connection once a login's command has written this line to stdout; a login that writes no such
+    line runs as it would."""
+    processes_exit: bool = False
+    """A unit's stand-in process ends at once, as a unit that fails at its start."""
     drop_only_without_config: bool = False
     """Drop it only for a login not given ``-F`` — the user's own."""
     hop_failure: HopFailure | None = None
@@ -171,6 +176,8 @@ class World:
     manager_unreachable: bool = False
     """``systemctl --user`` cannot reach the user manager: every call fails."""
     main_pid_fails: bool = False
+    main_pid_fails_while_running: bool = False
+    """``systemctl --user show -p MainPID`` fails for a unit only once it runs — the user manager lost after a start."""
     """Only ``systemctl --user show -p MainPID`` fails."""
     service_python: str | None = None
     """The interpreter the installed service's ``ExecStart`` runs, or ``None`` for no service installed."""
@@ -575,12 +582,19 @@ def _ssh(argv: list[str]) -> int:
     if login != "own":
         env["SSH_ORIGINAL_COMMAND"] = command
         command = login
-    if not world.drop_after_first_line or (world.drop_only_without_config and "_config" in options):
+    drops = world.drop_after_first_line or world.drop_after_line is not None
+    if not drops or (world.drop_only_without_config and "_config" in options):
         return _start_session(world, command, home=target.home, env=env).wait()
     session = _start_session(world, command, home=target.home, env=env, capture=True)
-    out, _ = session.communicate()
-    ran = subprocess.CompletedProcess(session.args, session.returncode, out, "")
-    print(ran.stdout.splitlines()[0] if ran.stdout else "")
+    out, err = session.communicate()
+    lines = out.splitlines()
+    if world.drop_after_line is not None and world.drop_after_line not in lines:
+        sys.stdout.write(out)
+        sys.stderr.write(err)
+        return session.returncode
+    end = lines.index(world.drop_after_line) + 1 if world.drop_after_line is not None else 1
+    lines = lines[:end] or [""]
+    print("\n".join(lines))
     print("client_loop: send disconnect: Connection reset by peer", file=sys.stderr)
     return 255
 
@@ -763,7 +777,8 @@ def _systemctl(argv: list[str]) -> int:
     world = _world()
     _record(world, "systemctl", argv)
     words = [word for word in argv if word not in ("--user", "--quiet")]
-    if world.manager_unreachable or (world.main_pid_fails and "MainPID" in words):
+    lost = world.main_pid_fails_while_running and "MainPID" in words and _unit_pid(world, words[-1]) > 0
+    if world.manager_unreachable or (world.main_pid_fails and "MainPID" in words) or lost:
         print("Failed to connect to bus: No medium found", file=sys.stderr)
         return 1
     if words == ["show-environment"]:
@@ -851,6 +866,8 @@ def _backend(_argv: list[str]) -> int:
 
 
 def _process(_argv: list[str]) -> int:
+    if _world().processes_exit:
+        return 1
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     time.sleep(LIFETIME)
     return 0

@@ -22,7 +22,7 @@ import subprocess
 import sys
 import threading
 from dataclasses import dataclass
-from typing import Literal, get_args
+from typing import Literal, assert_never, get_args
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -45,7 +45,7 @@ DISPATCHER_REFUSED = "tender-dev: refused: "
 _WORD = re.compile(r"[A-Za-z0-9._,:=+-]+")
 _SHIPPED = re.compile(r"^SHIPPED=\(([^)]*)\)", re.MULTILINE)
 
-Task = Literal[
+RemoteTask = Literal[
     "dev",
     "dev:bpm",
     "dev:desktop",
@@ -55,9 +55,10 @@ Task = Literal[
     "dev:desktop-reset",
     "dev:ui-scale",
     "dev:stop",
-    "dev:log",
     "dev:status",
 ]
+"""The tasks that copy the tree and run :data:`DEV_TARGET`."""
+Task = Literal[RemoteTask, "dev:log"]
 TASKS: tuple[Task, ...] = get_args(Task)
 
 Follows = Literal["backend", "ui-scale", "log"]
@@ -74,7 +75,7 @@ class TaskSpec:
     follows: Follows | None = None
 
 
-SPECS: dict[Task, TaskSpec] = {
+SPECS: dict[RemoteTask, TaskSpec] = {
     "dev": TaskSpec("start", ("restart",), builds=True, follows="backend"),
     "dev:bpm": TaskSpec("start", ("restart", "bpm"), takes_argument=True, builds=True, follows="backend"),
     "dev:desktop": TaskSpec("start", ("restart", "desktop"), takes_argument=True, builds=True, follows="backend"),
@@ -82,11 +83,12 @@ SPECS: dict[Task, TaskSpec] = {
     "dev:frontend": TaskSpec("frontend", takes_argument=True, builds=True),
     "dev:bpm-reset": TaskSpec("reset", ("bpm",), takes_argument=True),
     "dev:desktop-reset": TaskSpec("reset", ("desktop",), takes_argument=True),
+    # Its mode is required on the target; mise gives deck when none is named, and run() refuses a direct call
+    # without one.
     "dev:ui-scale": TaskSpec("ui-scale", takes_argument=True, follows="ui-scale"),
     "dev:stop": TaskSpec("stop"),
     "dev:status": TaskSpec("status"),
 }
-"""Every task but ``dev:log``, which reads through the dispatcher and copies nothing."""
 
 UI_SCALE_STOP = TaskSpec("ui-scale-stop")
 
@@ -149,10 +151,9 @@ def find_target(name: str) -> Target:
     return Target(name, config, destination)
 
 
-# A target that stops answering — a Deck gone to sleep, a network gone — ends the
-# call within a minute rather than leaving it waiting with nothing said. Given
-# here rather than in the dev loop's config, so targets set up before them get
-# them too.
+# What a target that stops answering does to a call: docs/contributing/frontend-dev-loop.md,
+# "The dev tasks on a target". Given here rather than in the dev loop's config,
+# so targets set up before them get them too.
 KEEPALIVE = ("ServerAliveInterval=15", "ServerAliveCountMax=3", "ConnectTimeout=10")
 
 
@@ -189,31 +190,35 @@ def connection_failure(stderr: str, target: Target) -> str | None:
             f"tender-dev: a hop on the way to {name} ({destination.via}) failed.\n"
             f"  Check that hop with your own ssh.\n{nothing_done}"
         )
-    if failure.kind == "host key changed":
-        return (
-            f"tender-dev: the host key at {destination.hostname} is not the one recorded for {name} — another"
-            " machine answers at that address. No connection was made.\n"
-            f"  If {name} was reinstalled, remove its record and set it up again:\n"
-            f"    ssh-keygen -R {setup.host_key_alias(name)} -f {known_hosts}\n"
-            f"    {setup_hint(target)}\n{nothing_done}"
-        )
-    if failure.kind == "host key not accepted":
-        return (
-            f"tender-dev: {name}'s host key is not recorded on this machine, so no connection was made.\n"
-            f"  Set it up again: {setup_hint(target)}\n{nothing_done}"
-        )
-    if failure.kind == "no login":
-        return (
-            f"tender-dev: {name} refused this machine's key. It accepts the key from one address only, and this"
-            f" machine's may have changed — or {name} no longer holds the key's line.\n"
-            f"  Set it up again: {setup_hint(target)}\n{nothing_done}"
-        )
-    hop = f", or at the hop {destination.via}" if destination.via else ""
-    return (
-        f"tender-dev: no answer from {name} at {destination.hostname} port {destination.port}{hop}.\n"
-        f"  It may have a new address; set it up with that one:\n"
-        f"    mise run setup:remote-target {name} <new address>\n{nothing_done}"
-    )
+    match failure.kind:
+        case "host key changed":
+            return (
+                f"tender-dev: the host key at {destination.hostname} is not the one recorded for {name} — another"
+                " machine answers at that address. No connection was made.\n"
+                f"  If {name} was reinstalled, remove its record and set it up again:\n"
+                f"    ssh-keygen -R {setup.host_key_alias(name)} -f {known_hosts}\n"
+                f"    {setup_hint(target)}\n{nothing_done}"
+            )
+        case "host key not accepted":
+            return (
+                f"tender-dev: {name}'s host key is not recorded on this machine, so no connection was made.\n"
+                f"  Set it up again: {setup_hint(target)}\n{nothing_done}"
+            )
+        case "no login":
+            return (
+                f"tender-dev: {name} refused this machine's key. It accepts the key from one address only, and this"
+                f" machine's may have changed — or {name} no longer holds the key's line.\n"
+                f"  Set it up again: {setup_hint(target)}\n{nothing_done}"
+            )
+        case "unresolved" | "no server":
+            hop = f", or at the hop {destination.via}" if destination.via else ""
+            return (
+                f"tender-dev: no answer from {name} at {destination.hostname} port {destination.port}{hop}.\n"
+                f"  It may have a new address; set it up with that one:\n"
+                f"    mise run setup:remote-target {name} <new address>\n{nothing_done}"
+            )
+        case unknown:
+            assert_never(unknown)
 
 
 def dispatcher_refusal(stderr: str, target: Target) -> str | None:
@@ -244,16 +249,19 @@ def build(target: Target, *, surface: bool) -> None:
         raise TargetError(f"tender-dev: the build failed; nothing was copied to {target.name}.")
 
 
-def copy(target: Target) -> None:
+def copy(target: Target, *, whole: bool) -> None:
     """Mirror :func:`copied_tree` into the target's incoming copy, beside the running tree.
 
     The filter names the tree from that one list, and ``--delete-excluded``
     drops from the copy whatever the list no longer names. Compiled modules
-    stay here: the target's Python is not this machine's.
+    stay here: the target's Python is not this machine's. A task that builds
+    copies the tree *whole*, and refuses a path the list names that the
+    checkout lacks, as ``scripts/package.sh`` does; the others mirror what
+    there is, so a checkout never built can still stop or ask a target.
     """
     tree = copied_tree()
     missing = [entry for entry in tree if not (REPO / entry).exists()]
-    if missing:
+    if whole and missing:
         build_first = " — build it first: mise run build" if missing == ["dist"] else ""
         raise TargetError(
             f"tender-dev: {REPO} has no {', '.join(missing)}{build_first}; nothing was copied to {target.name}."
@@ -281,14 +289,14 @@ def copy(target: Target) -> None:
     raise TargetError(f"{failure}\n  rsync said:\n{said}")
 
 
-def run_streaming(command: list[str], *, following: bool = False) -> Outcome:
+def run_streaming(command: list[str], *, from_first_line: bool = False) -> Outcome:
     """*command* run with its output passed on as it comes, and its stderr kept besides.
 
-    *following* says the call follows from its start (``dev:log --follow``);
-    otherwise the line :data:`FOLLOWING` says from where, and is taken out of
-    stdout. On Ctrl-C the
-    terminal has sent ``ssh`` the same signal; letting go of its output ends
-    whatever on the far side still writes to it.
+    The following starts at the line :data:`FOLLOWING`, which is taken out of
+    stdout — or, *from_first_line* (``dev:log --follow``), at the first line
+    the far side writes: an ``ssh`` that failed before the login wrote none.
+    On Ctrl-C the terminal has sent ``ssh`` the same signal; letting go of its
+    output ends whatever on the far side still writes to it.
     """
     process = subprocess.Popen(
         command,
@@ -312,11 +320,13 @@ def run_streaming(command: list[str], *, following: bool = False) -> Outcome:
 
     relay = threading.Thread(target=relay_errors, daemon=True)
     relay.start()
+    following = False
     try:
         for line in process.stdout:
             if line.rstrip("\n") == FOLLOWING:
                 following = True
                 continue
+            following = following or from_first_line
             sys.stdout.write(line)
             sys.stdout.flush()
         process.wait()
@@ -334,7 +344,11 @@ def run_streaming(command: list[str], *, following: bool = False) -> Outcome:
 
 
 def still_running(target: Target, unit: str) -> bool | None:
-    """Whether *unit* (``backend`` or ``ui-scale``) runs on the target, or ``None`` where that could not be asked."""
+    """Whether *unit* (``backend`` or ``ui-scale``) runs on the target.
+
+    ``None`` where that could not be asked: the connection failed, or the
+    target's user manager did not answer (``dev_target.sh running`` ends with 4).
+    """
     result = subprocess.run(
         [*ssh(target), "--", target.name, DEV_TARGET, "running", target.name, unit],
         stdin=subprocess.DEVNULL,
@@ -348,66 +362,86 @@ def still_running(target: Target, unit: str) -> bool | None:
 def after_following(follows: Follows, target: Target) -> str:
     """What to say once the following has ended here: what still runs there, as the target answers."""
     name = target.name
-    if follows == "log":
-        return f"tender-dev: stopped following the log on {name}."
     unknown = f" Whether it still runs could not be asked; `mise run dev:status --target {name}` says what runs there."
-    if follows == "ui-scale":
-        stopped = "tender-dev: stopped following dev:ui-scale."
-        running = still_running(target, "ui-scale")
-        if running is None:
-            return stopped + unknown
-        if not running:
-            return f"{stopped} dev:ui-scale no longer runs on {name}."
-        return (
-            f"{stopped} It keeps running on {name}, holding the scale;"
-            f" `mise run dev:ui-scale --stop --target {name}` restores the scale and the window."
-        )
-    stopped = "tender-dev: stopped following the log."
-    running = still_running(target, "backend")
-    if running is None:
-        return stopped + unknown
-    if not running:
-        return (
-            f"{stopped} The backend no longer runs on {name}; `mise run dev:log --target {name}` shows what it logged."
-        )
-    return (
-        f"{stopped} The backend keeps running on {name};"
-        f" `mise run dev:stop --target {name}` stops it, and `mise run dev:log --follow --target {name}`"
-        " follows its log again."
-    )
+    match follows:
+        case "log":
+            return f"tender-dev: stopped following the log on {name}."
+        case "ui-scale":
+            stopped = "tender-dev: stopped following dev:ui-scale."
+            running = still_running(target, "ui-scale")
+            if running is None:
+                return stopped + unknown
+            if not running:
+                return f"{stopped} dev:ui-scale no longer runs on {name}."
+            return (
+                f"{stopped} It keeps running on {name}, holding the scale;"
+                f" `mise run dev:ui-scale --stop --target {name}` restores the scale and the window."
+            )
+        case "backend":
+            stopped = "tender-dev: stopped following the log."
+            running = still_running(target, "backend")
+            if running is None:
+                return stopped + unknown
+            if not running:
+                return (
+                    f"{stopped} The backend no longer runs on {name};"
+                    f" `mise run dev:log --target {name}` shows what it logged."
+                )
+            return (
+                f"{stopped} The backend keeps running on {name};"
+                f" `mise run dev:stop --target {name}` stops it, and `mise run dev:log --follow --target {name}`"
+                " follows its log again."
+            )
+        case unknown_follows:
+            assert_never(unknown_follows)
 
 
 def connection_ended(follows: Follows, target: Target) -> str:
     name = target.name
     ended = f"tender-dev: the connection to {name} ended while following"
     status = f"`mise run dev:status --target {name}` says what runs there."
-    if follows == "log":
-        return f"{ended} the log."
-    if follows == "ui-scale":
-        return f"{ended} dev:ui-scale, which may still run there; {status}"
-    return f"{ended} the log. The backend may still run there; {status}"
+    match follows:
+        case "log":
+            return f"{ended} the log."
+        case "ui-scale":
+            return f"{ended} dev:ui-scale, which may still run there; {status}"
+        case "backend":
+            return f"{ended} the log. The backend may still run there; {status}"
+        case unknown:
+            assert_never(unknown)
 
 
-def on_target(target: Target, words: list[str], *, follows: Follows | None, from_start: bool = False) -> int:
+def cut_short(target: Target, why: str) -> str:
+    """For a call that ended before it followed anything: what it was doing there may have stopped part-way.
+
+    ``ssh -T`` gives the far side no terminal: on Ctrl-C, or a connection lost,
+    sshd closes its output, and it stops at its next write.
+    """
+    name = target.name
+    return (
+        f"tender-dev: {why}; what the task was doing on {name} may have stopped part-way —"
+        f" `mise run dev:status --target {name}` says what holds the lock; check Steam there."
+    )
+
+
+def on_target(target: Target, words: list[str], *, follows: Follows | None) -> int:
     """*words* run on the target with their output passed on; *follows* names what a following there is of."""
-    outcome = run_streaming([*ssh(target), "--", target.name, *words], following=from_start)
-    if outcome.interrupted and not outcome.following:
-        # ssh -T gives the far side no terminal, so the Ctrl-C reaches only this side.
-        print(
-            f"tender-dev: interrupted here. What the task does on {target.name} most likely goes on on {target.name};"
-            f" `mise run dev:status --target {target.name}` says what runs there.",
-            file=sys.stderr,
-        )
+    outcome = run_streaming([*ssh(target), "--", target.name, *words], from_first_line=follows == "log")
+    following = outcome.following or (outcome.interrupted and follows == "log")
+    if outcome.interrupted and not following:
+        print(cut_short(target, "interrupted here"), file=sys.stderr)
         return INTERRUPTED
-    if follows is not None and (outcome.interrupted or (outcome.following and outcome.returncode == 0)):
+    if follows is not None and (outcome.interrupted or (following and outcome.returncode == 0)):
         print(after_following(follows, target), file=sys.stderr)
         return 0
-    if follows is not None and outcome.following and outcome.returncode == setup.SSH_FAILED:
+    if follows is not None and following and outcome.returncode == setup.SSH_FAILED:
         print(connection_ended(follows, target), file=sys.stderr)
         return outcome.returncode
     if outcome.returncode != 0:
         explained = connection_failure(outcome.stderr, target) if outcome.returncode == setup.SSH_FAILED else None
         explained = explained or dispatcher_refusal(outcome.stderr, target)
+        if explained is None and outcome.returncode == setup.SSH_FAILED:
+            explained = cut_short(target, f"the connection to {target.name} ended")
         if explained is not None:
             print(explained, file=sys.stderr)
     return outcome.returncode
@@ -424,14 +458,18 @@ def run(arguments: argparse.Namespace) -> int:
     task: Task = arguments.task
     if task == "dev:log":
         follow: bool = arguments.follow
-        return on_target(
-            target, ["follow" if follow else "read", "log"], follows="log" if follow else None, from_start=follow
+        return on_target(target, ["follow" if follow else "read", "log"], follows="log" if follow else None)
+    stop: bool = arguments.stop
+    argument: str | None = arguments.argument or None
+    if task == "dev:ui-scale" and not stop and argument is None:
+        raise TargetError(
+            "tender-dev: dev:ui-scale needs a mode: deck, steam, auto or a factor (mise run dev:ui-scale gives deck)."
         )
-    spec = UI_SCALE_STOP if task == "dev:ui-scale" and arguments.stop else SPECS[task]
-    words = remote_words(spec, target.name, arguments.argument or None)
+    spec = UI_SCALE_STOP if task == "dev:ui-scale" and stop else SPECS[task]
+    words = remote_words(spec, target.name, argument)
     if spec.builds:
         build(target, surface=arguments.surface)
-    copy(target)
+    copy(target, whole=spec.builds)
     return on_target(target, words, follows=spec.follows)
 
 

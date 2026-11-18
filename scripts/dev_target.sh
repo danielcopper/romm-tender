@@ -13,7 +13,7 @@
 #       refuse unless the dev backend holds the lock; otherwise put the copy in
 #       place and restart Steam into the remembered window, starting no backend
 #   dev_target.sh reset <name> bpm|desktop [display]
-#   dev_target.sh ui-scale <name> [mode]
+#   dev_target.sh ui-scale <name> <mode>
 #       start dev_ui_scale.py as a user unit and follow what it prints until
 #       the unit stops; `auto` runs once in the foreground instead, as it does
 #       on the build host
@@ -23,7 +23,8 @@
 #       lock, and leave Steam and the service's enablement alone
 #   dev_target.sh status <name>
 #   dev_target.sh running <name> backend|ui-scale
-#       exit 0 while that unit runs, 1 when it does not
+#       exit 0 while that unit runs, 1 when it does not, 4 when the user
+#       manager could not be asked
 #
 # <name> is the target's name on the build host, for the messages. Everything
 # here needs nothing beyond /usr/bin.
@@ -49,15 +50,23 @@ say() {
     printf 'tender-dev: %s\n' "$*" >&2
 }
 
+# Before anything is started or the running tree replaced.
 manager_unreachable() {
-    say "could not ask the user manager on $name (systemctl --user); is a session of this user running there? Nothing was changed."
+    say "could not ask the user manager on $name (systemctl --user); is a session of this user running there? Nothing was started, and the running tree is as it was."
+    exit 1
+}
+
+# After $1 was started: it may run on without the task here knowing.
+manager_lost() {
+    say "could not ask the user manager on $name after starting $1 (systemctl --user)."
+    printf '%s\n' "  \`mise run dev:status --target $name\` says what runs there; $2" >&2
     exit 1
 }
 
 # Sets PYTHON to the interpreter the installed service runs on, so the dev
 # backend runs on the same one: the path= field of its ExecStart, which install.sh
-# wrote from TENDER_PYTHON or its default. TENDER_PYTHON itself is not read
-# here: sshd hands a forced command none of the installer's environment.
+# wrote from TENDER_PYTHON or its default. Why TENDER_PYTHON is not read here:
+# docs/contributing/frontend-dev-loop.md, "The dev tasks on a target".
 need_python() {
     exec_start=$(systemctl --user show -p ExecStart --value "$SERVICE_UNIT" 2>/dev/null) || manager_unreachable
     case "$exec_start" in
@@ -91,7 +100,7 @@ need_python() {
     esac
 }
 
-# sshd hands this script none of the desktop session: the display and the
+# A login over ssh carries none of the desktop session: the display and the
 # session bus that window placement and dev_ui_scale.py talk to are taken from
 # the user manager, whose units (the backend, Steam) run in them already. Only
 # those names are taken, and only a plain value: show-environment writes one
@@ -115,8 +124,28 @@ EOF
     fi
 }
 
-is_active() {
-    systemctl --user is-active --quiet "$1"
+# Status 0 while unit $1 runs, 1 when it does not, 2 when the user manager
+# could not be asked: systemctl is-active ends with 3 for a unit that is not
+# active, and with something else when it got no answer.
+unit_state() {
+    state_status=0
+    systemctl --user is-active --quiet "$1" || state_status=$?
+    case "$state_status" in
+        0) return 0 ;;
+        3) return 1 ;;
+        *) return 2 ;;
+    esac
+}
+
+# Whether unit $1 runs; a user manager that cannot be asked ends the task.
+unit_runs() {
+    runs_status=0
+    unit_state "$1" || runs_status=$?
+    case "$runs_status" in
+        0) return 0 ;;
+        1) return 1 ;;
+        *) manager_unreachable ;;
+    esac
 }
 
 # The unit's main pid, 0 when it runs none; status 1 when the user manager
@@ -148,7 +177,9 @@ EOF
     dev_pid=$(main_pid "$DEV_UNIT") || manager_unreachable
     service_pid=$(main_pid "$SERVICE_UNIT") || manager_unreachable
     dev_running=no
-    [ "$dev_pid" = 0 ] || dev_running=yes
+    if unit_runs "$DEV_UNIT"; then
+        dev_running=yes
+    fi
     case "$state" in
         free) holder=none ;;
         held)
@@ -270,7 +301,8 @@ start_backend() {
     systemd-run --user --unit="$DEV_UNIT" --collect --quiet -- "$PYTHON" "$root/current/backend/main.py"
     printf 'tender-dev: the backend runs on %s as %s.service; its log follows. Ctrl-C ends only the following.\n' \
         "$name" "$DEV_UNIT" >&2
-    backend=$(main_pid "$DEV_UNIT") || manager_unreachable
+    backend=$(main_pid "$DEV_UNIT") || manager_lost "the backend ($DEV_UNIT.service)" \
+        "\`mise run dev:stop --target $name\` stops it."
     printf '%s\n' "$FOLLOWING"
     case "$backend" in
         '' | 0)
@@ -316,14 +348,15 @@ ui_scale() {
         # dev_ui_scale.py ONE_SHOT_MODES: they act once and exit, as on the build host.
         auto | off) exec "$PYTHON" "$here/dev_ui_scale.py" "$mode" ;;
     esac
-    if is_active "$UI_SCALE_UNIT"; then
+    if unit_runs "$UI_SCALE_UNIT"; then
         say "dev:ui-scale already runs on $name. Stop it first: mise run dev:ui-scale --stop --target $name"
         exit 1
     fi
     since=$(date +%s)
     systemd-run --user --unit="$UI_SCALE_UNIT" --collect --quiet --setenv=TENDER_DEV_TARGET="$name" -- \
         "$PYTHON" "$here/dev_ui_scale.py" "$mode"
-    scale=$(main_pid "$UI_SCALE_UNIT") || manager_unreachable
+    scale=$(main_pid "$UI_SCALE_UNIT") || manager_lost "dev:ui-scale ($UI_SCALE_UNIT.service)" \
+        "\`mise run dev:ui-scale --stop --target $name\` stops it and restores the scale."
     printf '%s\n' "$FOLLOWING"
     journalctl --user -u "$UI_SCALE_UNIT" --since "@$since" -o cat --no-pager -f &
     follower=$!
@@ -342,24 +375,35 @@ ui_scale() {
 }
 
 # Stopping the unit is what restores: dev_ui_scale.py puts the scale and the
-# window back on SIGTERM, and what it says then is in the journal.
+# window back on SIGTERM and ends with one of its RESTORE_DONE or
+# RESTORE_INCOMPLETE lines, which journald may hand on a moment after the stop.
 ui_scale_stop() {
-    if ! is_active "$UI_SCALE_UNIT"; then
+    if ! unit_runs "$UI_SCALE_UNIT"; then
         printf 'tender-dev: no dev:ui-scale runs on %s; nothing was stopped.\n' "$name"
         return 0
     fi
     since=$(date +%s)
     systemctl --user stop "$UI_SCALE_UNIT"
-    said=$(journalctl --user -u "$UI_SCALE_UNIT" --since "@$since" -o cat --no-pager 2>&1) || true
+    said=""
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        said=$(journalctl --user -u "$UI_SCALE_UNIT" --since "@$since" -o cat --no-pager 2>&1) || true
+        case "$said" in
+            *"Restore done:"* | *"Restore incomplete:"*) break ;;
+        esac
+        sleep 1
+    done
     printf '%s\n' "$said"
-    # dev_ui_scale.py's words for a restore that failed or did not land.
     case "$said" in
-        *"COULD NOT RESTORE"* | *"The restore did not land"*)
+        *"Restore done:"*) printf 'tender-dev: stopped dev:ui-scale on %s.\n' "$name" ;;
+        *"Restore incomplete:"*)
             say "stopped dev:ui-scale on $name, but the restore on $name did not land — see what it said above."
             exit 1
             ;;
+        *)
+            say "stopped dev:ui-scale on $name, but its restore is not confirmed: it said neither that it was done nor that it was not. Check the scale and the window there."
+            exit 1
+            ;;
     esac
-    printf 'tender-dev: stopped dev:ui-scale on %s.\n' "$name"
 }
 
 stop() {
@@ -401,32 +445,43 @@ status() {
     need_python
     lock_holder
     case "$holder" in
-        none) printf 'tender-dev: no backend runs on %s — nothing holds the single-instance lock (%s).\n' "$name" "$lock" ;;
+        none)
+            if [ "$dev_running" = yes ]; then
+                printf 'tender-dev: nothing holds the single-instance lock on %s (%s).\n' "$name" "$lock"
+            else
+                printf 'tender-dev: no backend runs on %s — nothing holds the single-instance lock (%s).\n' \
+                    "$name" "$lock"
+            fi
+            ;;
         unknown) printf 'tender-dev: the single-instance lock on %s could not be read (%s).\n' "$name" "${lock:-its place}" ;;
         *) printf 'tender-dev: %s holds the single-instance lock on %s (%s).\n' "$(holder_text)" "$name" "$lock" ;;
     esac
     if [ "$dev_running" = yes ] && [ "$holder" != dev ]; then
         printf 'tender-dev: %s.service runs on %s but holds no lock.\n' "$DEV_UNIT" "$name"
     fi
-    if is_active "$UI_SCALE_UNIT"; then
+    if unit_runs "$UI_SCALE_UNIT"; then
         printf 'tender-dev: dev:ui-scale runs on %s (%s.service).\n' "$name" "$UI_SCALE_UNIT"
     else
         printf 'tender-dev: no dev:ui-scale runs on %s.\n' "$name"
     fi
 }
 
-# Exit 0 while the unit runs, 1 when it does not: what the build host asks after
-# a Ctrl-C, before it says what keeps running.
+# Exit 0 while the unit runs, 1 when it does not, 4 when the user manager could
+# not be asked: what the build host asks after a Ctrl-C, before it says what
+# keeps running.
 running() {
     case "${1:-}" in
         backend) unit="$DEV_UNIT" ;;
         ui-scale) unit="$UI_SCALE_UNIT" ;;
         *) usage ;;
     esac
-    if is_active "$unit"; then
-        exit 0
-    fi
-    exit 1
+    running_status=0
+    unit_state "$unit" || running_status=$?
+    case "$running_status" in
+        0) exit 0 ;;
+        1) exit 1 ;;
+        *) exit 4 ;;
+    esac
 }
 
 usage() {

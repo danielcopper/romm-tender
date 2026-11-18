@@ -44,11 +44,10 @@ DEV_TARGET="$ROOT/incoming/scripts/dev_target.sh"
 
 # The backend's names (host/logging_setup.py LOG_FILENAME, bootstrap/adapters.py
 # DB_FILENAME, domain/user_data_location.py APP_DIR_NAME), install.sh's ladder
-# for the directories they lie in, and install.sh's default interpreter. sshd
-# hands a forced command none of the installer's environment (the service unit's
-# Environment= lines among it), so the TENDER_* rungs below hold only for a
-# caller that sets them itself; an install into directories of its own is not
-# found here.
+# for the directories they lie in, and install.sh's default interpreter. The
+# TENDER_* rungs below hold only for a caller that sets them itself (why:
+# docs/contributing/frontend-dev-loop.md, "The dev tasks on a target"); an
+# install into directories of its own is not found here.
 APP_DIR="romm-tender"
 LOG_NAME="backend.log"
 DATABASE_NAME="romm-tender.db"
