@@ -80,20 +80,32 @@ CONTRADICTED = "contradicted"
 # question raised. ``PlatformSystem.unasked`` says why.
 UNASKED = "unasked"
 
-NO_PLATFORM_SYSTEM = "no_platform_system"
-PLATFORM_SYSTEM_OFF = "platform_system_off"
-PLATFORM_SYSTEM_NOT_HERE = "platform_system_not_here"
-PLATFORM_UNMATCHED = "platform_unmatched"
-PLATFORM_PAIRS_CONTRADICT = "platform_pairs_contradict"
-PLATFORM_SYSTEMS_SEVERAL = "platform_systems_several"
 
-_REASON_OF_STATE = {
-    NO_SYSTEM: NO_PLATFORM_SYSTEM,
-    SWITCHED_OFF: PLATFORM_SYSTEM_OFF,
-    NOT_HERE: PLATFORM_SYSTEM_NOT_HERE,
-    UNMATCHED: PLATFORM_UNMATCHED,
-    CONTRADICTED: PLATFORM_PAIRS_CONTRADICT,
-    SEVERAL: PLATFORM_SYSTEMS_SEVERAL,
+class PlatformRefusal(StrEnum):
+    """Why a platform has no system to use, as its refusal and its emulator list name it (#2751 D2, #2225 D8)."""
+
+    NO_SYSTEM = "no_platform_system"
+    SWITCHED_OFF = "platform_system_off"
+    NOT_HERE = "platform_system_not_here"
+    UNMATCHED = "platform_unmatched"
+    CONTRADICTED = "platform_pairs_contradict"
+    SEVERAL = "platform_systems_several"
+
+
+@dataclass(frozen=True, slots=True)
+class _NoSystemToUse:
+    """What a state with no system to use is refused with."""
+
+    platform_refusal: PlatformRefusal
+
+
+_CASE_OF_STATE = {
+    NO_SYSTEM: _NoSystemToUse(PlatformRefusal.NO_SYSTEM),
+    SWITCHED_OFF: _NoSystemToUse(PlatformRefusal.SWITCHED_OFF),
+    NOT_HERE: _NoSystemToUse(PlatformRefusal.NOT_HERE),
+    UNMATCHED: _NoSystemToUse(PlatformRefusal.UNMATCHED),
+    CONTRADICTED: _NoSystemToUse(PlatformRefusal.CONTRADICTED),
+    SEVERAL: _NoSystemToUse(PlatformRefusal.SEVERAL),
 }
 
 
@@ -304,19 +316,9 @@ class PlatformSystem:
             "slug": self.platform_slug,
             "folder": self.platform_folder,
         }
-        message = _refusal_message(self, kind, shown)
-        if self.state == NO_SYSTEM:
-            return FolderRefused(NO_PLATFORM_SYSTEM, message, **details)
-        if self.state == SWITCHED_OFF:
-            return FolderRefused(PLATFORM_SYSTEM_OFF, message, **details)
-        if self.state == NOT_HERE:
-            return FolderRefused(PLATFORM_SYSTEM_NOT_HERE, message, **details)
-        if self.state == UNMATCHED:
-            return FolderRefused(PLATFORM_UNMATCHED, message, **details)
-        if self.state == CONTRADICTED:
-            return FolderRefused(PLATFORM_PAIRS_CONTRADICT, message, **details)
-        if self.state == SEVERAL:
-            return FolderRefused(PLATFORM_SYSTEMS_SEVERAL, message, **details)
+        case = _CASE_OF_STATE.get(self.state)
+        if case is not None:
+            return FolderRefused(case.platform_refusal.value, _refusal_message(self, kind, shown), **details)
         if self.state != UNASKED:
             raise ValueError(f"a platform with system {self.system!r} is not refused")
         if self.unasked is not None and self.unasked_message is not None:
@@ -329,7 +331,8 @@ class PlatformSystem:
 
     def unavailable_options(self) -> dict[str, Any]:
         """The emulator list's "unavailable" answer for a platform with no system to list emulators for."""
-        reason = _REASON_OF_STATE.get(self.state, self.unasked)
+        case = _CASE_OF_STATE.get(self.state)
+        reason = case.platform_refusal.value if case is not None else self.unasked
         source = None if self.source is None else {"kind": self.source.kind, "starts_games": self.source.starts_games}
         return {"available": False, "options": [], "reason": reason, "source": source}
 

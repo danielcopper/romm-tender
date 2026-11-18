@@ -191,6 +191,32 @@ class TestTheRealResolverOverARealTree:
         assert platform.system == _pair("esde", "cdimono1")
 
 
+class TestACatalogueTheResolverCouldNotRead:
+    """A refused catalogue says nothing about what this machine has: never "not set up here" for every platform."""
+
+    def _catalogue(self, tmp_path):
+        deploy = tmp_path / "home" / ".local" / "share" / "flatpak" / "app" / "net.retrodeck.retrodeck"
+        return deploy / "current" / "active" / "files" / _SYSTEMS_SUFFIX
+
+    def test_a_systems_file_that_does_not_parse_leaves_every_platform_unasked(self, tmp_path, traces):
+        adapter = _real(tmp_path, traces)
+        self._catalogue(tmp_path).write_text("<systemList><system>broken", encoding="utf-8")
+
+        for slug in ("snes", "n64", "sms"):
+            platform = _ask(adapter, slug, slug)
+
+            assert (platform.state, platform.unasked, platform.named) == (UNASKED, "catalogue_invalid", ())
+
+    def test_a_systems_file_that_cannot_be_read_leaves_the_platform_unasked(self, tmp_path, traces):
+        adapter = _real(tmp_path, traces)
+        self._catalogue(tmp_path).unlink()
+
+        platform = _ask(adapter, "snes", "snes")
+
+        assert (platform.state, platform.named) == (UNASKED, ())
+        assert platform.unasked == "unavailable"
+
+
 class _Installation:
     """A source's handle that answers each tuple of pairs from a table, and records the questions."""
 

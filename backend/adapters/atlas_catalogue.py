@@ -205,7 +205,7 @@ from domain.launchability import (
     LaunchStatement,
 )
 from domain.launchability import NOT_ESTABLISHED as LAUNCH_NOT_ESTABLISHED
-from domain.platform_system import PLATFORM_SYSTEMS_SEVERAL, system_key
+from domain.platform_system import PlatformRefusal, system_key
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -471,8 +471,8 @@ def _named_source_payload(reading: SourcesReading, kind: str) -> dict[str, Any] 
     return {"kind": named.kind, "starts_games": named.starts_games}
 
 
-def _refusal_reason(answer: Any) -> str:
-    """Which refusal a refused catalogue answer is, as the page words it."""
+def catalogue_refusal_reason(answer: Any) -> str:
+    """Which refusal a refused catalogue answer is, as the page words it. Public for :mod:`adapters.atlas_platforms`."""
     codes = set(_caveat_codes(answer))
     if HEALTH_ISSUE_NOT_SET_UP in codes:
         return CATALOGUE_NOT_SET_UP
@@ -722,10 +722,10 @@ def catalogue_refused(answer: Any) -> bool:
     That is, no catalogue could be read, or what was read cannot be taken as the
     whole list: a sealed one, a systems file ES-DE refuses to load, or the empty
     answer of an installation that has not been set up. Public for
-    :mod:`adapters.atlas_saves` and :mod:`adapters.emulator_sources`, which decline
-    on the same codes: entries beside a refusal (EmuDeck's overlay beside
-    ``emulator-catalogue-sealed``) are an incomplete list, and an incomplete
-    list would look complete.
+    :mod:`adapters.atlas_saves`, :mod:`adapters.atlas_platforms` and
+    :mod:`adapters.emulator_sources`, which decline on the same codes: entries
+    beside a refusal (EmuDeck's overlay beside ``emulator-catalogue-sealed``)
+    are an incomplete list, and an incomplete list would look complete.
     """
     return not _CATALOGUE_REFUSALS.isdisjoint(_caveat_codes(answer))
 
@@ -854,10 +854,10 @@ class AtlasCatalogueAdapter:
         if answer is None:
             return _unavailable(CATALOGUE_UNAVAILABLE, payload)
         if catalogue_refused(answer):
-            return _unavailable(_refusal_reason(answer), payload)
+            return _unavailable(catalogue_refusal_reason(answer), payload)
         status = resolution_status(answer)
         if status != RESOLUTION_RESOLVED:
-            reason = PLATFORM_SYSTEMS_SEVERAL if status == RESOLUTION_AMBIGUOUS else CATALOGUE_UNAVAILABLE
+            reason = PlatformRefusal.SEVERAL.value if status == RESOLUTION_AMBIGUOUS else CATALOGUE_UNAVAILABLE
             return _unavailable(reason, payload)
         chosen = _frontend_choice(answer.entries)
         options = [_entry_option(entry, chosen_in_frontend=entry is chosen) for entry in answer.entries]

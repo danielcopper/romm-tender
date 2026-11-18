@@ -35,6 +35,7 @@ from _vendor.atlas import (
     PLATFORM_STATUS_DISABLED,
 )
 
+from adapters.atlas_catalogue import catalogue_refusal_reason, catalogue_refused
 from domain.emulator_sources import CATALOGUE_UNAVAILABLE, NO_SOURCE_DETECTED
 from domain.platform_system import (
     CONTRADICTED,
@@ -82,7 +83,13 @@ _NOTES = frozenset(
 
 
 class _Unasked(Exception):
-    """A resolver question raised, or answered in a word Tender does not read; the system is not established."""
+    """The platform's system is not established: the question raised, the source's catalogue was refused, or the
+    answer is in a word Tender does not read. ``reason`` says why, in the vocabulary of
+    :mod:`domain.emulator_sources`."""
+
+    def __init__(self, reason: str = CATALOGUE_UNAVAILABLE) -> None:
+        super().__init__(reason)
+        self.reason = reason
 
 
 class UnreadAnswer(Exception):
@@ -156,8 +163,8 @@ class AtlasPlatformSystemsAdapter:
             answer = reading.remember(
                 ("systems_for_platforms", installation.kind, pairs), lambda: self._ask(installation, pairs)
             )
-        except _Unasked:
-            return PlatformSystem(UNASKED, keys.slug, platform_name, source=arranged, unasked=CATALOGUE_UNAVAILABLE)
+        except _Unasked as unasked_because:
+            return PlatformSystem(UNASKED, keys.slug, platform_name, source=arranged, unasked=unasked_because.reason)
         state, named = answer
         self._log_debug(f"[platforms] {pairs} in {arranged.kind}: {state} {[tuple(n) for n in named]}")
         system = named[0] if len(named) == 1 else (pairs if len(named) > 1 else None)
@@ -200,6 +207,11 @@ class AtlasPlatformSystemsAdapter:
             f"because {sorted(codes & _PAIR_UNKNOWN_BECAUSE)}, notes {sorted(codes & _NOTES)}, "
             f"other caveats {sorted(codes - _PAIR_UNKNOWN_BECAUSE - _NOTES)}"
         )
+        if catalogue_refused(answer):
+            # Matches over a catalogue that was not read, or not read whole, say
+            # nothing of what this machine has: every system would read as one
+            # it has not set up.
+            raise _Unasked(catalogue_refusal_reason(answer))
         try:
             return read_platform_answer(answer)
         except UnreadAnswer as exc:
