@@ -432,11 +432,12 @@ the setup reads with `ssh -G` and never writes. `<name>` is yours to choose — 
    `user@address:port`, since an alias from your config means nothing in this one; a proxy command goes in as `ssh -G`
    prints it.
 6. **It checks that the dev loop can reach the target** with that file alone: one more login, through the entry just
-   written and the dev loop's key, which sends an empty setup request and asks for nothing — the target's host key is
-   recorded by then, and a jump host, which has no entry of its own in that file, fails where it would ask. Only when it
-   gets in does the setup say the target is set up. Otherwise the target is set up all the same, and so is its entry,
-   but the setup ends with what `ssh` said and that the dev loop's config carries none of yours — a jump host your own
-   config lets past, with settings of its own there, is the likely case.
+   written and the dev loop's key, which sends an empty setup request. Its leg to the target runs in batch mode and asks
+   for nothing, the target's host key being recorded by then; a jump host's leg takes nothing from that file and may
+   still ask, about its host key among others. Only when the login gets in does the setup end as done. Otherwise the
+   target is set up all the same, and so is its entry, but the setup ends saying the dev loop cannot reach it with its
+   own config, with what `ssh` said and that the dev loop's config carries none of yours — a jump host your own config
+   lets past, with settings of its own there, is the likely case.
 
 Run again, it changes what changed: one key, one `authorized_keys` line and one config entry, however often it runs.
 That is also how a target is repaired. While the build host's address is the one the line names, the repair needs no
@@ -505,14 +506,11 @@ to do. The install refuses on three things:
 - no address it can restrict the key to;
 - a rebuilt `authorized_keys` that did not come out whole;
 - a symlinked `authorized_keys` that cannot be resolved, or that resolves into a place that cannot be written — the
-  message gives the line to add there through whatever manages it. Anything else that stops it is no fault of the
-  install's own: it builds its files first and moves them into place last, so the setup says it stopped part-way, this
-  machine is unchanged, and running it again finishes it. A failure writing this machine's side after the target is set
-  up is named with its file, and running the setup again finishes that too.
+  message gives the line to add there through whatever manages it.
 
-A setup that installed can still end in a refusal: when the check login of step 6 does not get in, the setup says the
-target is set up, but the dev loop cannot reach it with its own config, and gives what `ssh` said. The target, the key
-and the entry are all in place by then.
+Anything else that stops the install is no fault of its own: it builds its files first and moves them into place last,
+so the setup says it stopped part-way, this machine is unchanged, and running it again finishes it. A failure writing
+this machine's side after the target is set up is named with its file, and running the setup again finishes that too.
 
 A target whose address changed is set up again with the new one, and needs no password for it: the key still holds,
 because `from=` bounds the build host's address, not the target's.

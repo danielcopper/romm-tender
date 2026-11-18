@@ -664,9 +664,11 @@ def hand_over(result: subprocess.CompletedProcess[str], *, name: str, destinatio
 def check_login(name: str, config: pathlib.Path) -> subprocess.CompletedProcess[str]:
     """A login to *name* through the dev loop's own *config* alone, sending an empty setup request.
 
-    It runs in batch mode, so it asks for nothing: the target's host key is
-    recorded by then, and a hop, which has no entry of its own in *config*,
-    fails where it would ask. It gets in exactly where the dev loop will.
+    The target's leg runs in batch mode and asks for nothing: its host key is
+    recorded by then. A hop's leg takes nothing from *config* — ``-o`` options
+    and *config*'s entry apply to the destination only (ssh(1), ``-J``) — so it
+    may still ask, about its host key among others. It gets in exactly where
+    the dev loop will.
     """
     command = ["ssh", "-F", str(config), "-T"]
     for option in ("BatchMode=yes", "ControlMaster=no", "ControlPath=none"):
