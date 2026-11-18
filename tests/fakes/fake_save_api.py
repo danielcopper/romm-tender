@@ -14,7 +14,7 @@ from fakes._romm_save_semantics import (
     order_sync_rows,
     tag_filename,
 )
-from lib.errors import RommSyncDisabledError
+from lib.errors import RommNotFoundError, RommSyncDisabledError
 
 if TYPE_CHECKING:
     from models.cover import CoverRevalidation
@@ -35,8 +35,9 @@ if TYPE_CHECKING:
 class FakeSaveApi:
     """In-memory fake that satisfies ``RommSaveApi`` save methods without HTTP.
 
-    Only save/download/negotiate/device methods are implemented.
-    ROM, firmware, and platform methods raise NotImplementedError — use MagicMock()
+    Only save/download/negotiate/device methods are implemented, and the
+    exact-id ROM read a sync proves an upload's 404 with. The other ROM,
+    firmware, and platform methods raise NotImplementedError — use MagicMock()
     when those methods are needed.
 
     Server-side save bytes live in ``_save_content`` (``save_id -> bytes``).
@@ -74,6 +75,10 @@ class FakeSaveApi:
         self.play_sessions: dict[int, list[dict[str, Any]]] = {}
         self._play_session_ledger: set[tuple[str, int, str]] = set()
         self.call_log: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
+        # ROMs RomM no longer has: their listing answers no saves, as RomM's
+        # does, and an upload or an exact-id read of one answers RomM's entity
+        # 404.
+        self.gone_rom_ids: set[int] = set()
         self._next_save_id = 1000
         self._next_play_session_id = 3000
         self._fail_on_next: Exception | None = None
@@ -386,7 +391,13 @@ class FakeSaveApi:
         raise NotImplementedError
 
     def get_rom(self, rom_id: int) -> dict[str, Any]:
-        raise NotImplementedError
+        self.call_log.append(("get_rom", (rom_id,), {}))
+        self._check_gone(rom_id)
+        return {"id": rom_id}
+
+    def _check_gone(self, rom_id: int) -> None:
+        if rom_id in self.gone_rom_ids:
+            raise RommNotFoundError(f"Rom with id '{rom_id}' not found")
 
     def get_rom_simple(self, rom_id: int) -> dict[str, Any]:
         raise NotImplementedError
@@ -675,6 +686,7 @@ class FakeSaveApi:
             )
         )
         self._check_fail()
+        self._check_gone(rom_id)
 
         filename = self._basename(file_path)
         stamp = datetime.now(UTC)

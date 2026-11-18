@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from services.saves._refusals import game_running
 from services.saves._sync_stop import SyncStop
+from services.saves.sync_engine._result_message import joined_names
 
 if TYPE_CHECKING:
     import asyncio
@@ -114,4 +115,4 @@ class RunningSkips:
         names = [name for _rom_id, name in self.skipped]
         if len(names) == 1:
             return f"{message}; {names[0]} was skipped because it is running"
-        return f"{message}; {', '.join(names[:-1])} and {names[-1]} were skipped because they are running"
+        return f"{message}; {joined_names(names)} were skipped because they are running"
