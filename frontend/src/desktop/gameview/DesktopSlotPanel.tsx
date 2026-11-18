@@ -98,10 +98,9 @@ function confirmSlotButtonStyle(disabled: boolean): CSSProperties {
   };
 }
 
-function renderInfoRow(key: string, label: string, value: ReactNode, valueColor = "#dfe3e6") {
-  if (value === null || value === "") return null;
+function renderInfoRow(label: string, value: ReactNode, valueColor = "#dfe3e6") {
   return (
-    <div key={key} style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+    <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
       <span style={INFO_LABEL_STYLE}>{label}</span>
       <div style={{ color: valueColor, flex: 1, minWidth: 0 }}>{value}</div>
     </div>
@@ -112,12 +111,14 @@ function renderLastSyncedNode(value: string) {
   if (value === "Never") {
     return <span style={{ color: "#d4a72c" }}>{value}</span>;
   }
-  if (value.includes(" ✓")) {
-    const [head, ...rest] = value.split(" ✓");
+  const checkIdx = value.indexOf(" ✓");
+  if (checkIdx !== -1) {
+    const head = value.slice(0, checkIdx);
+    const tail = value.slice(checkIdx + 2);
     return (
       <span>
         {head} <span style={{ color: "#5ba32b" }}>✓</span>
-        {rest.join(" ✓")}
+        {tail}
       </span>
     );
   }
@@ -207,14 +208,11 @@ export function renderDesktopSaveFileRow(
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px" }}>
-        {renderInfoRow("last-synced", "Last synced:", renderLastSyncedNode(lastSyncedValue))}
-        {checkedHint ? renderInfoRow("checked", "Checked:", checkedHint, MUTED_COLOR) : null}
-        {file.server_updated_at
-          ? renderInfoRow("last-updated", "Last updated:", formatTimestamp(file.server_updated_at))
-          : null}
+        {renderInfoRow("Last synced:", renderLastSyncedNode(lastSyncedValue))}
+        {checkedHint ? renderInfoRow("Checked:", checkedHint, MUTED_COLOR) : null}
+        {file.server_updated_at ? renderInfoRow("Last updated:", formatTimestamp(file.server_updated_at)) : null}
         {file.server_save_id != null
           ? renderInfoRow(
-              "server-save",
               "Server save:",
               <div>
                 <div>{formatServerSaveSummary(file)}</div>
@@ -228,7 +226,6 @@ export function renderDesktopSaveFileRow(
           : null}
         {file.local_path
           ? renderInfoRow(
-              "local-path",
               "Local path:",
               <span style={{ fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all" }}>
                 {file.local_path}
