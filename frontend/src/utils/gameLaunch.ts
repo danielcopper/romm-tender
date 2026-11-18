@@ -11,8 +11,8 @@
  * emulator does not read every disc a playlist lists; or whether it starts could
  * not be established, which names what could not be — the reading of the file
  * stopping short, its format included — and never says it can start (#2195 D2,
- * D40, D41; #2698 D7, D8). Beside any of them stands a name the frontend would
- * not list the file under. Each is said in its own words; this is the one home
+ * D40, D41; #2698 D7, D8). Beside a start or a verdict not established stands a
+ * name the frontend would not list the file under. Each is said in its own words; this is the one home
  * of that rule.
  *
  * Beside them are the notifications for a page whose check of whether the game

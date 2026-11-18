@@ -2219,8 +2219,9 @@ follow — the verdict is not established, Play stays on, and `statements` names
 the game can start (#2195 D2, D40, D41 as changed 2026-11-18). A system that resolved to no one system the source holds
 (`resolution.status` other than `resolved`) is not established for that reason: `systems_several` where several of its
 systems answer and the resolver names none, `system_unknown` otherwise. A file the frontend's scan would not list under
-its name (`frontend-name-unscanned`) is a statement of its own beside any verdict, and a folder whose files the entry
-would take as games of their own (`entry-directory-holds`) another; the resolver no longer answers "not a launch file".
+its name (`frontend-name-unscanned`) is a statement of its own beside a start or a verdict not established, and a folder
+whose files the entry would take as games of their own (`entry-directory-holds`) another; beside a refusal both ride the
+answer's `statements` and the page words neither; the resolver no longer answers "not a launch file".
 
 **Where the resolver reads the files a disc file opens**, each failure of that open carries the course the resolver
 states for it (`effect`), and Tender reads it by that alone

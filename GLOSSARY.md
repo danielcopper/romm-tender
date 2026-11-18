@@ -495,9 +495,9 @@ where there are any; or whether it starts is **not established** — the resolve
 take or a refusal, or no verdict could be given — which keeps Play on, names what could not be established (RPCS3's own
 list of games not read, a disc image's key not checked, whether the entry reads its format at all) and never says the
 game can start (D40, D41). The resolver judges a file by what the emulator starts, not by what the frontend lists; a
-file the frontend would not list under its name gets a note saying so. Which of them refuse a start is
-`frontend/src/utils/gameLaunch.ts`'s. The resolver compares the file's extension case-exactly, as ES-DE does, and Tender
-folds no case before it asks (D3).
+file the frontend would not list under its name gets a note saying so beside a start or a verdict not established. Which
+of them refuse a start is `frontend/src/utils/gameLaunch.ts`'s. The resolver compares the file's extension case-exactly,
+as ES-DE does, and Tender folds no case before it asks (D3).
 
 ### Start command / start hand-over
 

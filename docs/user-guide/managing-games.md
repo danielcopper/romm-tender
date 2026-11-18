@@ -753,7 +753,7 @@ where not, why. Every emulator stays choosable meanwhile.
 
 **Your download is kept.** The files stay on disk where the ROM would normally live, and **Uninstall** works as usual —
 because installing the package by hand in the emulator is exactly what you would do next. See
-[the troubleshooting entry](troubleshooting.md#the-download-has-no-launchable-file) for how.
+[the troubleshooting entry](troubleshooting.md#the-download-has-to-be-installed-first) for how.
 
 **A PS3 game downloaded as a folder** is named `<game>.ps3`, the name ES-DE expects for a PS3 game kept as a folder. A
 PS3 folder downloaded before this version is renamed so once, when Tender next starts; a folder whose new name is

@@ -415,17 +415,18 @@ path.
 Where RomM has no file, **Download again** is greyed out in the menu too, and **Forget this download** is the action
 left: it clears the record of the download without touching any file.
 
-### The download has no launchable file
+### The download has to be installed first
 
 **Symptom**: The download finished, but **Play** is off and the line under it says the game has to be installed in an
-emulator first, or that the file is not the one the system starts from. Steam's own Play on the shortcut says the same.
+emulator first. Steam's own Play on the shortcut says the same.
 
 **What happened**: Some titles are distributed as an _installer_ rather than as playable content. The clearest case is a
 PS3 game shipped as a `.pkg` (plus a `.rap` licence file): the game is sealed inside the package until an emulator
-installs it, so there is nothing for a shortcut to start. The same applies to a disc rip that arrived as raw `.bin`
-tracks with no `.cue` or `.gdi` alongside them. Whether a file starts is what the emulator source answers, asked each
-time the game's page opens. **Your download is not deleted** — the files are on disk exactly where the ROM would
-normally live.
+installs it, so there is nothing for a shortcut to start. Whether a file starts is what the emulator source answers,
+asked each time the game's page opens. A file the emulator source cannot judge — a disc rip that arrived as raw `.bin`
+tracks with no `.cue` or `.gdi` beside them, say — keeps **Play** on, and the line says what could not be established
+and, where ES-DE would not list the file under its name, which names it lists. **Your download is not deleted** — the
+files are on disk exactly where the ROM would normally live.
 
 **Fix**: Install the content in the emulator yourself. For a PS3 `.pkg`, that is RetroDECK's documented procedure — open
 **RetroDECK › Configurator › Open Emulator › RPCS3**, use **File › Install Packages (PKG)**, point it at the downloaded

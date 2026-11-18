@@ -467,12 +467,12 @@ line names what could not be established, where the reading stopped short (D40),
 game ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D2, D40, D41 as changed for emu-atlas 0.35.0):
 "whether it starts the game is not established: …". An entry that starts it says a file its start goes on without, with
 "can start it, without _file_: …", or what else it is established to do short of the whole start, with "can start it,
-but …". Beside any verdict, a file the emulator is judged on but the frontend's scan would not list under its name
-(`frontend-name-unscanned`) gets a note of its own; the resolver judges a file by what the emulator starts, and the
-former "not a launch file" verdict is gone. Where the answer says more than one thing, the line is the first with "+_N_
-more" (#2698 D8). The same request asks each installed entry's command for the game (`start_verdict`), and an entry the
-resolver gives no complete command for gets no "can start it" under it: its row says "Tender cannot start it yet:
-_reason_", after the file's statements and counted among them
+but …". Beside a start or a verdict not established, a file the emulator is judged on but the frontend's scan would not
+list under its name (`frontend-name-unscanned`) gets a note of its own; the resolver judges a file by what the emulator
+starts, and the former "not a launch file" verdict is gone. Where the answer says more than one thing, the line is the
+first with "+_N_ more" (#2698 D8). The same request asks each installed entry's command for the game (`start_verdict`),
+and an entry the resolver gives no complete command for gets no "can start it" under it: its row says "Tender cannot
+start it yet: _reason_", after the file's statements and counted among them
 ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D20). An entry whose installation could not be
 established says nothing there beyond its row's own note, and where the answering source is one Tender starts no game
 through yet, every row says so in that source's sentence (D21). The menu's answer never moves the pick; a pick of an
