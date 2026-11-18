@@ -165,13 +165,14 @@ async function readTrackingConfigured(
   isCurrent: () => boolean,
   onResult: (configured: boolean) => void,
 ): Promise<void> {
+  let configured = true;
   try {
     const tracking = await isSaveTrackingConfigured(romId);
-    if (isCurrent()) onResult(tracking.configured);
+    configured = tracking.configured;
   } catch (e) {
     logWarn(`DesktopSaveManagementCard: failed to check tracking: ${e}`);
-    if (isCurrent()) onResult(true);
   }
+  if (isCurrent()) onResult(configured);
 }
 
 async function readSurfaceAnswer<T>(

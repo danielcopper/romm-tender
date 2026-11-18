@@ -246,7 +246,7 @@ describe("SaveManagementCard", () => {
         expect(screen.getByText("~/retrodeck/saves/gba/Mario Golf - Advance Tour.srm")).toBeInTheDocument();
         const checkEl = screen.getByText("✓");
         expect(checkEl).toBeInTheDocument();
-        expect(checkEl.parentElement?.textContent).not.toContain("✓✓");
+        expect(checkEl.parentElement?.textContent).not.toMatch(/✓.*✓/);
       });
       expect(screen.queryByText("Checked:")).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Sync now" }).querySelector("svg")).toBeNull();
@@ -1029,6 +1029,9 @@ describe("SaveManagementCard", () => {
           expect(backend.getSaveSlots).toHaveBeenCalledTimes(3);
           expect(events.some((ev) => ev.detail.type === "save_sync" && ev.detail.rom_id === 42)).toBe(true);
         });
+        await act(async () => {
+          await Promise.resolve();
+        });
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
       }
@@ -1066,6 +1069,9 @@ describe("SaveManagementCard", () => {
           expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(3);
           expect(backend.getSaveSlots).toHaveBeenCalledTimes(3);
           expect(events.some((ev) => ev.detail.type === "save_sync" && ev.detail.rom_id === 42)).toBe(true);
+        });
+        await act(async () => {
+          await Promise.resolve();
         });
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
@@ -1463,18 +1469,22 @@ describe("SaveManagementCard", () => {
       expect(neverEl).toHaveStyle({ color: "#d4a72c" });
       expect(within(speedrunPanel).queryByText("Conflict")).not.toBeInTheDocument();
 
-      // Confirm button disables and dims when offline
+      // Confirm buttons (banner + active slot box) disable and dim when offline
       act(() => {
         reportServerReachable(false);
       });
-      const confirmBtn = screen.getByRole("button", { name: "Confirm 'default'" });
-      expect(confirmBtn).toBeDisabled();
-      expect(confirmBtn).toHaveStyle({ opacity: "0.5" });
+      const bannerConfirmBtn = screen.getByRole("button", { name: "Confirm 'default'" });
+      const slotConfirmBtn = screen.getByRole("button", { name: "Confirm Slot" });
+      expect(bannerConfirmBtn).toBeDisabled();
+      expect(bannerConfirmBtn).toHaveStyle({ opacity: "0.5" });
+      expect(slotConfirmBtn).toBeDisabled();
+      expect(slotConfirmBtn).toHaveStyle({ opacity: "0.5" });
 
       act(() => {
         reportServerReachable(true);
       });
-      expect(confirmBtn).not.toBeDisabled();
+      expect(bannerConfirmBtn).not.toBeDisabled();
+      expect(slotConfirmBtn).not.toBeDisabled();
 
       // Click active row's Copy to slot... directly (target excludes 'default')
       fireEvent.click(within(activePanel).getByRole("button", { name: "Copy to slot..." }));
@@ -1484,18 +1494,39 @@ describe("SaveManagementCard", () => {
       await waitFor(() => expect(backend.copySaveToSlot).toHaveBeenCalledWith(42, 4812, "speedrun"));
     });
 
-    it("pins activeHasSaves when saveStatus.files is empty but slot count > 0", async () => {
+    it("pins activeHasSaves and fileCount when either saveStatus.files or slot.count is zero", async () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: false,
         active_slot: "default",
         setup_needed: true,
       });
 
-      render(
+      const emptyFilesFirst = render(
         <SaveManagementCard appId={100} detail={{ ...baseDetail, saveStatus: { ...mockSaveStatus, files: [] } }} />,
       );
-
       expect(await screen.findByTestId("unconfirmed-slot-banner")).toBeInTheDocument();
+      emptyFilesFirst.unmount();
+
+      vi.mocked(backend.getSaveSlots).mockResolvedValueOnce({
+        success: true,
+        slots: [{ slot: "default", source: "server", count: 0, latest_updated_at: null }],
+        active_slot: "default",
+      });
+      render(
+        <SaveManagementCard
+          appId={100}
+          detail={{
+            ...baseDetail,
+            saveStatus: {
+              ...mockSaveStatus,
+              files: [{ ...mockSaveStatus.files[0]!, status: "download", last_sync_at: "2026-06-15T20:00:00Z" }],
+            },
+          }}
+        />,
+      );
+      expect(await screen.findByTestId("unconfirmed-slot-banner")).toBeInTheDocument();
+      expect(within(screen.getByTestId("desktop-slot-panel-default")).getByText("1 save")).toBeInTheDocument();
+      expect(screen.getAllByText("Server newer").length).toBeGreaterThanOrEqual(2);
     });
 
     it("manages inactive slot loading, cache reuse, event invalidation, failed delete info, and inactive Copy to slot...", async () => {
@@ -1539,6 +1570,18 @@ describe("SaveManagementCard", () => {
       });
       await waitFor(() => expect(within(speedrunPanel).getByText("alt.srm")).toBeInTheDocument());
       expect(within(speedrunPanel).getByText(/#700 · 1\.0 KB/)).toBeInTheDocument();
+
+      // Inactive Copy to slot... dims and disables offline
+      act(() => {
+        reportServerReachable(false);
+      });
+      const inactiveCopyBtn = within(speedrunPanel).getByRole("button", { name: "Copy to slot..." });
+      expect(inactiveCopyBtn).toBeDisabled();
+      expect(inactiveCopyBtn).toHaveStyle({ opacity: "0.5" });
+      act(() => {
+        reportServerReachable(true);
+      });
+      expect(inactiveCopyBtn).not.toBeDisabled();
 
       // Idle Activate / Delete buttons have no throbbers, and failed delete info aborts dialog
       const activateBtn = within(speedrunPanel).getByRole("button", { name: "Activate Slot" });
@@ -1838,21 +1881,79 @@ describe("SaveManagementCard", () => {
             }}
           />,
         );
-        await waitFor(() => {
-          expect(screen.getByText("LOCAL")).toBeInTheDocument();
-          expect(screen.getByText("SERVER")).toBeInTheDocument();
-          expect(screen.getByText("ACTIVE")).toBeInTheDocument();
-          expect(screen.getByText("1 save")).toBeInTheDocument();
-          expect(screen.getByText("2 saves")).toBeInTheDocument();
-          expect(screen.getByText(/^Newest save: /)).toBeInTheDocument();
-          expect(screen.getByText("Conflict detected on this file")).toBeInTheDocument();
-        });
+        const defaultLastKnown = await screen.findByTestId("desktop-last-known-slot-default");
+        const backupLastKnown = screen.getByTestId("desktop-last-known-slot-backup");
+        expect(within(defaultLastKnown).getByText("ACTIVE")).toBeInTheDocument();
+        expect(within(defaultLastKnown).getByText("LOCAL")).toBeInTheDocument();
+        expect(within(defaultLastKnown).getByText("1 save")).toBeInTheDocument();
+        expect(within(defaultLastKnown).getByText(/^Newest save: /)).toBeInTheDocument();
+        expect(within(backupLastKnown).queryByText("ACTIVE")).not.toBeInTheDocument();
+        expect(within(backupLastKnown).getByText("SERVER")).toBeInTheDocument();
+        expect(within(backupLastKnown).getByText("2 saves")).toBeInTheDocument();
+        expect(within(backupLastKnown).queryByText(/^Newest save: /)).not.toBeInTheDocument();
+        expect(screen.getAllByText("Conflict detected on this file")).toHaveLength(1);
+        expect(screen.getByText("Checked:")).toBeInTheDocument();
         unslottedView.unmount();
 
-        // 4. Live events + reportServerReachable(true) + catch logWarn coverage
+        // 3b. Empty UnslottedFilesSection (server_query_failed: false) renders noSaveLine; notDownloaded renders refusal+hint
+        vi.mocked(backend.getSaveSlots).mockResolvedValueOnce({
+          success: false,
+          reason: "not_found",
+          message: "missing",
+        });
+        setRommConnectionState("connected", "test setup");
+        const emptyUnslotted = render(
+          <SaveManagementCard
+            appId={100}
+            detail={{
+              ...baseDetail,
+              installed: false,
+              saveStatus: { ...mockSaveStatus, files: [], server_query_failed: false },
+            }}
+          />,
+        );
+        await waitFor(() => {
+          expect(screen.getByText(/No save yet — mGBA's saves/)).toBeInTheDocument();
+        });
+        expect(getRommConnectionState()).toBe("connected");
+        emptyUnslotted.unmount();
+
+        vi.mocked(backend.getSaveSyncAvailability).mockResolvedValueOnce({
+          available: false,
+          installed: false,
+          established: true,
+          emulator_label: "mGBA",
+          reason: "savefiles_in_content_dir",
+          message: "Saves sit beside game.",
+        });
+        vi.mocked(backend.getSaveSlots).mockResolvedValueOnce({
+          success: true,
+          slots: mockSlots,
+          active_slot: "default",
+        });
+        const notDlRefused = render(<SaveManagementCard appId={100} detail={{ ...baseDetail, installed: false }} />);
+        await waitFor(() => {
+          expect(screen.getByText("Saves sit beside game.")).toBeInTheDocument();
+          expect(screen.getByText(CONTENT_DIR_HINT)).toBeInTheDocument();
+        });
+        notDlRefused.unmount();
+
+        // 4. Live events + refreshSlots + readTrackingConfigured confirm/catch + catch logWarn coverage
+        vi.mocked(backend.isSaveTrackingConfigured)
+          .mockResolvedValueOnce({ configured: false, active_slot: "default", setup_needed: true })
+          .mockResolvedValueOnce({ configured: true, active_slot: "default", setup_needed: false });
         vi.mocked(backend.getSaveSlots)
           .mockRejectedValueOnce(new Error("slots boom"))
-          .mockResolvedValue({ success: true, slots: mockSlots, active_slot: "default" });
+          .mockResolvedValueOnce({
+            success: true,
+            slots: [...mockSlots, { slot: "refreshed-slot", source: "server", count: 0, latest_updated_at: null }],
+            active_slot: "default",
+          })
+          .mockResolvedValue({
+            success: true,
+            slots: mockSlots,
+            active_slot: "default",
+          });
         vi.mocked(backend.getVersionList).mockRejectedValueOnce(new Error("versions boom"));
         setRommConnectionState("connected", "test setup");
 
@@ -1866,7 +1967,7 @@ describe("SaveManagementCard", () => {
           );
         });
 
-        // Wrong event type / rom_id does not reload; matching save_sync reloads slots
+        // Reconnect / Sync triggers tracking false -> true banner clear and slot list refresh
         act(() => {
           globalThis.dispatchEvent(
             new CustomEvent("romm_data_changed", { detail: { type: "core_changed", rom_id: 42 } }),
@@ -1879,7 +1980,49 @@ describe("SaveManagementCard", () => {
         act(() => {
           globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
         });
-        await waitFor(() => expect(backend.getSaveSlots).toHaveBeenCalledTimes(callsBefore + 1));
+        await waitFor(() => {
+          expect(backend.getSaveSlots).toHaveBeenCalledTimes(callsBefore + 1);
+          expect(screen.getByText("refreshed-slot")).toBeInTheDocument();
+        });
+
+        // Second save_sync switches unconfirmed false -> true via refreshSlots
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
+          configured: false,
+          active_slot: "default",
+          setup_needed: true,
+        });
+        liveView.unmount();
+
+        const trackView = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        expect(await screen.findByTestId("unconfirmed-slot-banner")).toBeInTheDocument();
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
+          configured: true,
+          active_slot: "default",
+          setup_needed: false,
+        });
+        act(() => {
+          reportServerReachable(false);
+        });
+        expect(getRommConnectionState()).toBe("offline");
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+        });
+        await waitFor(() => {
+          expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument();
+          expect(getRommConnectionState()).toBe("connected");
+        });
+        trackView.unmount();
+
+        // Failing isSaveTrackingConfigured logs warn and falls back to confirmed=true
+        vi.mocked(backend.isSaveTrackingConfigured).mockRejectedValueOnce(new Error("track boom"));
+        const trackErrView = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        await waitFor(() => {
+          expect(warnSpy).toHaveBeenCalledWith(
+            "DesktopSaveManagementCard: failed to check tracking: Error: track boom",
+          );
+        });
+        expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument();
+        trackErrView.unmount();
 
         // Failing refreshSlots and failing auto-confirm log warnings
         vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
@@ -1888,7 +2031,6 @@ describe("SaveManagementCard", () => {
           setup_needed: true,
         });
         vi.mocked(backend.confirmSlotChoice).mockRejectedValueOnce(new Error("auto confirm boom"));
-        liveView.unmount();
 
         const autoFailView = render(<SaveManagementCard appId={100} detail={baseDetail} />);
         fireEvent.click(await screen.findByRole("button", { name: /speedrun/ }));
