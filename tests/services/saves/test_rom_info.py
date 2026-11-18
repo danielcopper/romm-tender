@@ -34,11 +34,7 @@ def _asked(svc) -> list[tuple[str, str, str | None]]:
 
 
 def _resolutions(svc) -> list[int]:
-    """Every resolution of a ROM's entry, as the fake recorded them.
-
-    One where no question is put changes no answer; it only reads the database
-    again and repeats a stale pick's warning, so nothing but this list sees it.
-    """
+    """Every resolution of a ROM's entry, as the fake recorded them."""
     return cast("FakeActiveCoreResolver", svc._rom_info._active_core).emulator_calls
 
 
