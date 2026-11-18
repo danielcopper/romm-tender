@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 import pytest
-from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
+from fakes.fake_platform_systems import FakePlatformSystems, platform_answer
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
-from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
+from domain.platform_system import NO_SYSTEM, SWITCHED_OFF
 from domain.retrodeck_folders import GAME_DOWNLOAD, switched_off
 from domain.save_answer import SaveAnswer
 from tests.services.saves._helpers import (
@@ -213,7 +213,7 @@ class TestFindSaveFiles:
         svc, _ = make_service(tmp_path)
         _seed_amiga_inside_content(svc)
         _seed_rom(svc, 80, platform_slug="commodore-amiga", fs_name="Turrican.adf")
-        platform = PlatformSystem(state, "commodore-amiga", "Amiga", system="amiga", source=RETRODECK_SOURCE)
+        platform = platform_answer(state, "commodore-amiga", "amiga", name="Amiga")
         svc._rom_info._platform_systems = FakePlatformSystems(answers={"commodore-amiga": platform})
         folders = svc._rom_info._retrodeck_folders
         asked_folders: list[object] = []

@@ -144,7 +144,7 @@ class TestTheRealResolverOverARealTree:
     def test_the_folder_narrows_the_slug_to_one_system_and_it_is_found_as_the_answer_names_it(self, tmp_path, traces):
         platform = _ask(_real(tmp_path, traces), "snes", "snes")
 
-        assert (platform.state, platform.system, _kind(platform)) == (FOUND, _pair("esde", "snes"), "retrodeck")
+        assert (platform.state, platform.taken, _kind(platform)) == (FOUND, _pair("esde", "snes"), "retrodeck")
 
     def test_twins_the_pairs_leave_are_several_and_none_is_picked(self, tmp_path, traces):
         """#2225 D8: Tender picks none of the systems the pairs leave; later questions ask with the pairs."""
@@ -170,25 +170,35 @@ class TestTheRealResolverOverARealTree:
     def test_a_platform_no_frontend_has_a_system_for_has_no_system(self, tmp_path, traces):
         platform = _ask(_real(tmp_path, traces), "altair-8800", "altair-8800")
 
-        assert (platform.state, platform.system, platform.named) == (NO_SYSTEM, None, ())
+        assert (platform.state, platform.taken, platform.named) == (NO_SYSTEM, None, ())
 
     def test_a_platform_the_resolver_knows_by_neither_pair_is_unmatched_never_its_slug(self, tmp_path, traces):
         """#2751 D2: case one, never a system named after RomM's slug."""
         platform = _ask(_real(tmp_path, traces), "not-a-platform", "not-a-platform")
 
-        assert (platform.state, platform.system) == (UNMATCHED, None)
+        assert (platform.state, platform.taken) == (UNMATCHED, None)
 
     def test_a_slug_and_a_folder_that_name_different_systems_contradict_each_other(self, tmp_path, traces):
         """#2751 D2 (changed): its own case, naming the slug and the folder, never case one."""
         platform = _ask(_real(tmp_path, traces), "snes", "xbox360")
 
-        assert (platform.state, platform.system) == (CONTRADICTED, None)
-        assert (platform.platform_slug, platform.platform_folder) == ("snes", "xbox360")
+        assert (platform.state, platform.taken) == (CONTRADICTED, None)
+        assert platform.keys == PlatformKeys("snes", "xbox360")
+
+    def test_two_folders_of_one_slug_answer_their_own_systems(self, tmp_path, traces):
+        """#2217 D16 (changed 2026-11-18): RomM folds megadrivejp into genesis; each folder names its own system."""
+        adapter = _real(tmp_path, traces)
+
+        genesis = _ask(adapter, "genesis", "genesis")
+        japan = _ask(adapter, "genesis", "megadrivejp")
+
+        assert genesis.named == (_pair("esde", "genesis"),)
+        assert japan.named == (_pair("esde", "megadrivejp"),)
 
     def test_the_system_the_catalogue_declares_is_taken_whatever_rom_m_calls_it(self, tmp_path, traces):
         platform = _ask(_real(tmp_path, traces), "philips-cd-i", "cdimono1")
 
-        assert platform.system == _pair("esde", "cdimono1")
+        assert platform.taken == _pair("esde", "cdimono1")
 
 
 class TestACatalogueTheResolverCouldNotRead:
@@ -270,7 +280,7 @@ class TestEachSourceIsAskedForItself:
 
         platform = _ask(adapter, "genesis", "genesis")
 
-        assert (platform.system, _kind(platform)) == (_pair("esde", "genesis"), "retrodeck")
+        assert (platform.taken, _kind(platform)) == (_pair("esde", "genesis"), "retrodeck")
         assert emudeck.asked == []
 
     def test_emu_deck_answers_with_its_own_system_asked_with_the_same_pairs(self, traces):
@@ -279,7 +289,7 @@ class TestEachSourceIsAskedForItself:
 
         platform = _ask(adapter, "genesis", "genesis")
 
-        assert (platform.system, _kind(platform)) == (_pair("esde", "megadrive"), "emudeck")
+        assert (platform.taken, _kind(platform)) == (_pair("esde", "megadrive"), "emudeck")
         assert emudeck.asked == [(("romm", "genesis"), ("folder", "genesis"))]
         assert retrodeck.asked == []
 
@@ -289,7 +299,7 @@ class TestEachSourceIsAskedForItself:
 
         platform = _ask(adapter, "genesis", "genesis", source="retrodeck")
 
-        assert (platform.system, _kind(platform)) == (_pair("esde", "genesis"), "retrodeck")
+        assert (platform.taken, _kind(platform)) == (_pair("esde", "genesis"), "retrodeck")
         assert emudeck.asked == []
 
     def test_a_source_that_names_no_system_is_not_stood_in_for_by_another(self, traces):
@@ -407,7 +417,7 @@ class TestTheResolversStatusesAreReadHere:
 
         platform = _ask(adapter, "genesis", "genesis")
 
-        assert (platform.state, platform.unasked, platform.system) == (UNASKED, CATALOGUE_UNAVAILABLE, None)
+        assert (platform.state, platform.unasked, platform.taken) == (UNASKED, CATALOGUE_UNAVAILABLE, None)
         assert any("'pending'" in line for line in traces)
 
 

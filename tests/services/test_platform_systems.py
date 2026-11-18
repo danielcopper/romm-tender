@@ -90,15 +90,15 @@ class TestTheKeptIds:
     def test_the_kept_ids_are_what_the_source_is_asked_with(self, service, uow_factory, romm, sources):
         _keep(uow_factory, json.dumps({"snes": {"igdb_id": 19, "libretro_slug": None, "ss_id": None, "tgdb_id": 6}}))
 
-        service.platform_system("snes")
+        service.platform_system(PlatformKeys("snes", "snes"))
 
-        assert sources.asked == [(PlatformKeys("snes"), None)]
+        assert sources.asked == [(PlatformKeys("snes", "snes"), None)]
         assert _listing_reads(romm) == 0
 
     def test_the_named_source_is_passed_on(self, service, uow_factory, sources):
         _keep(uow_factory, json.dumps({"snes": {"igdb_id": 19}}))
 
-        service.platform_system("snes", source="retrodeck")
+        service.platform_system(PlatformKeys("snes", "snes"), source="retrodeck")
 
         assert sources.asked[0][1] == "retrodeck"
 
@@ -106,7 +106,7 @@ class TestTheKeptIds:
         _keep(uow_factory, json.dumps({"snes": {"igdb_id": 19}}))
         uow_factory.uow.kv_config.set("platform_names", json.dumps({"snes": "Super Nintendo"}))
 
-        assert service.platform_system("snes").platform_name == "Super Nintendo"
+        assert service.platform_system(PlatformKeys("snes", "snes")).platform_name == "Super Nintendo"
 
     def test_the_name_is_the_one_kept_for_the_kept_platform_s_fs_slug(self, service, uow_factory):
         """The names cache is keyed by ``fs_slug``; the platform is asked by its slug (#2452 D10)."""
@@ -115,23 +115,23 @@ class TestTheKeptIds:
         names = {"gamecube": "Nintendo GameCube (gamecube)", "ngc": "Another platform whose fs_slug is ngc"}
         uow_factory.uow.kv_config.set("platform_names", json.dumps(names))
 
-        assert service.platform_system("ngc").platform_name == "Nintendo GameCube (gamecube)"
+        assert service.platform_system(PlatformKeys("ngc", "gamecube")).platform_name == "Nintendo GameCube (gamecube)"
 
     def test_a_platform_no_sync_named_is_named_by_the_name_kept_with_its_ids(self, service, uow_factory):
         _keep(uow_factory, json.dumps({"snes": {"igdb_id": 19, "name": "Super Famicom"}}))
 
-        assert service.platform_system("snes").platform_name == "Super Famicom"
+        assert service.platform_system(PlatformKeys("snes", "snes")).platform_name == "Super Famicom"
 
     def test_without_a_kept_name_the_slug_names_it(self, service, uow_factory):
         _keep(uow_factory, json.dumps({"snes": {"igdb_id": 19}}))
 
-        assert service.platform_system("snes").platform_name == "snes"
+        assert service.platform_system(PlatformKeys("snes", "snes")).platform_name == "snes"
 
 
 class TestWhereNoneAreKept:
     def test_they_are_read_once_from_rom_m_and_kept(self, service, uow_factory, romm, sources):
-        service.platform_system("snes")
-        service.platform_system("psx")
+        service.platform_system(PlatformKeys("snes", "snes"))
+        service.platform_system(PlatformKeys("psx", "psx"))
 
         assert _listing_reads(romm) == 1
         assert [keys for keys, _source in sources.asked] == [PlatformKeys("snes", "snes"), PlatformKeys("psx", "psx")]
@@ -143,7 +143,7 @@ class TestWhereNoneAreKept:
     def test_a_platform_kept_before_is_kept_beside_the_listing(self, service, uow_factory, romm):
         _keep(uow_factory, json.dumps({"n64": {"igdb_id": 4}}))
 
-        service.platform_system("snes")
+        service.platform_system(PlatformKeys("snes", "snes"))
 
         kept = decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY))
         assert kept is not None
@@ -151,21 +151,21 @@ class TestWhereNoneAreKept:
         assert kept["snes"] == _KEPT_SNES
 
     def test_the_listings_name_names_a_platform_with_no_kept_name(self, service):
-        assert service.platform_system("psx").platform_name == "PlayStation"
+        assert service.platform_system(PlatformKeys("psx", "psx")).platform_name == "PlayStation"
 
     def test_a_platform_rom_m_does_not_list_is_kept_with_no_ids(self, service, uow_factory, romm, sources):
-        service.platform_system("vic-20")
-        service.platform_system("vic-20")
+        service.platform_system(PlatformKeys("vic-20", "vic-20"))
+        service.platform_system(PlatformKeys("vic-20", "vic-20"))
 
         assert _listing_reads(romm) == 1
-        assert sources.asked[-1][0] == PlatformKeys("vic-20")
+        assert sources.asked[-1][0] == PlatformKeys("vic-20", "vic-20")
 
     def test_a_read_that_cannot_reach_rom_m_answers_unreachable_and_keeps_nothing(
         self, service, uow_factory, romm, sources
     ):
         romm.list_platforms_side_effect = RommConnectionError("connection refused")
 
-        platform = service.platform_system("snes", source="retrodeck")
+        platform = service.platform_system(PlatformKeys("snes", "snes"), source="retrodeck")
 
         assert (platform.state, platform.unasked) == (UNASKED, "server_unreachable")
         assert platform.unasked_message == classify_error(RommConnectionError("x"))[1]
@@ -176,7 +176,7 @@ class TestWhereNoneAreKept:
     def test_a_refused_read_answers_its_own_reason(self, service, romm):
         romm.list_platforms_side_effect = RommAuthError("401")
 
-        assert service.platform_system("snes").unasked == "auth_failed"
+        assert service.platform_system(PlatformKeys("snes", "snes")).unasked == "auth_failed"
 
     @pytest.mark.parametrize(
         ("error", "level"),
@@ -186,7 +186,7 @@ class TestWhereNoneAreKept:
         romm.list_platforms_side_effect = error
         caplog.set_level(logging.DEBUG, logger="test_platform_systems")
 
-        service.platform_system("snes")
+        service.platform_system(PlatformKeys("snes", "snes"))
 
         lines = [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "test_platform_systems"]
         assert lines == [
@@ -195,57 +195,64 @@ class TestWhereNoneAreKept:
 
     def test_the_next_read_with_rom_m_reachable_keeps_the_ids(self, service, uow_factory, romm):
         romm.list_platforms_side_effect = RommConnectionError("connection refused")
-        service.platform_system("snes")
+        service.platform_system(PlatformKeys("snes", "snes"))
         romm.list_platforms_side_effect = None
 
-        assert service.platform_system("snes").state == FOUND
+        assert service.platform_system(PlatformKeys("snes", "snes")).state == FOUND
         assert decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY)) is not None
 
     def test_a_caller_that_must_not_reach_rom_m_gets_no_ids(self, service, uow_factory, romm, sources):
-        service.platform_system("snes", ask_romm=False)
+        service.platform_system(PlatformKeys("snes", "snes"), ask_romm=False)
 
         assert _listing_reads(romm) == 0
-        assert sources.asked == [(PlatformKeys("snes"), None)]
+        assert sources.asked == [(PlatformKeys("snes", "snes"), None)]
         assert uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY) is None
 
 
 class TestTheRecordKeyedByFolder:
-    def test_a_record_kept_by_slug_is_asked_by_the_slug_alone_and_by_its_folder_once_kept_by_it(
+    def test_a_platform_is_asked_with_the_folder_the_caller_names_never_another_of_its_slug(
         self, service, uow_factory, sources
     ):
+        """#2217 D16 (changed 2026-11-18): the game's folder, or the page's, never the last kept of the slug."""
+        kept = {
+            "megadrive": KeptPlatform(slug="genesis", fs_slug="megadrive", name="Mega Drive"),
+            "megadrivejp": KeptPlatform(slug="genesis", fs_slug="megadrivejp", name="Mega Drive (Japan)"),
+        }
+        _keep(uow_factory, encode_platform_ids(kept))
+
+        first = service.platform_system(PlatformKeys("genesis", "megadrive"))
+        second = service.platform_system(PlatformKeys("genesis", "megadrivejp"))
+
+        assert [keys for keys, _source in sources.asked] == [
+            PlatformKeys("genesis", "megadrive"),
+            PlatformKeys("genesis", "megadrivejp"),
+        ]
+        assert (first.platform_name, second.platform_name) == ("Mega Drive", "Mega Drive (Japan)")
+
+    def test_without_a_folder_the_platform_is_asked_by_its_slug_alone(self, service, uow_factory, sources):
+        """#2217 D16: no folder of the slug's is put in for one the caller does not name."""
+        _keep(uow_factory, encode_platform_ids({"gc": KeptPlatform(slug="ngc", fs_slug="gc", name="GameCube")}))
+
+        platform = service.platform_system(PlatformKeys("ngc"))
+
+        assert sources.asked == [(PlatformKeys("ngc"), None)]
+        assert platform.platform_name == "GameCube"
+
+    def test_a_record_kept_by_slug_alone_is_read_again_for_a_folder(self, service, uow_factory, romm, sources):
         before = {"igdb_id": 21, "libretro_slug": "Nintendo - GameCube", "ss_id": 13, "tgdb_id": 2, "name": "GameCube"}
         _keep(uow_factory, json.dumps({"ngc": before}))
-        service.platform_system("ngc")
-        listed = {"id": 12, "slug": "ngc", "fs_slug": "gc", **before, "moby_id": 14, "ra_id": 16, "igdb_slug": "ngc"}
-        _keep(
-            uow_factory,
-            encode_platform_ids({"gc": KeptPlatform(slug="ngc", fs_slug="gc", name="GameCube", ids=listed)}),
-        )
+        romm.platforms = [{"id": 12, "slug": "ngc", "fs_slug": "gc", **before}]
 
-        service.platform_system("ngc")
+        service.platform_system(PlatformKeys("ngc", "gc"))
 
-        assert [keys for keys, _source in sources.asked] == [PlatformKeys("ngc"), PlatformKeys("ngc", "gc")]
-
-    def test_of_two_listed_folders_that_share_a_slug_the_last_listed_answers_it(
-        self, service, uow_factory, romm, sources
-    ):
-        romm.platforms = [
-            {"id": 12, "slug": "ngc", "fs_slug": "gc", "igdb_id": 21},
-            {"id": 13, "slug": "ngc", "fs_slug": "gamecube", "igdb_id": 99},
-        ]
-
-        service.platform_system("ngc")
-
-        assert sources.asked[0][0] == PlatformKeys("ngc", "gamecube")
-        kept = decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY))
-        assert kept is not None
-        assert list(kept) == ["gc", "gamecube"]
+        assert _listing_reads(romm) == 1
+        assert sources.asked == [(PlatformKeys("ngc", "gc"), None)]
 
     def test_a_platform_kept_by_slug_that_the_listing_names_is_replaced(self, service, uow_factory, romm):
         romm.platforms = [{"id": 3, "slug": "snes", "fs_slug": "sfc", "igdb_id": 19}, _PSX]
         _keep(uow_factory, json.dumps({"snes": {"igdb_id": 99}, "n64": {"igdb_id": 4}}))
 
-        service.platform_system("psx")
+        service.platform_system(PlatformKeys("psx", "psx"))
 
         kept = decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY))
         assert kept is not None
@@ -254,7 +261,7 @@ class TestTheRecordKeyedByFolder:
     def test_a_listed_folder_takes_the_key_of_a_slug_the_listing_does_not_name(self, service, uow_factory, romm):
         romm.platforms = [{"id": 12, "slug": "ngc", "fs_slug": "gc", "igdb_id": 21}]
 
-        service.platform_system("gc")
+        service.platform_system(PlatformKeys("gc"))
 
         kept = decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY))
         assert kept is not None
@@ -263,16 +270,16 @@ class TestTheRecordKeyedByFolder:
     def test_a_live_read_keeps_the_rom_m_version_it_was_read_with(self, service, uow_factory, romm):
         romm.set_version("5.4.1")
 
-        service.platform_system("snes")
+        service.platform_system(PlatformKeys("snes", "snes"))
 
         kept = decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY))
         assert kept is not None
         assert {entry.romm_version for entry in kept.values()} == {"5.4.1"}
 
-    def test_the_listed_platforms_are_named_by_their_slug_not_their_folder(self, service, uow_factory):
+    def test_the_listed_platforms_are_named_by_their_slug_and_their_folder(self, service, uow_factory):
         _keep(uow_factory, encode_platform_ids({"gc": KeptPlatform(slug="ngc", fs_slug="gc")}))
 
-        assert service.listed_platforms() == frozenset({"ngc"})
+        assert service.listed_platforms() == frozenset({PlatformKeys("ngc", "gc")})
 
 
 class TestAPlatformListedWithoutAName:
@@ -282,7 +289,7 @@ class TestAPlatformListedWithoutAName:
         unnamed = {k: v for k, v in _SNES.items() if k != "name"}
         romm.platforms = [{**unnamed, "display_name": "SNES Custom"}]
 
-        answer = service.platform_system("snes")
+        answer = service.platform_system(PlatformKeys("snes", "snes"))
 
         kept = decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY))
         assert kept is not None
@@ -293,7 +300,7 @@ class TestAPlatformListedWithoutAName:
         """#2761 D3 (changed): the platform system's answer names it as its Steam collection is."""
         romm.platforms = [{"id": 12, "slug": "ngc", "fs_slug": "gc", "display_name": "GameCube", "igdb_id": 21}]
 
-        assert service.platform_system("ngc").platform_name == "gc"
+        assert service.platform_system(PlatformKeys("ngc", "gc")).platform_name == "gc"
 
 
 class TestAnInstalledGame:
@@ -307,9 +314,9 @@ class TestAnInstalledGame:
             installed_at="2026-01-01T00:00:00+00:00",
         )
 
-        platform = service.rom_system("snes", install)
+        platform = service.rom_system(PlatformKeys("snes", "snes"), install)
 
-        assert (platform.state, platform.system) == (FOUND, "sfc")
+        assert (platform.state, platform.taken) == (FOUND, "sfc")
         assert sources.asked == []
         assert _listing_reads(romm) == 0
 
@@ -317,7 +324,7 @@ class TestAnInstalledGame:
         _keep(uow_factory, json.dumps({"snes": {"igdb_id": 19}}))
         sources.answers["snes"] = (NO_SYSTEM, None)
 
-        assert service.rom_system("snes", None).state == NO_SYSTEM
+        assert service.rom_system(PlatformKeys("snes", "snes"), None).state == NO_SYSTEM
         assert len(sources.asked) == 1
 
 
@@ -325,7 +332,7 @@ class TestTheListedPlatforms:
     def test_they_are_every_platform_whose_ids_are_kept(self, service, uow_factory, romm):
         _keep(uow_factory, json.dumps({"gb": {"igdb_id": 33}, "gbc": {"igdb_id": 22}}))
 
-        assert service.listed_platforms() == frozenset({"gb", "gbc"})
+        assert service.listed_platforms() == frozenset({PlatformKeys("gb"), PlatformKeys("gbc")})
         assert _listing_reads(romm) == 0
 
     def test_without_any_kept_there_is_no_answer(self, service, romm):
@@ -341,21 +348,21 @@ class TestAPlatformJustReadIsNamedByItsFolder:
         romm.platforms = [{"id": 7, "slug": "psx", "fs_slug": "ps", "name": "PlayStation", "igdb_id": 7}]
         uow_factory.uow.kv_config.set("platform_names", json.dumps({"ps": "Sony PlayStation"}))
 
-        assert service.platform_system("psx").platform_name == "Sony PlayStation"
+        assert service.platform_system(PlatformKeys("psx", "ps")).platform_name == "Sony PlayStation"
 
 
 class TestAListingReadHereIsRefiled:
     """The listing read here is handed to the refiling (#2452 D6, D7)."""
 
     def test_the_listing_read_for_a_platform_with_no_ids_is_handed_over(self, service, romm, refiling):
-        service.platform_system("snes")
+        service.platform_system(PlatformKeys("snes", "snes"))
 
         assert refiling.listings == [romm.platforms]
 
     def test_kept_ids_read_no_listing_and_hand_nothing_over(self, service, uow_factory, refiling):
         _keep(uow_factory, json.dumps({"snes": {"igdb_id": 19}}))
 
-        service.platform_system("snes")
+        service.platform_system(PlatformKeys("snes", "snes"))
 
         assert refiling.listings == []
 
@@ -408,7 +415,7 @@ class TestAPlatformReadHereIsKeptOnce:
     def test_a_platform_the_listing_names_is_written_once(self, service, uow_factory, monkeypatch):
         writes = self._writes(uow_factory, monkeypatch)
 
-        service.platform_system("snes")
+        service.platform_system(PlatformKeys("snes", "snes"))
 
         assert len(writes) == 1
         assert sorted(decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY)) or {}) == ["psx", "snes"]
@@ -416,7 +423,7 @@ class TestAPlatformReadHereIsKeptOnce:
     def test_a_platform_the_listing_does_not_name_is_added_beside_it(self, service, uow_factory, monkeypatch):
         writes = self._writes(uow_factory, monkeypatch)
 
-        service.platform_system("n64")
+        service.platform_system(PlatformKeys("n64", "n64"))
 
         assert len(writes) == 2
         kept = decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY)) or {}

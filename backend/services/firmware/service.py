@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.platform_system import PlatformKeys
 from lib.errors import Refused, require_platform_folder
 from services.firmware.deletion import FirmwareDeletionIncomplete, PlatformBiosDeleter, PlatformBiosDeleterConfig
 from services.firmware.demand import FirmwareDemand, FirmwareDemandConfig
@@ -272,9 +273,9 @@ class FirmwareService:
         """
         require_platform_folder(platform_folder)
         async with self._rules.hold("update_bios_links", update=True, folder=True, migration=True):
-            system = await self._downloads.platform_system(platform_slug, rom_id)
+            platform = await self._downloads.platform_system(PlatformKeys.of(platform_slug, platform_folder), rom_id)
             outcome = await self._config.loop.run_in_executor(
-                None, self._store.do_update_links, platform_slug, platform_folder, system
+                None, self._store.do_update_links, platform_folder, platform.one_system
             )
             return {"success": True, **outcome.payload()}
 
@@ -288,8 +289,12 @@ class FirmwareService:
         require_platform_folder(platform_folder)
         async with self._rules.hold("replace_bios_file", update=True, folder=True, migration=True):
             with self._downloads.downloading():
-                system = await self._downloads.platform_system(platform_slug, rom_id)
-                return await self._replacer.replace_bios_file(platform_slug, platform_folder, place, system)
+                platform = await self._downloads.platform_system(
+                    PlatformKeys.of(platform_slug, platform_folder), rom_id
+                )
+                return await self._replacer.replace_bios_file(
+                    platform_slug, platform_folder, place, platform.one_system
+                )
 
     async def delete_platform_bios(self, platform_slug, platform_folder) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete every BIOS file Tender put on the machine for a platform, and its links."""

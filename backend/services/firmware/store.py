@@ -35,7 +35,7 @@ from domain.firmware_store import (
     backup_stamp,
 )
 from domain.firmware_wants import SourceCatalogues
-from domain.platform_system import UNASKED
+from domain.platform_system import UNASKED, PlatformKeys
 from domain.rom_files import TMP_EXT
 from lib.errors import Refused, with_system_text
 from lib.path_safety import PathTraversalError, safe_join
@@ -307,10 +307,10 @@ class FirmwareStore:
 
     # ── The links ────────────────────────────────────────────
 
-    def do_update_links(self, platform_slug: str, platform_folder: str, system: SystemArgument | None) -> LinkOutcome:
+    def do_update_links(self, platform_folder: str, system: SystemArgument | None) -> LinkOutcome:
         """Bring the links of the platform RomM keeps in *platform_folder* up to date in every enabled source.
 
-        Downloads nothing. *platform_slug* is that platform's slug.
+        Downloads nothing.
 
         A platform with no system to ask about has no emulator to link for,
         and only its records are looked at. Before a link nobody on this
@@ -358,13 +358,12 @@ class FirmwareStore:
             records=records.links,
             blocked=frozenset(blocked),
             judged=judged,
-            wanted_elsewhere=self._kept_for_others(platform_slug, platform_folder, system, records, unwanted),
+            wanted_elsewhere=self._kept_for_others(platform_folder, system, records, unwanted),
         )
         return self._carry_out(plan)
 
     def _kept_for_others(
         self,
-        platform_slug: str,
         platform_folder: str,
         system: SystemArgument | None,
         records: StoreRecords,
@@ -372,11 +371,16 @@ class FirmwareStore:
     ) -> frozenset[tuple[str, str]]:
         """Which *unwanted* links, by source and place, another platform still wants — or might.
 
-        The platforms asked, each by its slug, are every one whose ids are
-        kept — each one RomM listed at the last sync, and any kept since — and
-        every one Tender holds store files for, less this platform's own slug,
-        so a platform that shares it is not asked; a platform whose system is
-        this platform's own adds nothing, and every other system is read once. An emulator its source states is not
+        The platforms asked, each by its slug and its folder, are every one
+        whose ids are kept — each one RomM listed at the last sync, and any
+        kept since — and every one Tender holds store files for, less this
+        platform's own folder: a folder that shares its slug may be another
+        system, so it is asked too (#2217 D16). Every system a platform's
+        answer names is asked, each on its own — a switched-off one, one not
+        set up here, each of several — since its emulator may want the place
+        once it is switched on or set up; a platform with no system wants
+        nothing, a system this platform's own adds nothing, and every other
+        system is read once. An emulator its source states is not
         installed wants nothing, and so does one whose wants the resolver could
         not read, since it states no place for it; a sealed list's places are
         wanted. Where a platform or a source could not be read — no listing
@@ -389,14 +393,19 @@ class FirmwareStore:
         listed = self._platform_systems.listed_platforms()
         if listed is None:
             return frozenset(unwanted)
-        others = sorted((listed | {stored.platform_slug for stored in records.stored}) - {platform_slug})
+        stored = {PlatformKeys.of(each.platform_slug, each.platform_folder) for each in records.stored}
+        others = sorted(
+            (keys for keys in listed | stored if (keys.folder or keys.slug) != platform_folder),
+            key=lambda keys: (keys.slug, keys.folder or ""),
+        )
         systems: list[SystemArgument] = []
         for other in others:
             answer = self._platform_systems.platform_system(other)
             if answer.state == UNASKED:
                 return frozenset(unwanted)
-            if answer.system is not None and answer.system != system and answer.system not in systems:
-                systems.append(answer.system)
+            for named in answer.wanting_systems():
+                if named != system and named not in systems:
+                    systems.append(named)
         copies = {copy.file_name: copy for copy in self.do_copies(records, platform_folder)}
         kept: set[tuple[str, str]] = set()
         for other_system in systems:

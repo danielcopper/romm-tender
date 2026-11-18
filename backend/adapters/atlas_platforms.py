@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 
     from adapters.emulator_sources import EmulatorSourcesAdapter
     from domain.emulator_sources import ArrangedSource, SourcesReading
-    from domain.platform_system import PlatformKeys
+    from domain.platform_system import PlatformKeys, PlatformState
 
 # RomM's column of the resolver's platform table, keyed by RomM's slug
 # (``atlas/data/SOURCES.md``, pinned at the RomM release it names). The
@@ -96,7 +96,7 @@ class UnreadAnswer(Exception):
     """A platform answer in a word Tender does not read: an intersection status or a match status it does not know."""
 
 
-def read_platform_answer(answer: Any) -> tuple[str, tuple[SystemPair, ...]]:
+def read_platform_answer(answer: Any) -> tuple[PlatformState, tuple[SystemPair, ...]]:
     """A platform answer in Tender's words: the state its matches come to, and the systems that state names.
 
     Where the resolver knows none of the pairs the state is
@@ -120,7 +120,7 @@ def read_platform_answer(answer: Any) -> tuple[str, tuple[SystemPair, ...]]:
 
 
 def platform_pairs(keys: PlatformKeys) -> tuple[SystemPair, ...]:
-    """The pairs a platform is asked about with: RomM's slug, and its folder in RomM where one is kept."""
+    """The pairs a platform is asked about with: RomM's slug, and its folder in RomM where the caller names one."""
     pairs = [SystemPair(_ROMM_SOURCE, keys.slug)]
     if keys.folder is not None:
         pairs.append(SystemPair(FOLDER_SOURCE, keys.folder))
@@ -156,7 +156,7 @@ class AtlasPlatformSystemsAdapter:
         unasked = self._unasked(reading, source)
         arranged = self._arranged(reading, source)
         if unasked is not None or arranged is None:
-            return PlatformSystem(UNASKED, keys.slug, platform_name, unasked=unasked or reading.no_answer_reason())
+            return PlatformSystem(UNASKED, keys, platform_name, unasked=unasked or reading.no_answer_reason())
         installation = next(i for i in reading.installations if i.kind == arranged.kind)
         pairs = platform_pairs(keys)
         try:
@@ -164,13 +164,10 @@ class AtlasPlatformSystemsAdapter:
                 ("systems_for_platforms", installation.kind, pairs), lambda: self._ask(installation, pairs)
             )
         except _Unasked as unasked_because:
-            return PlatformSystem(UNASKED, keys.slug, platform_name, source=arranged, unasked=unasked_because.reason)
+            return PlatformSystem(UNASKED, keys, platform_name, source=arranged, unasked=unasked_because.reason)
         state, named = answer
         self._log_debug(f"[platforms] {pairs} in {arranged.kind}: {state} {[tuple(n) for n in named]}")
-        system = named[0] if len(named) == 1 else (pairs if len(named) > 1 else None)
-        return PlatformSystem(
-            state, keys.slug, platform_name, system=system, source=arranged, named=named, platform_folder=keys.folder
-        )
+        return PlatformSystem(state, keys, platform_name, source=arranged, named=named, asked=pairs)
 
     def asked_source(
         self, *, source: str | None = None, reading: SourcesReading | None = None
@@ -193,7 +190,7 @@ class AtlasPlatformSystemsAdapter:
             return CATALOGUE_UNAVAILABLE
         return None if any(s.kind == source for s in reading.sources) else NO_SOURCE_DETECTED
 
-    def _ask(self, installation: Any, pairs: tuple[SystemPair, ...]) -> tuple[str, tuple[SystemPair, ...]]:
+    def _ask(self, installation: Any, pairs: tuple[SystemPair, ...]) -> tuple[PlatformState, tuple[SystemPair, ...]]:
         """What *installation* answers for *pairs*: the state its matches come to, and the systems it names."""
         try:
             answer = installation.systems_for_platforms(pairs)

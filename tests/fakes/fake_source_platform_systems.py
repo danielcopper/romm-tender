@@ -10,23 +10,24 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from domain.emulator_sources import ArrangedSource
-from domain.platform_system import FOUND, PlatformSystem
+from domain.platform_system import FOUND
+from fakes.fake_platform_systems import platform_answer
 
 if TYPE_CHECKING:
     from domain.emulator_sources import SourcesReading
-    from domain.platform_system import PlatformKeys, SystemArgument
+    from domain.platform_system import PlatformKeys, PlatformState, PlatformSystem, SystemArgument
 
 RETRODECK_SOURCE = ArrangedSource(kind="retrodeck", enabled=True, starts_games=True)
 
 
 class FakeSourcePlatformSystems:
-    """A slug in ``answers`` answers ``(state, system)`` there; any other slug is its own system, found.
+    """A folder or a slug in ``answers`` answers ``(state, system)`` there; any other slug is its own system, found.
 
     ``asked`` records each ``(keys, source)`` put to it.
     """
 
-    def __init__(self, answers: dict[str, tuple[str, SystemArgument | None]] | None = None) -> None:
-        self.answers: dict[str, tuple[str, SystemArgument | None]] = answers if answers is not None else {}
+    def __init__(self, answers: dict[str, tuple[PlatformState, SystemArgument | None]] | None = None) -> None:
+        self.answers: dict[str, tuple[PlatformState, SystemArgument | None]] = answers if answers is not None else {}
         self.asked: list[tuple[PlatformKeys, str | None]] = []
 
     def platform_system(
@@ -38,10 +39,8 @@ class FakeSourcePlatformSystems:
         reading: SourcesReading | None = None,
     ) -> PlatformSystem:
         self.asked.append((keys, source))
-        state, system = self.answers.get(keys.slug, (FOUND, keys.slug))
-        return PlatformSystem(
-            state, keys.slug, platform_name, system=system, source=RETRODECK_SOURCE, platform_folder=keys.folder
-        )
+        state, system = self.answers.get(keys.folder or "", None) or self.answers.get(keys.slug, (FOUND, keys.slug))
+        return platform_answer(state, keys, system, name=platform_name)
 
     def asked_source(self, *, source: str | None = None, reading: SourcesReading | None = None) -> ArrangedSource:
         return RETRODECK_SOURCE

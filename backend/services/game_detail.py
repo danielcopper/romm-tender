@@ -20,6 +20,7 @@ from domain.bios_status import BIOS_LABEL_UNKNOWN, BIOS_LEVEL_UNKNOWN
 from domain.emulator_choice import starting_entry
 from domain.emulator_sources import RETRODECK
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
+from domain.platform_system import PlatformKeys
 from domain.retrodeck_folders import FolderRefused
 from domain.save_status import compute_save_sync_display
 from lib.path_safety import PathTraversalError, safe_join
@@ -267,7 +268,9 @@ class GameDetailService:
         # the occupied one wins: it is the exact path this ROM would claim, so
         # there is nothing to search for. An installed ROM does neither.
         candidate_present = (
-            False if installed or target_occupied else self._candidate_probe(rom.platform_slug, rom.fs_name)
+            False
+            if installed or target_occupied
+            else self._candidate_probe(PlatformKeys.of(rom.platform_slug, rom.platform_fs_slug), rom.fs_name)
         )
 
         # Save sync
@@ -373,7 +376,8 @@ class GameDetailService:
         """
         if not rom.fs_name or not rom.platform_slug:
             return False
-        platform = self._platform_systems.platform_system(rom.platform_slug, source=RETRODECK, ask_romm=False)
+        keys = PlatformKeys.of(rom.platform_slug, rom.platform_fs_slug)
+        platform = self._platform_systems.platform_system(keys, source=RETRODECK, ask_romm=False)
         if platform.one_system is None:
             return False
         folder = self._retrodeck_folders.download_folder(platform.one_system)

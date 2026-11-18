@@ -91,9 +91,7 @@ class FirmwareReplacer:
         backup = await self._loop.run_in_executor(
             None, self._replace_io, platform_slug, platform_folder, place, firmware, source
         )
-        links = await self._loop.run_in_executor(
-            None, self._store.do_update_links, platform_slug, platform_folder, system
-        )
+        links = await self._loop.run_in_executor(None, self._store.do_update_links, platform_folder, system)
         self._listing.invalidate()
         self._logger.info(f"Replaced {place} with Tender's copy; the old file is at {backup}")
         return {"success": True, "backup_path": backup, **links.payload(), "placed": links.placed + 1}

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
 from _romm_platforms import LISTED_GAMECUBE
 
@@ -19,6 +17,7 @@ from domain.platform_system import (
     UNMATCHED,
     KeptPlatform,
     PlatformKeys,
+    PlatformState,
     PlatformSystem,
     SystemPair,
     SystemStatus,
@@ -34,6 +33,7 @@ from domain.platform_system import (
 from domain.retrodeck_folders import GAME_DOWNLOAD, EveryFolderRefused, FolderRefused
 
 RETRODECK = ArrangedSource(kind="retrodeck", enabled=True, starts_games=True)
+_RETRODECK_KIND = {"kind": "retrodeck", "starts_games": True}
 
 
 class TestTheKeptValue:
@@ -127,12 +127,6 @@ class TestKeptPlatform:
         assert found.fs_slug == "gamecube"
         assert kept_by_slug(kept, "gc") is None
 
-    def test_the_question_is_asked_with_the_slug_and_the_folder_alone(self):
-        """#2217 D16: RomM's ids are kept, never asked with."""
-        kept = kept_platform_of(LISTED_GAMECUBE, "5.4.1")
-
-        assert kept.keys("ngc") == PlatformKeys("ngc", "gc")
-
     def test_a_record_kept_before_the_folder_was_reads_as_the_slug_it_was_kept_under(self):
         raw = '{"snes": {"igdb_id": 19, "libretro_slug": null, "ss_id": null, "tgdb_id": 6, "name": "Super Nintendo"}}'
 
@@ -144,14 +138,22 @@ class TestKeptPlatform:
             )
         }
 
-    def test_a_record_kept_before_the_folder_was_is_asked_with_its_slug_alone(self):
-        before = {"igdb_id": 19, "libretro_slug": None, "ss_id": 4, "tgdb_id": 6, "name": "Super Nintendo"}
-        [kept] = (decode_platform_ids(json.dumps({"snes": before})) or {}).values()
 
-        assert kept.keys("snes") == PlatformKeys("snes")
+class TestPlatformKeys:
+    """#2217 D16: a platform is asked with the folder the caller names — the game's, or the page's."""
+
+    def test_a_game_is_asked_with_the_folder_rom_m_puts_it_in(self):
+        detail = {"platform_slug": "genesis", "platform_fs_slug": "megadrivejp"}
+
+        assert PlatformKeys.of_detail(detail) == PlatformKeys("genesis", "megadrivejp")
+
+    @pytest.mark.parametrize("folder", [None, ""])
+    def test_without_a_folder_it_is_asked_with_its_slug_alone(self, folder):
+        assert PlatformKeys.of("snes", folder) == PlatformKeys("snes")
 
 
 _SNES = SystemPair("esde", "snes")
+_XBOX360 = SystemPair("esde", "xbox360")
 _SNESNA = SystemPair("esde", "snesna")
 _MARK3 = SystemPair("esde", "mark3")
 _MASTERSYSTEM = SystemPair("esde", "mastersystem")
@@ -198,39 +200,71 @@ class TestSystemKey:
 
 
 def _platform(
-    state: str,
+    state: PlatformState,
     *,
-    system: str | SystemPair | tuple[SystemPair, ...] | None = None,
+    named: tuple[SystemPair, ...] = (),
+    asked: tuple[SystemPair, ...] = (),
+    recorded: str | None = None,
     unasked: str | None = None,
     source: ArrangedSource | None = RETRODECK,
-    named: tuple[SystemPair, ...] = (),
 ) -> PlatformSystem:
     return PlatformSystem(
-        state, "vic-20", "Commodore VIC-20", system=system, source=source, unasked=unasked, named=named
+        state,
+        PlatformKeys("vic-20"),
+        "Commodore VIC-20",
+        source=source,
+        named=named,
+        asked=asked,
+        recorded=recorded,
+        unasked=unasked,
     )
 
 
 class TestPlatformSystem:
     def test_only_a_found_system_is_taken(self):
-        assert _platform(FOUND, system="c64").taken == "c64"
-        assert _platform(SWITCHED_OFF, system="xbox360").taken is None
+        assert _platform(FOUND, recorded="c64").taken == "c64"
+        assert _platform(SWITCHED_OFF, named=(_XBOX360,)).taken is None
         assert _platform(NO_SYSTEM).taken is None
 
     def test_a_found_system_is_taken_as_the_answer_named_it(self):
         """#2217 D16: a later question names the system as the source's answer named it."""
-        found = _platform(FOUND, system=_SNES, named=(_SNES,))
+        found = _platform(FOUND, named=(_SNES,))
 
         assert (found.taken, found.one_system) == (_SNES, _SNES)
 
     def test_several_systems_are_asked_with_the_platforms_pairs_and_land_nowhere(self):
         """#2225 D8: questions go to the resolver with the pairs, so it answers alike or not at all; no folder."""
-        several = _platform(SEVERAL, system=_SMS_PAIRS, named=(_MARK3, _MASTERSYSTEM))
+        several = _platform(SEVERAL, named=(_MARK3, _MASTERSYSTEM), asked=_SMS_PAIRS)
 
         assert (several.taken, several.one_system) == (_SMS_PAIRS, None)
 
     @pytest.mark.parametrize("state", [NO_SYSTEM, UNMATCHED, NOT_HERE, SWITCHED_OFF, UNASKED])
     def test_a_platform_with_no_system_to_use_takes_none(self, state):
-        assert _platform(state, system=_SNES).taken is None
+        assert _platform(state, named=(_SNES,)).taken is None
+
+    def test_a_download_lands_under_the_one_system_found_as_named_and_as_recorded(self):
+        """Review A3: the one rule downloads and adoption share."""
+        assert _platform(FOUND, named=(_SNES,)).download_system(GAME_DOWNLOAD) == (_SNES, "snes")
+        assert _platform(FOUND, recorded="c64").download_system(GAME_DOWNLOAD) == ("c64", "c64")
+
+    def test_a_download_of_several_systems_is_the_platforms_refusal(self):
+        several = _platform(SEVERAL, named=(_MARK3, _MASTERSYSTEM), asked=_SMS_PAIRS)
+
+        refusal = several.download_system(GAME_DOWNLOAD)
+
+        assert isinstance(refusal, FolderRefused)
+        assert refusal.reason == "platform_systems_several"
+
+    @pytest.mark.parametrize("state", [SWITCHED_OFF, NOT_HERE])
+    def test_every_system_a_platform_without_one_to_use_names_is_asked_on_its_own(self, state):
+        """Review A2: never the pairs it was asked with, whatever the count."""
+        platform = _platform(state, named=(_SNES, _SNESNA), asked=(SystemPair("romm", "snes"),))
+
+        assert platform.wanting_systems() == (_SNES, _SNESNA)
+        assert platform.taken is None
+
+    def test_a_platform_with_no_system_wants_nothing(self):
+        assert _platform(NO_SYSTEM).wanting_systems() == ()
 
     def test_no_system_refuses_with_the_facts_the_sentence_is_worded_from(self):
         refusal = _platform(NO_SYSTEM).refusal(GAME_DOWNLOAD)
@@ -240,36 +274,34 @@ class TestPlatformSystem:
         assert refusal.details == {
             "source": "retrodeck",
             "platform": "Commodore VIC-20",
-            "system": None,
             "systems": [],
             "slug": "vic-20",
             "folder": None,
         }
 
     def test_a_switched_off_system_refuses_naming_it(self):
-        refusal = _platform(SWITCHED_OFF, system="xbox360").refusal(GAME_DOWNLOAD)
+        refusal = _platform(SWITCHED_OFF, named=(_XBOX360,)).refusal(GAME_DOWNLOAD)
 
         assert refusal.reason == "platform_system_off"
         assert refusal.details == {
             "source": "retrodeck",
             "platform": "Commodore VIC-20",
-            "system": "xbox360",
             "systems": ["xbox360"],
             "slug": "vic-20",
             "folder": None,
         }
 
     @pytest.mark.parametrize(
-        ("state", "named", "reason", "system", "systems"),
+        ("state", "named", "reason", "systems"),
         [
-            (UNMATCHED, (), "platform_unmatched", None, []),
-            (NOT_HERE, (_MARK3,), "platform_system_not_here", "mark3", ["mark3"]),
-            (SEVERAL, (_MARK3, _MASTERSYSTEM), "platform_systems_several", None, ["mark3", "mastersystem"]),
-            (SWITCHED_OFF, (_SNES, _SNESNA), "platform_system_off", None, ["snes", "snesna"]),
-            (CONTRADICTED, (), "platform_pairs_contradict", None, []),
+            (UNMATCHED, (), "platform_unmatched", []),
+            (NOT_HERE, (_MARK3,), "platform_system_not_here", ["mark3"]),
+            (SEVERAL, (_MARK3, _MASTERSYSTEM), "platform_systems_several", ["mark3", "mastersystem"]),
+            (SWITCHED_OFF, (_SNES, _SNESNA), "platform_system_off", ["snes", "snesna"]),
+            (CONTRADICTED, (), "platform_pairs_contradict", []),
         ],
     )
-    def test_each_case_with_no_system_to_use_refuses_with_its_own_reason(self, state, named, reason, system, systems):
+    def test_each_case_with_no_system_to_use_refuses_with_its_own_reason(self, state, named, reason, systems):
         """#2751 D2: each case of a platform with no system says which it is."""
         refusal = _platform(state, named=named).refusal(GAME_DOWNLOAD)
 
@@ -277,7 +309,6 @@ class TestPlatformSystem:
         assert refusal.details == {
             "source": "retrodeck",
             "platform": "Commodore VIC-20",
-            "system": system,
             "systems": systems,
             "slug": "vic-20",
             "folder": None,
@@ -298,7 +329,12 @@ class TestPlatformSystem:
 
     def test_a_rom_m_that_could_not_be_read_refuses_with_its_reason_and_message(self):
         platform = PlatformSystem(
-            UNASKED, "vic-20", "VIC-20", source=RETRODECK, unasked="server_unreachable", unasked_message="offline"
+            UNASKED,
+            PlatformKeys("vic-20"),
+            "VIC-20",
+            source=RETRODECK,
+            unasked="server_unreachable",
+            unasked_message="offline",
         )
 
         refusal = platform.refusal(GAME_DOWNLOAD)
@@ -318,7 +354,7 @@ class TestPlatformSystem:
         assert isinstance(refusal, EveryFolderRefused)
 
     def test_a_found_system_is_not_refused(self):
-        found = _platform(FOUND, system="c64")
+        found = _platform(FOUND, recorded="c64")
         with pytest.raises(ValueError, match="not refused"):
             found.refusal(GAME_DOWNLOAD)
 
@@ -326,7 +362,11 @@ class TestPlatformSystem:
         ("platform", "reason", "source"),
         [
             (_platform(NO_SYSTEM), "no_platform_system", {"kind": "retrodeck", "starts_games": True}),
-            (_platform(SWITCHED_OFF, system="x"), "platform_system_off", {"kind": "retrodeck", "starts_games": True}),
+            (
+                _platform(SWITCHED_OFF, named=(_XBOX360,)),
+                "platform_system_off",
+                {"kind": "retrodeck", "starts_games": True},
+            ),
             (_platform(UNMATCHED), "platform_unmatched", {"kind": "retrodeck", "starts_games": True}),
             (_platform(NOT_HERE), "platform_system_not_here", {"kind": "retrodeck", "starts_games": True}),
             (_platform(UNASKED, unasked=NO_SOURCE_DETECTED, source=None), "no_source", None),
@@ -336,10 +376,9 @@ class TestPlatformSystem:
         assert platform.unavailable_options() == {"available": False, "options": [], "reason": reason, "source": source}
 
     def test_the_pages_read_the_state_the_source_the_system_and_the_name(self):
-        assert _platform(SWITCHED_OFF, system="xbox360").payload() == {
+        assert _platform(SWITCHED_OFF, named=(_XBOX360,)).payload() == {
             "state": "switched_off",
             "source": "retrodeck",
-            "system": "xbox360",
             "systems": ["xbox360"],
             "slug": "vic-20",
             "folder": None,
@@ -348,7 +387,7 @@ class TestPlatformSystem:
 
     def test_a_contradiction_names_rom_ms_slug_and_folder(self):
         """#2751 D2 (changed): the sentence names both, so the user can rename the folder."""
-        contradicted = PlatformSystem(CONTRADICTED, "snes", "SNES", source=RETRODECK, platform_folder="xbox360")
+        contradicted = PlatformSystem(CONTRADICTED, PlatformKeys("snes", "xbox360"), "SNES", source=RETRODECK)
 
         assert contradicted.refusal(GAME_DOWNLOAD).details["folder"] == "xbox360"
         assert (contradicted.payload() or {})["slug"] == "snes"
@@ -357,10 +396,9 @@ class TestPlatformSystem:
 
     def test_the_pages_read_every_system_of_several_and_none_as_the_one(self):
         """#2225 D8: the page says why a platform of several systems gets no link, naming them."""
-        assert _platform(SEVERAL, system=_SMS_PAIRS, named=(_MARK3, _MASTERSYSTEM)).payload() == {
+        assert _platform(SEVERAL, named=(_MARK3, _MASTERSYSTEM), asked=_SMS_PAIRS).payload() == {
             "state": "several",
             "source": "retrodeck",
-            "system": None,
             "systems": ["mark3", "mastersystem"],
             "slug": "vic-20",
             "folder": None,
@@ -369,7 +407,7 @@ class TestPlatformSystem:
 
     def test_with_no_source_asked_the_pages_read_nothing(self):
         assert _platform(UNASKED, unasked=NO_SOURCE_DETECTED, source=None).payload() is None
-        assert _platform(FOUND, system="c64", source=None).payload() is None
+        assert _platform(FOUND, recorded="c64", source=None).payload() is None
 
 
 class TestKeptFoldersOfSlug:

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.disk_space import disk_space_verdict
 from domain.emulator_sources import RETRODECK
-from domain.platform_system import system_key
+from domain.platform_system import PlatformKeys
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused
 from domain.rom_candidates import DIR, FILE
 from domain.rom_file import NO_FILE_ON_ROMM_MESSAGE, NoFileOnRomm, has_file_on_romm
@@ -250,9 +250,9 @@ class DownloadService:
             self._state.drop_claim(rom_id)
             raise
 
-    def _download_platform_io(self, platform_slug: str) -> PlatformSystem:
+    def _download_platform_io(self, keys: PlatformKeys) -> PlatformSystem:
         """The platform's system in RetroDECK, which a download lands in. Blocking: it may read RomM's listing."""
-        return self._platform_systems.platform_system(platform_slug, source=RETRODECK)
+        return self._platform_systems.platform_system(keys, source=RETRODECK)
 
     async def _start_claimed_download(self, rom_id, *, resume: bool, replace_existing: bool, **answer):
         """:meth:`_begin_download` once the ROM's in-progress claim is held."""
@@ -262,12 +262,13 @@ class DownloadService:
         if not has_file_on_romm(rom_detail):
             raise NoFileOnRomm(NO_FILE_ON_ROMM_MESSAGE)
 
-        platform_slug = rom_detail.get("platform_slug", "")
-        platform = await self._loop.run_in_executor(None, self._download_platform_io, platform_slug)
-        named = platform.one_system
-        system = None if named is None else system_key(named)
-        if named is None or system is None:
-            raise platform.refusal(GAME_DOWNLOAD)
+        platform = await self._loop.run_in_executor(
+            None, self._download_platform_io, PlatformKeys.of_detail(rom_detail)
+        )
+        landing = platform.download_system(GAME_DOWNLOAD)
+        if isinstance(landing, FolderRefused):
+            raise landing
+        named, system = landing
 
         # The folder is taken once, here: a download that started lands where it
         # started even if RetroDECK is switched off before it ends. From here on

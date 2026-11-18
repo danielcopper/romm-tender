@@ -47,6 +47,7 @@ def seed_rom(
     rom_id: int,
     *,
     platform_slug: str = "gba",
+    platform_folder: str | None = None,
     shortcut_app_id: int | None = BIND_TO_ROM_ID,
 ) -> None:
     """Seed a ``Rom`` registry row (the FK anchor for per-ROM child writes).
@@ -58,7 +59,8 @@ def seed_rom(
     Unbound is ``NULL``, never ``0``: the ``003`` partial unique index is
     ``WHERE shortcut_app_id IS NOT NULL`` and ADR-0007 reads NULL as the unbound
     state, so a literal ``0`` would still be a binding — one that no bound-row
-    read would skip.
+    read would skip. ``platform_folder`` is the platform's folder in RomM; the
+    seeded platforms keep it equal to their slug unless one is given.
     """
     with harness.uow_factory() as uow:
         uow.roms.save(
@@ -69,9 +71,7 @@ def seed_rom(
                 fs_name=f"rom-{rom_id}",
                 shortcut_app_id=rom_id if shortcut_app_id == BIND_TO_ROM_ID else shortcut_app_id,
                 synced_at="2026-01-01T00:00:00",
-                # The folder the sync records for the platform; the seeded
-                # platforms keep it equal to their slug.
-                platform_fs_slug=platform_slug,
+                platform_fs_slug=platform_folder or platform_slug,
             )
         )
 

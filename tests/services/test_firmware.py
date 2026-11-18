@@ -24,7 +24,7 @@ from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
-from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
+from fakes.fake_platform_systems import FakePlatformSystems, platform_answer
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_start_commands import FakeStartCommands
@@ -50,7 +50,7 @@ from domain.firmware_wants import (
     FolderFile,
     FolderVerdict,
 )
-from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
+from domain.platform_system import NO_SYSTEM, SWITCHED_OFF
 from domain.retrodeck_folders import GAME_DOWNLOAD, finding_refusal, no_bios_root, switched_off
 from domain.rom import Rom
 from domain.rom_install import RomInstall
@@ -3909,7 +3909,7 @@ def _rom_scoped_surfaces(
             path_exists=FakePathExistsReader(),
             retrodeck_folders=FakeRetroDeckFolders(),
             platform_systems=platform_systems,
-            candidate_probe=lambda platform_slug, fs_name: False,
+            candidate_probe=lambda keys, fs_name: False,
         )
     )
     return cores, detail, fw
@@ -7203,7 +7203,7 @@ class TestThePlatformsSystem:
     @pytest.mark.asyncio
     async def test_a_platform_with_no_system_reads_no_firmware_and_says_why(self, firmware):
         resolver = FakeFirmwareResolver()
-        platform = PlatformSystem(NO_SYSTEM, "dc", "Dreamcast", source=RETRODECK_SOURCE)
+        platform = platform_answer(NO_SYSTEM, "dc", name="Dreamcast")
         fw, core_info = self._service(firmware, FakePlatformSystems(answers={"dc": platform}), resolver)
         _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "platform_slug": "dc"}])
 
@@ -7215,7 +7215,6 @@ class TestThePlatformsSystem:
         assert answer["platform_system"] == {
             "state": "no_system",
             "source": "retrodeck",
-            "system": None,
             "systems": [],
             "slug": "dc",
             "folder": None,
@@ -7321,7 +7320,7 @@ class TestThePlatformsSystem:
     async def test_its_bios_download_lands_in_the_store_only(self, firmware, tmp_path, state):
         """A platform with no system to link for still downloads; nothing asks an emulator source about it."""
         resolver = FakeFirmwareResolver()
-        platform = PlatformSystem(state, "dc", "Dreamcast", system="dreamcast", source=RETRODECK_SOURCE)
+        platform = platform_answer(state, "dc", "dreamcast", name="Dreamcast")
         fw, _ = self._service(firmware, FakePlatformSystems(answers={"dc": platform}), resolver)
         _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "platform_slug": "dc"}])
 

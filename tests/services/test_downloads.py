@@ -20,7 +20,7 @@ from _factories import (
 from _spawns import record_spawns
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
-from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
+from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems, platform_answer
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -29,7 +29,7 @@ from fakes.system_time import FakeClock
 from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.download_file import DownloadFileAdapter
 from adapters.rom_files import RomFileAdapter
-from domain.platform_system import NO_SYSTEM, SEVERAL, SWITCHED_OFF, PlatformSystem, SystemPair
+from domain.platform_system import NO_SYSTEM, SEVERAL, SWITCHED_OFF, PlatformKeys, PlatformSystem, SystemPair
 from domain.refusal import DomainRefused
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused, finding_refusal, switched_off
 from domain.rom import Rom
@@ -3730,7 +3730,7 @@ class TestAPlatformWithNoSystemDownloadsNothing:
     )
     @pytest.mark.asyncio
     async def test_it_is_refused_naming_why(self, make_downloads, tmp_path, state, system, reason):
-        platform = PlatformSystem(state, "xbox-360", "Xbox 360", system=system, source=RETRODECK_SOURCE)
+        platform = platform_answer(state, "xbox-360", system, name="Xbox 360")
         downloads = make_downloads(platform_systems=FakePlatformSystems(answers={"xbox-360": platform}))
         made_dirs: list[str] = []
         downloads.download_file_store.make_dirs = lambda p: made_dirs.append(p)
@@ -3754,7 +3754,6 @@ class TestAPlatformWithNoSystemDownloadsNothing:
         assert refused.value.details == {
             "source": "retrodeck",
             "platform": "Xbox 360",
-            "system": system,
             "systems": [] if system is None else [system],
             "slug": "xbox-360",
             "folder": None,
@@ -3768,7 +3767,9 @@ class TestAPlatformWithNoSystemDownloadsNothing:
         """#2225 D8: Tender picks none of several systems, and a download lands in one system's folder."""
         pairs = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
         named = (SystemPair("esde", "mark3"), SystemPair("esde", "mastersystem"))
-        platform = PlatformSystem(SEVERAL, "sms", "Master System", system=pairs, source=RETRODECK_SOURCE, named=named)
+        platform = PlatformSystem(
+            SEVERAL, PlatformKeys("sms"), "Master System", source=RETRODECK_SOURCE, named=named, asked=pairs
+        )
         downloads = make_downloads(platform_systems=FakePlatformSystems(answers={"sms": platform}))
         made_dirs: list[str] = []
         downloads.download_file_store.make_dirs = lambda p: made_dirs.append(p)
@@ -3792,7 +3793,6 @@ class TestAPlatformWithNoSystemDownloadsNothing:
         assert refused.value.details == {
             "source": "retrodeck",
             "platform": "Master System",
-            "system": None,
             "systems": ["mark3", "mastersystem"],
             "slug": "sms",
             "folder": None,
@@ -3808,9 +3808,9 @@ class TestAPlatformWithNoSystemDownloadsNothing:
         platform_systems = FakePlatformSystems()
         original = platform_systems.platform_system
 
-        def recording(platform_slug, *, source=None, reading=None, ask_romm=True):
+        def recording(keys, *, source=None, reading=None, ask_romm=True):
             threads.append(threading.current_thread())
-            return original(platform_slug, source=source, reading=reading, ask_romm=ask_romm)
+            return original(keys, source=source, reading=reading, ask_romm=ask_romm)
 
         platform_systems.platform_system = recording
         downloads = make_downloads(platform_systems=platform_systems)

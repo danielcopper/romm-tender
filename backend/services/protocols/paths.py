@@ -62,18 +62,21 @@ class PlatformSystems(Protocol):
 
     def platform_system(
         self,
-        platform_slug: str,
+        keys: PlatformKeys,
         *,
         source: str | None = None,
         reading: SourcesReading | None = None,
         ask_romm: bool = True,
     ) -> PlatformSystem:
-        """The system *platform_slug* is in *source*, the answering source where it is ``None``.
+        """The system the platform *keys* names is in *source*, the answering source where it is ``None``.
+
+        *keys* carries the folder the game lies in, or the folder the page is
+        about; never another folder of the slug.
 
         A download names the source it lands in; every other question asks the
         answering source. Where nothing is kept for the platform, RomM's listing
         is read and kept, unless *ask_romm* is false — a caller that must not
-        reach the network then gets the answer for the platform's slug alone. A read that
+        reach the network then gets the platform's own folder as its name. A read that
         fails raises nothing: it answers ``UNASKED`` with the reason and message
         ``classify_error`` gives the failure and the source that would have been
         asked, and keeps nothing.
@@ -81,12 +84,12 @@ class PlatformSystems(Protocol):
         ...
 
     def rom_system(
-        self, platform_slug: str, install: RomInstall | None, *, reading: SourcesReading | None = None
+        self, keys: PlatformKeys, install: RomInstall | None, *, reading: SourcesReading | None = None
     ) -> PlatformSystem:
         """The system a game is asked about: its install record's where it is installed, else the platform's."""
         ...
 
-    def listed_platforms(self) -> frozenset[str] | None:
+    def listed_platforms(self) -> frozenset[PlatformKeys] | None:
         """The slug of every kept platform; ``None`` where no listing was ever kept. Reads nothing from RomM.
 
         Each platform RomM listed at the last sync, and every one kept since —

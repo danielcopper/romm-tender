@@ -19,7 +19,7 @@ from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, libretro_option, standalone_option
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_emulator_sources import FakeSourcesReading
-from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
+from fakes.fake_platform_systems import FakePlatformSystems, platform_answer
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_start_commands import FakeStartCommands
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -35,7 +35,6 @@ from domain.launchability import NEEDS_INSTALLING, NOT_THIS_EMULATOR, TAKES_NO_F
 from domain.platform_system import (
     NO_SYSTEM,
     SWITCHED_OFF,
-    PlatformSystem,
 )
 from domain.rom import Rom
 from domain.rom_install import RomInstall
@@ -222,10 +221,9 @@ class TestGetPlatformCoreInfo:
             "platform_system": {
                 "state": "found",
                 "source": "retrodeck",
-                "system": "snes",
                 "systems": ["snes"],
                 "slug": "snes",
-                "folder": None,
+                "folder": "snes",
                 "platform": "snes",
             },
             "active_core": "snes9x_libretro.so",
@@ -381,10 +379,9 @@ class TestGetSystemCoreInfo:
             "platform_system": {
                 "state": "found",
                 "source": "retrodeck",
-                "system": "snes",
                 "systems": ["snes"],
                 "slug": "snes",
-                "folder": None,
+                "folder": "snes",
                 "platform": "snes",
             },
             "active_core_label": "Snes9x",
@@ -457,9 +454,7 @@ class TestAPlatformWithNoSystem:
         [(NO_SYSTEM, None, "no_platform_system"), (SWITCHED_OFF, "xbox360", "platform_system_off")],
     )
     def test_the_platform_page_says_why(self, event_loop, service, core_info, platform_systems, state, system, reason):
-        platform_systems.answers["xbox-360"] = PlatformSystem(
-            state, "xbox-360", "Xbox 360", system=system, source=RETRODECK_SOURCE
-        )
+        platform_systems.answers["xbox-360"] = platform_answer(state, "xbox-360", system, name="Xbox 360")
 
         result = event_loop.run_until_complete(service.get_system_core_info("xbox-360", "xbox-360"))
 
@@ -469,7 +464,6 @@ class TestAPlatformWithNoSystem:
         assert result["platform_system"] == {
             "state": state,
             "source": "retrodeck",
-            "system": system,
             "systems": [] if system is None else [system],
             "slug": "xbox-360",
             "folder": None,
@@ -479,7 +473,7 @@ class TestAPlatformWithNoSystem:
 
     def test_a_game_page_says_why(self, event_loop, service, core_info, platform_systems, uow):
         _seed_rom(uow, rom_id=42, platform_slug="vic-20")
-        platform_systems.answers["vic-20"] = PlatformSystem(NO_SYSTEM, "vic-20", "VIC-20", source=RETRODECK_SOURCE)
+        platform_systems.answers["vic-20"] = platform_answer(NO_SYSTEM, "vic-20", name="VIC-20")
 
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
 
@@ -493,10 +487,9 @@ class TestAPlatformWithNoSystem:
         assert result["platform_system"] == {
             "state": "found",
             "source": "retrodeck",
-            "system": "dreamcast",
             "systems": ["dreamcast"],
             "slug": "dc",
-            "folder": None,
+            "folder": "dc",
             "platform": "dc",
         }
 

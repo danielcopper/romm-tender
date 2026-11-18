@@ -100,7 +100,7 @@ def achievements(clock, logger) -> AchievementsHarness:
             path_exists=FakePathExistsReader(),
             retrodeck_folders=FakeRetroDeckFolders(),
             platform_systems=FakePlatformSystems(),
-            candidate_probe=lambda platform_slug, fs_name: False,
+            candidate_probe=lambda keys, fs_name: False,
         ),
     )
     return AchievementsHarness(service=service, game_detail=game_detail, uow=uow, romm_api=romm_api)

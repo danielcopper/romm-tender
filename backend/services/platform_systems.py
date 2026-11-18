@@ -81,36 +81,40 @@ class PlatformSystemService:
 
     def platform_system(
         self,
-        platform_slug: str,
+        keys: PlatformKeys,
         *,
         source: str | None = None,
         reading: SourcesReading | None = None,
         ask_romm: bool = True,
     ) -> PlatformSystem:
-        """The system *platform_slug* is in *source*, the answering source where it is ``None``.
+        """The system the platform *keys* names is in *source*, the answering source where it is ``None``.
 
-        Where nothing is kept for the platform, RomM's listing is read and
-        kept, and the listing is handed to the refiling, so this read may move
-        Tender's older entries; with *ask_romm* false the platform is asked by
-        its slug alone instead. A
-        read that fails answers :data:`~domain.platform_system.UNASKED` with the
-        reason every RomM read is classified by, and keeps nothing. It is logged
-        here, at the level the entrypoint logs a RomM error at, because what
-        it becomes reaches the entrypoint as a refusal, or as an answer that
-        something is unavailable, and neither is logged.
+        The platform is asked by RomM's slug and the folder *keys* names — the
+        one a game lies in, or the one a page is about — never another folder
+        that shares the slug; without a folder, by the slug alone
+        ([#2217](https://github.com/danielcopper/romm-tender/issues/2217) D16).
+        What is kept for the platform gives its name. Where nothing is kept for
+        it, RomM's listing is read and kept, and the listing is handed to the
+        refiling, so this read may move Tender's older entries; with *ask_romm*
+        false nothing is read. A read that fails answers
+        :data:`~domain.platform_system.UNASKED` with the reason every RomM read
+        is classified by, and keeps nothing. It is logged here, at the level the
+        entrypoint logs a RomM error at, because what it becomes reaches the
+        entrypoint as a refusal, or as an answer that something is unavailable,
+        and neither is logged.
         """
         try:
-            keys, name = self._keys_and_name(platform_slug, ask_romm=ask_romm)
+            name = self._name(keys, ask_romm=ask_romm)
         except RommApiError as exc:
             reason, message = classify_error(exc)
             self._logger.log(
                 romm_error_log_level(exc),
-                f"[platforms] no ids kept for {platform_slug}, and RomM's listing failed: {type(exc).__name__}: {exc}",
+                f"[platforms] no ids kept for {keys.slug}, and RomM's listing failed: {type(exc).__name__}: {exc}",
             )
             return PlatformSystem(
                 UNASKED,
-                platform_slug,
-                platform_slug,
+                keys,
+                keys.folder or keys.slug,
                 source=self._source_platform_systems.asked_source(source=source, reading=reading),
                 unasked=reason,
                 unasked_message=message,
@@ -118,15 +122,15 @@ class PlatformSystemService:
         return self._source_platform_systems.platform_system(keys, platform_name=name, source=source, reading=reading)
 
     def rom_system(
-        self, platform_slug: str, install: RomInstall | None, *, reading: SourcesReading | None = None
+        self, keys: PlatformKeys, install: RomInstall | None, *, reading: SourcesReading | None = None
     ) -> PlatformSystem:
         """The install record's system for an installed game, else :meth:`platform_system` in the answering source."""
         if install is not None:
-            return PlatformSystem(FOUND, platform_slug, platform_slug, system=install.system)
-        return self.platform_system(platform_slug, reading=reading)
+            return PlatformSystem(FOUND, keys, keys.folder or keys.slug, recorded=install.system)
+        return self.platform_system(keys, reading=reading)
 
-    def listed_platforms(self) -> frozenset[str] | None:
-        """The slug of every kept platform, or ``None`` where no listing was ever kept. Reads nothing from RomM.
+    def listed_platforms(self) -> frozenset[PlatformKeys] | None:
+        """The slug and folder of every kept platform; ``None`` where no listing was ever kept. Reads nothing from RomM.
 
         That is each platform RomM listed at the last sync, every one a listing
         read since named (each is handed to :meth:`keep_listing`), and a
@@ -136,7 +140,9 @@ class PlatformSystemService:
             kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
         if kept is None:
             return None
-        return frozenset(entry.slug for entry in kept.values() if entry.slug is not None)
+        return frozenset(
+            PlatformKeys.of(entry.slug, entry.fs_slug) for entry in kept.values() if entry.slug is not None
+        )
 
     def kept_folders(self, platform_slug: str) -> frozenset[str]:
         """The ``fs_slug`` of every kept platform of *platform_slug*. Reads nothing from RomM."""
@@ -169,22 +175,22 @@ class PlatformSystemService:
             before = {key: entry for key, entry in current.items() if entry.slug not in slugs}
             uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({**before, **kept}))
 
-    def _keys_and_name(self, platform_slug: str, *, ask_romm: bool) -> tuple[PlatformKeys, str]:
+    def _name(self, keys: PlatformKeys, *, ask_romm: bool) -> str:
+        """The name the platform *keys* names is shown under; reads RomM's listing where nothing is kept for it."""
         with self._uow_factory() as uow:
             kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
             names = decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
-        entry = kept_by_slug(kept, platform_slug) if kept is not None else None
+        entry = _kept_entry(kept or {}, keys)
         if entry is None and ask_romm:
-            entry = self._read_and_keep(platform_slug)
-        keys = entry.keys(platform_slug) if entry is not None else PlatformKeys(platform_slug)
+            entry = self._read_and_keep(keys)
         # The names cache is keyed by fs_slug; an entry kept before it recorded
         # one was kept under its slug.
-        named_by = entry.fs_slug if entry is not None and entry.fs_slug else platform_slug
+        named_by = keys.folder or (entry.fs_slug if entry is not None and entry.fs_slug else keys.slug)
         # A platform listed without a name is named by its fs_slug (#2761 D3).
-        return keys, names.get(named_by) or (entry.name if entry is not None else None) or named_by
+        return names.get(named_by) or (entry.name if entry is not None else None) or named_by
 
-    def _read_and_keep(self, platform_slug: str) -> KeptPlatform | None:
-        """*platform_slug*'s platform from RomM's listing; the listing is kept by the refiling's keep step.
+    def _read_and_keep(self, keys: PlatformKeys) -> KeptPlatform | None:
+        """The platform *keys* names, from RomM's listing; the listing is kept by the refiling's keep step.
 
         The listing is handed to the refiling, which has it kept
         (:meth:`keep_listing`); this adds only the placeholder for a slug the
@@ -194,19 +200,30 @@ class PlatformSystemService:
         platforms = self._romm_api.list_platforms()
         self._refiling.do_refile(platforms)
         listed = kept_platforms(platforms, self._romm_api.get_version())
-        entry = kept_by_slug(listed, platform_slug)
-        self._log_debug(f"[platforms] no ids kept for {platform_slug}; read {len(listed)} from RomM")
+        entry = _kept_entry(listed, keys)
+        self._log_debug(f"[platforms] no ids kept for {keys.slug}; read {len(listed)} from RomM")
         # The refiling has had the listing kept (keep_listing); what is left is
         # the platform the listing did not name, kept so it is not read again.
         if entry is None:
-            self._keep_unlisted(platform_slug)
+            self._keep_unlisted(keys)
         return entry
 
-    def _keep_unlisted(self, platform_slug: str) -> None:
-        """Keep *platform_slug* with nothing but its slug, unless a listed platform is already kept under that key."""
+    def _keep_unlisted(self, keys: PlatformKeys) -> None:
+        """Keep the platform *keys* names with nothing but its slug and folder, unless one is kept under that key.
+
+        It is kept under its folder where one was asked with, else its slug.
+        """
+        key = keys.folder or keys.slug
         with self._uow_factory() as uow:
             current = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY)) or {}
-            if platform_slug in current:
+            if key in current:
                 return
-            current[platform_slug] = KeptPlatform(slug=platform_slug)
+            current[key] = KeptPlatform(slug=keys.slug, fs_slug=keys.folder)
             uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids(current))
+
+
+def _kept_entry(kept: Mapping[str, KeptPlatform], keys: PlatformKeys) -> KeptPlatform | None:
+    """What is kept for the platform *keys* names: the record of its folder, or — without one — of its slug."""
+    if keys.folder is not None:
+        return kept.get(keys.folder)
+    return kept_by_slug(kept, keys.slug)

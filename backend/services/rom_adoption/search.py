@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.emulator_sources import RETRODECK
 from domain.game_files import download_size_bytes
+from domain.platform_system import PlatformKeys
 from domain.retrodeck_folders import FolderRefused
 from domain.rom_adoption import is_archive_name, server_manifest
 from domain.rom_candidates import (
@@ -142,7 +143,7 @@ class CandidateSearch:
            neither of the above applies.
         """
         platform_dir = os.path.dirname(checked_path)
-        platform = self._platform_systems.platform_system(rom_detail.get("platform_slug", ""), source=RETRODECK)
+        platform = self._platform_systems.platform_system(PlatformKeys.of_detail(rom_detail), source=RETRODECK)
         system = platform.one_system
         if system is None:
             return
@@ -198,8 +199,8 @@ class CandidateSearch:
 
     # ── The game page's half ────────────────────────────────────────
 
-    def name_matches(self, platform_slug: str, fs_name: str) -> tuple[LocalName, ...]:
-        """Entries in *platform_slug*'s folder whose normalized name is *fs_name*'s.
+    def name_matches(self, keys: PlatformKeys, fs_name: str) -> tuple[LocalName, ...]:
+        """Entries in the folder of the platform *keys* names whose normalized name is *fs_name*'s.
 
         Every kind comes back, because the page's question is "is this game here
         at all" — a symlink the click path will refuse to adopt is still content
@@ -212,17 +213,17 @@ class CandidateSearch:
         :meth:`_searchable_dir` refuses one besides: a namesake in such a
         directory is content no emulator will ever look at.
         """
-        platform = self._platform_systems.platform_system(platform_slug, source=RETRODECK, ask_romm=False)
+        platform = self._platform_systems.platform_system(keys, source=RETRODECK, ask_romm=False)
         system = platform.one_system
         platform_dir = None if system is None else self._platform_dir(system)
         wanted_name = normalize_rom_name(fs_name)
         if system is None or platform_dir is None or not wanted_name:
-            self._log_probe(platform_slug, platform_dir, wanted_name, entries=(), found=())
+            self._log_probe(keys.folder or keys.slug, platform_dir, wanted_name, entries=(), found=())
             return ()
         covered = self._installed_paths() | {os.path.join(platform_dir, fs_name)}
         entries = self._local_names(platform_dir)
         found = self._named(entries, system=system, wanted=frozenset({wanted_name}), covered=covered)
-        self._log_probe(platform_slug, platform_dir, wanted_name, entries=entries, found=found)
+        self._log_probe(keys.folder or keys.slug, platform_dir, wanted_name, entries=entries, found=found)
         return found
 
     def _log_probe(

@@ -28,7 +28,7 @@ from _spawns import record_spawns
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_adoption_move import FakeAdoptionMoveStore
 from fakes.fake_download_file_store import FakeDownloadFileStore
-from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
+from fakes.fake_platform_systems import FakePlatformSystems, platform_answer
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_save_backup import FakeSaveBackup
@@ -37,7 +37,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
 
 from domain.adoption_rename import RenameCollisions
-from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem, SystemPair, system_key
+from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformKeys, SystemPair, system_key
 from domain.retrodeck_folders import FolderRefused, no_rom_root
 from domain.rom import Rom
 from domain.rom_adoption import TargetOccupied
@@ -1895,7 +1895,7 @@ class TestTheAdmissionRule:
             )
             is None
         )
-        assert h.service.has_adoption_candidate("snes", "Game (USA).sfc") is False
+        assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc") is False
 
     async def test_a_real_file_is_still_a_candidate_beside_a_link(self, h):
         h.system_extensions = {"snes": frozenset({".sfc"})}
@@ -1917,7 +1917,7 @@ class TestTheAdmissionRule:
         h.system_extensions = {"snes": frozenset({".sfc"})}
         h.store.links["/roms/snes/Game (U).sfc"] = "/roms/snes/real.sfc"
 
-        assert h.service.has_adoption_candidate("snes", "Game (USA).sfc") is True
+        assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc") is True
 
     async def test_downloading_anyway_leaves_the_link_alone(self, h):
         h.system_extensions = {"snes": frozenset({".sfc"})}
@@ -2027,14 +2027,14 @@ class TestSearchableDirectory:
             )
             is None
         )
-        assert h.service.has_adoption_candidate("snes", "Game (USA).sfc") is False
+        assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc") is False
 
     async def test_a_real_system_still_answers(self, h):
         h.known_systems = {"snes": True}
         h.system_extensions = {"snes": frozenset({".sfc"})}
         h.store.files["/roms/snes/Game (U).sfc"] = b"x"
 
-        assert h.service.has_adoption_candidate("snes", "Game (USA).sfc") is True
+        assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc") is True
 
     async def test_a_source_that_could_not_answer_is_not_a_denial(self, h):
         # ``None`` is "es_systems.xml could not be read", which must not turn the
@@ -2043,7 +2043,7 @@ class TestSearchableDirectory:
         h.system_extensions = {"snes": frozenset({".sfc"})}
         h.store.files["/roms/snes/Game (U).sfc"] = b"x"
 
-        assert h.service.has_adoption_candidate("snes", "Game (USA).sfc") is True
+        assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc") is True
 
     async def test_an_unknown_directory_with_no_accept_list_matches_nothing(self, h):
         # The second hole the same check closes: an empty accept-list means
@@ -2053,7 +2053,7 @@ class TestSearchableDirectory:
         h.system_extensions = {}
         h.store.files["/roms/not-a-system/Game (U).sfc"] = b"x"
 
-        assert h.service.has_adoption_candidate("not-a-system", "Game (USA).sfc") is False
+        assert h.service.has_adoption_candidate(PlatformKeys("not-a-system"), "Game (USA).sfc") is False
 
 
 class TestThePlatformsSystemIsAskedOffTheLoop:
@@ -2064,9 +2064,9 @@ class TestThePlatformsSystemIsAskedOffTheLoop:
         platform_systems = FakePlatformSystems()
         original = platform_systems.platform_system
 
-        def recording(platform_slug, *, source=None, reading=None, ask_romm=True):
+        def recording(keys, *, source=None, reading=None, ask_romm=True):
             threads.append(threading.current_thread())
-            return original(platform_slug, source=source, reading=reading, ask_romm=ask_romm)
+            return original(keys, source=source, reading=reading, ask_romm=ask_romm)
 
         platform_systems.platform_system = recording
         h.service._platform_systems = platform_systems
@@ -2100,24 +2100,24 @@ class TestAPlatformWithNoSystem:
     async def test_the_page_finds_no_copy(self, h, state):
         h.system_extensions = {"snes": frozenset({".sfc"})}
         h.store.files["/roms/snes/Game (U).sfc"] = b"x"
-        platform = PlatformSystem(state, "snes", "SNES", system="snes", source=RETRODECK_SOURCE)
+        platform = platform_answer(state, "snes", "snes", name="SNES")
         h.service._search._platform_systems = FakePlatformSystems(answers={"snes": platform})
 
-        assert h.service.has_adoption_candidate("snes", "Game (USA).sfc") is False
+        assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc") is False
 
     async def test_the_page_never_reads_rom_m_for_the_ids(self, h):
         platform_systems = FakePlatformSystems()
         asked: list[bool] = []
         original = platform_systems.platform_system
 
-        def recording(platform_slug, *, source=None, reading=None, ask_romm=True):
+        def recording(keys, *, source=None, reading=None, ask_romm=True):
             asked.append(ask_romm)
-            return original(platform_slug, source=source, reading=reading, ask_romm=ask_romm)
+            return original(keys, source=source, reading=reading, ask_romm=ask_romm)
 
         platform_systems.platform_system = recording
         h.service._search._platform_systems = platform_systems
 
-        h.service.has_adoption_candidate("snes", "Game (USA).sfc")
+        h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc")
 
         assert asked == [False]
 
@@ -2284,7 +2284,7 @@ class TestSearchLogging:
         h.system_extensions = {"snes": frozenset({".sfc"})}
         h.store.files["/roms/snes/Game (U).sfc"] = b"x"
 
-        h.service.has_adoption_candidate("snes", "Game (USA).sfc")
+        h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc")
 
         (line,) = [entry for entry in h.debug_log if entry.startswith("adopt probe:")]
         assert "dir=/roms/snes" in line
@@ -2295,7 +2295,7 @@ class TestSearchLogging:
         # Every exit from the probe leaves a line, including the ones that give
         # up before reading anything — a probe that logged nothing is a probe
         # that cannot be told apart from one that never ran.
-        h.service.has_adoption_candidate("snes", "")
+        h.service.has_adoption_candidate(PlatformKeys("snes"), "")
 
         (line,) = [entry for entry in h.debug_log if entry.startswith("adopt probe:")]
         assert "slug=snes" in line
@@ -2305,7 +2305,7 @@ class TestSearchLogging:
     async def test_a_name_that_is_only_tags_answers_the_same_way(self, h):
         # It has a name and still nothing to match on, which is the same answer
         # and now the same line.
-        h.service.has_adoption_candidate("snes", "(USA).sfc")
+        h.service.has_adoption_candidate(PlatformKeys("snes"), "(USA).sfc")
 
         (line,) = [entry for entry in h.debug_log if entry.startswith("adopt probe:")]
         assert "name=<empty>" in line
@@ -2320,9 +2320,9 @@ class TestSearchLogging:
         h.system_extensions = {"snes": frozenset({".sfc"})}
         h.store.files["/roms/snes/Example Quest (U).sfc"] = b"x"
 
-        h.service.has_adoption_candidate("snes", "Example Quest (USA).sfc")
-        h.service.has_adoption_candidate("snes", "")
-        h.service.has_adoption_candidate("../escape", "Example Quest (USA).sfc")
+        h.service.has_adoption_candidate(PlatformKeys("snes"), "Example Quest (USA).sfc")
+        h.service.has_adoption_candidate(PlatformKeys("snes"), "")
+        h.service.has_adoption_candidate(PlatformKeys("../escape"), "Example Quest (USA).sfc")
 
         lines = [entry for entry in h.debug_log if entry.startswith("adopt probe:")]
         assert len(lines) == 3
@@ -2496,13 +2496,13 @@ class TestHasAdoptionCandidate:
         h.system_extensions = {"snes": frozenset({".sfc"})}
         h.store.files["/roms/snes/Game (U).sfc"] = b"x"
 
-        assert h.service.has_adoption_candidate("snes", "Game (USA).sfc") is True
+        assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc") is True
 
     async def test_a_folder_of_other_games_is_not(self, h):
         h.system_extensions = {"snes": frozenset({".sfc"})}
         h.store.files["/roms/snes/Other Game (USA).sfc"] = b"z"
 
-        assert h.service.has_adoption_candidate("snes", "Game (USA).sfc") is False
+        assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc") is False
 
     async def test_a_matching_directory_counts_too(self, h):
         # The page cannot know whether RomM serves this ROM as one file or a
@@ -2511,21 +2511,21 @@ class TestHasAdoptionCandidate:
         h.store.dirs.add("/roms/psx/Game (U)")
         h.store.files["/roms/psx/Game (U)/disc.cue"] = b"x"
 
-        assert h.service.has_adoption_candidate("psx", "Game.zip") is True
+        assert h.service.has_adoption_candidate(PlatformKeys("psx"), "Game.zip") is True
 
     async def test_the_rom_s_own_target_is_not_its_own_candidate(self, h):
         # That is the occupied-target state, which the page answers separately.
         h.system_extensions = {"snes": frozenset({".sfc"})}
         h.store.files["/roms/snes/Game.sfc"] = b"x"
 
-        assert h.service.has_adoption_candidate("snes", "Game.sfc") is False
+        assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game.sfc") is False
 
     async def test_an_install_row_s_content_is_another_game_s(self, h):
         h.system_extensions = {"snes": frozenset({".sfc"})}
         h.store.files["/roms/snes/Game (U).sfc"] = b"x"
         h.seed_install(rom_id=99, file_path="/roms/snes/Game (U).sfc")
 
-        assert h.service.has_adoption_candidate("snes", "Game (USA).sfc") is False
+        assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc") is False
 
     async def test_it_never_reads_an_archive_index(self, h):
         # Ranking evidence is the dialog's cost, not the page's: the page only has
@@ -2540,13 +2540,13 @@ class TestHasAdoptionCandidate:
 
         h.store.list_archive_members = record
 
-        assert h.service.has_adoption_candidate("snes", "Game (USA).zip") is True
+        assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).zip") is True
         assert opened == []
 
     async def test_without_a_rom_folder_it_answers_quietly(self, h):
         h.paths.roms = ""
 
-        assert h.service.has_adoption_candidate("snes", "Game (USA).sfc") is False
+        assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc") is False
 
     async def test_a_read_that_raises_answers_quietly(self, h, caplog):
         # A search that could not run must never make a game look uninstallable.
@@ -2558,12 +2558,12 @@ class TestHasAdoptionCandidate:
         h.store.list_top_level_names = boom
 
         with caplog.at_level(logging.WARNING):
-            assert h.service.has_adoption_candidate("snes", "Game (USA).sfc") is False
+            assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc") is False
 
         assert any("candidate probe failed" in record.message for record in caplog.records)
 
     async def test_an_unsafe_platform_slug_answers_quietly(self, h):
-        assert h.service.has_adoption_candidate("../../etc", "passwd") is False
+        assert h.service.has_adoption_candidate(PlatformKeys("../../etc"), "passwd") is False
 
         # Refused where the directory is derived rather than thrown at the
         # blanket guard, so the log says a probe ran and found nowhere to look —
