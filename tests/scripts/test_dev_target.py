@@ -733,15 +733,42 @@ class TestTheConnection:
         assert "check Steam there" in result.stderr
         assert "no answer" not in result.stderr
 
-    def test_dev_log_follow_on_an_empty_log_that_drops_is_not_read_as_no_answer(self, loop: Loop) -> None:
+    @pytest.mark.parametrize(
+        "says",
+        [
+            "client_loop: send disconnect: Connection reset by peer",
+            "Read from remote host deck: Connection reset by peer",
+        ],
+        ids=["client-loop", "read-from-remote-host"],
+    )
+    def test_dev_log_follow_on_an_empty_log_that_drops_is_not_read_as_no_answer(self, loop: Loop, says: str) -> None:
+        """Nothing written yet, so only ssh's own words tell the drop from a target that never answered."""
         loop.log.parent.mkdir(parents=True)
         loop.log.write_text("", encoding="utf-8")
         loop.world.follow_holds = False
         loop.world.drop_after_first_line = True
+        loop.world.drop_says = says
 
         result = loop.run("dev:log", "--follow")
 
         assert result.returncode == 255
+        assert "tender-dev: the connection to deck ended." in result.stderr
+        assert "no answer" not in result.stderr
+
+    def test_a_drop_after_the_target_wrote_only_on_stderr_is_not_read_as_no_answer(self, loop: Loop) -> None:
+        """The target's own stderr line counts as an answer, whatever ssh then says."""
+        loop.start_ui_scale()
+        loop.world.drop_after_first_line = True
+        loop.world.drop_only_for = "dev_target.sh ui-scale"
+        loop.world.drop_says = "Connection reset by 192.168.1.20 port 22"
+
+        result = loop.run("dev:ui-scale", "deck")
+
+        assert result.returncode == 255
+        assert "tender-dev: dev:ui-scale already runs on deck" in result.stderr
+        assert "the connection to deck ended; what the task was doing on deck may have stopped part-way" in (
+            result.stderr
+        )
         assert "no answer" not in result.stderr
 
     def test_ctrl_c_on_dev_log_follow_before_its_first_line_stops_the_following(self, loop: Loop) -> None:
@@ -894,6 +921,24 @@ class TestADevUnitThatHoldsNoLock:
         assert result.returncode == 0, result.stderr
         assert "romm-tender-dev.service runs on deck." in result.stdout
         assert "holds no lock" not in result.stdout
+
+    def test_a_held_lock_whose_holder_no_pid_names_goes_to_the_unit_that_runs(self, loop: Loop, tmp_path: Path) -> None:
+        """Where the kernel names no pid, lock_holder asks which unit runs (unit_runs)."""
+        lock = loop.target_home / ".local/share/romm-tender/backend.lock"
+        python = tmp_path / "python-whose-lock-reading-names-no-pid"
+        python.write_text(
+            f"#!/bin/sh\ncase \"$*\" in *--holder*) printf 'held\\n\\n%s\\n\\n' '{lock}'; exit 0 ;; esac\n"
+            f'exec "{sys.executable}" "$@"\n',
+            encoding="utf-8",
+        )
+        python.chmod(0o755)
+        loop.world.service_python = str(python)
+        loop.run_unit("romm-tender")
+
+        result = loop.run("dev:status")
+
+        assert result.returncode == 0, result.stderr
+        assert "the installed service (romm-tender.service) holds the single-instance lock on deck" in result.stdout
 
     def test_dev_status_reports_it(self, loop: Loop) -> None:
         loop.run_unit("romm-tender-dev")

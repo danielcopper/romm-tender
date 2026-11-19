@@ -1082,8 +1082,9 @@ class TestReadingWhatSshSaid:
             "Connection to 192.168.1.20 closed by remote host.",
             "Timeout, server 192.168.1.20 not responding.",
             "packet_write_wait: Connection to 192.168.1.20 port 22: Broken pipe",
+            "Read from remote host 192.168.1.20: Connection reset by peer",
         ],
-        ids=["reset", "closed", "timeout", "broken pipe"],
+        ids=["reset", "closed", "timeout", "broken pipe", "read from remote host"],
     )
     def test_a_connection_lost_after_the_login_is_no_failure_before_it(self, stderr: str) -> None:
         assert setup_remote_target.ssh_failure(stderr, name="deck", destination=self._DESTINATION) is None

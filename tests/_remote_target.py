@@ -137,7 +137,12 @@ class World:
     route_source: str = "192.168.1.10"
     """What ``ip route get`` names as this machine's source address."""
     drop_after_first_line: bool = False
-    """Drop the connection once the login's command has written its first line to stdout."""
+    """Drop the connection once the login's command has written its first line to stdout, or ended writing none;
+    what it wrote on stderr is handed on first."""
+    drop_only_for: str | None = None
+    """Drop only a login whose request holds this — the task's call, not the copy before it."""
+    drop_says: str = "client_loop: send disconnect: Connection reset by peer"
+    """What ssh writes on stderr when it drops the connection."""
     drop_after_line: str | None = None
     """Drop the connection once a login's command has written a line starting with this to stdout; a login that
     writes no such line runs as it would."""
@@ -583,10 +588,13 @@ def _ssh(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 255
+    requested = command
     if login != "own":
         env["SSH_ORIGINAL_COMMAND"] = command
         command = login
     drops = world.drop_after_first_line or world.drop_after_line is not None
+    if world.drop_only_for is not None and world.drop_only_for not in requested:
+        drops = False
     if not drops or (world.drop_only_without_config and "_config" in options):
         return _start_session(world, command, home=target.home, env=env).wait()
     session = _start_session(world, command, home=target.home, env=env, capture=True)
@@ -599,9 +607,10 @@ def _ssh(argv: list[str]) -> int:
         sys.stderr.write(err)
         return session.returncode
     end = matching[0] + 1 if marker is not None else 1
-    lines = lines[:end] or [""]
-    print("\n".join(lines))
-    print("client_loop: send disconnect: Connection reset by peer", file=sys.stderr)
+    if lines[:end]:
+        print("\n".join(lines[:end]))
+    sys.stderr.write(err)
+    print(world.drop_says, file=sys.stderr)
     return 255
 
 

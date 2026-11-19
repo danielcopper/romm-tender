@@ -69,10 +69,12 @@ KEY_REFUSED = re.compile(r"Permission denied \(")
 NO_LOGIN = re.compile(KEY_REFUSED.pattern + r"|Too many authentication failures")
 UNRESOLVED = re.compile(r"Could not resolve hostname ([^:\s]+)")
 # What ssh says when a connection it had logged in on is lost — the far side
-# gone to sleep, a network gone. "Connection reset" and "closed by" in NO_SERVER
-# match these too, so a line of these is read as no failure before the login.
+# gone to sleep, a network gone (OpenSSH's "Read from remote host %s: %s" among
+# them). "Connection reset" in NO_SERVER matches some of these too, so a line
+# of these is read as no failure before the login.
 LOST_AFTER_LOGIN = re.compile(
-    r"client_loop: |packet_write_wait: |Timeout, server \S+ not responding|Connection to \S+ closed by remote host"
+    r"client_loop: |packet_write_wait: |Read from remote host |Timeout, server \S+ not responding"
+    r"|Connection to \S+ closed by remote host"
 )
 NO_SERVER = re.compile(
     r"Connection refused|Connection timed out|Operation timed out|No route to host|Network is unreachable"
