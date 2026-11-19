@@ -2166,6 +2166,8 @@ describe("SaveManagementCard", () => {
       await waitFor(() => {
         expect(getRommConnectionState()).toBe("connected");
         expect(screen.getByTestId("desktop-slot-panel-synthesized")).toBeInTheDocument();
+        expect(backend.getSaveSlots).toHaveBeenCalledWith(42);
+        expect(backend.isSaveTrackingConfigured).toHaveBeenCalledWith(42);
       });
 
       // Refresh returning non-unreachable failure leaves connection state connected
@@ -2178,7 +2180,56 @@ describe("SaveManagementCard", () => {
         globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
       });
       await waitFor(() => expect(backend.getSaveSlots).toHaveBeenCalledTimes(2));
+      expect(backend.isSaveTrackingConfigured).toHaveBeenNthCalledWith(2, 42);
       expect(getRommConnectionState()).toBe("connected");
+    });
+
+    it("handles offline slot snapshot recovery, offline unconfigured tracking, and false confirmSlotChoice in auto-confirm", async () => {
+      setRommConnectionState("offline", "test offline");
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
+        configured: false,
+        active_slot: "offline-recovered",
+        setup_needed: true,
+      });
+      vi.mocked(backend.getSaveSlots).mockResolvedValueOnce({
+        success: true,
+        slots: [{ slot: "offline-recovered", source: "server", count: 1, latest_updated_at: null }],
+        active_slot: "offline-recovered",
+      });
+
+      const offlineView = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      await waitFor(() => {
+        expect(screen.getByTestId("desktop-slot-panel-offline-recovered")).toBeInTheDocument();
+        expect(screen.getByTestId("unconfirmed-slot-banner")).toBeInTheDocument();
+        expect(getRommConnectionState()).toBe("connected");
+      });
+      expect(backend.getSaveSlots).toHaveBeenCalledTimes(1);
+      expect(backend.getSaveSlots).toHaveBeenCalledWith(42);
+      expect(backend.isSaveTrackingConfigured).toHaveBeenCalledWith(42);
+      offlineView.unmount();
+
+      // Auto-confirm returning success: false toasts Switched to slot rather than Switched to and confirmed
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
+        configured: false,
+        active_slot: "default",
+        setup_needed: true,
+      });
+      vi.mocked(backend.switchSlot).mockResolvedValueOnce({
+        success: true,
+        save_status: mockSaveStatus,
+      });
+      vi.mocked(backend.confirmSlotChoice).mockResolvedValueOnce({
+        success: false,
+        reason: "unknown",
+        message: "no",
+      });
+
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      fireEvent.click(await screen.findByRole("button", { name: /speedrun/ }));
+      fireEvent.click(await screen.findByRole("button", { name: "Activate Slot" }));
+      await waitFor(() => {
+        expect(toast.showToast).toHaveBeenCalledWith("Switched to slot 'speedrun'");
+      });
     });
   });
 });
