@@ -704,6 +704,7 @@ describe("SaveManagementCard", () => {
         expect(backend.savesRollbackToVersion).toHaveBeenCalledWith(42, "default", 4809);
         expect(toast.showToast).toHaveBeenCalledWith(expect.stringContaining("Save restored"));
         expect(screen.getByRole("button", { name: "Previous Versions" })).toBeInTheDocument();
+        expect(backend.savesListFileVersions).toHaveBeenCalledTimes(1);
       });
     });
 
@@ -1650,6 +1651,7 @@ describe("SaveManagementCard", () => {
         reportServerReachable(true);
       });
       expect(inactiveCopyBtn).not.toBeDisabled();
+      expect(inactiveCopyBtn).toHaveStyle({ opacity: "1" });
 
       // Idle Activate / Delete buttons have no throbbers, and failed delete info aborts dialog
       const activateBtn = within(speedrunPanel).getByRole("button", { name: "Activate Slot" });
