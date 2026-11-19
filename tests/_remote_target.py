@@ -16,10 +16,13 @@ for the parts the setup depends on:
 - a host it has no :class:`Target` for cannot be resolved, and one that is not
   ``serving`` refuses the connection;
 - the host key is checked against ``UserKnownHostsFile`` under
-  ``HostKeyAlias``: a different recorded key fails as a changed host key, an
+  ``HostKeyAlias``, or without one under the host as OpenSSH names it (``host``,
+  ``[host]:port`` off port 22): a different recorded key fails as a changed host key, an
   unrecorded one is "shown" (logged) and appended — unless the world declines
   it, or ``StrictHostKeyChecking`` is ``yes``, or ``BatchMode`` is ``yes``, which
   leaves ssh no way to ask;
+- a password prompt names ``HostKeyAlias`` where one is set, as OpenSSH's
+  ``userauth_passwd`` does, and the host otherwise;
 - authentication runs in OpenSSH's order: the user's agent keys (none with
   ``IdentitiesOnly=yes``), then each ``IdentityFile`` against the target's real
   ``authorized_keys`` — honouring ``from=`` against the address the target sees
@@ -407,10 +410,16 @@ def _setting(options: dict[str, list[str]], config: dict[str, list[str]], name: 
     return default
 
 
+def _key_name(host: str, resolved: dict[str, list[str]]) -> str:
+    """The name OpenSSH looks a host's key up under without a HostKeyAlias."""
+    port = resolved.get("port", ["22"])[0]
+    return host if port == "22" else f"[{host}]:{port}"
+
+
 def _check_host_key(
     world: World, target: Target, options: dict[str, list[str]], resolved: dict[str, list[str]], host: str
 ) -> bool:
-    alias = _setting(options, resolved, "hostkeyalias", host)
+    alias = _setting(options, resolved, "hostkeyalias", _key_name(host, resolved))
     strict = _setting(options, resolved, "stricthostkeychecking", "ask")
     known_hosts = Path(os.path.expanduser(_setting(options, resolved, "userknownhostsfile", "~/.ssh/known_hosts")))
     lines = known_hosts.read_text(encoding="utf-8").splitlines() if known_hosts.exists() else []
@@ -502,7 +511,7 @@ def _authenticate(
     preferred = _setting(options, config, "preferredauthentications", "publickey,password")
     password_allowed = _setting(options, config, "batchmode", "no") != "yes" and "password" in preferred
     if target.own_access == PASSWORD and password_allowed:
-        _log(world, f"password asked {host}")
+        _log(world, f"password asked {_setting(options, config, 'hostkeyalias', host)}")
         _log(world, f"login {host} own")
         return "own"
     return None

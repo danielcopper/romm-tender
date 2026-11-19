@@ -120,6 +120,15 @@ class Destination:
     proxy_command: str | None
     jump: str | None = None
     """:attr:`proxy_jump` with every hop spelled out (:func:`resolve_jump`), once :func:`with_jump` has run."""
+    key_alias: str | None = None
+    """A HostKeyAlias the user's own SSH config gives the destination."""
+
+    @property
+    def key_name(self) -> str:
+        """The name the user's own ``ssh`` files this host's key under: OpenSSH's ``host``, or ``[host]:port``."""
+        if self.key_alias:
+            return self.key_alias
+        return self.hostname if self.port == "22" else f"[{self.hostname}]:{self.port}"
 
     @property
     def via(self) -> str | None:
@@ -157,6 +166,33 @@ def config_dir() -> pathlib.Path:
 def host_key_alias(name: str) -> str:
     """The name the target *name*'s host key is recorded under, whatever its address."""
     return f"romm-tender-dev.{name}"
+
+
+def _renamed(line: str, names: str) -> str:
+    fields = line.split(maxsplit=1)
+    return f"{names} {fields[1]}" if len(fields) == 2 else line
+
+
+def _names(line: str) -> list[str]:
+    fields = line.split()
+    return fields[0].split(",") if fields and not line.startswith("#") else []
+
+
+def with_key_name(known_hosts: str, alias: str, key_name: str) -> str:
+    """*known_hosts* with each key recorded under *alias* recorded under *key_name* as well.
+
+    The user's own login looks the target's key up under *key_name*, so a key
+    already recorded is not asked about again, and one that changed fails.
+    """
+    lines = known_hosts.splitlines()
+    copies = [_renamed(line, key_name) for line in lines if alias in _names(line)]
+    return "".join(f"{line}\n" for line in dict.fromkeys([*lines, *copies]))
+
+
+def under_alias(known_hosts: str, alias: str, key_name: str) -> str:
+    """*known_hosts* with every key filed under *key_name* filed under *alias* instead, each line once."""
+    lines = [_renamed(line, alias) if key_name in _names(line) else line for line in known_hosts.splitlines()]
+    return "".join(f"{line}\n" for line in dict.fromkeys(lines))
 
 
 def is_recorded(known_hosts: str, alias: str) -> bool:
@@ -211,6 +247,7 @@ def resolve(text: str, port: str | None = None) -> Destination:
         port=_single(answer, _PORT) or "22",
         proxy_jump=_single(answer, _PROXY_JUMP),
         proxy_command=_single(answer, _PROXY_COMMAND),
+        key_alias=_single(answer, "hostkeyalias"),
     )
 
 
@@ -709,7 +746,11 @@ def setup_login(
     The key's login reads *key_config* alone, an entry :func:`config_entry`
     built for the key and *known_hosts*, so nothing of the user's SSH config —
     another IdentityFile among it — takes part. The user's own login reads the
-    user's config, *known_hosts* given beside it.
+    user's config, *known_hosts* given beside it, and no HostKeyAlias of ours:
+    OpenSSH names that alias in its password prompt (``userauth_passwd`` in
+    sshconnect2.c), where the user has to see the host. Its key is looked up
+    under :attr:`Destination.key_name`, and :func:`under_alias` files it under
+    the alias afterwards.
 
     Every login asks about a host key it has not recorded, whatever a config
     says, and opens a connection of its own: one shared through a ControlMaster
@@ -722,12 +763,7 @@ def setup_login(
     options = ["StrictHostKeyChecking=ask", "HashKnownHosts=no", "ControlMaster=no", "ControlPath=none"]
     if key_config is None:
         command = ["ssh", "-T"]
-        options += [
-            f'UserKnownHostsFile="{known_hosts}"',
-            "GlobalKnownHostsFile=/dev/null",
-            f"HostKeyAlias={host_key_alias(name)}",
-            "BatchMode=no",
-        ]
+        options += [f'UserKnownHostsFile="{known_hosts}"', "GlobalKnownHostsFile=/dev/null", "BatchMode=no"]
         target = destination.text
     else:
         command = ["ssh", "-F", str(key_config), "-T"]
@@ -835,7 +871,15 @@ def run_setup(name: str, destination_text: str) -> int:
             key_config.write_text("\n".join(entry) + "\n", encoding="utf-8")
             key_result = log_in(key_config)
             handed_over = hand_over(key_result, name=name, destination=destination)
-        result = log_in(None) if key_result is None or handed_over is not None else key_result
+        if key_result is None or handed_over is not None:
+            alias = host_key_alias(name)
+            trial_known_hosts.write_text(
+                with_key_name(trial_known_hosts.read_text(encoding="utf-8"), alias, destination.key_name),
+                encoding="utf-8",
+            )
+            result = log_in(None)
+        else:
+            result = key_result
 
         installed = installed_from(result)
         if installed is None:
@@ -854,7 +898,9 @@ def run_setup(name: str, destination_text: str) -> int:
         try:
             if new_key is not None:
                 install_key(new_key, directory)
-            trial = trial_known_hosts.read_text(encoding="utf-8")
+            trial = under_alias(
+                trial_known_hosts.read_text(encoding="utf-8"), host_key_alias(name), destination.key_name
+            )
             if trial != recorded:
                 write_atomically(known_hosts, trial)
             current = config_path.read_text(encoding="utf-8") if config_path.exists() else ""

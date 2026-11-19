@@ -417,7 +417,9 @@ the setup reads with `ssh -G` and never writes. `<name>` is yours to choose — 
 3. **It records the target's host key** in the dev loop's own known-hosts file. At first contact `ssh` shows the
    fingerprint and asks, as it always does — even for a machine your own `~/.ssh/known_hosts` already knows, because
    that file is not the one the dev loop's entries name. The record is filed under the target's name
-   (`romm-tender-dev.<name>`) rather than its address, so a target at a new address keeps it.
+   (`romm-tender-dev.<name>`) rather than its address, so a target at a new address keeps it. Your own login sees the
+   target by its address, and so do its prompts — `deck@192.168.1.20's password` — and a key already filed under the
+   name holds for it too.
 4. **It installs on the target**, under `~/.local/lib/romm-tender-dev/`: `current/` (the running tree), `incoming/` (the
    copy the build host sends), and `dispatch.sh` beside them, where no copy reaches it. It rebuilds
    `~/.ssh/authorized_keys` with one line for the key, a comment above it naming the build host and the time, and every

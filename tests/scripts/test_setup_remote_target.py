@@ -169,11 +169,53 @@ class TestTheSetupLogin:
         assert "Running it again changes it." in comment
         assert line == _dispatcher_line(remote, _SEEN_FROM)
         assert log_lines(remote.world) == [
-            "host key shown romm-tender-dev.deck",
+            f"host key shown {_ADDRESS}",
             f"password asked {_ADDRESS}",
             f"login {_ADDRESS} own",
             f"login {_ADDRESS} key",
         ]
+
+    def test_the_users_own_login_names_the_host_not_the_dev_loops_alias(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """OpenSSH names a HostKeyAlias in its password prompt; the user is to see the host there."""
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        assert code == 0, err
+        own_login = ssh_calls(remote.world)[0]
+        assert "hostkeyalias" not in own_login
+        assert f"password asked {_ADDRESS}" in log_lines(remote.world)
+        assert (remote.dev_dir / "known_hosts").read_text(encoding="utf-8") == f"romm-tender-dev.deck {_HOST_KEY}\n"
+
+    @pytest.mark.parametrize("port", ["22", "2222"])
+    def test_a_host_key_recorded_under_the_alias_is_found_by_the_users_own_login_again(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str], port: str
+    ) -> None:
+        remote.world.configs = {"deck": {"user": ["deck"], "hostname": [_ADDRESS], "port": [port]}}
+        remote.setup(capsys, "deck", "deck")
+        remote.target().client_address = "10.8.0.99"
+        logged = len(log_lines(remote.world))
+
+        code, _, err = remote.setup(capsys, "deck", "deck")
+
+        assert code == 0, err
+        assert not any(line.startswith("host key shown") for line in log_lines(remote.world)[logged:])
+        assert f"password asked {_ADDRESS}" in log_lines(remote.world)[logged:]
+        assert (remote.dev_dir / "known_hosts").read_text(encoding="utf-8") == f"romm-tender-dev.deck {_HOST_KEY}\n"
+
+    def test_a_changed_key_at_the_host_fails_the_users_own_login_as_a_changed_key(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Without the dev loop's key, only the user's own login runs: the key recorded under the alias still holds."""
+        remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+        for name in ("id_ed25519", "id_ed25519.pub"):
+            (remote.dev_dir / name).unlink()
+        remote.target().host_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAnotherMachine"
+
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        assert code == 1
+        assert "is not the one recorded for deck" in err
 
     def test_the_line_restricts_the_key_to_the_address_the_target_sees(
         self, remote: Remote, capsys: pytest.CaptureFixture[str]
@@ -282,7 +324,7 @@ class TestTheSetupLogin:
         code, _, err = remote.setup(capsys, "deck", "deck")
 
         assert code == 0, err
-        assert log_lines(remote.world)[0] == "host key shown romm-tender-dev.deck"
+        assert log_lines(remote.world)[0] == f"host key shown {_ADDRESS}"
 
     def test_other_lines_of_authorized_keys_stay_and_an_old_line_of_this_build_host_goes(
         self, remote: Remote, capsys: pytest.CaptureFixture[str]
