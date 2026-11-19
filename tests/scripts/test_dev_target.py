@@ -364,6 +364,7 @@ class TestStartingABackend:
 
         assert process.returncode == 0, err
         assert "Whether it still runs could not be asked" in err
+        assert "systemctl said: Failed to connect to bus: No medium found" in err
         assert "keeps running" not in err
 
     def test_ctrl_c_after_the_backend_ended_says_it_no_longer_runs(self, loop: Loop) -> None:

@@ -352,11 +352,12 @@ def run_streaming(command: list[str], *, from_first_line: bool = False) -> Outco
     return Outcome(process.returncode, "".join(errors), following, interrupted=False, answered=answered)
 
 
-def still_running(target: Target, unit: str) -> bool | None:
-    """Whether *unit* (``backend`` or ``ui-scale``) runs on the target.
+def still_running(target: Target, unit: str) -> tuple[bool | None, str]:
+    """Whether *unit* (``backend`` or ``ui-scale``) runs on the target, and what the asking said on stderr.
 
     ``None`` where that could not be asked: the connection failed, or the
-    target's user manager did not answer (``dev_target.sh running`` ends with 4).
+    target's user manager did not answer (``dev_target.sh running`` ends with 4
+    and says what systemctl said).
     """
     result = subprocess.run(
         [*ssh(target), "--", target.name, DEV_TARGET, "running", target.name, unit],
@@ -365,7 +366,7 @@ def still_running(target: Target, unit: str) -> bool | None:
         text=True,
         check=False,
     )
-    return {0: True, 1: False}.get(result.returncode)
+    return {0: True, 1: False}.get(result.returncode), result.stderr.strip()
 
 
 def after_following(follows: Follows, target: Target) -> str:
@@ -377,9 +378,9 @@ def after_following(follows: Follows, target: Target) -> str:
             return f"tender-dev: stopped following the log on {name}."
         case "ui-scale":
             stopped = "tender-dev: stopped following dev:ui-scale."
-            running = still_running(target, "ui-scale")
+            running, said = still_running(target, "ui-scale")
             if running is None:
-                return stopped + unknown
+                return stopped + unknown + _indented(said)
             if not running:
                 return f"{stopped} dev:ui-scale no longer runs on {name}."
             return (
@@ -388,9 +389,9 @@ def after_following(follows: Follows, target: Target) -> str:
             )
         case "backend":
             stopped = "tender-dev: stopped following the log."
-            running = still_running(target, "backend")
+            running, said = still_running(target, "backend")
             if running is None:
-                return stopped + unknown
+                return stopped + unknown + _indented(said)
             if not running:
                 return (
                     f"{stopped} The backend no longer runs on {name};"
@@ -403,6 +404,10 @@ def after_following(follows: Follows, target: Target) -> str:
             )
         case unknown_follows:
             assert_never(unknown_follows)
+
+
+def _indented(said: str) -> str:
+    return "".join(f"\n  {line.strip()}" for line in said.splitlines() if line.strip())
 
 
 def connection_ended(follows: Follows, target: Target) -> str:

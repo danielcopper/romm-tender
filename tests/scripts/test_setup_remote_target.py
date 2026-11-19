@@ -187,6 +187,23 @@ class TestTheSetupLogin:
         assert f"password asked {_ADDRESS}" in log_lines(remote.world)
         assert (remote.dev_dir / "known_hosts").read_text(encoding="utf-8") == f"romm-tender-dev.deck {_HOST_KEY}\n"
 
+    def test_a_hostkeyalias_of_the_users_own_config_is_where_their_login_finds_the_key(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Their ssh files the key under their alias; the dev loop's file keeps it under romm-tender-dev.<name>."""
+        remote.world.configs = {"deck": {"user": ["deck"], "hostname": [_ADDRESS], "hostkeyalias": ["my-deck"]}}
+        remote.setup(capsys, "deck", "deck")
+        first = log_lines(remote.world)
+        remote.target().client_address = "10.8.0.99"
+        logged = len(log_lines(remote.world))
+
+        code, _, err = remote.setup(capsys, "deck", "deck")
+
+        assert code == 0, err
+        assert first[0] == "host key shown my-deck"
+        assert not any(line.startswith("host key shown") for line in log_lines(remote.world)[logged:])
+        assert (remote.dev_dir / "known_hosts").read_text(encoding="utf-8") == f"romm-tender-dev.deck {_HOST_KEY}\n"
+
     @pytest.mark.parametrize("port", ["22", "2222"])
     def test_a_host_key_recorded_under_the_alias_is_found_by_the_users_own_login_again(
         self, remote: Remote, capsys: pytest.CaptureFixture[str], port: str
