@@ -39,7 +39,8 @@ FOLLOWING = "tender-dev-target: following"
 
 # How the dispatcher opens a refusal (scripts/dev_dispatch.sh, refuse).
 DISPATCHER_REFUSED = "tender-dev: refused: "
-# How the target's scripts open the messages they write themselves on stderr.
+# How dev_target.sh and dev_dispatch.sh open the messages they write on stderr; the other scripts' lines
+# open otherwise and are not read as an answer.
 TARGET_SAYS = "tender-dev"
 
 # The characters the dispatcher lets through in a word for dev_target.sh
