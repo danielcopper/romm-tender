@@ -370,7 +370,7 @@ def still_running(target: Target, unit: str) -> tuple[bool | None, str]:
 
 
 def after_following(follows: Follows, target: Target) -> str:
-    """What to say once the following has ended here: what still runs there, as the target answers."""
+    """What to say once a following has ended by itself: what still runs there, as the target answers."""
     name = target.name
     unknown = f" Whether it still runs could not be asked; `mise run dev:status --target {name}` says what runs there."
     match follows:
@@ -418,11 +418,46 @@ def connection_ended(follows: Follows, target: Target) -> str:
         case "log":
             return f"{ended} the log."
         case "ui-scale":
-            return f"{ended} dev:ui-scale, which may still run there; {status}"
+            return (
+                f"{ended} dev:ui-scale, which may still run there; {status}"
+                f" `mise run dev:ui-scale --stop --target {name}` stops it."
+            )
         case "backend":
-            return f"{ended} the log. The backend may still run there; {status}"
+            return (
+                f"{ended} the log. The backend may still run there; {status}"
+                f" `mise run dev:stop --target {name}` stops it."
+            )
         case unknown:
             assert_never(unknown)
+
+
+def stop_after_ctrl_c(follows: Literal["backend", "ui-scale"], target: Target) -> int:
+    """Ctrl-C on a task that follows what it started: stop that there, as Ctrl-C stops it locally.
+
+    The backend's stop is the dev unit's alone — never the installed service's —
+    and dev:ui-scale's runs its restore and says whether it landed. A second
+    Ctrl-C abandons the stop and says what may still run.
+    """
+    name = target.name
+    if follows == "backend":
+        verb, what, stopper = "stop-dev", "the backend", f"`mise run dev:stop --target {name}` stops it"
+    else:
+        verb, what, stopper = (
+            "ui-scale-stop",
+            "dev:ui-scale",
+            f"`mise run dev:ui-scale --stop --target {name}` stops it",
+        )
+    print(f"tender-dev: stopping {what} on {name} …", file=sys.stderr, flush=True)
+    outcome = run_streaming([*ssh(target), "--", name, DEV_TARGET, verb, name])
+    if outcome.interrupted:
+        print(f"tender-dev: the stop was abandoned; {what} may still run on {name}: {stopper}.", file=sys.stderr)
+        return INTERRUPTED
+    if outcome.returncode == 0:
+        return 0
+    restore_said = follows == "ui-scale" and outcome.returncode == 1 and outcome.answered
+    if not restore_said:
+        print(f"tender-dev: {what} may still run on {name}: {stopper}.", file=sys.stderr)
+    return 1
 
 
 def cut_short(target: Target, why: str, *, reads_only: bool) -> str:
@@ -450,6 +485,8 @@ def on_target(target: Target, words: list[str], *, follows: Follows | None, read
     if outcome.interrupted and not following:
         print(cut_short(target, "interrupted here", reads_only=reads_only), file=sys.stderr)
         return INTERRUPTED
+    if outcome.interrupted and (follows == "backend" or follows == "ui-scale"):
+        return stop_after_ctrl_c(follows, target)
     if follows is not None and (outcome.interrupted or (following and outcome.returncode == 0)):
         print(after_following(follows, target), file=sys.stderr)
         return 0

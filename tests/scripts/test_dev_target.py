@@ -331,9 +331,10 @@ class TestTheCopy:
 
 class TestStartingABackend:
     def test_dev_restarts_steam_starts_the_backend_and_follows_its_log_until_ctrl_c(self, loop: Loop) -> None:
-        """#2846 D2: Ctrl-C ends only the following, says the backend runs on, and names dev:stop."""
+        """#2846 D2: Ctrl-C ends the following and stops the dev backend there, as it ends the backend locally."""
         loop.log.parent.mkdir(parents=True)
         loop.log.write_text("an earlier run's line\n", encoding="utf-8")
+        service = loop.run_unit("romm-tender")
         process = loop.start("dev")
         # dev_steam.sh starts Steam in the background, so its call may land after the backend's — and a Ctrl-C
         # before it lands would end it.
@@ -344,12 +345,46 @@ class TestStartingABackend:
         assert process.returncode == 0, err
         assert "an earlier run's line" not in out
         assert "backend started" in out
-        assert "The backend keeps running on deck" in err
-        assert "`mise run dev:stop --target deck` stops it" in err
+        assert "stopped the dev backend on deck" in out + err
+        assert "keeps running" not in err
         backend = units(loop.world)["romm-tender-dev"]["pid"]
-        assert _alive(backend)
+        assert not _alive(backend)
+        assert "no backend runs on deck" in loop.run("dev:status").stdout
+        assert _alive(service)
+        assert ["--user", "stop", "romm-tender"] not in [call["argv"] for call in commands(loop.world, "systemctl")]
         unit = [call for call in commands(loop.world, "systemd-run") if "--unit=romm-tender-dev" in call["argv"]]
         assert [call["argv"][-2:] for call in unit] == [[sys.executable, str(loop.root / "current/backend/main.py")]]
+
+    def test_ctrl_c_on_dev_backend_restarts_nothing_while_it_stops_the_backend(self, loop: Loop) -> None:
+        process = loop.start("dev:backend")
+        assert process.stdout is not None
+        while "backend started" not in process.stdout.readline():
+            assert process.poll() is None, process.communicate()
+
+        os.killpg(process.pid, signal.SIGINT)
+        out, err = process.communicate(timeout=_TIMEOUT)
+
+        assert process.returncode == 0, err
+        assert "stopped the dev backend on deck" in out + err
+        assert _steam_calls(loop.world) == []
+
+    def test_a_stop_that_cannot_be_sent_after_ctrl_c_says_the_backend_may_run_and_names_dev_stop(
+        self, loop: Loop
+    ) -> None:
+        process = loop.start("dev:backend")
+        assert process.stdout is not None
+        while "backend started" not in process.stdout.readline():
+            assert process.poll() is None, process.communicate()
+        loop.world.targets[_ADDRESS].serving = False
+        loop.save()
+
+        os.killpg(process.pid, signal.SIGINT)
+        _, err = process.communicate(timeout=_TIMEOUT)
+
+        assert process.returncode == 1
+        assert "the backend may still run on deck" in err
+        assert "`mise run dev:stop --target deck` stops it" in err
+        assert _alive(units(loop.world)["romm-tender-dev"]["pid"])
 
     def test_ctrl_c_where_the_target_cannot_say_what_runs_says_so(self, loop: Loop) -> None:
         process = loop.start("dev:backend")
@@ -362,10 +397,10 @@ class TestStartingABackend:
         os.killpg(process.pid, signal.SIGINT)
         _, err = process.communicate(timeout=_TIMEOUT)
 
-        assert process.returncode == 0, err
-        assert "Whether it still runs could not be asked" in err
+        assert process.returncode == 1
+        assert "the backend may still run on deck" in err
         assert "systemctl said: Failed to connect to bus: No medium found" in err
-        assert "keeps running" not in err
+        assert "`mise run dev:stop --target deck` stops it" in err
 
     def test_ctrl_c_after_the_backend_ended_says_it_no_longer_runs(self, loop: Loop) -> None:
         process = loop.start("dev:backend")
@@ -377,10 +412,10 @@ class TestStartingABackend:
         _wait_for(lambda: not _alive(backend))
 
         os.killpg(process.pid, signal.SIGINT)
-        _, err = process.communicate(timeout=_TIMEOUT)
+        out, err = process.communicate(timeout=_TIMEOUT)
 
         assert "keeps running" not in err
-        assert "The backend no longer runs on deck" in err
+        assert "no dev backend runs on deck" in out + err
 
     def test_dev_bpm_restarts_into_big_picture_and_the_choice_is_remembered_on_the_target(self, loop: Loop) -> None:
         loop.world.backend_exits = True
@@ -586,15 +621,40 @@ class TestTheTasksThatStartNothing:
         assert again.returncode == 1
         assert "dev:ui-scale already runs on deck" in again.stderr
 
-    def test_ctrl_c_ends_only_the_following_of_a_dev_ui_scale_that_runs_on(self, loop: Loop) -> None:
+    def test_ctrl_c_on_dev_ui_scale_stops_it_and_says_whether_the_restore_landed(self, loop: Loop) -> None:
+        """#2844 D3: as Ctrl-C does locally."""
+        loop.world.journal = ["Restore done: the scale and the window are as they were before this run."]
         started, scale = loop.start_ui_scale()
+
+        os.killpg(started.pid, signal.SIGINT)
+        out, err = started.communicate(timeout=_TIMEOUT)
+
+        assert started.returncode == 0, err
+        assert "stopped dev:ui-scale on deck" in out + err
+        assert "keeps running" not in err
+        assert not _alive(scale)
+
+    def test_ctrl_c_on_dev_ui_scale_whose_restore_did_not_land_says_so(self, loop: Loop) -> None:
+        loop.world.journal = ["Restore incomplete: see the lines above."]
+        started, _ = loop.start_ui_scale()
 
         os.killpg(started.pid, signal.SIGINT)
         _, err = started.communicate(timeout=_TIMEOUT)
 
-        assert started.returncode == 0, err
-        assert "It keeps running on deck" in err
-        assert "`mise run dev:ui-scale --stop --target deck` restores the scale and the window" in err
+        assert started.returncode == 1
+        assert "the restore on deck did not land" in err
+
+    def test_a_ui_scale_stop_that_cannot_be_sent_after_ctrl_c_names_ui_scale_stop(self, loop: Loop) -> None:
+        started, scale = loop.start_ui_scale()
+        loop.world.targets[_ADDRESS].serving = False
+        loop.save()
+
+        os.killpg(started.pid, signal.SIGINT)
+        _, err = started.communicate(timeout=_TIMEOUT)
+
+        assert started.returncode == 1
+        assert "dev:ui-scale may still run on deck" in err
+        assert "`mise run dev:ui-scale --stop --target deck`" in err
         assert _alive(scale)
 
     def test_ctrl_c_after_dev_ui_scale_ended_says_it_no_longer_runs(self, loop: Loop) -> None:
@@ -603,10 +663,10 @@ class TestTheTasksThatStartNothing:
         _wait_for(lambda: not _alive(scale))
 
         os.killpg(started.pid, signal.SIGINT)
-        _, err = started.communicate(timeout=_TIMEOUT)
+        out, err = started.communicate(timeout=_TIMEOUT)
 
         assert "keeps running" not in err
-        assert "dev:ui-scale no longer runs on deck." in err
+        assert "no dev:ui-scale runs on deck" in out + err
 
     def test_dev_ui_scale_stop_with_none_running_says_so(self, loop: Loop) -> None:
         result = loop.run("dev:ui-scale", "--stop")

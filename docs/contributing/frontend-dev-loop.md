@@ -532,8 +532,8 @@ mise run dev:frontend [display] --target <name> [--surface]   # build here, rest
 mise run dev:bpm-reset [display] --target <name>              # only the restart, there
 mise run dev:desktop-reset [display] --target <name>
 mise run dev:ui-scale [mode] --target <name>                  # emulate Game Mode's metrics there
-mise run dev:ui-scale --stop --target <name>                  # ...and put the scale and the window back
-mise run dev:stop --target <name>                             # stop the backend there
+mise run dev:ui-scale --stop --target <name>                  # stop one whose terminal is gone
+mise run dev:stop --target <name>                             # stop the backend there, or the installed service
 mise run dev:log --target <name> [--follow]                   # its backend.log, once or followed
 mise run dev:status --target <name>                           # who holds the lock there, and whether dev:ui-scale runs
 ```
@@ -563,6 +563,8 @@ Without `--target`, every task does what the sections above describe and nothing
    refused below 3.12. `TENDER_PYTHON` is not read there: a login over `ssh` carries none of the installer's
    environment. The display a task names is one of the target's, and the
    [remembered window](#why-the-window-is-remembered-rather-than-read) is the target's memory file.
+5. **It follows what it started** — the backend's log, or what `dev:ui-scale` prints — until Ctrl-C, which stops it
+   there, as Ctrl-C stops it locally (below).
 
 On the target everything runs in the user manager's environment: the units do by being units, and the steps between take
 the display and the session bus from it, since a login over `ssh` carries neither. It needs nothing beyond `/usr/bin`. A
@@ -573,15 +575,19 @@ task to run here, with `--target <name>`.
 
 **The tasks that start a backend follow its `backend.log` until Ctrl-C.** The log shows from where it stood before the
 start, so a start that fails is seen: when the backend stops, the following ends and shows what the backend wrote to
-stderr since it started — an import that failed before the log was opened among it. Ctrl-C ends only the following,
-since it does not reach the target. The task then asks the target whether the backend still runs, and says so: when it
-does, the message names `dev:stop`.
+stderr since it started — an import that failed before the log was opened among it. **Ctrl-C ends the following and
+stops the dev backend there**, as it ends the backend locally: the task catches it here, since a Ctrl-C does not reach
+the target, and stops the `romm-tender-dev` unit — never the installed service — and says so. A stop that cannot be
+sent, the connection gone, says the backend may still run and names `dev:stop`; a second Ctrl-C abandons the stop and
+says the same. A following that ends without a Ctrl-C here — a connection lost, a terminal closed — leaves the backend
+running, and the task says so and names `dev:stop`.
 
-**`dev:stop` stops whichever holds the lock on the target**: the dev backend, or the installed service. It leaves Steam
-as it is — the next task that starts a backend restarts it, or has it reload its JS context, anyway — and leaves the
-installed service enabled, so it starts again at the next login; the message names `systemctl --user start romm-tender`
-to start it now. A lock held by any other process is named and left alone. When the installed service holds the lock, a
-task that starts a backend refuses with `mise run dev:stop --target <name>` in its message.
+**`dev:stop` stops whichever holds the lock on the target**: the dev backend, or the installed service. It is for a dev
+backend whose following ended without a Ctrl-C, and for the installed service. It leaves Steam as it is — the next task
+that starts a backend restarts it, or has it reload its JS context, anyway — and leaves the installed service enabled,
+so it starts again at the next login; the message names `systemctl --user start romm-tender` to start it now. A lock
+held by any other process is named and left alone. When the installed service holds the lock, a task that starts a
+backend refuses with `mise run dev:stop --target <name>` in its message.
 
 **`dev:frontend --target` needs the dev backend to hold the lock**, not just any backend: on a target the installed
 service is the likely holder, and it loads the panel it was installed with, never the copy. So beside the installed
@@ -590,12 +596,13 @@ any other process it names that process, to be stopped by hand. Without `--targe
 the lock, as above.
 
 **`dev:ui-scale` runs on the target as the user unit `romm-tender-dev-ui-scale`**, and the task follows what it prints
-until the unit stops, which the task then says, or until Ctrl-C, which ends only the following; the task then asks
-whether the unit still runs, and says so. `dev:ui-scale --stop --target <name>` stops the unit, which restores the scale
-and the window as Ctrl-C does locally, and shows what it said doing so. The task waits for the restore's last line,
-which says whether the scale and the window were put back and read back as they were before; a restore that did not
-land, could not be read back, or ends without saying — or a stop that failed — ends the task with 1 and says so.
-`dev:stop` leaves it running. `auto`, the rescue, runs once and ends, as it does locally.
+until the unit stops, which the task then says, or until Ctrl-C, which stops the unit there as Ctrl-C does locally: it
+restores the scale and the window, and the task shows what it said doing so. `dev:ui-scale --stop --target <name>` does
+the same for one whose terminal is gone. Either way the task waits for the restore's last line, which says whether the
+scale and the window were put back and read back as they were before; a restore that did not land, could not be read
+back, or ends without saying — or a stop that failed — ends the task with 1 and says so. A stop that cannot be sent
+after a Ctrl-C names `dev:ui-scale --stop`. `dev:stop` leaves it running. `auto`, the rescue, runs once and ends, as it
+does locally.
 
 **`dev:log`** shows the target's `backend.log` once; with `--follow` it shows its end and follows it, by name, so a log
 rotated away or not written yet is picked up. **`dev:status`** says what holds the lock — the dev backend, the installed

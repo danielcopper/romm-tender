@@ -22,6 +22,9 @@
 #       stop whichever of the dev backend and the installed service holds the
 #       lock, and leave Steam and the service's enablement alone
 #   dev_target.sh status <name>
+#   dev_target.sh stop-dev <name>
+#       stop the dev backend's unit and nothing else: what a Ctrl-C on a task
+#       that follows the backend sends
 #   dev_target.sh running <name> backend|ui-scale
 #       exit 0 while that unit runs, 1 when it does not, 4 when the user
 #       manager could not be asked
@@ -467,6 +470,33 @@ stop() {
     esac
 }
 
+# The dev unit alone, never the installed service: a Ctrl-C here ends what the
+# task started, as it ends the backend locally.
+stop_dev() {
+    dev_state=0
+    unit_state "$DEV_UNIT" || dev_state=$?
+    case "$dev_state" in
+        0) ;;
+        1)
+            printf 'tender-dev: no dev backend runs on %s; nothing was stopped.\n' "$name"
+            return 0
+            ;;
+        *)
+            say "could not ask the user manager on $name (systemctl --user)."
+            systemctl_said "$state_said"
+            exit 4
+            ;;
+    esac
+    stop_status=0
+    stop_said=$(systemctl --user stop "$DEV_UNIT" 2>&1) || stop_status=$?
+    if [ "$stop_status" != 0 ]; then
+        say "stopping $DEV_UNIT.service on $name failed (systemctl ended with $stop_status)."
+        systemctl_said "$stop_said"
+        exit 1
+    fi
+    printf 'tender-dev: stopped the dev backend on %s (%s.service). Steam was left as it is.\n' "$name" "$DEV_UNIT"
+}
+
 status() {
     need_python
     lock_holder
@@ -516,7 +546,7 @@ running() {
 }
 
 usage() {
-    say "usage: dev_target.sh start|frontend|reset|ui-scale|ui-scale-stop|stop|status|running <name> [word ...]"
+    say "usage: dev_target.sh start|frontend|reset|ui-scale|ui-scale-stop|stop|stop-dev|status|running <name> [word ...]"
     exit 2
 }
 
@@ -544,6 +574,7 @@ case "$verb" in
     ui-scale) ui_scale "$@" ;;
     ui-scale-stop) ui_scale_stop ;;
     stop) stop ;;
+    stop-dev) stop_dev ;;
     status) status ;;
     running) running "$@" ;;
     *) usage ;;

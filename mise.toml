@@ -241,7 +241,7 @@ raw = true
 usage = '''
 arg "[mode]" help="'deck' (1.5, = Game Mode metrics), a bare factor (2.0-2.4 = 'Larger text', ~1.28 = docked 1080p, ~1.71 = docked 1440p), 'steam' (adopt the UI Scale set in Steam), or 'auto' (restore automatic scaling and exit)" default="deck"
 complete "mode" run="printf 'deck\\nsteam\\nauto\\n'"
-flag "--stop" help="With --target: stop the dev:ui-scale running there, which restores the scale and the window."
+flag "--stop" help="With --target: stop the dev:ui-scale running there, which restores the scale and the window — for one whose terminal is gone; a Ctrl-C while it runs does the same."
 flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
 '''
 # Holds until Ctrl-C, then restores BOTH halves as they were BEFORE the run: the
@@ -250,8 +250,8 @@ flag "--target <name>" help="Run it on the target setup:remote-target prepared u
 # forced factor to config.vdf, so leaving it forced is not harmless.
 # `exec` so Ctrl-C / SIGTERM reach the script itself (mise is not left in the
 # signal path, which is what makes the restore reliable).
-# With --target it runs on the target as a user unit, which the build host's
-# Ctrl-C does not reach — so it is stopped by --stop.
+# With --target it runs on the target as a user unit: a Ctrl-C while the task
+# follows it stops it there, and --stop stops one whose terminal is gone.
 run = '''
 if [ -n "${usage_target:-}" ]; then
   exec python scripts/dev_target.py --target "$usage_target" ${usage_stop:+--stop} -- dev:ui-scale "$usage_mode"
@@ -392,13 +392,14 @@ bash scripts/dev_steam.sh restart desktop "${usage_display:-}"
 '''
 
 [tasks."dev:stop"]
-description = "Stop the backend on a target — the dev backend or the installed service, whichever holds the lock there — and leave Steam and a dev:ui-scale running (--target only)"
+description = "Stop the backend on a target — the dev backend or the installed service, whichever holds the lock there — and leave Steam and a dev:ui-scale running (--target only): for a backend whose following ended without a Ctrl-C, or the installed service"
 raw = true
 usage = '''
 flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
 '''
-# The tasks with --target start the backend as a user unit on the target, which
-# the build host's Ctrl-C does not reach; locally, Ctrl-C is the stop.
+# The tasks with --target start the backend as a user unit on the target, and a
+# Ctrl-C while they follow it stops it there; this is for a following that ended
+# otherwise (a connection lost, a terminal closed). Locally, Ctrl-C is the stop.
 run = '''
 if [ -z "${usage_target:-}" ]; then
   echo "dev:stop stops the backend on a target: give --target <name>. Here, Ctrl-C stops it." >&2
