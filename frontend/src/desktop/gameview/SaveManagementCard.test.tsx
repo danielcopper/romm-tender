@@ -585,6 +585,7 @@ describe("SaveManagementCard", () => {
       fireEvent.click(within(partialDialog).getByRole("button", { name: "Create Slot" }));
       await waitFor(() => {
         expect(screen.queryByRole("dialog", { name: "New Save Slot" })).not.toBeInTheDocument();
+        expect(toast.showToast).toHaveBeenCalledWith(expect.stringContaining("The slot wasn't created:"));
         expect(toast.showToast).toHaveBeenCalledWith(expect.stringContaining("Already moved there: foo.srm"));
       });
     });
@@ -1126,7 +1127,7 @@ describe("SaveManagementCard", () => {
 
     it("scrolls into view only when romm_tab_switch dispatches tab='saves'", async () => {
       const scrollSpy = vi.fn();
-      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      const { unmount } = render(<SaveManagementCard appId={100} detail={baseDetail} />);
 
       const card = await screen.findByTestId("desktop-saves-card");
       card.scrollIntoView = scrollSpy;
@@ -1140,6 +1141,12 @@ describe("SaveManagementCard", () => {
         globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } }));
       });
       expect(scrollSpy).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+
+      unmount();
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } }));
+      });
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1564,6 +1571,7 @@ describe("SaveManagementCard", () => {
         <SaveManagementCard appId={100} detail={{ ...baseDetail, saveStatus: { ...mockSaveStatus, files: [] } }} />,
       );
       expect(await screen.findByTestId("unconfirmed-slot-banner")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Confirm Slot" })).toBeInTheDocument();
       emptyFilesFirst.unmount();
 
       vi.mocked(backend.getSaveSlots).mockResolvedValueOnce({
@@ -1584,6 +1592,7 @@ describe("SaveManagementCard", () => {
         />,
       );
       expect(await screen.findByTestId("unconfirmed-slot-banner")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Confirm Slot" })).toBeInTheDocument();
       expect(within(screen.getByTestId("desktop-slot-panel-default")).getByText("1 save")).toBeInTheDocument();
       expect(screen.getAllByText("Server newer").length).toBeGreaterThanOrEqual(2);
     });
@@ -1881,9 +1890,21 @@ describe("SaveManagementCard", () => {
           globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
         });
         await waitFor(() => expect(backend.getLocalSaveFiles).toHaveBeenCalledTimes(3));
+
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+        });
+        await waitFor(() => expect(backend.getLocalSaveFiles).toHaveBeenCalledTimes(4));
+
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync" } }));
+        });
+        await waitFor(() => expect(backend.getLocalSaveFiles).toHaveBeenCalledTimes(5));
+        expect(backend.getVersionList).not.toHaveBeenCalled();
+        expect(backend.getSaveSlots).not.toHaveBeenCalled();
         offView.unmount();
 
-        // 2. Refusal subtitle ("save sync unavailable")
+        // 2. Refusal subtitle ("save sync unavailable") and ignores save_sync reloads
         vi.mocked(backend.getSaveSyncAvailability).mockResolvedValueOnce({
           available: false,
           installed: true,
@@ -1894,6 +1915,11 @@ describe("SaveManagementCard", () => {
         });
         const refusedView = render(<SaveManagementCard appId={100} detail={baseDetail} />);
         await waitFor(() => expect(screen.getByText("save sync unavailable")).toBeInTheDocument());
+        const refusedSlotCalls = vi.mocked(backend.getSaveSlots).mock.calls.length;
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+        });
+        expect(backend.getSaveSlots).toHaveBeenCalledTimes(refusedSlotCalls);
         refusedView.unmount();
 
         // 3. LastKnown LOCAL vs SERVER & singular/plural + Unslotted with conflict match & no-server-error empty
@@ -2026,6 +2052,7 @@ describe("SaveManagementCard", () => {
           expect(warnSpy).toHaveBeenCalledWith(
             "DesktopSaveManagementCard: stranded-version check failed for appId 100: Error: versions boom",
           );
+          expect(screen.queryByTestId("desktop-saves-connecting")).not.toBeInTheDocument();
         });
 
         // Reconnect / Sync triggers tracking false -> true banner clear and slot list refresh
@@ -2110,6 +2137,46 @@ describe("SaveManagementCard", () => {
       } finally {
         warnSpy.mockRestore();
       }
+    });
+
+    it("promotes connection state from checking to connected when loadDesktopSlots succeeds, synthesizes missing activeSlot, and keeps connected on non-unreachable refresh failure", async () => {
+      let resolveSlots!: (v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void;
+      vi.mocked(backend.getSaveSlots).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSlots = resolve;
+          }),
+      );
+      setRommConnectionState("checking", "test checking");
+
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      expect(await screen.findByTestId("desktop-saves-connecting")).toBeInTheDocument();
+      expect(getRommConnectionState()).toBe("checking");
+
+      await act(async () => {
+        resolveSlots({
+          success: true,
+          slots: mockSlots,
+          active_slot: "synthesized",
+        });
+      });
+
+      await waitFor(() => {
+        expect(getRommConnectionState()).toBe("connected");
+        expect(screen.getByTestId("desktop-slot-panel-synthesized")).toBeInTheDocument();
+      });
+
+      // Refresh returning non-unreachable failure leaves connection state connected
+      vi.mocked(backend.getSaveSlots).mockResolvedValueOnce({
+        success: false,
+        reason: "not_found",
+        message: "missing",
+      });
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+      });
+      await waitFor(() => expect(backend.getSaveSlots).toHaveBeenCalledTimes(2));
+      expect(getRommConnectionState()).toBe("connected");
     });
   });
 });
