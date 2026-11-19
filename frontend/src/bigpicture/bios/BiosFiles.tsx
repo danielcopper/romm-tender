@@ -15,10 +15,9 @@
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
  */
 
-import { useState, type FC, type ReactNode } from "react";
+import type { FC, ReactNode } from "react";
 import { ConfirmModal, DialogButton, showModal } from "@decky/ui";
-import type { EmulatorTab } from "../../types";
-import { downloadName, isFetchable } from "../../utils/biosFetchable";
+import { downloadName } from "../../utils/biosFetchable";
 import {
   biosDiskMark,
   biosFileDescription,
@@ -31,8 +30,6 @@ import {
 } from "../../utils/biosFileNote";
 import { needWords } from "../../utils/biosGroup";
 import { DOWNLOAD_DAMAGED, IDENTIFYING, biosPlaceLines, libraryRowLines } from "../../utils/biosPlaceWords";
-import { isUnclaimedLibraryRow, selectedTab, tabLabel, tabRows } from "../../utils/biosTabs";
-import { useIdentifications } from "../../utils/firmwareIdentifications";
 import {
   deleteBiosFileConfirmCopy,
   deletePlatformBiosConfirmCopy,
@@ -40,11 +37,14 @@ import {
   type BiosConfirmCopy,
 } from "../../utils/biosConfirmWording";
 import {
+  UNCLAIMED_LIBRARY_HEADING,
   biosBulkOffer,
   biosDownloadButtonState,
   biosRowAction,
+  useBiosTable,
   type BiosActions,
   type BiosAnswerFields,
+  type BiosTableComposition,
   type PlatformKey,
 } from "../../utils/useBiosActions";
 import { Throbber, ThrobberLabel } from "../../shared/Throbber";
@@ -355,7 +355,7 @@ function confirmBiosAction(
  * Render the `DialogButton` for {@link biosRowAction}'s offer, or `null` when
  * the row offers nothing to press (leaving the row itself as the focus stop).
  */
-function rowAction(part: BiosPart, file: BiosTableRow, fetchable: Set<string>, key: string): ReactNode | null {
+function rowAction(part: BiosPart, file: BiosTableRow, fetchable: ReadonlySet<string>, key: string): ReactNode | null {
   const { platform, busyFolder, serverOffline, actions, answer } = part.input;
   const { focus } = part;
   const busy = busyFolder !== null;
@@ -433,15 +433,9 @@ export interface BiosPartInput {
   stop: BiosRowStop;
 }
 
-export interface BiosPart {
+export interface BiosPart extends BiosTableComposition {
   input: BiosPartInput;
   focus: BiosFocus;
-  tabs: EmulatorTab[] | undefined;
-  tab: EmulatorTab | null;
-  select: (chosen: EmulatorTab) => void;
-  shownRows: readonly BiosTableRow[];
-  libraryRows: readonly BiosTableRow[];
-  identifications: ReturnType<typeof useIdentifications>;
 }
 
 /**
@@ -449,42 +443,31 @@ export interface BiosPart {
  * rows, the library's own rows and focus.
  */
 export function useBiosFiles(input: BiosPartInput): BiosPart {
-  const [tabKey, setTabKey] = useState<string | null>(null);
-  const files = input.answer.files ?? [];
-  const tabs = input.answer.emulator_tabs;
-  const tab = selectedTab(tabs, tabKey);
-  const shownRows = tabRows(files, tabs, tab);
+  const table = useBiosTable(input.answer);
   const focus = useBiosFocus(
     input.busyFolder !== null,
-    shownRows.map((file) => tableKey(file.file_name)),
-  );
-  const libraryRows = files.filter(isUnclaimedLibraryRow);
-  const identifications = useIdentifications(
-    libraryRows.flatMap((file) => (file.library?.md5 ? [file.library.md5] : [])),
+    table.shownRows.map((file) => tableKey(file.file_name)),
   );
   return {
     input,
     focus,
-    tabs,
-    tab,
-    select: (chosen) => focus.step(() => setTabKey(chosen.launching ? null : chosen.emulator)),
-    shownRows,
-    libraryRows,
-    identifications,
+    ...table,
   };
 }
 
 /** The selector over every emulator the answer holds an entry for. */
 export const BiosEmulatorSelector: FC<{ part: BiosPart; padding?: string }> = ({ part, padding = "0" }) => (
-  <EmulatorSelector tabs={part.tabs} shown={part.tab} onSelect={part.select} padding={padding} />
+  <EmulatorSelector
+    tabs={part.tabs}
+    shown={part.tab}
+    onSelect={(chosen) => part.focus.step(() => part.selectTab(chosen))}
+    padding={padding}
+  />
 );
 
 /** The shown emulator's files, one row each, with the row's button where it has one. */
 export const BiosShownTable: FC<{ part: BiosPart }> = ({ part }) => {
-  const { input, tab, shownRows, focus } = part;
-  const shownLabel = tab ? tabLabel(tab) : null;
-  const emulator = shownLabel ?? input.answer.active_core_label ?? null;
-  const fetchable = new Set(shownRows.filter(isFetchable).map((f) => f.file_name));
+  const { input, shownRows, focus, shownEmulator, shownFetchable } = part;
   if (shownRows.length === 0) return null;
   return (
     <>
@@ -493,11 +476,11 @@ export const BiosShownTable: FC<{ part: BiosPart }> = ({ part }) => {
         <div key={file.file_name} ref={focus.slot(tableKey(file.file_name))}>
           <BiosFileRow
             file={file}
-            action={rowAction(part, file, fetchable, tableKey(file.file_name))}
-            emulator={emulator}
+            action={rowAction(part, file, shownFetchable, tableKey(file.file_name))}
+            emulator={shownEmulator}
             placeLines={biosPlaceLines(
               file,
-              emulator,
+              shownEmulator,
               input.actions.attemptFor(input.platform.folder, file.local_path, downloadName(file)),
             )}
             stop={input.stop}
@@ -582,14 +565,13 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
   );
 };
 
-/** The library's files no emulator here asks for, each with its own Download. */
+/** The library's files no emulator here asks for, each with its offered row action. */
 export const BiosLibraryTable: FC<{ part: BiosPart }> = ({ part }) => {
-  const { input, libraryRows, identifications } = part;
+  const { input, libraryRows, identifications, libraryFetchable } = part;
   if (libraryRows.length === 0) return null;
-  const libraryFetchable = new Set(libraryRows.filter(isFetchable).map((f) => f.file_name));
   return (
     <>
-      <SubHeading title="In your RomM library, asked for by no emulator here" />
+      <SubHeading title={UNCLAIMED_LIBRARY_HEADING} />
       <BiosTableHeader />
       {libraryRows.map((file) => (
         <div key={file.file_name} ref={part.focus.slot(libraryKey(file.file_name))}>

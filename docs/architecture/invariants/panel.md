@@ -107,8 +107,8 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   the fallback page's actions (`frontend/src/boot/FallbackActions.tsx`) give way to the answer — every button but
   Restart Steam, which asks Steam rather than the backend — with the line that an update's result shows after the reload
   or restart that answer names. In the desktop dev build the desktop client's Play button
-  (`frontend/src/desktop/gameview/PlayButton.tsx`) and Emulation card
-  (`frontend/src/desktop/gameview/EmulationSettings.tsx`) render nothing and issue no backend reads, since neither has
+  (`frontend/src/desktop/gameview/PlayButton.tsx`) renders nothing, and the Emulation card
+  (`frontend/src/desktop/gameview/EmulationSettings.tsx`) renders nothing and issues no backend reads, since neither has
   Resume and every press they offer needs the backend, pinned by the stranded-panel `describe` blocks of
   `frontend/src/desktop/gameview/PlayButton.test.tsx` and `frontend/src/desktop/gameview/EmulationSettings.test.tsx`.
   **Why**: a stranded panel is never admitted again — it holds the token of a backend process that is gone — so every

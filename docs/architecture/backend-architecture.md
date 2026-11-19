@@ -3377,8 +3377,10 @@ the name back out and answers `null` where nothing is left.
 **No unknown withdraws a download, because the two questions are independent.** What the resolver could establish is the
 emulator's DEMAND; what is fetchable is what the RomM library HOLDS, and neither answers the other. A platform nothing
 could be read for still has a library behind it, and fetching from it is the one action that moves the platform along at
-all — so every download the BIOS table offers (`frontend/src/utils/useBiosActions.ts`, drawn on a platform's pane, a
-game's BIOS tab, and the desktop game page's Emulation card) is built off the fetchable set
+all — so every download the BIOS table offers (`useBiosTable` and `biosBulkOffer` in
+`frontend/src/utils/useBiosActions.ts`, drawn on a platform's pane and a game's BIOS tab via
+`frontend/src/bigpicture/bios/BiosFiles.tsx`, and on the desktop game page's Emulation card via
+`frontend/src/desktop/gameview/EmulationSettings.tsx`) is built off the fetchable set
 (`on_server && !downloaded && declared_kind !== "directory"`, plus the offline server) and reads the verdict
 **nowhere**: not `bios_level`, not `required_withheld`. The two further inputs those buttons do read are of the same two
 kinds — each row's `fetch_for_required` is its emulator's own demand and is what `Download required` counts over the

@@ -104,6 +104,7 @@ function makeBiosFile(fileName: string, overrides: Partial<BiosFileStatus> = {})
     description: "",
     wanted: "needed",
     required_by_active: true,
+    used_by_active: true,
     on_server: true,
     satisfied: false,
     declared_kind: "file",
@@ -124,6 +125,8 @@ function makeBiosFile(fileName: string, overrides: Partial<BiosFileStatus> = {})
     place_refusal: null,
     replace_offered: false,
     in_folder: null,
+    delete_name: null,
+    deletable_count: 0,
     ...overrides,
   };
 }
@@ -178,10 +181,23 @@ describe("EmulationSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     forgetIdentifications();
-    vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValue(makeBiosAnswer());
-    vi.mocked(backend.getBiosStatus).mockResolvedValue(makeBiosAnswer());
-    vi.mocked(backend.getEmulatorLaunches).mockResolvedValue([]);
-    vi.mocked(coreOverride.executeGameCoreChange).mockResolvedValue({ status: "applied" });
+    vi.mocked(sharedReads.getBiosStatusShared).mockReset().mockResolvedValue(makeBiosAnswer());
+    vi.mocked(backend.getBiosStatus).mockReset().mockResolvedValue(makeBiosAnswer());
+    vi.mocked(backend.getEmulatorLaunches).mockReset().mockResolvedValue([]);
+    vi.mocked(coreOverride.executeGameCoreChange).mockReset().mockResolvedValue({ status: "applied" });
+    for (const fn of [
+      backend.identifyLibraryFirmware,
+      backend.downloadPlatformFirmwareFile,
+      backend.downloadRequiredFirmware,
+      backend.downloadAllFirmware,
+      backend.deleteBiosFile,
+      backend.deletePlatformBios,
+      backend.replaceBiosFile,
+    ]) {
+      vi.mocked(fn)
+        .mockReset()
+        .mockResolvedValue(undefined as never);
+    }
   });
 
   it("draws nothing and issues no read before the ROM identity is known", async () => {
@@ -202,6 +218,57 @@ describe("EmulationSettings", () => {
       expect(screen.queryByTestId("desktop-emulation-card")).not.toBeInTheDocument();
       expect(sharedReads.getBiosStatusShared).not.toHaveBeenCalled();
       expect(backend.getEmulatorLaunches).not.toHaveBeenCalled();
+    });
+
+    it("stops queued library identifications and skips pending reread reads when stranded mid-flight", async () => {
+      const idDeferred = deferred<Awaited<ReturnType<typeof backend.identifyLibraryFirmware>>>();
+      const dlDeferred = deferred<Awaited<ReturnType<typeof backend.downloadPlatformFirmwareFile>>>();
+      vi.mocked(backend.identifyLibraryFirmware).mockReturnValueOnce(idDeferred.promise);
+      vi.mocked(backend.downloadPlatformFirmwareFile).mockReturnValueOnce(dlDeferred.promise);
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(
+        makeBiosAnswer({
+          files: [
+            makeBiosFile("missing.bin", { library: makeLibMatch("missing.bin", 10, "m0") }),
+            makeBiosFile("lib1.bin", {
+              declared_by: null,
+              wanted: "not_needed",
+              required_by_active: false,
+              library: makeLibMatch("lib1.bin", 11, "m1", null),
+            }),
+            makeBiosFile("lib2.bin", {
+              declared_by: null,
+              wanted: "not_needed",
+              required_by_active: false,
+              library: makeLibMatch("lib2.bin", 12, "m2", null),
+            }),
+          ],
+        }),
+      );
+
+      render(<EmulationSettings appId={APP_ID} detail={makeDetail()} />);
+      const libRow = (await screen.findByText("lib1.bin")).closest("[data-testid='bios-file-row']") as HTMLElement;
+      await within(libRow).findByText(IDENTIFYING);
+      expect(backend.identifyLibraryFirmware).toHaveBeenCalledTimes(1);
+
+      const dlBtn = within(
+        screen.getByText("missing.bin").closest("[data-testid='bios-file-row']") as HTMLElement,
+      ).getByRole("button", { name: "Download" });
+      fireEvent.click(dlBtn);
+
+      act(() => setStrandedAnswer("reloads"));
+      expect(screen.queryByTestId("desktop-emulation-card")).not.toBeInTheDocument();
+
+      vi.mocked(backend.getBiosStatus).mockClear();
+      vi.mocked(gameDetailStore.refreshBiosStatus).mockClear();
+      await act(async () => {
+        idDeferred.resolve({ success: true, known_as: ["PSX 1"] });
+        dlDeferred.resolve({ success: true, message: "ok", downloaded: 1 });
+      });
+      await flushMacrotask();
+
+      expect(backend.identifyLibraryFirmware).toHaveBeenCalledTimes(1);
+      expect(backend.getBiosStatus).not.toHaveBeenCalled();
+      expect(gameDetailStore.refreshBiosStatus).not.toHaveBeenCalled();
     });
   });
 
@@ -511,6 +578,63 @@ describe("EmulationSettings", () => {
       expect(screen.getByText(/Whether SwanStation is installed could not be established/)).toBeInTheDocument();
       expect(screen.getByText(/Your choice 'OldCore' no longer exists/)).toBeInTheDocument();
     });
+
+    it("keeps an uninstalled pinned entry pressable to clear and omits (pinned) when a vanished pick falls back", async () => {
+      const uninstalledPinned = makeEntry("PCSX ReARMed", { reason: "not_installed" });
+      const fallback = makeEntry("DuckStation", { is_default: true });
+      const { rerender } = render(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({
+            emulators: [fallback, uninstalledPinned],
+            activeCoreLabel: "PCSX ReARMed",
+            hasGameOverride: true,
+            vanishedPick: null,
+          })}
+        />,
+      );
+      await screen.findByTestId("bios-table-header");
+
+      const clearBtn = screen.getByRole("button", { name: /PCSX ReARMed \(pinned\) ✓ — emulator not installed/ });
+      expect(clearBtn).toBeEnabled();
+      expect(clearBtn).toHaveAttribute("aria-pressed", "true");
+      fireEvent.click(clearBtn);
+      await waitFor(() =>
+        expect(coreOverride.executeGameCoreChange).toHaveBeenCalledWith(
+          expect.objectContaining({ romId: ROM_ID, coreLabel: null }),
+        ),
+      );
+
+      // When a game override vanished from its source, has_game_override stays true while
+      // activeCoreLabel names the fallback; the fallback must not carry (pinned) and clicking it pins it.
+      vi.mocked(coreOverride.executeGameCoreChange).mockClear();
+      rerender(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({
+            emulators: [fallback, uninstalledPinned],
+            activeCoreLabel: "DuckStation",
+            hasGameOverride: true,
+            vanishedPick: {
+              label: "OldCore",
+              source: "retrodeck",
+              layer: "game",
+              used: "DuckStation",
+              used_layer: "default",
+            },
+          })}
+        />,
+      );
+      const fallbackBtn = screen.getByRole("button", { name: "DuckStation (default) ✓" });
+      expect(fallbackBtn).toHaveAttribute("aria-pressed", "false");
+      expect(screen.queryByRole("button", { name: /\(pinned\)/ })).not.toBeInTheDocument();
+      fireEvent.click(fallbackBtn);
+      await waitFor(() =>
+        expect(coreOverride.executeGameCoreChange).toHaveBeenCalledWith(
+          expect.objectContaining({ romId: ROM_ID, coreLabel: "DuckStation", coreName: "DuckStation" }),
+        ),
+      );
+    });
   });
 
   describe("BIOS read lifecycle, version switches, and events", () => {
@@ -609,7 +733,49 @@ describe("EmulationSettings", () => {
       await act(async () => {
         oldRead.resolve(makeBiosAnswer({ files: [makeBiosFile("version1.bin")] }));
       });
+      expect(screen.getByText("version2.bin")).toBeInTheDocument();
       expect(screen.queryByText("version1.bin")).not.toBeInTheDocument();
+    });
+
+    it("drops a late BIOS answer for a ROM no longer shown", async () => {
+      const read42 = deferred<BiosAnswer>();
+      const read99 = deferred<BiosAnswer>();
+      const read42Reopened = deferred<BiosAnswer>();
+      vi.mocked(sharedReads.getBiosStatusShared).mockReturnValueOnce(read42.promise);
+      vi.mocked(backend.getBiosStatus).mockReturnValueOnce(read99.promise).mockReturnValueOnce(read42Reopened.promise);
+
+      const { rerender } = render(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />);
+      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 99 })} />);
+      await act(async () => {
+        read99.resolve(makeBiosAnswer({ files: [makeBiosFile("v99-current.bin")] }));
+      });
+      expect(await screen.findByText("v99-current.bin")).toBeInTheDocument();
+
+      // Late answer for romId=42 lands while romId=99 is shown -> dropped, not stored for 42 either.
+      await act(async () => {
+        read42.resolve(makeBiosAnswer({ files: [makeBiosFile("v42-stale.bin")] }));
+      });
+      expect(screen.getByText("v99-current.bin")).toBeInTheDocument();
+      expect(screen.queryByTestId("bios-checking")).not.toBeInTheDocument();
+
+      // Switching back to romId=42 starts a fresh Checking state without showing the dropped v42-stale.bin.
+      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />);
+      expect(screen.getByTestId("bios-checking")).toBeInTheDocument();
+      expect(screen.queryByText("v42-stale.bin")).not.toBeInTheDocument();
+
+      // Transitioning romId -> null while a read is pending also drops the late answer.
+      const pending77 = deferred<BiosAnswer>();
+      vi.mocked(backend.getBiosStatus).mockReturnValueOnce(pending77.promise);
+      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 77 })} />);
+      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: null })} />);
+      await act(async () => {
+        pending77.resolve(makeBiosAnswer({ files: [makeBiosFile("dropped-null.bin")] }));
+      });
+      const stillPending = deferred<BiosAnswer>();
+      vi.mocked(backend.getBiosStatus).mockReturnValueOnce(stillPending.promise);
+      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 77 })} />);
+      expect(screen.getByTestId("bios-checking")).toBeInTheDocument();
+      expect(screen.queryByText("dropped-null.bin")).not.toBeInTheDocument();
     });
 
     it("re-reads on matching bios, core_changed, and emulator_sources events, ignoring other platforms", async () => {
@@ -700,12 +866,47 @@ describe("EmulationSettings", () => {
       expect(screen.queryByText("scph5501.bin")).not.toBeInTheDocument();
     });
 
-    it("runs row Download, confirms Replace and row Delete, and confirms bulk Delete downloads", async () => {
+    it("runs row Download and refreshes BIOS status", async () => {
       vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValue({
         success: true,
         message: "Downloaded",
         downloaded: 1,
       });
+      vi.mocked(backend.identifyLibraryFirmware).mockResolvedValue({
+        success: true,
+        known_as: ["PS1 BIOS"],
+      });
+
+      const answer = makeBiosAnswer({
+        emulator_tabs: [{ emulator: "DUCKSTATION", label: "DuckStation", launching: true, requirements_met: false }],
+        files: [
+          makeBiosFile("missing.bin", { library: makeLibMatch("missing.bin", 11, "aaa") }),
+          makeBiosFile("extra.bin", {
+            declared_by: null,
+            wanted: "not_needed",
+            required_by_active: false,
+            library: makeLibMatch("extra.bin", 22, "bbb", null),
+          }),
+        ],
+      });
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(answer);
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(answer);
+
+      render(<EmulationSettings appId={APP_ID} detail={makeDetail()} />);
+      await screen.findByText("In your RomM library, asked for by no emulator here");
+      await waitFor(() => expect(backend.identifyLibraryFirmware).toHaveBeenCalledWith("bbb"));
+      // A single-entry emulator_tabs list hides the tab bar (`tabs.length <= 1`).
+      expect(screen.queryByTestId("bios-emulator-tabs")).not.toBeInTheDocument();
+
+      const missingRow = screen.getByText("missing.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
+      fireEvent.click(within(missingRow).getByRole("button", { name: "Download" }));
+      await waitFor(() =>
+        expect(backend.downloadPlatformFirmwareFile).toHaveBeenCalledWith("psx", "psx", "missing.bin", 11, ROM_ID),
+      );
+      expect(gameDetailStore.refreshBiosStatus).toHaveBeenCalledWith(APP_ID);
+    });
+
+    it("confirms and cancels Replace…, row Delete, and bulk Delete downloads", async () => {
       vi.mocked(backend.replaceBiosFile).mockResolvedValue({
         success: true,
         placed: 1,
@@ -724,17 +925,12 @@ describe("EmulationSettings", () => {
         message: "Deleted platform BIOS",
         deleted_count: 2,
       });
-      vi.mocked(backend.identifyLibraryFirmware).mockResolvedValue({
-        success: true,
-        known_as: ["PS1 BIOS"],
-      });
 
       const answer = makeBiosAnswer({
         deletable_count: 2,
         backup_root: "/backups",
         emulator_tabs: [{ emulator: "DUCKSTATION", label: "DuckStation", launching: true, requirements_met: false }],
         files: [
-          makeBiosFile("missing.bin", { library: makeLibMatch("missing.bin", 11, "aaa") }),
           makeBiosFile("wrong.bin", { on_server: false, downloaded: true, replace_offered: true }),
           makeBiosFile("owned.bin", {
             on_server: false,
@@ -743,29 +939,13 @@ describe("EmulationSettings", () => {
             deletable_count: 1,
             delete_name: "owned.bin",
           }),
-          makeBiosFile("extra.bin", {
-            declared_by: null,
-            wanted: "not_needed",
-            required_by_active: false,
-            library: makeLibMatch("extra.bin", 22, "bbb", null),
-          }),
         ],
       });
       vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(answer);
       vi.mocked(backend.getBiosStatus).mockResolvedValue(answer);
 
-      const { rerender } = render(<EmulationSettings appId={APP_ID} detail={makeDetail()} />);
-      await screen.findByText("In your RomM library, asked for by no emulator here");
-      await waitFor(() => expect(backend.identifyLibraryFirmware).toHaveBeenCalledWith("bbb"));
-      // A single-entry emulator_tabs list hides the tab bar (`tabs.length <= 1`).
-      expect(screen.queryByTestId("bios-emulator-tabs")).not.toBeInTheDocument();
-
-      const missingRow = screen.getByText("missing.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
-      fireEvent.click(within(missingRow).getByRole("button", { name: "Download" }));
-      await waitFor(() =>
-        expect(backend.downloadPlatformFirmwareFile).toHaveBeenCalledWith("psx", "psx", "missing.bin", 11, ROM_ID),
-      );
-      expect(gameDetailStore.refreshBiosStatus).toHaveBeenCalledWith(APP_ID);
+      render(<EmulationSettings appId={APP_ID} detail={makeDetail()} />);
+      await screen.findByText("wrong.bin");
 
       fireEvent.click(screen.getByRole("button", { name: "Replace…" }));
       const replaceDialog = await screen.findByRole("dialog", { name: "Replace wrong.bin?" });
@@ -792,29 +972,7 @@ describe("EmulationSettings", () => {
       await flushMacrotask();
       expect(backend.deleteBiosFile).not.toHaveBeenCalled();
 
-      // Dismissing an open confirmation dialog via null romId, version switch, or stranded panel settles false.
       fireEvent.click(within(ownedRow).getByRole("button", { name: "Delete" }));
-      await screen.findByRole("dialog", { name: "Delete owned.bin?" });
-      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: null })} />);
-      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: ROM_ID })} />);
-      await screen.findByText("owned.bin");
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-
-      const ownedRowBeforeSwitch = screen
-        .getByText("owned.bin")
-        .closest("[data-testid='bios-file-row']") as HTMLElement;
-      fireEvent.click(within(ownedRowBeforeSwitch).getByRole("button", { name: "Delete" }));
-      await screen.findByRole("dialog", { name: "Delete owned.bin?" });
-      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 99 })} />);
-      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: ROM_ID })} />);
-      await screen.findByText("owned.bin");
-      await flushMacrotask();
-      expect(backend.deleteBiosFile).not.toHaveBeenCalled();
-
-      const ownedRowConfirm = screen.getByText("owned.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
-      fireEvent.click(within(ownedRowConfirm).getByRole("button", { name: "Delete" }));
       const deleteDialog = await screen.findByRole("dialog", { name: "Delete owned.bin?" });
       fireEvent.click(within(deleteDialog).getByRole("button", { name: "Delete" }));
       await waitFor(() => expect(backend.deleteBiosFile).toHaveBeenCalledWith("psx", "psx", "owned.bin"));
@@ -835,10 +993,64 @@ describe("EmulationSettings", () => {
       fireEvent.click(within(bulkDeleteDialog).getByRole("button", { name: "Delete" }));
       await waitFor(() => expect(backend.deletePlatformBios).toHaveBeenCalledWith("psx", "psx"));
       expect(await screen.findByTestId("bios-action-status")).toHaveTextContent("Deleted platform BIOS");
+    });
 
-      // Becoming stranded while a confirmation dialog is open unmounts it and settles false.
-      vi.mocked(backend.deletePlatformBios).mockClear();
-      fireEvent.click(screen.getByRole("button", { name: "Delete downloads (2)" }));
+    it("dismisses an open confirmation dialog on null romId, version switch, or stranding while keeping the selected emulator tab across versions", async () => {
+      const makeMultiTabAnswer = (altFileName: string) =>
+        makeBiosAnswer({
+          deletable_count: 1,
+          emulator_tabs: [
+            { emulator: "DUCKSTATION", label: "DuckStation", launching: true, requirements_met: false },
+            {
+              emulator: "mednafen_psx_hw_libretro.so",
+              label: "Beetle PSX HW",
+              launching: false,
+              requirements_met: false,
+              rows: [
+                makeBiosFile(altFileName, {
+                  declared_by: "mednafen_psx_hw_libretro.so",
+                  on_server: false,
+                  downloaded: true,
+                  satisfied: true,
+                  deletable_count: 1,
+                  delete_name: altFileName,
+                }),
+              ],
+            },
+          ],
+          files: [makeBiosFile("scph5501.bin")],
+        });
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(makeMultiTabAnswer("owned.bin"));
+      vi.mocked(backend.getBiosStatus).mockImplementation(async (id) =>
+        makeMultiTabAnswer(id === 99 ? "owned-v99.bin" : "owned.bin"),
+      );
+
+      const { rerender } = render(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />);
+      const tabs = await screen.findByTestId("bios-emulator-tabs");
+      fireEvent.click(within(tabs).getByRole("button", { name: "Beetle PSX HW" }));
+      await screen.findByText("owned.bin");
+
+      // 1. Transitioning romId -> null dismisses an open confirmation dialog without deleting.
+      fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+      await screen.findByRole("dialog", { name: "Delete owned.bin?" });
+      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: null })} />);
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />);
+      await screen.findByText("owned.bin");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      // 2. Switching versions (42 -> 99) dismisses the dialog AND preserves the selected Beetle PSX HW tab.
+      fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+      await screen.findByRole("dialog", { name: "Delete owned.bin?" });
+      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 99 })} />);
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(await screen.findByText("owned-v99.bin")).toBeInTheDocument();
+      const v99Tabs = screen.getByTestId("bios-emulator-tabs");
+      expect(within(v99Tabs).getByRole("button", { name: "Beetle PSX HW" })).toHaveAttribute("aria-pressed", "true");
+      expect(backend.deleteBiosFile).not.toHaveBeenCalled();
+
+      // 3. Becoming stranded while a confirmation dialog is open unmounts it and settles false.
+      fireEvent.click(screen.getByRole("button", { name: "Delete downloads (1)" }));
       await screen.findByRole("dialog", {
         name: "Delete Tender's BIOS downloads for PlayStation?",
       });
@@ -978,84 +1190,77 @@ describe("EmulationSettings", () => {
       }
     });
 
-    it("covers bulk Download required / Download all busy gating, offline withdrawal, redText states, and duplicate-confirm guards", async () => {
+    const makeRichBulkAnswer = (overrides: Partial<BiosStatus> = {}): BiosAnswer =>
+      makeBiosAnswer({
+        deletable_count: 1,
+        server_count: 2,
+        local_count: 0,
+        emulator_tabs: [
+          {
+            emulator: "DUCKSTATION",
+            label: "DuckStation",
+            launching: true,
+            installed: true,
+            requirements_met: false,
+          },
+          {
+            emulator: "mednafen_psx_hw_libretro.so",
+            label: "Beetle PSX HW",
+            launching: false,
+            installed: true,
+            requirements_met: false,
+            rows: [
+              makeBiosFile("scph5502.bin", {
+                declared_by: "mednafen_psx_hw_libretro.so",
+                fetch_for_required: true,
+                library: makeLibMatch("scph5502.bin", 52, "5502"),
+              }),
+              makeBiosFile("replace.bin", {
+                declared_by: "mednafen_psx_hw_libretro.so",
+                on_server: false,
+                downloaded: true,
+                replace_offered: true,
+                local_path: "/bios/sub/replace.bin",
+              }),
+              makeBiosFile("owned.bin", {
+                declared_by: "mednafen_psx_hw_libretro.so",
+                on_server: false,
+                downloaded: true,
+                satisfied: true,
+                deletable_count: 1,
+                delete_name: "owned.bin",
+              }),
+            ],
+          },
+          {
+            emulator: "pcsx_rearmed_libretro.so",
+            label: "PCSX ReARMed",
+            launching: false,
+            installed: false,
+            requirements_met: false,
+            rows: [],
+          },
+        ],
+        files: [
+          makeBiosFile("scph5501.bin", {
+            fetch_for_required: true,
+            library: makeLibMatch("scph5501.bin", 51, "5501"),
+            missing_configured_image: { emulator_label: null, file_name: "scph10000.bin" },
+          }),
+        ],
+        ...overrides,
+      });
+
+    it("draws tab pill colors and configured-image lines, and runs Download required for the shown tab", async () => {
       const launchReqDeferred = deferred<Awaited<ReturnType<typeof backend.downloadRequiredFirmware>>>();
       const reqDeferred = deferred<Awaited<ReturnType<typeof backend.downloadRequiredFirmware>>>();
-      const allDeferred = deferred<Awaited<ReturnType<typeof backend.downloadAllFirmware>>>();
-      const repDeferred = deferred<Awaited<ReturnType<typeof backend.replaceBiosFile>>>();
-      const delRowDeferred = deferred<Awaited<ReturnType<typeof backend.deleteBiosFile>>>();
-      const delAllDeferred = deferred<Awaited<ReturnType<typeof backend.deletePlatformBios>>>();
       vi.mocked(backend.downloadRequiredFirmware)
         .mockReturnValueOnce(launchReqDeferred.promise)
         .mockReturnValueOnce(reqDeferred.promise);
-      vi.mocked(backend.downloadAllFirmware).mockReturnValueOnce(allDeferred.promise);
-      vi.mocked(backend.replaceBiosFile).mockReturnValueOnce(repDeferred.promise);
-      vi.mocked(backend.deleteBiosFile).mockReturnValueOnce(delRowDeferred.promise);
-      vi.mocked(backend.deletePlatformBios).mockReturnValueOnce(delAllDeferred.promise);
 
-      const makeRichAnswer = (overrides: Partial<BiosStatus> = {}) =>
-        makeBiosAnswer({
-          deletable_count: 1,
-          server_count: 2,
-          local_count: 0,
-          emulator_tabs: [
-            {
-              emulator: "DUCKSTATION",
-              label: "DuckStation",
-              launching: true,
-              installed: true,
-              requirements_met: false,
-            },
-            {
-              emulator: "mednafen_psx_hw_libretro.so",
-              label: "Beetle PSX HW",
-              launching: false,
-              installed: true,
-              requirements_met: false,
-              rows: [
-                makeBiosFile("scph5502.bin", {
-                  declared_by: "mednafen_psx_hw_libretro.so",
-                  fetch_for_required: true,
-                  library: makeLibMatch("scph5502.bin", 52, "5502"),
-                }),
-                makeBiosFile("replace.bin", {
-                  declared_by: "mednafen_psx_hw_libretro.so",
-                  on_server: false,
-                  downloaded: true,
-                  replace_offered: true,
-                  local_path: "/bios/sub/replace.bin",
-                }),
-                makeBiosFile("owned.bin", {
-                  declared_by: "mednafen_psx_hw_libretro.so",
-                  on_server: false,
-                  downloaded: true,
-                  satisfied: true,
-                  deletable_count: 1,
-                  delete_name: "owned.bin",
-                }),
-              ],
-            },
-            {
-              emulator: "pcsx_rearmed_libretro.so",
-              label: "PCSX ReARMed",
-              launching: false,
-              installed: false,
-              requirements_met: false,
-              rows: [],
-            },
-          ],
-          files: [
-            makeBiosFile("scph5501.bin", {
-              fetch_for_required: true,
-              library: makeLibMatch("scph5501.bin", 51, "5501"),
-              missing_configured_image: { emulator_label: null, file_name: "scph10000.bin" },
-            }),
-          ],
-          ...overrides,
-        });
-
-      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(makeRichAnswer());
-      vi.mocked(backend.getBiosStatus).mockImplementation(async () => makeRichAnswer());
+      const rich = makeRichBulkAnswer();
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(rich);
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(rich);
 
       render(<EmulationSettings appId={APP_ID} detail={makeDetail()} />);
       const tabs = await screen.findByTestId("bios-emulator-tabs");
@@ -1063,7 +1268,6 @@ describe("EmulationSettings", () => {
       const beetlePill = within(tabs).getByRole("button", { name: "Beetle PSX HW" });
       const rearmedPill = within(tabs).getByRole("button", { name: "PCSX ReARMed" });
 
-      // Tab pill colors and aria-pressed: launching=blue, installed alt=uncolored, uninstalled alt=red.
       expect(duckPill).toHaveAttribute("aria-pressed", "true");
       expect(duckPill.style.backgroundColor).toContain("rgba(79, 163, 255");
       expect(within(duckPill).getByText("DuckStation")).toHaveStyle({ color: "#4fa3ff" });
@@ -1077,11 +1281,9 @@ describe("EmulationSettings", () => {
         ),
       ).toBeInTheDocument();
 
-      // On the launching tab, Download required passes the launching emulator's identity (`"shown"`).
       const duckReqBtn = screen.getByRole("button", { name: "Download required for DuckStation (1)" });
       fireEvent.click(duckReqBtn);
       expect(backend.downloadRequiredFirmware).toHaveBeenCalledWith("psx", "psx", "DUCKSTATION", ROM_ID);
-      // Clicking the spinning Download required button a second time is ignored.
       fireEvent.click(duckReqBtn);
       expect(backend.downloadRequiredFirmware).toHaveBeenCalledTimes(1);
       await act(async () => {
@@ -1089,7 +1291,6 @@ describe("EmulationSettings", () => {
       });
       await waitFor(() => expect(screen.getByRole("button", { name: "Download all" })).toBeEnabled());
 
-      // Switch to Beetle PSX HW tab and run Download required for that shown tab.
       fireEvent.click(beetlePill);
       expect(beetlePill).toHaveAttribute("aria-pressed", "true");
 
@@ -1098,7 +1299,6 @@ describe("EmulationSettings", () => {
       const bulkDelBtn = screen.getByRole("button", { name: "Delete downloads (1)" });
       const rowDelBtn = screen.getByRole("button", { name: "Delete" });
 
-      // Enabled delete buttons render red inner spans.
       expect(bulkDelBtn.querySelector("span")).toHaveStyle({ color: BIOS_MISSING_RED });
       expect(rowDelBtn.querySelector("span")).toHaveStyle({ color: BIOS_MISSING_RED });
 
@@ -1114,7 +1314,6 @@ describe("EmulationSettings", () => {
       expect(allBtn).toBeDisabled();
       expect(bulkDelBtn).toBeDisabled();
       expect(rowDelBtn).toBeDisabled();
-      // While disabled by another busy action, redText renders plain text without the red span.
       expect(bulkDelBtn.querySelector("span")).toBeNull();
       expect(rowDelBtn.querySelector("span")).toBeNull();
 
@@ -1122,14 +1321,26 @@ describe("EmulationSettings", () => {
         reqDeferred.resolve({ success: true, message: "ok", downloaded: 1 });
       });
       await waitFor(() => expect(allBtn).toBeEnabled());
+    });
 
-      // Download all busy state, then failure + server_offline re-read disabling the Failed span before 2s.
-      vi.mocked(backend.getBiosStatus).mockResolvedValueOnce(makeRichAnswer({ server_offline: true }));
+    it("handles Download all busy gating, Failed state, and offline withdrawal", async () => {
+      const allDeferred = deferred<Awaited<ReturnType<typeof backend.downloadAllFirmware>>>();
+      vi.mocked(backend.downloadAllFirmware).mockReturnValueOnce(allDeferred.promise);
+
+      const onlineRich = makeRichBulkAnswer();
+      const offlineRich = makeRichBulkAnswer({ server_offline: true });
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(onlineRich);
+      vi.mocked(backend.getBiosStatus).mockResolvedValueOnce(offlineRich);
+
+      render(<EmulationSettings appId={APP_ID} detail={makeDetail()} />);
+      const reqBtn = await screen.findByRole("button", { name: "Download required for DuckStation (1)" });
+      const allBtn = screen.getByRole("button", { name: "Download all" });
+      const bulkDelBtn = screen.getByRole("button", { name: "Delete downloads (1)" });
+
       fireEvent.click(allBtn);
       expect(backend.downloadAllFirmware).toHaveBeenCalledWith("psx", "psx", ROM_ID);
       expect(allBtn).toBeEnabled();
       expect(within(allBtn).getByTestId("spinner")).toBeInTheDocument();
-      // Clicking the spinning Download all button a second time is ignored.
       fireEvent.click(allBtn);
       expect(backend.downloadAllFirmware).toHaveBeenCalledTimes(1);
       expect(reqBtn).toBeDisabled();
@@ -1140,7 +1351,7 @@ describe("EmulationSettings", () => {
       });
       expect(within(allBtn).getByText("Failed")).toHaveStyle({ color: BIOS_MISSING_RED });
 
-      // Trigger server_offline re-read while the Failed notice is active (< 2000ms) so allBtn shows muted Failed.
+      // server_offline re-read while the Failed notice is active (< 2000ms) renders muted Failed.
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: "psx" } }),
@@ -1151,17 +1362,35 @@ describe("EmulationSettings", () => {
       expect(allBtn.querySelector("span")).toBeNull();
       expect(reqBtn).toBeDisabled();
 
-      // Wait out the 2s Failed notice so busyFolder clears and bulkDelBtn re-enables while offline.
       await act(async () => {
         await new Promise((r) => setTimeout(r, 2050));
       });
       await waitFor(() => expect(bulkDelBtn).toBeEnabled());
       expect(allBtn).toHaveTextContent("Download all");
-      // Row Download is withdrawn while server_offline is true, while Replace… and Delete remain available.
       expect(screen.queryByRole("button", { name: "Download" })).not.toBeInTheDocument();
+    }, 10000);
+
+    it("uses primary tone for Replace… and danger tone for Delete while guarding duplicate clicks", async () => {
+      const repDeferred = deferred<Awaited<ReturnType<typeof backend.replaceBiosFile>>>();
+      const delRowDeferred = deferred<Awaited<ReturnType<typeof backend.deleteBiosFile>>>();
+      const delAllDeferred = deferred<Awaited<ReturnType<typeof backend.deletePlatformBios>>>();
+      vi.mocked(backend.replaceBiosFile).mockReturnValueOnce(repDeferred.promise);
+      vi.mocked(backend.deleteBiosFile).mockReturnValueOnce(delRowDeferred.promise);
+      vi.mocked(backend.deletePlatformBios).mockReturnValueOnce(delAllDeferred.promise);
+
+      const rich = makeRichBulkAnswer();
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(rich);
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(rich);
+
+      render(<EmulationSettings appId={APP_ID} detail={makeDetail()} />);
+      const tabs = await screen.findByTestId("bios-emulator-tabs");
+      fireEvent.click(within(tabs).getByRole("button", { name: "Beetle PSX HW" }));
+
+      const replaceBtn = screen.getByRole("button", { name: "Replace…" });
+      const rowDelBtn = screen.getByRole("button", { name: "Delete" });
+      const bulkDelBtn = screen.getByRole("button", { name: "Delete downloads (1)" });
 
       // Replace… without backup_root names "the backup folder", uses primary tone, and ignores clicks while busy.
-      const replaceBtn = screen.getByRole("button", { name: "Replace…" });
       fireEvent.click(replaceBtn);
       const repDialog = await screen.findByRole("dialog", { name: "Replace replace.bin?" });
       expect(repDialog).toHaveTextContent(
@@ -1174,7 +1403,6 @@ describe("EmulationSettings", () => {
       expect(replaceBtn).toBeEnabled();
       fireEvent.click(replaceBtn);
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      vi.mocked(backend.getBiosStatus).mockResolvedValueOnce(makeRichAnswer({ server_offline: true }));
       await act(async () => {
         repDeferred.resolve({
           success: true,
@@ -1217,19 +1445,9 @@ describe("EmulationSettings", () => {
       await act(async () => {
         delAllDeferred.resolve({ success: true, message: "Deleted all", deleted_count: 1 });
       });
-    }, 10000);
+    });
 
-    it("renders declared subfolders, descriptions, emulator-scoped mismatch wording, identifying spinner, damaged downloads, and console demand headlines", async () => {
-      const idDeferred = deferred<Awaited<ReturnType<typeof backend.identifyLibraryFirmware>>>();
-      vi.mocked(backend.identifyLibraryFirmware)
-        .mockReturnValueOnce(idDeferred.promise)
-        .mockResolvedValueOnce({ success: true, known_as: [] });
-      vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValueOnce({
-        success: false,
-        reason: "bios_download_damaged",
-        message: "Checksum mismatch",
-      });
-
+    it("renders console demand headlines, declared subfolders, descriptions, and emulator-scoped mismatch wording", async () => {
       const answer = makeBiosAnswer(
         {
           active_core_label: null,
@@ -1278,20 +1496,6 @@ describe("EmulationSettings", () => {
               wanted: "not_needed",
               on_server: true,
             }),
-            makeBiosFile("lib_extra.bin", {
-              declared_by: null,
-              wanted: "not_needed",
-              required_by_active: false,
-              used_by_active: false,
-              library: makeLibMatch("lib_extra.bin", 77, "md5-77", null),
-            }),
-            makeBiosFile("lib_queued.bin", {
-              declared_by: null,
-              wanted: "not_needed",
-              required_by_active: false,
-              used_by_active: false,
-              library: makeLibMatch("lib_queued.bin", 78, "md5-78", null),
-            }),
           ],
         },
         "missing",
@@ -1304,19 +1508,15 @@ describe("EmulationSettings", () => {
       );
       await screen.findByText("dc_boot.bin");
 
-      // With active_core_label null and no emulator_tabs, Download required is omitted,
-      // tabs are hidden, and Delete downloads (0) has no red span.
       expect(screen.queryByRole("button", { name: /Download required/ })).not.toBeInTheDocument();
       expect(screen.queryByTestId("bios-emulator-tabs")).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Delete downloads (0)" }).querySelector("span")).toBeNull();
 
-      // Console demand headline names PlayStation and uses BODY_COLOR; falls back when platformName is empty.
       const headlineRow = screen.getByText(/PlayStation does not start without a BIOS image/).parentElement!;
       expect(headlineRow).toHaveStyle({ color: "#dfe3e6" });
       rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ platformName: "" })} />);
       expect(screen.getByText(/This system does not start without a BIOS image/)).toBeInTheDocument();
 
-      // Subfolder span vs root file without span, description line, and clean row with single bios-file-cells child.
       const dcRow = screen.getByText("dc_boot.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
       expect(within(dcRow).getByTestId("bios-file-name").querySelector("span")).toHaveTextContent("dc/");
       expect(within(dcRow).getByTestId("bios-file-name").querySelector("span")).toHaveStyle({ color: "#8f98a0" });
@@ -1326,11 +1526,53 @@ describe("EmulationSettings", () => {
       expect(within(plainRow).getByTestId("bios-file-name").querySelector("span")).toBeNull();
       expect(plainRow.children).toHaveLength(1);
 
-      // Unclaimed library row shows IDENTIFYING with spinner only on the checksum currently
-      // being asked, clears spinner once settled, and shows DOWNLOAD_DAMAGED on checksum failure.
-      const libRow = screen.getByText("lib_extra.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
+      vi.mocked(backend.getBiosStatus).mockResolvedValueOnce({
+        ...answer,
+        bios_status: { ...answer.bios_status!, active_core_label: "Flycast" },
+      });
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: "psx" } }),
+        );
+      });
+      expect(await within(dcRow).findByText("wrong file — not the image Flycast expects")).toBeInTheDocument();
+    });
+
+    it("tracks unclaimed library identifications with a spinner and shows damaged-download notices", async () => {
+      const idDeferred = deferred<Awaited<ReturnType<typeof backend.identifyLibraryFirmware>>>();
+      vi.mocked(backend.identifyLibraryFirmware)
+        .mockReturnValueOnce(idDeferred.promise)
+        .mockResolvedValueOnce({ success: true, known_as: [] });
+      vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValueOnce({
+        success: false,
+        reason: "bios_download_damaged",
+        message: "Checksum mismatch",
+      });
+
+      const answer = makeBiosAnswer({
+        files: [
+          makeBiosFile("lib_extra.bin", {
+            declared_by: null,
+            wanted: "not_needed",
+            required_by_active: false,
+            used_by_active: false,
+            library: makeLibMatch("lib_extra.bin", 77, "md5-77", null),
+          }),
+          makeBiosFile("lib_queued.bin", {
+            declared_by: null,
+            wanted: "not_needed",
+            required_by_active: false,
+            used_by_active: false,
+            library: makeLibMatch("lib_queued.bin", 78, "md5-78", null),
+          }),
+        ],
+      });
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(answer);
+
+      render(<EmulationSettings appId={APP_ID} detail={makeDetail()} />);
+      const libRow = (await screen.findByText("lib_extra.bin")).closest("[data-testid='bios-file-row']") as HTMLElement;
       const queuedRow = screen.getByText("lib_queued.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
-      expect(within(libRow).getByText(IDENTIFYING)).toBeInTheDocument();
+      expect(await within(libRow).findByText(IDENTIFYING)).toBeInTheDocument();
       expect(within(libRow).getByTestId("spinner")).toBeInTheDocument();
       expect(within(queuedRow).getByText(IDENTIFYING)).toBeInTheDocument();
       expect(within(queuedRow).queryByTestId("spinner")).not.toBeInTheDocument();
@@ -1344,23 +1586,11 @@ describe("EmulationSettings", () => {
 
       fireEvent.click(within(libRow).getByRole("button", { name: "Download" }));
       expect(await within(libRow).findByText(DOWNLOAD_DAMAGED)).toBeInTheDocument();
-
-      // When active_core_label names the emulator, contentsWords names it in mismatch wording.
-      vi.mocked(backend.getBiosStatus).mockResolvedValueOnce({
-        ...answer,
-        bios_status: { ...answer.bios_status!, active_core_label: "Flycast" },
-      });
-      await act(async () => {
-        globalThis.dispatchEvent(
-          new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: "psx" } }),
-        );
-      });
-      expect(await within(dcRow).findByText("wrong file — not the image Flycast expects")).toBeInTheDocument();
     });
   });
 
-  describe("edge transitions across picker, stranded recovery, appId switches, and unmount", () => {
-    it("covers platform_system_off wording, picker styles, busy spinner, error clearing, logTags, and launch verdict transitions", async () => {
+  describe("picker and lifecycle edge cases", () => {
+    it("renders platform_system_off reason, picker button styles, and ignores core picks when platformSlug is empty", async () => {
       const { rerender } = render(
         <EmulationSettings
           appId={APP_ID}
@@ -1383,9 +1613,6 @@ describe("EmulationSettings", () => {
         "System psx is switched off in RetroDECK.",
       );
 
-      // Uninstalled game with emulators: no picker spinners, active button is blue and
-      // opacity 1, uninstalled is opacity 0.5, and matching chosen_in_frontend omits
-      // frontendChoiceSentence.
       const beetleChosen = makeEntry("Beetle PSX HW", { is_default: true, chosen_in_frontend: true });
       const missing = makeEntry("PCSX ReARMed", { reason: "not_installed" });
       rerender(
@@ -1406,14 +1633,13 @@ describe("EmulationSettings", () => {
       expect(within(activeBtn).queryByTestId("spinner")).not.toBeInTheDocument();
       expect(screen.queryByText(/chosen in ES-DE; Tender starts/)).not.toBeInTheDocument();
 
-      // Empty platformSlug blocks core picks.
       fireEvent.click(activeBtn);
       await flushMacrotask();
       expect(coreOverride.executeGameCoreChange).not.toHaveBeenCalled();
+    });
 
-      // Enabling installed triggers getEmulatorLaunches; emulator_sources cancels an
-      // in-flight ask on the same romId, installed toggling true -> false -> true clears
-      // stale verdicts back to spinner, and switching romId ignores stale answers.
+    it("cancels stale launch-verdict reads on emulator_sources, resets on installed toggle, and drops late answers on version switch", async () => {
+      const beetleChosen = makeEntry("Beetle PSX HW", { is_default: true, chosen_in_frontend: true });
       const swan = makeEntry("SwanStation");
       const launches42First = deferred<GameLaunch[]>();
       const launches42Second = deferred<GameLaunch[]>();
@@ -1427,7 +1653,7 @@ describe("EmulationSettings", () => {
         .mockReturnValueOnce(launches42Reopened.promise)
         .mockReturnValueOnce(launches99.promise);
 
-      rerender(
+      const { rerender } = render(
         <EmulationSettings
           appId={APP_ID}
           detail={makeDetail({
@@ -1438,9 +1664,9 @@ describe("EmulationSettings", () => {
           })}
         />,
       );
+      await screen.findByTestId("bios-table-header");
       expect(backend.getEmulatorLaunches).toHaveBeenCalledTimes(1);
 
-      // Non-emulator_sources events do not re-ask entry launches.
       act(() => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: "psx" } }),
@@ -1448,7 +1674,6 @@ describe("EmulationSettings", () => {
       });
       expect(backend.getEmulatorLaunches).toHaveBeenCalledTimes(1);
 
-      // emulator_sources cancels launches42First and starts launches42Second on the same romId=42.
       act(() => {
         globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
       });
@@ -1479,7 +1704,6 @@ describe("EmulationSettings", () => {
       });
       expect(screen.getByText("settled42.pbp is not a disc image it opens")).toBeInTheDocument();
 
-      // emulator_sources after verdicts settled clears settled42.pbp back to spinner while re-asking.
       act(() => {
         globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
       });
@@ -1499,7 +1723,6 @@ describe("EmulationSettings", () => {
       });
       expect(screen.getByText("settled42.pbp is not a disc image it opens")).toBeInTheDocument();
 
-      // Toggling installed true -> false -> true on romId=42 clears stale settled42.pbp and shows spinner.
       rerender(
         <EmulationSettings
           appId={APP_ID}
@@ -1560,15 +1783,16 @@ describe("EmulationSettings", () => {
           }),
         ]);
       });
-      const settledBtn = screen.getByRole("button", { name: /Beetle PSX HW/ });
-      const unlistedBtn = screen.getByRole("button", { name: /SwanStation/ });
-      expect(settledBtn.children).toHaveLength(1);
-      expect(unlistedBtn.children).toHaveLength(1);
+      expect(screen.getByRole("button", { name: /Beetle PSX HW/ }).children).toHaveLength(1);
+      expect(screen.getByRole("button", { name: /SwanStation/ }).children).toHaveLength(1);
+    });
 
-      // Overlapping core picks across romId=42 and romId=99 preserve busyRomId=99 when 42 settles first.
+    it("keeps per-ROM busy spinner across overlapping picks, clears prior error, and resets ownCoreDispatch", async () => {
+      const beetleChosen = makeEntry("Beetle PSX HW", { is_default: true, chosen_in_frontend: true });
       const pick42 = deferred<{ status: "applied" }>();
       const pick99 = deferred<{ status: "applied" }>();
-      rerender(
+
+      const { rerender } = render(
         <EmulationSettings
           appId={APP_ID}
           detail={makeDetail({
@@ -1579,6 +1803,8 @@ describe("EmulationSettings", () => {
           })}
         />,
       );
+      await screen.findByTestId("bios-table-header");
+
       vi.mocked(coreOverride.executeGameCoreChange).mockReturnValueOnce(pick42.promise);
       fireEvent.click(screen.getByRole("button", { name: /Beetle PSX HW/ }));
 
@@ -1606,12 +1832,49 @@ describe("EmulationSettings", () => {
         pick99.resolve({ status: "applied" });
       });
       await waitFor(() => expect(within(overlapHeading).queryByTestId("spinner")).not.toBeInTheDocument());
+
+      // A late-settling applied pick from another ROM does not clear the active ROM's displayed error.
+      const pick99Late = deferred<{ status: "applied" }>();
+      vi.mocked(coreOverride.executeGameCoreChange).mockReturnValueOnce(pick99Late.promise);
+      fireEvent.click(screen.getByRole("button", { name: /Beetle PSX HW/ }));
+      rerender(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({
+            installed: false,
+            romId: 100,
+            emulators: [beetleChosen],
+            activeCoreLabel: "Beetle PSX HW",
+          })}
+        />,
+      );
+      vi.mocked(coreOverride.executeGameCoreChange).mockResolvedValueOnce({
+        status: "failed",
+        message: "Error on 100",
+      });
+      fireEvent.click(screen.getByRole("button", { name: /Beetle PSX HW/ }));
+      expect(await screen.findByTestId("desktop-core-error")).toHaveTextContent("Error on 100");
+      await act(async () => {
+        pick99Late.resolve({ status: "applied" });
+      });
+      await flushMacrotask();
+      expect(screen.getByTestId("desktop-core-error")).toHaveTextContent("Error on 100");
+
+      rerender(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({
+            installed: false,
+            romId: 99,
+            emulators: [beetleChosen],
+            activeCoreLabel: "Beetle PSX HW",
+          })}
+        />,
+      );
       vi.mocked(coreOverride.executeGameCoreChange).mockClear();
 
-      // Core pick failure -> subsequent core pick busy spinner, duplicate-click guard,
-      // logTag, call order, error clearing, and ownCoreDispatch reset.
       vi.mocked(coreOverride.executeGameCoreChange).mockResolvedValueOnce({ status: "failed", message: "First error" });
-      fireEvent.click(settledBtn);
+      fireEvent.click(screen.getByRole("button", { name: /Beetle PSX HW/ }));
       expect(await screen.findByTestId("desktop-core-error")).toHaveTextContent("First error");
       expect(coreOverride.executeGameCoreChange).toHaveBeenLastCalledWith(
         expect.objectContaining({ logTag: "desktopChangeGameCore" }),
@@ -1666,7 +1929,6 @@ describe("EmulationSettings", () => {
         await waitFor(() => expect(within(headingRow).queryByTestId("spinner")).not.toBeInTheDocument());
         expect(callOrder).toEqual(["rereadBios", "announceCore"]);
 
-        // External core_changed right after own core change still re-reads (ownCoreDispatch reset in finally).
         vi.mocked(backend.getBiosStatus).mockClear();
         act(() => {
           globalThis.dispatchEvent(
@@ -1679,22 +1941,21 @@ describe("EmulationSettings", () => {
       }
     });
 
-    it("logs failed BIOS reads, ignores events while romId is null or stranded, re-reads on appId change, and detaches tab listener on unmount", async () => {
+    it("logs failed BIOS reads via logWarn and hides empty group and unclaimed sections", async () => {
       const logSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
-      vi.mocked(sharedReads.getBiosStatusShared).mockRejectedValueOnce(new Error("read boom"));
+      try {
+        vi.mocked(sharedReads.getBiosStatusShared).mockRejectedValueOnce(new Error("read boom"));
 
-      const { unmount: unmountFailed } = render(
-        <EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />,
-      );
-      await screen.findByTestId("bios-read-failed");
-      expect(logSpy).toHaveBeenCalledWith(
-        "DesktopEmulationSettings: BIOS read for appId=12345 romId=42 failed: Error: read boom",
-      );
-      unmountFailed();
+        const { unmount } = render(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />);
+        await screen.findByTestId("bios-read-failed");
+        expect(logSpy).toHaveBeenCalledWith(
+          "DesktopEmulationSettings: BIOS read for appId=12345 romId=42 failed: Error: read boom",
+        );
+        unmount();
+      } finally {
+        logSpy.mockRestore();
+      }
 
-      // Fresh mount: initial shared read runs, optional sections stay hidden when empty,
-      // romm_tab_switch scrolls the card into view, and stranding unmounts the card cleanly.
-      vi.clearAllMocks();
       const emptyOkAnswer = makeBiosAnswer(
         {
           emulator_tabs: [{ emulator: "DUCKSTATION", label: "DuckStation", launching: true, requirements_met: true }],
@@ -1702,23 +1963,24 @@ describe("EmulationSettings", () => {
         },
         "ok",
       );
-      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValue(emptyOkAnswer);
-      vi.mocked(backend.getBiosStatus).mockResolvedValue(emptyOkAnswer);
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(emptyOkAnswer);
 
-      const { rerender, unmount } = render(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />);
-      const card = await screen.findByTestId("desktop-emulation-card");
-      expect(sharedReads.getBiosStatusShared).toHaveBeenCalledWith(42);
+      render(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />);
+      await screen.findByTestId("desktop-emulation-card");
       expect(screen.queryByTestId("bios-group")).not.toBeInTheDocument();
       expect(screen.queryByTestId("bios-unclaimed-header")).not.toBeInTheDocument();
+    });
 
-      const scrollSpy = vi.fn();
-      card.scrollIntoView = scrollSpy;
-      act(() => {
-        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+    it("re-reads via getBiosStatusShared on appId change and skips mid-action reread when romId becomes null", async () => {
+      const okAnswer = makeBiosAnswer({
+        files: [makeBiosFile("dl-on-app2.bin", { library: makeLibMatch("dl-on-app2.bin", 91, "91") })],
       });
-      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValue(okAnswer);
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(okAnswer);
 
-      // Switching appId with the same romId=42 issues getBiosStatusShared again and updates handleActionReread.
+      const { rerender } = render(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />);
+      await screen.findByText("dl-on-app2.bin");
+
       vi.mocked(sharedReads.getBiosStatusShared).mockClear();
       vi.mocked(gameDetailStore.refreshBiosStatus).mockClear();
       rerender(<EmulationSettings appId={APP_ID + 1} detail={makeDetail({ romId: 42 })} />);
@@ -1732,7 +1994,6 @@ describe("EmulationSettings", () => {
       fireEvent.click(screen.getByRole("button", { name: "Download" }));
       await waitFor(() => expect(gameDetailStore.refreshBiosStatus).toHaveBeenCalledWith(APP_ID + 1));
 
-      // Transitioning romId -> null mid-action makes rereadCurrentBios return early without calling getBiosStatus.
       fireEvent.click(screen.getByRole("button", { name: "Download" }));
       vi.mocked(backend.getBiosStatus).mockClear();
       rerender(<EmulationSettings appId={APP_ID + 1} detail={makeDetail({ romId: null })} />);
@@ -1741,45 +2002,65 @@ describe("EmulationSettings", () => {
       });
       await flushMacrotask();
       expect(backend.getBiosStatus).not.toHaveBeenCalled();
+    });
 
-      // Transitioning romId -> null while a shared read is pending drops the answer and ignores events.
-      const pendingNewApp = deferred<BiosAnswer>();
-      vi.mocked(sharedReads.getBiosStatusShared).mockReturnValueOnce(pendingNewApp.promise);
-      rerender(<EmulationSettings appId={APP_ID + 2} detail={makeDetail({ romId: 77 })} />);
-      expect(sharedReads.getBiosStatusShared).toHaveBeenCalledWith(77);
+    it("ignores events when romId is null and detaches tab and data listeners when unmounted or stranded", async () => {
+      const { rerender, unmount } = render(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />);
+      const card = await screen.findByTestId("desktop-emulation-card");
+      const scrollSpy = vi.fn();
+      card.scrollIntoView = scrollSpy;
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+      });
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
 
-      rerender(<EmulationSettings appId={APP_ID + 2} detail={makeDetail({ romId: null })} />);
+      vi.mocked(backend.getBiosStatus).mockClear();
+      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: null })} />);
       act(() => {
         globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
       });
       await flushMacrotask();
       expect(backend.getBiosStatus).not.toHaveBeenCalled();
+      unmount();
 
-      await act(async () => {
-        pendingNewApp.resolve(makeBiosAnswer({ files: [makeBiosFile("dropped-null.bin")] }));
-      });
-      const stillPending = deferred<BiosAnswer>();
-      vi.mocked(backend.getBiosStatus).mockReturnValueOnce(stillPending.promise);
-      rerender(<EmulationSettings appId={APP_ID + 2} detail={makeDetail({ romId: 77 })} />);
-      expect(screen.getByTestId("bios-checking")).toBeInTheDocument();
-      expect(screen.queryByText("dropped-null.bin")).not.toBeInTheDocument();
-
-      // Unmounting an unstranded card detaches its tab listener; mounted transition into
-      // stranded (`false -> true`) detaches tab & data listeners, and mounting while already
-      // stranded never attaches a tab listener.
+      // Unmounting an unstranded card detaches both listeners; stranding an active
+      // card (`false -> true`) and mounting while already stranded leave neither attached.
       const tabSpy = vi.fn(() => "bios");
       const makeSpyTabEvent = () =>
         new CustomEvent("romm_tab_switch", { detail: Object.defineProperty({}, "tab", { get: tabSpy }) });
 
-      const secondMount = render(<EmulationSettings appId={APP_ID + 3} detail={makeDetail({ romId: 42 })} />);
-      await within(secondMount.container).findByTestId("desktop-emulation-card");
-      secondMount.unmount();
+      const unmountedView = render(<EmulationSettings appId={APP_ID + 3} detail={makeDetail({ romId: 42 })} />);
+      await within(unmountedView.container).findByTestId("desktop-emulation-card");
+      unmountedView.unmount();
 
+      vi.mocked(backend.getBiosStatus).mockClear();
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
+        globalThis.dispatchEvent(makeSpyTabEvent());
+      });
+      await flushMacrotask();
+      expect(tabSpy).not.toHaveBeenCalled();
+      expect(backend.getBiosStatus).not.toHaveBeenCalled();
+
+      const strandedMidRun = render(<EmulationSettings appId={APP_ID + 4} detail={makeDetail({ romId: 42 })} />);
+      await within(strandedMidRun.container).findByTestId("desktop-emulation-card");
+      tabSpy.mockClear();
       scrollSpy.mockClear();
       vi.mocked(sharedReads.getBiosStatusShared).mockClear();
       vi.mocked(backend.getBiosStatus).mockClear();
       act(() => setStrandedAnswer("reloads"));
-      const strandedMount = render(<EmulationSettings appId={APP_ID + 4} detail={makeDetail({ romId: 42 })} />);
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
+        globalThis.dispatchEvent(makeSpyTabEvent());
+      });
+      await flushMacrotask();
+      expect(tabSpy).not.toHaveBeenCalled();
+      expect(scrollSpy).not.toHaveBeenCalled();
+      expect(sharedReads.getBiosStatusShared).not.toHaveBeenCalled();
+      expect(backend.getBiosStatus).not.toHaveBeenCalled();
+      strandedMidRun.unmount();
+
+      const strandedMount = render(<EmulationSettings appId={APP_ID + 5} detail={makeDetail({ romId: 42 })} />);
       act(() => {
         globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
         globalThis.dispatchEvent(makeSpyTabEvent());
@@ -1790,7 +2071,6 @@ describe("EmulationSettings", () => {
       expect(sharedReads.getBiosStatusShared).not.toHaveBeenCalled();
       expect(backend.getBiosStatus).not.toHaveBeenCalled();
       strandedMount.unmount();
-      unmount();
     });
   });
 });

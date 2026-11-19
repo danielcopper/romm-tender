@@ -28,7 +28,7 @@ import { Focusable } from "@decky/ui";
 import type { BiosLevel, BiosStatus, CoreInfo } from "../types";
 import { GROUP_TONE_COLOR, biosColorForLevel } from "../utils/biosColor";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
-import { biosAnswerStale, biosReadState } from "../utils/biosReadState";
+import { biosAnswerStale, biosReadState, GAME_BIOS_READ_FAILED, GAME_BIOS_REREAD_FAILED } from "../utils/biosReadState";
 import { storeOnlySentence } from "../utils/biosPlaceWords";
 import { biosSummary, groupBlocks } from "../utils/biosSummary";
 import { emulatorDataReasonSentence } from "../utils/emulatorSourceWording";
@@ -229,7 +229,7 @@ function unansweredTab(failed: boolean): ReactElement {
     biosTitle(),
     failed ? (
       <div key="bios-read-failed" className="romm-panel-value" data-testid="bios-read-failed">
-        Could not read the BIOS state. Open the game page again to retry.
+        {GAME_BIOS_READ_FAILED}
       </div>
     ) : (
       <div key="bios-checking" className="romm-panel-value">
@@ -323,7 +323,7 @@ export const BiosTab: FC<BiosTabProps> = ({
         data-testid="bios-stale"
         style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "12px", marginBottom: "4px" }}
       >
-        Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry.
+        {GAME_BIOS_REREAD_FAILED}
       </div>,
     );
   }

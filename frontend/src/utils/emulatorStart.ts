@@ -48,6 +48,19 @@ export function gameCanPickAnother(emulators: readonly EmulatorOption[], activeL
   return emulators.length > 1 && canPickAnother(emulators, activeLabel);
 }
 
+/** Which surface asks how a start refusal points at choosing another emulator. */
+export type PickSurface = "menu" | "page";
+
+/** Whether and how a start refusal on *surface* points at choosing another emulator ({@link PickPointer}). */
+export function pickPointerFor(
+  surface: PickSurface,
+  emulators: readonly EmulatorOption[],
+  activeLabel: string | null,
+): PickPointer {
+  if (surface === "page") return canPickAnother(emulators, activeLabel) ? "page" : false;
+  return gameCanPickAnother(emulators, activeLabel);
+}
+
 /**
  * Why the resolver gives no complete command for an entry, as the words after "Tender cannot start <entry> yet: ".
  * A reason this map does not hold reads as the command not being read.
@@ -102,7 +115,7 @@ export function startVerdictLine(verdict: StartCommandVerdict | null): { tenderS
 }
 
 /** Why the resolver gives no complete command for `entry`, as one sentence (#2221 D2). */
-export function commandRefusalSentence(reason: string, entry: string): string {
+function commandRefusalSentence(reason: string, entry: string): string {
   if (reason === "entry_unknown") return `Your choice '${entry}' no longer exists in its emulator source.`;
   return `Tender cannot start ${entry} yet: ${commandRefusedBecause(reason)}.`;
 }

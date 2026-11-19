@@ -832,14 +832,14 @@ describe("PlayButtonBadges", () => {
     const controls = container.querySelectorAll(
       "[tabindex],[role='button'],button,a[href],input,select,textarea,summary",
     );
-    expect(Array.from(controls)).toEqual([container.querySelector(".tender-desktop-bios")]);
-    for (const badge of container.querySelectorAll(".tender-desktop-badge-item:not(.tender-desktop-bios)")) {
-      for (const element of [badge, ...badge.querySelectorAll("*")]) {
-        const propsKey = Object.keys(element).find((key) => key.startsWith("__reactProps"));
-        expect(propsKey).toBeDefined();
-        const props = (element as unknown as Record<string, object>)[propsKey!]!;
-        expect(Object.keys(props).filter((name) => /^on[A-Z]/.test(name))).toEqual([]);
-      }
+    const biosButton = container.querySelector(".tender-desktop-bios");
+    expect(Array.from(controls)).toEqual([biosButton]);
+    for (const element of container.querySelectorAll("*")) {
+      if (element === biosButton) continue;
+      const propsKey = Object.keys(element).find((key) => key.startsWith("__reactProps"));
+      expect(propsKey).toBeDefined();
+      const props = (element as unknown as Record<string, object>)[propsKey!]!;
+      expect(Object.keys(props).filter((name) => /^on[A-Z]/.test(name))).toEqual([]);
     }
   });
 });

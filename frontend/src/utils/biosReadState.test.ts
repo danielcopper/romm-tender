@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
 import type { BiosAnswer } from "../api/backend";
-import { biosAnswerStale, biosFieldsFromCache, biosReadState } from "./biosReadState";
+import {
+  GAME_BIOS_READ_FAILED,
+  GAME_BIOS_REREAD_FAILED,
+  biosAnswerStale,
+  biosFieldsFromCache,
+  biosReadState,
+} from "./biosReadState";
+
+describe("game BIOS read-failure wording", () => {
+  it("pins the shared initial-read and stale-reread messages", () => {
+    expect(GAME_BIOS_READ_FAILED).toBe("Could not read the BIOS state. Open the game page again to retry.");
+    expect(GAME_BIOS_REREAD_FAILED).toBe(
+      "Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry.",
+    );
+  });
+});
 
 describe("biosReadState", () => {
   it("is pending while nothing is held and no read has failed", () => {

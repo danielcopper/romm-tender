@@ -29,6 +29,13 @@ import type { BiosLevel, BiosStatus } from "../types";
 
 export type BiosReadState = "pending" | "answered" | "failed";
 
+/** Shown on a game's BIOS view when its initial BIOS read fails with no answer held behind it. */
+export const GAME_BIOS_READ_FAILED = "Could not read the BIOS state. Open the game page again to retry.";
+
+/** Shown on a game's BIOS view above a held answer when a later BIOS re-read fails. */
+export const GAME_BIOS_REREAD_FAILED =
+  "Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry.";
+
 /** The state of a page holding an answer or not (`held`) whose latest read did or did not fail (`failed`). */
 export function biosReadState(held: boolean, failed: boolean): BiosReadState {
   if (held) return "answered";

@@ -45,7 +45,7 @@ export async function executeGameCoreChange({
     // Leaving the page cancels the change; the pin may already be persisted, so
     // that teardown is not a "failed to set core" the user must see.
     if (isPruneLeaseCancellation(e, admission)) {
-      detach(debugLog(`${logTag}: continuation was cancelled: ${e}`));
+      logWarn(`${logTag}: continuation was cancelled: ${e}`);
       return { status: "cancelled" };
     }
     logWarn(`${logTag}: unexpected error: ${e}`);

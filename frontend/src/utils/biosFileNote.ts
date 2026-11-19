@@ -680,14 +680,12 @@ export function declaredFolder(file: BiosTableRow): string | null {
 /**
  * The legend entries explaining the marks present across *files*.
  *
- * Filters to states present in *files* so absent states take no space, and
- * emits a single `⊘` entry at the end when any row carries
- * {@link biosLibraryMark} (since `⊘` means the same beside every verdict).
- * Ordered with unmet required and unmet group-option marks (`✗`) first, then
- * met required and met group-option marks (`✓`), unestablished marks (`?`),
- * met non-required (`✓` `"here, not required"`), unmet non-required (`✗`), and
- * `⊘` last — keeping each group-option mark beside the ordinary mark that
- * shares its colour.
+ * Shows only the states *files* hold so absent states take no space, and emits
+ * one `⊘` entry when any row carries {@link biosLibraryMark} since it means the
+ * same beside every verdict. Ordered by what the reader cares about — what is
+ * wrong first, then the second channel — with each group-option state beside
+ * the ordinary mark it shares a colour with, so a reader meeting two red `✗`
+ * lines sees what separates them.
  */
 export function biosLegendEntries(files: readonly BiosTableRow[]): BiosLegendEntry[] {
   const marks = files.map((file) => biosDiskMark(file));

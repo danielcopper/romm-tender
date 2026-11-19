@@ -28,8 +28,9 @@ import type { RommDataChangedDetail } from "../types/events";
 import { downloadName, fetchedAsRequired, isFetchable } from "./biosFetchable";
 import type { BiosTableRow } from "./biosFileNote";
 import { backupLines, keptLines, placedSentence, type RowAttempt } from "./biosPlaceWords";
-import { tabLabel } from "./biosTabs";
+import { isUnclaimedLibraryRow, selectedTab, tabLabel, tabRows } from "./biosTabs";
 import { detach } from "./detach";
+import { useIdentifications, type Identifications } from "./firmwareIdentifications";
 
 /** How long the pressed button says `Failed` before everything returns. Two of
  *  the two-to-three seconds the device pass asked for: long enough to read one
@@ -189,6 +190,58 @@ interface BiosBulkOffer {
   canDownloadRequired: boolean;
   canDownloadAll: boolean;
   deletable: number;
+}
+
+/** Heading for the RomM library BIOS section showing files no emulator here declares. */
+export const UNCLAIMED_LIBRARY_HEADING = "In your RomM library, asked for by no emulator here";
+
+/** UI-free BIOS table state and derived rows shared by Big Picture and desktop BIOS surfaces. */
+export interface BiosTableComposition {
+  tabs: EmulatorTab[] | undefined;
+  tab: EmulatorTab | null;
+  selectTab: (chosen: EmulatorTab) => void;
+  shownRows: readonly BiosTableRow[];
+  libraryRows: readonly BiosTableRow[];
+  identifications: Identifications;
+  shownEmulator: string | null;
+  shownFetchable: ReadonlySet<string>;
+  libraryFetchable: ReadonlySet<string>;
+}
+
+/**
+ * Compose the BIOS table state from a BIOS answer: selected emulator tab (kept
+ * across answer refreshes and version switches while that emulator stays
+ * listed), shown and unclaimed library rows, firmware identifications, shown
+ * emulator label, and fetchable sets.
+ */
+export function useBiosTable(answer: BiosAnswerFields): BiosTableComposition {
+  const [tabKey, setTabKey] = useState<string | null>(null);
+  const files = answer.files ?? [];
+  const tabs = answer.emulator_tabs;
+  const tab = selectedTab(tabs, tabKey);
+  const selectTab = useCallback((chosen: EmulatorTab) => {
+    setTabKey(chosen.launching ? null : chosen.emulator);
+  }, []);
+  const shownRows = tabRows(files, tabs, tab);
+  const libraryRows = files.filter(isUnclaimedLibraryRow);
+  const identifications = useIdentifications(
+    libraryRows.flatMap((file) => (file.library?.md5 ? [file.library.md5] : [])),
+  );
+  const shownLabel = tab ? tabLabel(tab) : null;
+  const shownEmulator = shownLabel ?? answer.active_core_label ?? null;
+  const shownFetchable = new Set(shownRows.filter(isFetchable).map((f) => f.file_name));
+  const libraryFetchable = new Set(libraryRows.filter(isFetchable).map((f) => f.file_name));
+  return {
+    tabs,
+    tab,
+    selectTab,
+    shownRows,
+    libraryRows,
+    identifications,
+    shownEmulator,
+    shownFetchable,
+    libraryFetchable,
+  };
 }
 
 /**

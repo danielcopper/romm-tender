@@ -39,7 +39,7 @@ import { readGameRunning } from "../../utils/sessionManager";
 import { hasAnySaveConflict } from "../../utils/saveStatus";
 import { usePruneLeaseOwner } from "../../utils/pruneLease";
 import { useStrandedAnswer } from "../../utils/strandedPanelStore";
-import { canPickAnother, startRefusal } from "../../utils/emulatorStart";
+import { pickPointerFor, startRefusal } from "../../utils/emulatorStart";
 import { detach } from "../../utils/detach";
 import type {
   DownloadCompleteEvent,
@@ -388,7 +388,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
 
   const startCheckFailed = detail.startCheck?.state === "failed";
   const startChecking = detail.startCheck?.state === "checking";
-  const canPick = canPickAnother(detail.emulators, detail.activeCoreLabel) ? "page" : false;
+  const canPick = pickPointerFor("page", detail.emulators, detail.activeCoreLabel);
   const playRefusal =
     startCheckFailed || detail.emulatorStart === null
       ? null

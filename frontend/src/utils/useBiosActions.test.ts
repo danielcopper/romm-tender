@@ -3,11 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import * as backend from "../api/backend";
 import type { BiosFileStatus, EmulatorTab } from "../types";
 import {
+  UNCLAIMED_LIBRARY_HEADING,
   announceBiosChange,
   biosBulkOffer,
   biosDownloadButtonState,
   biosRowAction,
   useBiosActions,
+  useBiosTable,
 } from "./useBiosActions";
 
 function libMatch(fileName: string, firmwareId: number, md5: string): NonNullable<BiosFileStatus["library"]> {
@@ -33,6 +35,7 @@ function row(overrides: Partial<BiosFileStatus> = {}): BiosFileStatus {
     downloaded: false,
     on_server: true,
     satisfied: false,
+    used_by_active: true,
     declared_kind: "file",
     caveats: [],
     images: [],
@@ -51,6 +54,8 @@ function row(overrides: Partial<BiosFileStatus> = {}): BiosFileStatus {
     place_refusal: null,
     replace_offered: false,
     in_folder: null,
+    delete_name: null,
+    deletable_count: 0,
     ...overrides,
   };
 }
@@ -209,6 +214,30 @@ describe("biosBulkOffer", () => {
 
 describe("useBiosActions hook", () => {
   const platform = { slug: "psx", folder: "psx" };
+  const mountActions = (
+    romId: number | null = 42,
+    reread: () => Promise<void> = vi.fn().mockResolvedValue(undefined),
+    setStatus = vi.fn(),
+  ) => ({
+    setStatus,
+    ...renderHook(() =>
+      useBiosActions({
+        setBusy: vi.fn(),
+        setStatus,
+        reread,
+        announce: vi.fn(),
+        romId,
+      }),
+    ),
+  });
+  const triggerAllActions = (actions: ReturnType<typeof useBiosActions>) => {
+    act(() => {
+      actions.downloadOne(platform, "scph5501.bin", 19);
+      actions.replaceBios(platform, "/bios/scph5501.bin");
+      actions.deleteBios(platform);
+      actions.deleteBiosFile(platform, "scph5501.bin");
+    });
+  };
 
   it("records link failures before awaiting reread and clears downloadPending once finished", async () => {
     vi.spyOn(backend, "downloadPlatformFirmwareFile").mockResolvedValueOnce({
@@ -226,15 +255,7 @@ describe("useBiosActions hook", () => {
         }),
     );
 
-    const { result } = renderHook(() =>
-      useBiosActions({
-        setBusy: vi.fn(),
-        setStatus: vi.fn(),
-        reread,
-        announce: vi.fn(),
-        romId: 42,
-      }),
-    );
+    const { result } = mountActions(42, reread);
 
     act(() => {
       result.current.downloadOne(platform, "scph5501.bin", 19);
@@ -261,23 +282,8 @@ describe("useBiosActions hook", () => {
     vi.spyOn(backend, "deletePlatformBios").mockRejectedValueOnce(new Error("busy"));
     vi.spyOn(backend, "deleteBiosFile").mockRejectedValueOnce(new Error("locked"));
 
-    const setStatus = vi.fn();
-    const { result, unmount } = renderHook(() =>
-      useBiosActions({
-        setBusy: vi.fn(),
-        setStatus,
-        reread: vi.fn().mockResolvedValue(undefined),
-        announce: vi.fn(),
-        romId: 42,
-      }),
-    );
-
-    act(() => {
-      result.current.downloadOne(platform, "scph5501.bin", 19);
-      result.current.replaceBios(platform, "/bios/scph5501.bin");
-      result.current.deleteBios(platform);
-      result.current.deleteBiosFile(platform, "scph5501.bin");
-    });
+    const { result, unmount } = mountActions(42);
+    triggerAllActions(result.current);
 
     await waitFor(() => expect(logSpy).toHaveBeenCalledTimes(4));
     expect(logSpy).toHaveBeenCalledWith(
@@ -318,22 +324,8 @@ describe("useBiosActions hook", () => {
       message: "record missing",
     });
 
-    const { result, unmount } = renderHook(() =>
-      useBiosActions({
-        setBusy: vi.fn(),
-        setStatus: vi.fn(),
-        reread: vi.fn().mockResolvedValue(undefined),
-        announce: vi.fn(),
-        romId: null,
-      }),
-    );
-
-    act(() => {
-      result.current.downloadOne(platform, "scph5501.bin", 19);
-      result.current.replaceBios(platform, "/bios/scph5501.bin");
-      result.current.deleteBios(platform);
-      result.current.deleteBiosFile(platform, "scph5501.bin");
-    });
+    const { result, unmount } = mountActions(null);
+    triggerAllActions(result.current);
 
     await waitFor(() => expect(logSpy).toHaveBeenCalledTimes(4));
     expect(logSpy).toHaveBeenCalledWith(
@@ -379,16 +371,7 @@ describe("useBiosActions hook", () => {
       ],
     });
 
-    const setStatus = vi.fn();
-    const { result, unmount } = renderHook(() =>
-      useBiosActions({
-        setBusy: vi.fn(),
-        setStatus,
-        reread: vi.fn().mockResolvedValue(undefined),
-        announce: vi.fn(),
-        romId: 42,
-      }),
-    );
+    const { result, setStatus, unmount } = mountActions(42);
 
     act(() => {
       result.current.downloadOne(platform, "scph5501.bin", 19);
@@ -443,5 +426,89 @@ describe("announceBiosChange", () => {
     } finally {
       globalThis.removeEventListener("romm_data_changed", listener);
     }
+  });
+});
+
+describe("useBiosTable", () => {
+  it("shares the unclaimed heading, keeps selected emulator tab across answers, and derives rows, identifications, and fetchable sets", async () => {
+    expect(UNCLAIMED_LIBRARY_HEADING).toBe("In your RomM library, asked for by no emulator here");
+    vi.spyOn(backend, "identifyLibraryFirmware").mockResolvedValueOnce({
+      success: true,
+      known_as: ["PS1 Extra"],
+    });
+    const launchingTab: EmulatorTab = {
+      emulator: "DUCKSTATION",
+      label: "DuckStation",
+      launching: true,
+      requirements_met: false,
+    };
+    const altRow = row({
+      file_name: "scph5502.bin",
+      declared_by: "mednafen_psx_hw_libretro.so",
+      library: libMatch("scph5502.bin", 2, "md5-alt"),
+    });
+    const altTab: EmulatorTab = {
+      emulator: "mednafen_psx_hw_libretro.so",
+      label: "Beetle PSX HW",
+      launching: false,
+      requirements_met: false,
+      rows: [altRow],
+    };
+    const launchingRow = row({
+      file_name: "scph5501.bin",
+      declared_by: "DUCKSTATION",
+      library: libMatch("scph5501.bin", 1, "md5-launch"),
+    });
+    const libraryRow = row({
+      file_name: "extra.bin",
+      declared_by: null,
+      wanted: "not_needed",
+      required_by_active: false,
+      library: libMatch("extra.bin", 3, "md5-lib"),
+    });
+
+    const initialAnswer = {
+      active_core_label: "DuckStation",
+      emulator_tabs: [launchingTab, altTab],
+      files: [launchingRow, libraryRow],
+    };
+
+    const { result, rerender, unmount } = renderHook(({ answer }) => useBiosTable(answer), {
+      initialProps: { answer: initialAnswer },
+    });
+
+    await waitFor(() => expect(result.current.identifications.answers["md5-lib"]).toEqual(["PS1 Extra"]));
+    expect(result.current.tab).toBe(launchingTab);
+    expect(result.current.shownEmulator).toBe("DuckStation");
+    expect(result.current.shownRows.map((r) => r.file_name)).toEqual(["scph5501.bin"]);
+    expect(result.current.libraryRows.map((r) => r.file_name)).toEqual(["extra.bin"]);
+    expect(Array.from(result.current.shownFetchable)).toEqual(["scph5501.bin"]);
+    expect(Array.from(result.current.libraryFetchable)).toEqual(["extra.bin"]);
+
+    act(() => {
+      result.current.selectTab(altTab);
+    });
+    expect(result.current.tab).toBe(altTab);
+    expect(result.current.shownEmulator).toBe("Beetle PSX HW");
+    expect(result.current.shownRows.map((r) => r.file_name)).toEqual(["scph5502.bin"]);
+    expect(Array.from(result.current.shownFetchable)).toEqual(["scph5502.bin"]);
+
+    // Rerendering with a fresh answer (e.g. after a version switch) preserves the selected non-launching tab.
+    rerender({
+      answer: {
+        active_core_label: "DuckStation",
+        emulator_tabs: [{ ...launchingTab }, { ...altTab }],
+        files: [launchingRow, libraryRow],
+      },
+    });
+    expect(result.current.tab?.emulator).toBe("mednafen_psx_hw_libretro.so");
+    expect(result.current.shownEmulator).toBe("Beetle PSX HW");
+
+    // Selecting the launching tab returns tabKey to null.
+    act(() => {
+      result.current.selectTab(launchingTab);
+    });
+    expect(result.current.tab?.launching).toBe(true);
+    unmount();
   });
 });

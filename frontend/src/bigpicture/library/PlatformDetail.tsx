@@ -312,6 +312,7 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // where a file can be put instead. A verdict the resolver left open over an
   // emulator it DID read is not this. It decides one extra LINE only — what the
   // pane offers to fetch is a separate question with a separate input, in
+  // `utils/useBiosActions.ts` (`useBiosTable`, `biosBulkOffer`), drawn by
   // `bios/BiosFiles.tsx`.
   const nothingEstablished = firmware.bios_level === "unknown" && firmware.emulator_read === false;
   // Why a download here lands in Tender's firmware store and is linked nowhere.

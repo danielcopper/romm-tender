@@ -17,19 +17,22 @@ column holds two cards: About (`frontend/src/desktop/gameview/AboutDetails.tsx`)
 `frontend/src/utils/artworkThumbs.ts`), the title, the summary and the rows `metadataRows` answers, under the labels and
 in the order Big Picture's GAME INFO tab shows them — and Emulation
 (`frontend/src/desktop/gameview/EmulationSettings.tsx`), which draws the game's emulator / core picker (the answering
-source's entries with `(default)` and `(pinned)` markers, where clicking an unpinned entry pins it and clicking the
+source's entries with `(default)` and `(pinned)` markers, where clicking an unpinned entry pins it — keeping a pinned
+entry pressable to clear even when not choosable, and omitting `(pinned)` while `vanishedPick` is set — and clicking the
 pinned entry again clears the pin, alongside installation notes, per-entry launch verdicts for an installed game, and
 active, vanished and frontend-choice notes, writing through `executeGameCoreChange`,
 `frontend/src/utils/coreOverride.ts`) above its BIOS / firmware readiness, group blocks, emulator tab pills, file table,
 unclaimed RomM library rows (`useIdentifications`, `frontend/src/utils/firmwareIdentifications.ts`), legend
-(`frontend/src/utils/biosFileNote.ts`) and BIOS download, replace and delete presses (`useBiosActions`,
-`frontend/src/utils/useBiosActions.ts`), whose confirmation copy (`frontend/src/utils/biosConfirmWording.ts`) opens in
-the desktop dialogs (`frontend/src/desktop/gameview/dialogs/DesktopBiosConfirmDialog.tsx`). Emulation reads BIOS status
-through `frontend/src/api/sharedReads.ts`, tags its held answer by `romId` and orders reads for the same ROM by
-sequence, and draws nothing before the ROM identity is known or on a stranded panel
-([invariant register](invariants/panel.md)). While `GameView` is drawn it holds two things `RomMPlaySection` holds on
-Big Picture's game page: the connection heartbeat, and the automatic artwork, whose apply in flight it cancels on
-leaving.
+(`frontend/src/utils/biosFileNote.ts`) and BIOS download, replace and delete presses (`useBiosTable` and
+`useBiosActions`, `frontend/src/utils/useBiosActions.ts`, keeping the selected emulator tab across version switches),
+whose confirmation copy (`frontend/src/utils/biosConfirmWording.ts`) opens in the desktop dialogs
+(`frontend/src/desktop/gameview/dialogs/DesktopBiosConfirmDialog.tsx`). Emulation issues its first BIOS read for an
+`appId` through `frontend/src/api/sharedReads.ts`, calls `getBiosStatus` (`frontend/src/api/backend.ts`) directly on
+later reads (version switches, newly recorded `platformFolder`, core picks, action re-reads, and matching external
+`romm_data_changed` events), tags its held answer by `romId` and orders reads for the same ROM by sequence, and draws
+nothing before the ROM identity is known or on a stranded panel ([invariant register](invariants/panel.md)). While
+`GameView` is drawn it holds two things `RomMPlaySection` holds on Big Picture's game page: the connection heartbeat,
+and the automatic artwork, whose apply in flight it cancels on leaving.
 
 While a RetroDECK migration is pending it draws the migration card
 (`frontend/src/desktop/gameview/MigrationBlockedCard.tsx`) in place of the columns, as the game page's section does on

@@ -39,14 +39,8 @@ export const AMBER = "#d4a72c";
 /** AMBER at 15% opacity (`0x26` of `0xff`): the fill behind a warning card's
  *  amber edge. */
 export const AMBER_WASH = `${AMBER}26`;
-/** The BIOS table's verdict mark for a file that is present and that the core
- *  the platform launches with does not require — green's quieter twin, so
- *  "there and needed" and "there and spare" are one glance apart rather than one
- *  reading apart. */
-export const PALE_GREEN = "#8fc46b";
-/** The BIOS table's library mark, deliberately outside the verdict palette's
- *  traffic light: what it reports — that the RomM library does not hold the
- *  file — is not a degree of wrongness. */
+/** The drive-name tag on a storage tile (`bigpicture/settings/TenderFolderSection.tsx`),
+ *  outside the green default-place tag and the blue in-use badge and outline. */
 export const VIOLET = "#a48fd4";
 
 /**

@@ -5,10 +5,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FC, type ReactNode } from "react";
 import { getBiosStatus, logWarn, type BiosAnswer } from "../../api/backend";
+import { strandedAnswer } from "../../api/host";
 import { getBiosStatusShared } from "../../api/sharedReads";
 import type { AnsweringSource, BiosLevel, BiosStatus, EmulatorOption, EmulatorTab } from "../../types";
-import { BIOS_MISSING_RED, GROUP_TONE_COLOR, biosColorForLevel } from "../../utils/biosColor";
-import { downloadName, isFetchable } from "../../utils/biosFetchable";
+import { BIOS_MISSING_RED, BIOS_MUTED_GREY, GROUP_TONE_COLOR, biosColorForLevel } from "../../utils/biosColor";
+import { downloadName } from "../../utils/biosFetchable";
 import {
   biosDiskMark,
   biosFileDescription,
@@ -28,9 +29,15 @@ import {
   libraryRowLines,
   storeOnlySentence,
 } from "../../utils/biosPlaceWords";
-import { biosAnswerStale, biosFieldsFromCache, biosReadState } from "../../utils/biosReadState";
+import {
+  GAME_BIOS_READ_FAILED,
+  GAME_BIOS_REREAD_FAILED,
+  biosAnswerStale,
+  biosFieldsFromCache,
+  biosReadState,
+} from "../../utils/biosReadState";
 import { biosSummary, groupBlocks } from "../../utils/biosSummary";
-import { isUnclaimedLibraryRow, selectedTab, tabLabel, tabRows } from "../../utils/biosTabs";
+import { tabLabel } from "../../utils/biosTabs";
 import { announceCoreChange, coreChangeIsFor } from "../../utils/coreChangedEvent";
 import { executeGameCoreChange } from "../../utils/coreOverride";
 import { detach } from "../../utils/detach";
@@ -51,7 +58,7 @@ import {
   isChoosable,
   vanishedPickSentence,
 } from "../../utils/emulatorStart";
-import { useIdentifications } from "../../utils/firmwareIdentifications";
+import type { Identifications } from "../../utils/firmwareIdentifications";
 import { refreshBiosStatus, refreshCoreAndBios, type GameDetailState } from "../../utils/gameDetailStore";
 import { usePruneLeaseOwner } from "../../utils/pruneLease";
 import { useStrandedAnswer } from "../../utils/strandedPanelStore";
@@ -62,13 +69,16 @@ import {
   type BiosConfirmCopy,
 } from "../../utils/biosConfirmWording";
 import {
+  UNCLAIMED_LIBRARY_HEADING,
   announceBiosChange,
   biosBulkOffer,
   biosDownloadButtonState,
   biosRowAction,
   useBiosActions,
+  useBiosTable,
   type BiosActions,
   type BiosStatusLine,
+  type BiosTableComposition,
   type PlatformKey,
 } from "../../utils/useBiosActions";
 import { desktopBiosConfirmDialog } from "./dialogs/desktopDialogs";
@@ -91,7 +101,6 @@ interface RomBiosState {
 }
 
 const ACCENT_BLUE = "#4fa3ff";
-const MUTED_COLOR = "#8f98a0";
 const BODY_COLOR = "#dfe3e6";
 
 const HEADING_STYLE: CSSProperties = {
@@ -121,13 +130,13 @@ const SUBHEADING_STYLE: CSSProperties = {
   fontWeight: 700,
   letterSpacing: "0.06em",
   textTransform: "uppercase",
-  color: MUTED_COLOR,
+  color: BIOS_MUTED_GREY,
 };
 
 const MUTED_TEXT_STYLE: CSSProperties = {
   fontSize: "12px",
   lineHeight: 1.45,
-  color: MUTED_COLOR,
+  color: BIOS_MUTED_GREY,
 };
 
 const ERROR_TEXT_STYLE: CSSProperties = {
@@ -184,7 +193,7 @@ const TABLE_HEADER_STYLE: CSSProperties = {
   padding: "6px 8px",
   fontSize: "11px",
   fontWeight: 600,
-  color: MUTED_COLOR,
+  color: BIOS_MUTED_GREY,
   borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
 };
 
@@ -366,7 +375,7 @@ function useDesktopBiosReadState(
   }, []);
 
   const current =
-    romId !== null && biosState !== null && biosState.romId === romId
+    !isStranded && romId !== null && biosState !== null && biosState.romId === romId
       ? biosState
       : { biosStatus: null, biosLevel: null, readFailed: false };
 
@@ -420,7 +429,7 @@ const DesktopEmulatorEntryButton: FC<{
   onToggle: () => void;
 }> = ({ entry, isActive, isPinned, isPlatformCore, coreBusy, launchesAsked, settledLaunches, source, onToggle }) => {
   const choosable = isChoosable(entry);
-  const disabled = !choosable || coreBusy;
+  const disabled = (!choosable && !isPinned) || coreBusy;
   const labelText = `${emulatorEntryLabel(entry, isActive, isPlatformCore, isPinned)}${emulatorEntryNotes(entry)}`;
   let launchRow: ReactNode = null;
   if (launchesAsked) {
@@ -521,7 +530,7 @@ const DesktopEmulatorSection: FC<{
         rereadBios,
         announceOwnCore,
       });
-      setFailure(errorMessage === null ? null : { romId: targetRomId, message: errorMessage });
+      if (errorMessage !== null) setFailure({ romId: targetRomId, message: errorMessage });
     } finally {
       setBusyRomId((prev) => (prev === targetRomId ? null : prev));
     }
@@ -543,7 +552,8 @@ const DesktopEmulatorSection: FC<{
         <div style={MUTED_TEXT_STYLE}>{CORE_SWITCH_COMPAT_NOTE}</div>
         <div style={PICKER_LIST_STYLE}>
           {detail.emulators.map((entry) => {
-            const isPinned = detail.hasGameOverride && detail.activeCoreLabel === entry.label;
+            const isPinned =
+              detail.hasGameOverride && detail.vanishedPick === null && detail.activeCoreLabel === entry.label;
             return (
               <DesktopEmulatorEntryButton
                 key={entry.label}
@@ -618,9 +628,7 @@ function renderDownloadFace(
 ): ReactNode {
   const showing = biosDownloadButtonState(busyFolder, platformFolder, actions, id);
   if (showing === "spinner") return <SvgThrobber style={INLINE_SPINNER_STYLE} />;
-  if (showing === "failed") {
-    return disabled ? "Failed" : <span style={{ color: BIOS_MISSING_RED }}>Failed</span>;
-  }
+  if (showing === "failed") return redText("Failed", disabled);
   return label;
 }
 
@@ -735,7 +743,7 @@ const DesktopBiosFileRow: FC<{
             data-testid="bios-file-name"
             style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
           >
-            {folder && <span style={{ color: MUTED_COLOR }}>{folder}</span>}
+            {folder && <span style={{ color: BIOS_MUTED_GREY }}>{folder}</span>}
             {file.file_name}
           </div>
           <div data-testid="bios-need" style={MUTED_TEXT_STYLE}>
@@ -938,6 +946,8 @@ const DesktopBiosBulkSection: FC<{
 
 const DesktopBiosUnclaimedSection: FC<{
   libraryRows: readonly BiosTableRow[];
+  libraryFetchable: ReadonlySet<string>;
+  identifications: Identifications;
   activeCoreLabel: string | null;
   serverOffline: boolean;
   platform: PlatformKey;
@@ -949,6 +959,8 @@ const DesktopBiosUnclaimedSection: FC<{
   confirmBios: ConfirmBiosFn;
 }> = ({
   libraryRows,
+  libraryFetchable,
+  identifications,
   activeCoreLabel,
   serverOffline,
   platform,
@@ -959,17 +971,11 @@ const DesktopBiosUnclaimedSection: FC<{
   actions,
   confirmBios,
 }) => {
-  const identifications = useIdentifications(
-    libraryRows.flatMap((file) => (file.library?.md5 ? [file.library.md5] : [])),
-  );
   if (libraryRows.length === 0) return null;
-  const libraryFetchable = new Set(libraryRows.filter(isFetchable).map((f) => f.file_name));
 
   return (
     <div style={{ marginTop: "14px" }}>
-      <div style={{ ...SUBHEADING_STYLE, marginBottom: "6px" }}>
-        In your RomM library, asked for by no emulator here
-      </div>
+      <div style={{ ...SUBHEADING_STYLE, marginBottom: "6px" }}>{UNCLAIMED_LIBRARY_HEADING}</div>
       <div data-testid="bios-unclaimed-header" style={TABLE_HEADER_STYLE}>
         <span>File</span>
         <span>On disk</span>
@@ -1018,20 +1024,39 @@ const DesktopBiosAnsweredContent: FC<{
   readFailed: boolean;
   detail: GameDetailState;
   platform: PlatformKey;
+  table: BiosTableComposition;
   busyFolder: string | null;
   pressedKey: string | null;
   onPressKey: (key: string) => void;
   actions: BiosActions;
   status: BiosStatusLine | null;
-}> = ({ biosStatus, biosLevel, readFailed, detail, platform, busyFolder, pressedKey, onPressKey, actions, status }) => {
+}> = ({
+  biosStatus,
+  biosLevel,
+  readFailed,
+  detail,
+  platform,
+  table,
+  busyFolder,
+  pressedKey,
+  onPressKey,
+  actions,
+  status,
+}) => {
   const dialogHost = useDialogHost();
   const confirmBios = desktopBiosConfirmDialog(dialogHost.ask);
-  const [tabKey, setTabKey] = useState<string | null>(null);
   const files = biosStatus.files ?? [];
-  const tabs = biosStatus.emulator_tabs;
-  const activeTab = selectedTab(tabs, tabKey);
-  const shownRows = tabRows(files, tabs, activeTab);
-  const libraryRows = files.filter(isUnclaimedLibraryRow);
+  const {
+    tabs,
+    tab: activeTab,
+    selectTab,
+    shownRows,
+    libraryRows,
+    identifications,
+    shownEmulator,
+    shownFetchable,
+    libraryFetchable,
+  } = table;
 
   const platformNameOrNull = detail.platformName || null;
   const platformDisplayName = detail.platformName || detail.platformSlug || "this platform";
@@ -1041,17 +1066,14 @@ const DesktopBiosAnsweredContent: FC<{
     biosStatus.active_core_label ?? detail.activeCoreLabel,
     platformDisplayName,
   );
-  const shownLabel = activeTab ? tabLabel(activeTab) : null;
-  const shownEmulator = shownLabel ?? biosStatus.active_core_label ?? null;
   const serverOffline = biosStatus.server_offline ?? false;
-  const shownFetchable = new Set(shownRows.filter(isFetchable).map((f) => f.file_name));
   const legendEntries = biosLegendEntries([...shownRows, ...libraryRows]);
 
   return (
     <div>
       {biosAnswerStale(true, readFailed) && (
         <div data-testid="bios-stale" style={{ ...MUTED_TEXT_STYLE, marginBottom: "6px" }}>
-          Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry.
+          {GAME_BIOS_REREAD_FAILED}
         </div>
       )}
       <div style={INLINE_ROW_STYLE}>
@@ -1064,11 +1086,7 @@ const DesktopBiosAnsweredContent: FC<{
         </div>
       )}
       <DesktopBiosGroupSection biosStatus={biosStatus} />
-      <DesktopBiosTabPills
-        tabs={tabs}
-        activeTab={activeTab}
-        onSelect={(chosen) => setTabKey(chosen.launching ? null : chosen.emulator)}
-      />
+      <DesktopBiosTabPills tabs={tabs} activeTab={activeTab} onSelect={selectTab} />
       {shownRows.length > 0 && (
         <div style={{ marginTop: "8px" }}>
           <div data-testid="bios-table-header" style={TABLE_HEADER_STYLE}>
@@ -1124,6 +1142,8 @@ const DesktopBiosAnsweredContent: FC<{
       />
       <DesktopBiosUnclaimedSection
         libraryRows={libraryRows}
+        libraryFetchable={libraryFetchable}
+        identifications={identifications}
         activeCoreLabel={biosStatus.active_core_label ?? null}
         serverOffline={serverOffline}
         platform={platform}
@@ -1155,7 +1175,7 @@ function failedBiosMessage(detail: GameDetailState): string {
   if (detail.platformSlug && !detail.platformFolder) {
     return "Could not read the BIOS state because this platform's folder in RomM is not recorded yet. Run a library sync in Tender to record it.";
   }
-  return "Could not read the BIOS state. Open the game page again to retry.";
+  return GAME_BIOS_READ_FAILED;
 }
 
 export const EmulationSettings: FC<EmulationSettingsProps> = ({ appId, detail }) => {
@@ -1166,6 +1186,7 @@ export const EmulationSettings: FC<EmulationSettingsProps> = ({ appId, detail })
 
   const { biosStatus, biosLevel, readFailed, rereadBios, rereadCurrentBios, announceOwnBios, announceOwnCore } =
     useDesktopBiosReadState(appId, detail.romId, detail.platformSlug, detail.platformFolder, isStranded);
+  const table = useBiosTable(biosStatus ?? {});
 
   const [busyFolder, setBusyFolder] = useState<string | null>(null);
   const [pressedKey, setPressedKey] = useState<string | null>(null);
@@ -1180,6 +1201,7 @@ export const EmulationSettings: FC<EmulationSettingsProps> = ({ appId, detail })
   // reading `romIdRef.current` via `rereadCurrentBios` refreshes whichever ROM
   // version is currently shown if the user switched versions mid-action.
   const handleActionReread = useCallback(async () => {
+    if (strandedAnswer() !== null) return;
     await Promise.all([rereadCurrentBios(), refreshBiosStatus(appId)]);
   }, [appId, rereadCurrentBios]);
 
@@ -1221,6 +1243,7 @@ export const EmulationSettings: FC<EmulationSettingsProps> = ({ appId, detail })
         readFailed={readFailed}
         detail={detail}
         platform={platform}
+        table={table}
         busyFolder={busyFolder}
         pressedKey={pressedKey}
         onPressKey={setPressedKey}
