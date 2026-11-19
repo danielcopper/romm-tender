@@ -184,6 +184,8 @@ class World:
     """Only ``systemctl --user show -p MainPID`` fails."""
     main_pid_fails_while_running: bool = False
     """``systemctl --user show -p MainPID`` fails for a unit only once it runs — the user manager lost after a start."""
+    unit_states: dict[str, str] = field(default_factory=dict)
+    """An ``ActiveState`` a unit reports whatever its process does — ``activating``, ``deactivating``."""
     stop_fails: bool = False
     """``systemctl --user stop`` fails and stops nothing."""
     journal_late: bool = False
@@ -800,10 +802,15 @@ def _systemctl(argv: list[str]) -> int:
         print("\n".join(world.session_environment))
         return 0
     if words[:1] == ["is-active"]:
+        # systemd 261: 3 for a loaded unit that is not active, 4 for one not loaded at all.
         active = _unit_pid(world, words[1]) > 0
         if "--quiet" not in argv:
             print("active" if active else "inactive")
-        return 0 if active else 3
+        return 0 if active else 3 if words[1] in units(world) else 4
+    if words[:1] == ["show"] and "ActiveState" in words:
+        state = world.unit_states.get(words[-1])
+        print(state or ("active" if _unit_pid(world, words[-1]) > 0 else "inactive"))
+        return 0
     if words[:1] == ["show"] and "MainPID" in words:
         print(_unit_pid(world, words[-1]))
         return 0

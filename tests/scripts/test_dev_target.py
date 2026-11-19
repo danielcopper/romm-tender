@@ -820,6 +820,7 @@ class TestWhenTheTargetCannotAnswer:
 
         assert result.returncode == 1
         assert "could not ask the user manager on deck" in result.stderr
+        assert "systemctl said: Failed to connect to bus: No medium found" in result.stderr
         assert [entry.name for entry in (loop.root / "current").iterdir()] == ["sentinel"]
         assert _steam_calls(loop.world) == []
 
@@ -831,6 +832,7 @@ class TestWhenTheTargetCannotAnswer:
 
         assert result.returncode == 1
         assert "could not ask the user manager on deck" in result.stderr
+        assert "systemctl said: Failed to connect to bus: No medium found" in result.stderr
         assert "holds the single-instance lock" not in result.stdout
 
     def test_no_display_from_the_user_manager_is_warned_about(self, loop: Loop) -> None:
@@ -869,6 +871,7 @@ class TestWhenTheTargetCannotAnswer:
 
         assert result.returncode == 1
         assert "could not ask the user manager on deck after starting" in result.stderr
+        assert "systemctl said: Failed to connect to bus: No medium found" in result.stderr
         assert names in result.stderr
         assert "Nothing was started" not in result.stderr
 
@@ -884,6 +887,52 @@ class TestWhenTheTargetCannotAnswer:
         assert "older than 3.12" not in result.stderr
         assert f"{broken} on deck (the installed service's interpreter) does not run" in result.stderr
         assert "libpython3.so" in result.stderr
+
+
+class TestAUnitsState:
+    """Read from ActiveState: systemd 261's is-active ends with 4 for a unit that is not loaded."""
+
+    def test_units_that_are_not_loaded_read_as_not_running(self, loop: Loop) -> None:
+        result = loop.run("dev:status")
+
+        assert result.returncode == 0, result.stderr
+        assert "no backend runs on deck" in result.stdout
+        assert "no dev:ui-scale runs on deck" in result.stdout
+
+    @pytest.mark.parametrize("state", ["activating", "deactivating"])
+    def test_a_unit_starting_or_stopping_runs(self, loop: Loop, state: str) -> None:
+        loop.world.unit_states = {"romm-tender-dev": state}
+
+        result = loop.run("dev:backend")
+
+        assert result.returncode == 1
+        assert "romm-tender-dev.service runs on deck but holds no lock" in result.stderr
+
+    def test_running_names_what_systemctl_said_when_it_cannot_ask(self, loop: Loop) -> None:
+        loop.run("dev:status")
+        loop.world.manager_unreachable = True
+        loop.save()
+
+        asked = subprocess.run(
+            [
+                "ssh",
+                "-F",
+                str(loop.build_home / ".config/romm-tender-dev/ssh_config"),
+                "--",
+                "deck",
+                "scripts/dev_target.sh",
+                "running",
+                "deck",
+                "backend",
+            ],
+            env=loop.env(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert asked.returncode == 4
+        assert "systemctl said: Failed to connect to bus: No medium found" in asked.stderr
 
 
 class TestADevUnitThatHoldsNoLock:

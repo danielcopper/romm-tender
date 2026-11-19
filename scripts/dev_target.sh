@@ -51,16 +51,28 @@ say() {
 }
 
 # Before anything is started or the running tree replaced.
+# $1: what systemctl said.
 manager_unreachable() {
     say "could not ask the user manager on $name (systemctl --user); is a session of this user running there? Nothing was started, and the running tree is as it was."
+    systemctl_said "${1:-}"
     exit 1
 }
 
-# After $1 was started: it may run on without the task here knowing.
+# After $1 was started: it may run on without the task here knowing. $3: what
+# systemctl said.
 manager_lost() {
     say "could not ask the user manager on $name after starting $1 (systemctl --user)."
+    systemctl_said "${3:-}"
     printf '%s\n' "  \`mise run dev:status --target $name\` says what runs there; $2" >&2
     exit 1
+}
+
+systemctl_said() {
+    if [ -n "$1" ]; then
+        printf '  systemctl said: %s\n' "$1" >&2
+    else
+        printf '  systemctl said nothing.\n' >&2
+    fi
 }
 
 # Sets PYTHON to the interpreter the installed service runs on, so the dev
@@ -68,7 +80,7 @@ manager_lost() {
 # wrote from TENDER_PYTHON or its default. Why TENDER_PYTHON is not read here:
 # docs/contributing/frontend-dev-loop.md, "The dev tasks on a target".
 need_python() {
-    exec_start=$(systemctl --user show -p ExecStart --value "$SERVICE_UNIT" 2>/dev/null) || manager_unreachable
+    exec_start=$(systemctl --user show -p ExecStart --value "$SERVICE_UNIT" 2>&1) || manager_unreachable "$exec_start"
     case "$exec_start" in
         *"path="*)
             PYTHON="${exec_start#*path=}"
@@ -105,7 +117,7 @@ need_python() {
 # those names are taken, and only a plain value: show-environment writes one
 # with special characters in $'...' quoting, which no session address needs.
 import_session() {
-    environment=$(systemctl --user show-environment 2>/dev/null) || manager_unreachable
+    environment=$(systemctl --user show-environment 2>&1) || manager_unreachable "$environment"
     while IFS= read -r line; do
         case "$line" in
             DISPLAY=* | WAYLAND_DISPLAY=* | XAUTHORITY=* | DBUS_SESSION_BUS_ADDRESS=*)
@@ -124,15 +136,18 @@ EOF
 }
 
 # Status 0 while unit $1 runs, 1 when it does not, 2 when the user manager
-# could not be asked: systemctl is-active ends with 3 for a unit that is not
-# active, and with something else when it got no answer.
+# could not be asked; state_said then holds what systemctl said. Read from the
+# unit's ActiveState, which systemctl prints with exit 0 whatever the state:
+# is-active's exit code is no answer to that, as systemd 261 ends it with 4 for
+# a unit that is not loaded. A unit starting or stopping runs: its process is
+# there.
 unit_state() {
-    state_status=0
-    systemctl --user is-active --quiet "$1" || state_status=$?
-    case "$state_status" in
-        0) return 0 ;;
-        3) return 1 ;;
-        *) return 2 ;;
+    if ! state_said=$(systemctl --user show -p ActiveState --value "$1" 2>&1); then
+        return 2
+    fi
+    case "$state_said" in
+        inactive | failed | '') return 1 ;;
+        *) return 0 ;;
     esac
 }
 
@@ -143,14 +158,18 @@ unit_runs() {
     case "$runs_status" in
         0) return 0 ;;
         1) return 1 ;;
-        *) manager_unreachable ;;
+        *) manager_unreachable "$state_said" ;;
     esac
 }
 
 # The unit's main pid, 0 when it runs none; status 1 when the user manager
-# gave no answer — an empty one among them, which is not a 0.
+# gave no answer — an empty one among them, which is not a 0 — with what
+# systemctl said in its place.
 main_pid() {
-    answer=$(systemctl --user show -p MainPID --value "$1" 2>/dev/null) || return 1
+    if ! answer=$(systemctl --user show -p MainPID --value "$1" 2>&1); then
+        printf '%s\n' "$answer"
+        return 1
+    fi
     [ -n "$answer" ] || return 1
     printf '%s\n' "$answer"
 }
@@ -173,8 +192,8 @@ lock_holder() {
     } <<EOF
 $report
 EOF
-    dev_pid=$(main_pid "$DEV_UNIT") || manager_unreachable
-    service_pid=$(main_pid "$SERVICE_UNIT") || manager_unreachable
+    dev_pid=$(main_pid "$DEV_UNIT") || manager_unreachable "$dev_pid"
+    service_pid=$(main_pid "$SERVICE_UNIT") || manager_unreachable "$service_pid"
     dev_running=no
     if unit_runs "$DEV_UNIT"; then
         dev_running=yes
@@ -301,7 +320,7 @@ start_backend() {
     printf 'tender-dev: the backend runs on %s as %s.service; its log follows. Ctrl-C ends only the following.\n' \
         "$name" "$DEV_UNIT" >&2
     backend=$(main_pid "$DEV_UNIT") || manager_lost "the backend ($DEV_UNIT.service)" \
-        "\`mise run dev:stop --target $name\` stops it."
+        "\`mise run dev:stop --target $name\` stops it." "$backend"
     printf '%s\n' "$FOLLOWING"
     case "$backend" in
         '' | 0)
@@ -355,7 +374,7 @@ ui_scale() {
     systemd-run --user --unit="$UI_SCALE_UNIT" --collect --quiet --setenv=TENDER_DEV_TARGET="$name" -- \
         "$PYTHON" "$here/dev_ui_scale.py" "$mode"
     scale=$(main_pid "$UI_SCALE_UNIT") || manager_lost "dev:ui-scale ($UI_SCALE_UNIT.service)" \
-        "\`mise run dev:ui-scale --stop --target $name\` stops it and restores the scale."
+        "\`mise run dev:ui-scale --stop --target $name\` stops it and restores the scale." "$scale"
     printf '%s\n' "$FOLLOWING"
     journalctl --user -u "$UI_SCALE_UNIT" --since "@$since" -o cat --no-pager -f &
     follower=$!
@@ -489,7 +508,10 @@ running() {
     case "$running_status" in
         0) exit 0 ;;
         1) exit 1 ;;
-        *) exit 4 ;;
+        *)
+            systemctl_said "$state_said"
+            exit 4
+            ;;
     esac
 }
 
