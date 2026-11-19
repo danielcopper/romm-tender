@@ -1783,7 +1783,7 @@ describe("SaveManagementCard", () => {
         expect(backend.getVersionList).toHaveBeenCalled();
       });
 
-      // Collapsed save_sync clears nothing / fetches nothing
+      // Collapsed save_sync clears cached versions/error without fetching
       act(() => {
         globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
       });
@@ -1984,7 +1984,8 @@ describe("SaveManagementCard", () => {
         expect(screen.getByText("Checked:")).toBeInTheDocument();
         unslottedView.unmount();
 
-        // 3b. Empty UnslottedFilesSection (server_query_failed: false) renders noSaveLine; notDownloaded renders refusal+hint
+        // 3b. Empty UnslottedFilesSection (server_query_failed: false) renders noSaveLine;
+        // notDownloaded renders refusal+hint
         vi.mocked(backend.getSaveSlots).mockResolvedValueOnce({
           success: false,
           reason: "not_found",

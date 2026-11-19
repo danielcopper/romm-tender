@@ -47,10 +47,11 @@ the stranded-version notice (`findStrandedVersion`), the connecting retry indica
 files and read-only last-known slots (`frontend/src/utils/slotState.ts`), the downloaded-game refusal and not-downloaded
 statements (`getSaveSyncAvailability`, `frontend/src/utils/saveSyncStatement.ts`), and the save-sync-off local file list
 (`getLocalSaveFiles`). Saves holds a prune lease (`usePruneLeaseOwner`, `frontend/src/utils/pruneLease.ts`), keys its
-content by `romId` with sequence-guarded reads, and draws nothing before the ROM identity is known or on a stranded
-panel ([invariant register](invariants/panel.md)). While `GameView` is drawn it holds two things `RomMPlaySection` holds
-on Big Picture's game page: the connection heartbeat, and the automatic artwork, whose apply in flight it cancels on
-leaving.
+content by `romId`, orders surface (`latestSeq`), inactive-slot (`slotSavesSeqRef`), and version-history (`readSeqRef`)
+reads by sequence while cancelling stale effects on unmount or input changes, and draws nothing before the ROM identity
+is known or on a stranded panel ([invariant register](invariants/panel.md)). While `GameView` is drawn it holds two
+things `RomMPlaySection` holds on Big Picture's game page: the connection heartbeat, and the automatic artwork, whose
+apply in flight it cancels on leaving.
 
 While a RetroDECK migration is pending it draws the migration card
 (`frontend/src/desktop/gameview/MigrationBlockedCard.tsx`) in place of the columns, as the game page's section does on

@@ -171,9 +171,10 @@ export async function executeSlotDelete(romId: number, slot: string): Promise<bo
 }
 
 /**
- * Load prior server versions of `filename` in `slot` for `romId`. Never
- * throws: non-ok answers and rejections are logged and mapped via
- * {@link versionHistoryLoadError}.
+ * Load prior server versions of `filename` in `slot` for `romId`. Returns
+ * `{ ok: true }` on `ok` and `multi_file_unsupported`; never throws: other
+ * non-ok answers and rejections are mapped via {@link versionHistoryLoadError}
+ * (logging rejections and non-refusal failures).
  */
 export async function loadFileVersions(
   romId: number,
@@ -189,7 +190,6 @@ export async function loadFileVersions(
       return { ok: true, versions: result.versions };
     }
     if (result.status === "not_found") {
-      // The server answered — blaming the connection here would be a lie.
       detach(debugLog(`saveSlotFlow: server has no such entry for ${filename}: ${result.message}`));
     } else if (result.status === "device_not_registered") {
       detach(debugLog(`saveSlotFlow: device not registered for ${filename}: ${result.message}`));

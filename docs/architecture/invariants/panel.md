@@ -141,12 +141,14 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   alongside `isCancelled()` and `mountedRef` guards across `SaveManagementCard.tsx`, `DesktopSlotPanel`
   (`frontend/src/desktop/gameview/DesktopSlotPanel.tsx`) and `DesktopVersionHistory`
   (`frontend/src/desktop/gameview/DesktopVersionHistory.tsx`)) the same way. Two answers for the SAME rom are ordered by
-  a sequence taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`, `EmulationSettings`'s `readSeqRef`, and
-  `SaveManagementCard`'s / `DesktopSlotPanel`'s / `DesktopVersionHistory`'s sequence counters). Ordered but unbound: the
-  two identity writes (the store's `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab slot load
-  (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the store's
-  `cached.bios_status` fold. The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on the BIOS tab both
-  read through, is bound and ordered (`bios` ticket). The play button is NOT covered
+  a sequence taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`, `EmulationSettings`'s `readSeqRef`,
+  `useSaveSurfaceAnswers`'s `latestSeq` in `SaveManagementCard.tsx`, `DesktopSlotPanel`'s `slotSavesSeqRef`, and
+  `DesktopVersionHistory`'s `readSeqRef`). Ordered but unbound: the two identity writes (the store's `loadDetail`, the
+  panel's `loadData`) and the panel's lazy SAVES-tab slot load (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter,
+  `slots` ticket); neither bound nor ordered: the store's `cached.bios_status` fold (and `SaveManagementCard`'s
+  `refreshSlots` / `useStrandedCheck` rely on subtree `key`, effect cancellation, and `mountedRef` rather than sequence
+  counters). The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on the BIOS tab both read through, is
+  bound and ordered (`bios` ticket). The play button is NOT covered
 
   The panel component itself holds none of these writes. `RomBinding` is built by `bindRom` for a read a run of the
   `[appId]` effect issued and by `bindRomInState` for the active tab's panes, whose writer is built during render; the

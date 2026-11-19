@@ -1,6 +1,6 @@
 /**
  * Desktop confirmation dialog for deleting a save slot.
- * Shown from SaveManagementCard when the user confirms deleting an inactive slot.
+ * Shown from DesktopSlotPanel when the user confirms deleting an inactive slot.
  */
 
 import type { FC } from "react";

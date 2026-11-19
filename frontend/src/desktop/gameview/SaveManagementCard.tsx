@@ -9,9 +9,11 @@
  * - Save sync on: checks `getSaveSyncAvailability(romId)` (`refusesDownloadedGame`,
  *   `notDownloadedStatement`, `noSaveLine`), shows live retry progress while
  *   loading with a known-offline fast path and auto-reload on reconnect, renders
- *   unslotted local files and stale last-known snapshots apart from live slot
- *   panels, inline slot-tracking confirmation, stranded-version warning,
- *   manual sync, delete local saves, and copy/restore/new-slot dialogs.
+ *   unslotted local files and stale last-known snapshots, delegates collapsible
+ *   slot panels and per-file version history to `DesktopSlotPanel`, renders
+ *   inline slot-tracking confirmation and stranded-version warnings, and drives
+ *   manual sync, delete local saves, `+ New Slot`, and `Copy to slot...`
+ *   dialogs.
  */
 
 import {
