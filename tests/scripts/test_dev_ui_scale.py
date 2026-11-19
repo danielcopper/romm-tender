@@ -114,3 +114,18 @@ def test_the_check_verifies_only_what_it_could_read(
     monkeypatch.setattr(dev_ui_scale, "_current_dpr", lambda: dpr)
 
     assert dev_ui_scale._verify_restore(dev_ui_scale.SteamScaleState(True, None, 1.9, "live")) is verified
+
+
+def test_a_scale_that_could_not_be_read_back_is_not_printed_as_read(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(dev_ui_scale, "_SETTLE_SEC", 0)
+    monkeypatch.setattr(dev_ui_scale, "_read_live_scale_state", lambda: None)
+    monkeypatch.setattr(dev_ui_scale, "_current_dpr", lambda: 1.9)
+
+    dev_ui_scale._verify_restore(dev_ui_scale.SteamScaleState(True, None, 1.9, "live"))
+
+    said = capsys.readouterr().out
+    assert "Could not read Steam's scale back" in said
+    assert "Verified" not in said
+    assert "Read back" not in said

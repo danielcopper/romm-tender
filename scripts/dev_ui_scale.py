@@ -1220,7 +1220,7 @@ def _restore(prior: SteamScaleState | None, prior_window: BpmWindow | None) -> N
     order: a stranded forced scale is the damaging outcome (Steam persists it), a window left
     at 1280x800 is cosmetic.
 
-    Signals are held off for the duration. The window half is the slow half — subprocesses
+    Signals are held off for the duration. The window part is the slow part — subprocesses
     plus a journal read — and an impatient second Ctrl-C used to truncate the restore right
     there, leaving the window resized. SIGKILL remains the only way to skip the restore, which
     is what the docs promise.
@@ -1289,8 +1289,11 @@ def _verify_restore(prior: SteamScaleState | None) -> bool:
     time.sleep(_SETTLE_SEC)
     dpr = _current_dpr()
     live = _read_live_scale_state()
-    now = "an unreadable state" if live is None else SteamScaleState(live[0], live[1], dpr, "live").describe()
-    print(f"Verified: Steam is on {now}, rendering at dpr {'unknown' if dpr is None else dpr}")
+    if live is None:
+        print("Could not read Steam's scale back after the restore.")
+    else:
+        now = SteamScaleState(live[0], live[1], dpr, "live").describe()
+        print(f"Read back: Steam is on {now}, rendering at dpr {'unknown' if dpr is None else dpr}")
     if prior is None or live is None or (prior.dpr is not None and dpr is None):
         return False
 

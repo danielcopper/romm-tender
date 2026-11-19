@@ -629,8 +629,8 @@ A Ctrl-C before a task follows anything, or a connection lost then, ends this si
 restart among it. For a task that changes the target the message says so: `dev:status` says what holds the lock, and
 Steam there is to be checked by eye; `dev:status` and `dev:log` change nothing, and say only that they were interrupted
 or lost the connection. A Ctrl-C during the build or the copy says only `interrupted`: nothing on the target but
-`incoming/` was touched by then. A connection lost after the target answered is never read as a target that did not
-answer.
+`incoming/` was touched by then. A connection lost after the task there has written anything, or after `ssh` said it was
+lost, is not read as a target that did not answer.
 
 ## DevTools
 

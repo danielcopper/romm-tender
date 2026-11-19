@@ -39,7 +39,7 @@ FOLLOWING = "tender-dev-target: following"
 
 # How the dispatcher opens a refusal (scripts/dev_dispatch.sh, refuse).
 DISPATCHER_REFUSED = "tender-dev: refused: "
-# How every line the target's scripts write on stderr opens.
+# How the target's scripts open the messages they write themselves on stderr.
 TARGET_SAYS = "tender-dev"
 
 # The characters the dispatcher lets through in a word for dev_target.sh
@@ -434,7 +434,9 @@ def on_target(target: Target, words: list[str], *, follows: Follows | None, read
     """*words* run on the target with their output passed on; *follows* names what a following there is of.
 
     What ssh said is read as a failure before the login only while the far
-    side has said nothing: a connection lost after it reads much the same.
+    side has written no line on stdout and none of the target's own messages
+    (:data:`TARGET_SAYS`) on stderr: a connection lost after it reads much the
+    same.
     """
     from_first_line = follows == "log"
     outcome = run_streaming([*ssh(target), "--", target.name, *words], from_first_line=from_first_line)
