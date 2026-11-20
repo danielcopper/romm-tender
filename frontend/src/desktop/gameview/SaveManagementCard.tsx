@@ -589,7 +589,6 @@ const SaveSlotsSection: FC<{
   displaySlots: SaveSlotSummary[];
   saveStatus: SaveStatus | null;
   noSaveText: string;
-  saveSyncEnabled: boolean;
   ask: AskDialog;
   onConfirmSlot: (slotName: string) => void;
   onSlotActivated: (slotName: string, newStatus: SaveStatus) => Promise<void>;
@@ -607,7 +606,6 @@ const SaveSlotsSection: FC<{
   displaySlots,
   saveStatus,
   noSaveText,
-  saveSyncEnabled,
   ask,
   onConfirmSlot,
   onSlotActivated,
@@ -652,7 +650,6 @@ const SaveSlotsSection: FC<{
                 isOffline={isOffline}
                 defaultExpanded={isSlotActive}
                 slotConfirmed={slotConfirmed}
-                saveSyncEnabled={saveSyncEnabled}
                 confirmingSlot={confirmingSlot}
                 ask={ask}
                 onConfirmSlot={onConfirmSlot}
@@ -685,7 +682,6 @@ const SaveSyncOnSection: FC<{
   displaySlots: SaveSlotSummary[];
   saveStatus: SaveStatus | null;
   noSaveText: string;
-  saveSyncEnabled: boolean;
   ask: AskDialog;
   onConfirmSlot: (slotName: string) => void;
   onSlotActivated: (slotName: string, newStatus: SaveStatus) => Promise<void>;
@@ -707,7 +703,6 @@ const SaveSyncOnSection: FC<{
   displaySlots,
   saveStatus,
   noSaveText,
-  saveSyncEnabled,
   ask,
   onConfirmSlot,
   onSlotActivated,
@@ -798,7 +793,6 @@ const SaveSyncOnSection: FC<{
         displaySlots={displaySlots}
         saveStatus={saveStatus}
         noSaveText={noSaveText}
-        saveSyncEnabled={saveSyncEnabled}
         ask={ask}
         onConfirmSlot={onConfirmSlot}
         onSlotActivated={onSlotActivated}
@@ -1141,7 +1135,6 @@ const SaveManagementCardContent: FC<{
           displaySlots={displaySlots}
           saveStatus={saveStatus}
           noSaveText={noSaveText}
-          saveSyncEnabled={detail.saveSyncEnabled}
           ask={dialogHost.ask}
           onConfirmSlot={(slotName) => detach(handleConfirmSlot(slotName))}
           onSlotActivated={handleSlotActivated}

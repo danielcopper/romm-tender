@@ -32,9 +32,10 @@ export interface FileVersionHistoryState {
 }
 
 export function useFileVersionHistory(
-  { romId, slot, filename, isOffline, onRestored }: FileVersionHistoryTarget,
+  target: FileVersionHistoryTarget,
   showConflict: (conflict: SyncConflict) => Promise<unknown>,
 ): FileVersionHistoryState {
+  const { romId, slot, filename, onRestored, isOffline } = target;
   // Synchronous ref avoids re-loading when a successful restore collapses the
   // subsection and announces `save_sync` in the same turn, before React re-renders.
   const { expanded, expandedRef, setOpen, toggle } = useExpandedPanel(false);

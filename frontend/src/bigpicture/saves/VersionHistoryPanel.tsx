@@ -33,7 +33,7 @@ interface VersionHistoryPanelProps extends FileVersionHistoryTarget {
 }
 
 export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = (props) => {
-  const { slot, filename, isOffline, onCopy } = props;
+  const { slot, filename, onCopy, isOffline } = props;
   const { expanded, versions, loading, restoringVersionId, loadError, handleToggle, fetchVersions, handleRestore } =
     useFileVersionHistory(props, showSyncConflictModal);
 

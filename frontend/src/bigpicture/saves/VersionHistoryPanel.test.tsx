@@ -557,7 +557,7 @@ describe("VersionHistoryPanel", () => {
   it("Restore button is disabled while a restore is in flight", async () => {
     vi.mocked(backend.savesListFileVersions).mockResolvedValue({
       status: "ok",
-      versions: [makeVersion()],
+      versions: [makeVersion({ id: 11, file_name: "save-v1.srm" }), makeVersion({ id: 12, file_name: "save-v2.srm" })],
     });
     let resolveRestore: (v: RollbackStatus) => void = () => undefined;
     vi.mocked(backend.savesRollbackToVersion).mockImplementation(
@@ -566,12 +566,14 @@ describe("VersionHistoryPanel", () => {
           resolveRestore = res;
         }),
     );
-    const { getByText } = render(<VersionHistoryPanel {...defaultProps()} />);
+    const { getByText, getAllByRole } = render(<VersionHistoryPanel {...defaultProps()} />);
     fireEvent.click(getByText("Previous Versions"));
     await flushAsync();
-    fireEvent.click(getByText("Restore"));
+    fireEvent.click(getAllByRole("button", { name: "Restore" })[0]!);
     await flushAsync();
-    expect(getByText("Restoring...")).toBeDisabled();
+    for (const btn of getAllByRole("button", { name: /^Restor/ })) {
+      expect(btn).toBeDisabled();
+    }
     resolveRestore({ status: "ok" });
     await flushAsync();
   });

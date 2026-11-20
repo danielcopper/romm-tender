@@ -43,7 +43,6 @@ interface DesktopSlotSharedProps {
   romId: number;
   saveStatus: SaveStatus | null;
   isOffline: boolean;
-  saveSyncEnabled: boolean;
   slotConfirmed: boolean | null;
   confirmingSlot: boolean;
   ask: AskDialog;
@@ -274,7 +273,6 @@ const ActiveSlotBody: FC<ActiveSlotBodyProps> = ({
   saveStatus,
   conflicts,
   isOffline,
-  saveSyncEnabled,
   slotConfirmed,
   confirmingSlot,
   activeHasSaves,
@@ -353,7 +351,7 @@ const ActiveSlotBody: FC<ActiveSlotBodyProps> = ({
 
   return (
     <div>
-      {saveSyncEnabled && slotConfirmed === false ? (
+      {slotConfirmed === false ? (
         <div
           data-testid="active-slot-unconfirmed-box"
           style={{
@@ -563,7 +561,6 @@ export const DesktopSlotPanel: FC<DesktopSlotPanelProps> = ({
   isOffline,
   defaultExpanded,
   slotConfirmed,
-  saveSyncEnabled,
   confirmingSlot,
   ask,
   onConfirmSlot,
@@ -641,7 +638,6 @@ export const DesktopSlotPanel: FC<DesktopSlotPanelProps> = ({
           saveStatus,
           conflicts,
           isOffline,
-          saveSyncEnabled,
           slotConfirmed,
           confirmingSlot,
           activeHasSaves,

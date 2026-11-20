@@ -15,13 +15,18 @@ export function assertDialogEscapeScopedToOwnWindow(renderElement: (onDismiss: (
   popupWin.document.body.appendChild(container);
   const { unmount } = render(renderElement(onDismiss), { container: container as unknown as HTMLElement });
   try {
-    fireEvent.keyDown(globalThis.window, { key: "Escape" });
-    expect(onDismiss).not.toHaveBeenCalled();
+    try {
+      fireEvent.keyDown(globalThis.window, { key: "Escape" });
+      expect(onDismiss).not.toHaveBeenCalled();
 
+      fireEvent.keyDown(popupWin as unknown as Window, { key: "Escape" });
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    } finally {
+      unmount();
+    }
     fireEvent.keyDown(popupWin as unknown as Window, { key: "Escape" });
     expect(onDismiss).toHaveBeenCalledTimes(1);
   } finally {
-    unmount();
     void popupWin.close();
   }
 }
