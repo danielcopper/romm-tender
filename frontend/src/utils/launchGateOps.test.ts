@@ -613,6 +613,7 @@ describe("ensureTrackingConfiguredDesktop", () => {
 
   it("aborts with Desktop 'Saves' wording and switches to saves when server is unreachable", async () => {
     expect(await runDesktopTrackingGate({ recommended_action: "server_unreachable" })).toBe("abort");
+    await new Promise((r) => setTimeout(r, 0));
     expect(toastBodies()).toEqual(["Cannot configure save slot — RomM server is not reachable. Open Saves to retry."]);
     expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
     expect((tabSwitch.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail).toEqual({ tab: "saves" });
@@ -630,6 +631,7 @@ describe("ensureTrackingConfiguredDesktop", () => {
 
   it("auto-adopts default slot and proceeds when safe", async () => {
     expect(await runDesktopTrackingGate()).toBe("proceed");
+    await new Promise((r) => setTimeout(r, 0));
     expect(backend.confirmSlotChoice).toHaveBeenCalledWith(ROM_ID, "slot1", false, null, false);
     expect(tabSwitch).not.toHaveBeenCalled();
   });

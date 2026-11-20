@@ -29,7 +29,6 @@ import {
   ACTIVE_PILL_BADGE_STYLE,
   ATTENTION_AMBER,
   BODY_TEXT_COLOR,
-  BUTTON_STYLE,
   CONFLICT_RED,
   MUTED_PILL_BADGE_STYLE,
   SUBTLE_LABEL_COLOR,
@@ -297,11 +296,7 @@ const ActiveSlotBody: FC<ActiveSlotBodyProps> = ({
               {file.server_save_id != null ? (
                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
                   <DesktopCopyToSlotButton
-                    style={{
-                      ...BUTTON_STYLE,
-                      opacity: isOffline ? 0.5 : 1,
-                      cursor: isOffline ? "not-allowed" : "pointer",
-                    }}
+                    style={actionButtonStyle(isOffline)}
                     disabled={isOffline}
                     onClick={() => onCopySave(file.server_save_id!, slotName)}
                   />
@@ -444,14 +439,11 @@ const InactiveSlotFilesList: FC<{
             <div style={{ color: BODY_TEXT_COLOR, fontWeight: 500, fontSize: "13px" }}>{f.filename}</div>
             <div style={{ color: MUTED_COLOR, fontSize: "11px" }}>{formatInactiveFileDetails(f)}</div>
           </div>
-          <button
-            type="button"
+          <DesktopCopyToSlotButton
             style={smallActionButtonStyle(isOffline)}
             disabled={isOffline}
             onClick={() => onCopySave(f.id, slotName)}
-          >
-            Copy to slot...
-          </button>
+          />
         </div>
       ))}
     </div>

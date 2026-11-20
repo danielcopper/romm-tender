@@ -1045,26 +1045,34 @@ kept RomM's platform list is read once (`PlatformSystems.platform_system`).
   opens, bound to the ROM it was read for and ordered by its own read sequence (`refreshSaveSyncAnswer`,
   `frontend/src/bigpicture/panelState.ts`, and `useSaveSurfaceAnswers` in
   `frontend/src/desktop/gameview/SaveManagementCard.tsx`), and again after a version switch, an emulator change, save
-  sync switched on, a download, an uninstall, and each time the SAVES tab is opened; an answer already shown stays until
-  the new one lands. While no answer is held the tab marks nothing and shows the slots or the setup as for a game that
-  syncs. A downloaded game it refuses gets a warning mark beside the tab's title (`renderTabAddon`), and the tab shows
-  the sentence the sync refuses with under the title "Save Sync", and no slot buttons, whether or not its slot is
-  confirmed (`SaveSyncRefusal`, `frontend/src/bigpicture/saves/SaveSyncRefusal.tsx`); its set-up mark and its slots on
-  RomM stay untouched. For `savefiles_in_content_dir` RetroArch's setting stands under the sentence. Any other game
-  shows the wizard when `slot_confirmed=false`, else the save list. A game not downloaded reads a line above them: whose
-  saves will sync once it is, that they will not and why, or — where `established` is false — that whether they will
-  sync could not be established. An active slot holding no save, read from this device and from RomM, reads "No save yet
-  — _label_'s saves for this game sync with RomM once it writes one." where the answer says the downloaded game syncs
-  ("…this game's saves sync with RomM once its emulator writes one." without a label), and "No save yet." where it does
-  not say so; where RomM could not be asked it reads "No save on this device.", and with no status read it reads no
-  line. The wizard still takes its own setup info: a refusal there asked RomM nothing, so it does not feed the shared
-  connection state either. Where the panel already holds RomM as unreachable, the wizard skips the setup info, whose
-  retry ladder would only wait the outage out, and asks `get_save_sync_availability` instead: a downloaded game that
-  cannot sync shows its reason the same way, and any other keeps the unreachable notice and its Retry.
-- **Play button:** checks before launch. If not configured and server has saves, redirects to SAVES tab. If no server
-  saves, auto-configures with default. A game whose saves no sync carries starts with no setup step and no toast, also
-  where RomM holds saves for it: the sync before the start passes it over, or asks first where the saves folder is
-  missing. The launch watcher's cold start confirms nothing for it either.
+  sync switched on, a download, an uninstall, and (on Big Picture) each time the SAVES tab is opened; an answer already
+  shown stays until the new one lands. While no answer is held the surface marks nothing and shows the slots or the
+  setup as for a game that syncs. A downloaded game it refuses gets a warning mark beside the SAVES tab's title on Big
+  Picture (`renderTabAddon`), hides header slot controls (`Sync now`, `+ New Slot`, `Delete Local Saves`) and slots on
+  the desktop Saves card, and shows the sentence the sync refuses with under the title "Save Sync" on Big Picture
+  (`SaveSyncRefusal`, `frontend/src/bigpicture/saves/SaveSyncRefusal.tsx`) or the inline refusal notice on desktop
+  (`RefusalBox` in `frontend/src/desktop/gameview/SaveManagementCard.tsx`, subtitle `save sync unavailable`), whether or
+  not its slot is confirmed; its set-up mark and its slots on RomM stay untouched. For `savefiles_in_content_dir`
+  RetroArch's setting stands under the sentence. Any other game shows `SlotSetupWizard` on Big Picture or the
+  unconfirmed-slot banner and inline active-slot confirmation prompt on the desktop Saves card when
+  `slot_confirmed=false`, else the save list. A game not downloaded reads a line above them: whose saves will sync once
+  it is, that they will not and why, or — where `established` is false — that whether they will sync could not be
+  established. An active slot holding no save, read from this device and from RomM, reads "No save yet — _label_'s saves
+  for this game sync with RomM once it writes one." where the answer says the downloaded game syncs ("…this game's saves
+  sync with RomM once its emulator writes one." without a label), and "No save yet." where it does not say so; where
+  RomM could not be asked it reads "No save on this device.", and with no status read it reads no line. The wizard still
+  takes its own setup info: a refusal there asked RomM nothing, so it does not feed the shared connection state either.
+  Where the panel already holds RomM as unreachable, the wizard skips the setup info, whose retry ladder would only wait
+  the outage out, and asks `get_save_sync_availability` instead: a downloaded game that cannot sync shows its reason the
+  same way, and any other keeps the unreachable notice and its Retry.
+- **Play button:** `frontend/src/bigpicture/CustomPlayButton.tsx` (`ensureTrackingConfiguredBigPicture`) and
+  `frontend/src/desktop/gameview/usePlayLaunch.ts` (`ensureTrackingConfiguredDesktop`, both via
+  `frontend/src/utils/launchGateOps.ts`) check before launch. If not configured and server has saves, Big Picture
+  redirects to the SAVES tab and desktop toasts and dispatches `romm_tab_switch` (`{ tab: "saves" }`) so
+  `SaveManagementCard` scrolls into view. If no server saves, auto-configures with default. A game whose saves no sync
+  carries starts with no setup step and no toast, also where RomM holds saves for it: the sync before the start passes
+  it over, or asks first where the saves folder is missing. The launch watcher's cold start confirms nothing for it
+  either.
 - **SAVE SYNC badge (`frontend/src/desktop/gameview/PlayButtonBadges.tsx`, dev build only):** reads
   `get_save_sync_availability` for an installed game; see
   [How the desktop surface adapts Steam's game page](desktop-dom-architecture.md).
@@ -1386,8 +1394,9 @@ any surface that shows a conflict:
 - `VersionHistoryPanel.handleRestore` (in `SavesTab`, `frontend/src/bigpicture/SavesTab.tsx`, through
   `executeVersionRestore`), through `showSyncConflictModal` for the first conflict — when a version-restore pre-flight
   returns `conflict_blocked`.
-- `useCopyToSlot` (the Saves tab's "Copy to slot…", through `executeCopySaveToSlot`), through `showSyncConflictModal`
-  for the first conflict — when a copy returns `conflict_blocked`.
+- `useCopyToSlot` (`frontend/src/bigpicture/saves/useCopyToSlot.tsx`, the Saves tab's "Copy to slot…", through
+  `executeCopySaveToSlot`), through `showSyncConflictModal` for the first conflict — when a copy returns
+  `conflict_blocked`.
 - In the desktop dev build, `SaveManagementCard` (`frontend/src/desktop/gameview/SaveManagementCard.tsx`) and
   `DesktopVersionHistory` (`frontend/src/desktop/gameview/DesktopVersionHistory.tsx`, backed by
   `frontend/src/utils/useFileVersionHistory.ts`) reach the same conflict dialog through `desktopSlotConflictDialog`
@@ -2271,13 +2280,15 @@ On the proof the ROM's run ends with the `GoneFromRomm` refusal (reason `gone_fr
 
 ### Get save status (read-only)
 
-Triggered by the game-detail panel and SAVES tab via `getSaveStatus(romId)`. Runs `_get_save_status_io` — a read-only
-counterpart of `MatrixExecutor.sync_rom_saves` that returns the same `compute_sync_action` decisions but performs no
-upload/download I/O. The only mutation it allows is recording the baseline of a `Skip(adopt_baseline=True)` that needs
-no acknowledgement, so future drift detection works; one that must be acknowledged is left to the next sync, and its row
-reads "synced", which is true — the bytes are identical ([Outcomes](#outcomes)). `server_has_saves` says whether RomM's
-listing of the ROM's saves returned anything, in any slot, also for a game with no `files` row; it is false where the
-query failed or was never sent, with `server_query_failed` beside it.
+Triggered by Big Picture's game-detail panel and SAVES tab (`getSaveStatus(romId)`) and desktop
+`frontend/src/utils/gameDetailStore.ts` (`refreshSaveStatus`, feeding `PlayButtonBadges` and `SaveManagementCard`). Runs
+`_get_save_status_io` — a read-only counterpart of `MatrixExecutor.sync_rom_saves` that returns the same
+`compute_sync_action` decisions but performs no upload/download I/O. The only mutation it allows is recording the
+baseline of a `Skip(adopt_baseline=True)` that needs no acknowledgement, so future drift detection works; one that must
+be acknowledged is left to the next sync, and its row reads "synced", which is true — the bytes are identical
+([Outcomes](#outcomes)). `server_has_saves` says whether RomM's listing of the ROM's saves returned anything, in any
+slot, also for a game with no `files` row; it is false where the query failed or was never sent, with
+`server_query_failed` beside it.
 
 ### This device's save files (save sync off)
 

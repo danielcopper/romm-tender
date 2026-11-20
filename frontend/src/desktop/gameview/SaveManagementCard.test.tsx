@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { DesktopSlotPanel } from "./DesktopSlotPanel";
 import { SaveManagementCard } from "./SaveManagementCard";
 import * as backend from "../../api/backend";
 import {
@@ -433,7 +434,9 @@ describe("SaveManagementCard", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
-      expect(await screen.findByRole("button", { name: "Deleting…" })).toBeDisabled();
+      const deletingLocalBtn = await screen.findByRole("button", { name: "Deleting…" });
+      expect(deletingLocalBtn).toBeDisabled();
+      expect(deletingLocalBtn).toHaveStyle({ opacity: "0.5" });
 
       await act(async () => {
         resolveDelete({
@@ -564,7 +567,9 @@ describe("SaveManagementCard", () => {
       fireEvent.click(await screen.findByRole("button", { name: "Delete Slot" }));
 
       expect(await screen.findByRole("dialog", { name: "Delete Slot" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Deleting..." })).toBeDisabled();
+      const deletingSlotBtn = screen.getByRole("button", { name: "Deleting..." });
+      expect(deletingSlotBtn).toBeDisabled();
+      expect(deletingSlotBtn).toHaveStyle({ opacity: "0.5" });
 
       const delEvents: unknown[] = [];
       const onDelEvt = (e: Event) => delEvents.push((e as CustomEvent).detail);
@@ -1085,7 +1090,9 @@ describe("SaveManagementCard", () => {
         expect(screen.getByTestId("active-slot-unconfirmed-box")).toBeInTheDocument();
       });
 
-      expect(screen.getByRole("button", { name: "Confirm 'default'" })).toBeInTheDocument();
+      const confirmBannerBtn = screen.getByRole("button", { name: "Confirm 'default'" });
+      expect(confirmBannerBtn).toBeInTheDocument();
+      expect(confirmBannerBtn).toHaveStyle({ color: "#ffffff" });
       expect(screen.getByRole("button", { name: "Confirm Slot" })).toBeInTheDocument();
     });
 
@@ -1153,6 +1160,13 @@ describe("SaveManagementCard", () => {
         active_slot: "default",
         setup_needed: true,
       });
+      let resolveConfirm!: (v: Awaited<ReturnType<typeof backend.confirmSlotChoice>>) => void;
+      vi.mocked(backend.confirmSlotChoice).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveConfirm = resolve;
+          }),
+      );
       vi.mocked(backend.switchSlot).mockResolvedValue({
         success: true,
         save_status: mockSaveStatus,
@@ -1173,6 +1187,15 @@ describe("SaveManagementCard", () => {
         await waitFor(() => {
           expect(backend.switchSlot).toHaveBeenCalledWith(42, "new_slot");
           expect(backend.confirmSlotChoice).toHaveBeenCalledWith(42, "new_slot", false, null, false);
+        });
+        await flushMacrotask();
+        expect(screen.getByRole("dialog", { name: "New Save Slot" })).toBeInTheDocument();
+
+        await act(async () => {
+          resolveConfirm({ success: true, needs_conflict_resolution: false, message: "confirmed" });
+        });
+
+        await waitFor(() => {
           expect(toast.showToast).toHaveBeenCalledWith("Created and confirmed slot 'new_slot'");
           expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
           expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument();
@@ -2513,6 +2536,7 @@ describe("SaveManagementCard", () => {
             "DesktopSaveManagementCard: confirmSlotChoice for romId=42 slot='default' refused (server_error): confirm refused",
           );
         });
+        await flushMacrotask();
         expect(gameDetailStore.refreshSaveStatus).not.toHaveBeenCalled();
 
         // 2. Post-confirm refreshSaveStatus rejection does not misreport slot confirm failure
@@ -2529,6 +2553,9 @@ describe("SaveManagementCard", () => {
         });
         await flushMacrotask();
         expect(toast.showToast).not.toHaveBeenCalledWith("An error occurred while confirming the slot");
+        expect(warnSpy).toHaveBeenCalledWith(
+          "DesktopSaveManagementCard: refreshSaveStatus for appId=100 failed: Error: status down",
+        );
         expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("failed to confirm slot"));
         expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("failed to refresh save slots"));
       } finally {
@@ -2867,6 +2894,7 @@ describe("SaveManagementCard", () => {
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "Delete Local Saves" })).not.toBeInTheDocument());
+      await flushMacrotask();
       expect(backend.deleteLocalSaves).not.toHaveBeenCalled();
     });
 
@@ -3101,6 +3129,7 @@ describe("SaveManagementCard", () => {
       vi.mocked(backend.getSaveSlots).mockClear();
       const viewC = render(<SaveManagementCard appId={100} detail={{ ...baseDetail, saveSyncEnabled: false }} />);
       await waitFor(() => expect(backend.getLocalSaveFiles).toHaveBeenCalled());
+      await flushMacrotask();
       expect(backend.getSaveSlots).not.toHaveBeenCalled();
 
       viewC.rerender(<SaveManagementCard appId={100} detail={baseDetail} />);
@@ -3260,6 +3289,123 @@ describe("SaveManagementCard", () => {
       rerender(<SaveManagementCard appId={100} detail={{ ...baseDetail, installed: false, saveSyncEnabled: true }} />);
       await waitFor(() => expect(backend.getSaveSyncAvailability).toHaveBeenCalledTimes(3));
       expect(screen.queryByTestId("desktop-saves-refusal")).not.toBeInTheDocument();
+    });
+
+    it("ignores stale initial isSaveTrackingConfigured responses after a newer refreshSlots supersedes it", async () => {
+      let resolveStaleTracking!: (v: Awaited<ReturnType<typeof backend.isSaveTrackingConfigured>>) => void;
+      vi.mocked(backend.isSaveTrackingConfigured)
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveStaleTracking = resolve;
+            }),
+        )
+        .mockResolvedValueOnce({
+          configured: true,
+          active_slot: "default",
+          setup_needed: false,
+        });
+
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      await waitFor(() => expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(1));
+
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+      });
+      await waitFor(() => expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(2));
+
+      await act(async () => {
+        resolveStaleTracking({ configured: false, active_slot: "default", setup_needed: true });
+      });
+      await flushMacrotask();
+      expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument();
+    });
+
+    it("enables save_sync refresh on a slot flipped in-place from active to inactive and logs refreshSaveStatus failure", async () => {
+      const warnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+      try {
+        vi.mocked(backend.switchSlot).mockResolvedValueOnce({
+          success: true,
+          save_status: mockSaveStatus,
+        });
+        vi.mocked(backend.getSaveSlots)
+          .mockResolvedValueOnce({
+            success: true,
+            slots: mockSlots,
+            active_slot: "default",
+          })
+          .mockResolvedValue({
+            success: true,
+            slots: mockSlots,
+            active_slot: "speedrun",
+          });
+        vi.mocked(backend.getSlotSaves).mockResolvedValue({
+          success: true,
+          slot: "default",
+          saves: [],
+        });
+
+        render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        fireEvent.click(await screen.findByRole("button", { name: /speedrun/ }));
+        fireEvent.click(await screen.findByRole("button", { name: "Activate Slot" }));
+        await waitFor(() => expect(backend.getSaveSlots).toHaveBeenCalledTimes(3));
+
+        // Key changes from panel-default-active -> panel-default-inactive, so default remounts collapsed; one click expands it
+        vi.mocked(backend.getSlotSaves).mockClear();
+        fireEvent.click(screen.getByRole("button", { name: /default/ }));
+        await waitFor(() => expect(backend.getSlotSaves).toHaveBeenCalledExactlyOnceWith(42, "default"));
+
+        vi.mocked(backend.getSlotSaves).mockClear();
+        vi.mocked(gameDetailStore.refreshSaveStatus).mockRejectedValueOnce(new Error("event status down"));
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+        });
+
+        await waitFor(() => {
+          expect(backend.getSlotSaves).toHaveBeenCalledExactlyOnceWith(42, "default");
+          expect(warnSpy).toHaveBeenCalledWith(
+            "DesktopSaveManagementCard: refreshSaveStatus for appId=100 failed: Error: event status down",
+          );
+        });
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    it("registers save_sync listener when DesktopSlotPanel flips isActive true -> false in place", async () => {
+      vi.mocked(backend.getSlotSaves).mockResolvedValue({
+        success: true,
+        slot: "speedrun",
+        saves: [],
+      });
+      const noopAsk = vi.fn(async () => false) as never;
+      const basePanelProps = {
+        romId: 42,
+        slot: mockSlots[1]!,
+        noSaveLine: "No save yet.",
+        isOffline: false,
+        defaultExpanded: false,
+        slotConfirmed: true,
+        confirmingSlot: false,
+        ask: noopAsk,
+        onConfirmSlot: vi.fn(),
+        onSlotActivated: vi.fn(),
+        onSlotDeleted: vi.fn(),
+        onVersionRestored: vi.fn(),
+        onCopySave: vi.fn(),
+      };
+
+      const { rerender } = render(<DesktopSlotPanel {...basePanelProps} isActive={true} saveStatus={mockSaveStatus} />);
+      rerender(<DesktopSlotPanel {...basePanelProps} isActive={false} saveStatus={null} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /speedrun/ }));
+      await waitFor(() => expect(backend.getSlotSaves).toHaveBeenCalledExactlyOnceWith(42, "speedrun"));
+
+      vi.mocked(backend.getSlotSaves).mockClear();
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+      });
+      await waitFor(() => expect(backend.getSlotSaves).toHaveBeenCalledExactlyOnceWith(42, "speedrun"));
     });
   });
 });

@@ -1219,4 +1219,21 @@ describe("SlotPanel", () => {
       expect(container.textContent).not.toContain(line);
     });
   });
+
+  describe("in-place romId updates on inactive panels", () => {
+    it("queries the updated romId when an inactive collapsed panel rerenders for another ROM before expanding", async () => {
+      vi.mocked(backend.getSlotSaves).mockResolvedValue({
+        success: true,
+        slot: "default",
+        saves: [],
+      });
+
+      const { container, rerender } = render(<SlotPanel {...defaultProps({ romId: 1, isActive: false })} />);
+      rerender(<SlotPanel {...defaultProps({ romId: 2, isActive: false })} />);
+
+      fireEvent.click(container.querySelector("button")!);
+      await flushAsync();
+      expect(vi.mocked(backend.getSlotSaves)).toHaveBeenCalledWith(2, "default");
+    });
+  });
 });

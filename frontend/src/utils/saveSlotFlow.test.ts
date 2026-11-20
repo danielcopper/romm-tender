@@ -702,10 +702,12 @@ describe("executeDeleteLocalSaves", () => {
   it("toasts result.message or fallback on failure, and logs+toasts on throw", async () => {
     vi.mocked(backend.deleteLocalSaves).mockResolvedValueOnce({ success: false, deleted_count: 0, message: "denied" });
     await executeDeleteLocalSaves(100, 7);
+    expect(backend.logWarn).toHaveBeenCalledWith("saveSlotFlow: deleteLocalSaves for rom 7 failed: denied");
     expect(toast.showToast).toHaveBeenCalledWith("denied");
 
     vi.mocked(backend.deleteLocalSaves).mockResolvedValueOnce({ success: false, deleted_count: 0, message: "" });
     await executeDeleteLocalSaves(100, 7);
+    expect(backend.logWarn).toHaveBeenCalledWith("saveSlotFlow: deleteLocalSaves for rom 7 failed: ");
     expect(toast.showToast).toHaveBeenCalledWith("Failed to delete saves");
 
     vi.mocked(backend.deleteLocalSaves).mockRejectedValueOnce(new Error("io"));

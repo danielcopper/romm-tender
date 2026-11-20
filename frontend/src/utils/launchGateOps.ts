@@ -260,9 +260,9 @@ export function ensureTrackingConfiguredDesktop(romId: number): Promise<"proceed
 }
 
 /**
- * The tracking-setup step for a start with no saves tab to send the user to.
- * Unlike {@link ensureTrackingConfiguredBigPicture}, it MUST NOT route the user
- * to the saves tab. Instead it silently auto-adopts the default/recommended
+ * The tracking-setup step for a start with no save surface to send the user to.
+ * Unlike {@link ensureTrackingConfiguredForSurface}, it MUST NOT route the user
+ * to the save surface. Instead it silently auto-adopts the default/recommended
  * slot (via `confirmSlotChoice`) and proceeds. A start is never blocked on a
  * setup ANSWER — every answer proceeds; any failure (server unreachable,
  * needs-user-choice, a thrown error) is swallowed. Nothing is set up where the

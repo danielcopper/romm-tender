@@ -417,6 +417,7 @@ describe("PlayButton", () => {
         pressPlay();
 
         await waitFor(() => expect(toast.showToast).toHaveBeenCalledWith("Configure save sync in Saves first"));
+        await new Promise((r) => setTimeout(r, 0));
         expect(backend.getSaveSetupInfo).toHaveBeenCalledWith(100);
         expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
         expect((tabSwitch.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail).toEqual({ tab: "saves" });

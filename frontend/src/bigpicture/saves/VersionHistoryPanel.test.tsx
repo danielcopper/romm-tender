@@ -705,4 +705,20 @@ describe("VersionHistoryPanel — self-refresh on romm_data_changed", () => {
     await waitFor(() => expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(container.textContent).toContain("Previous Versions (1)"));
   });
+
+  it("re-binds version history fetch and save_sync listener when romId changes in place", async () => {
+    vi.mocked(backend.savesListFileVersions).mockResolvedValue({ status: "ok", versions: [makeVersion({ id: 1 })] });
+    const { getByText, rerender } = render(<VersionHistoryPanel {...defaultProps({ romId: 1 })} />);
+    fireEvent.click(getByText("Previous Versions"));
+    await waitFor(() =>
+      expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledWith(1, "default", "save.srm"),
+    );
+
+    rerender(<VersionHistoryPanel {...defaultProps({ romId: 2 })} />);
+    dispatchDataChanged(2);
+
+    await waitFor(() =>
+      expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledWith(2, "default", "save.srm"),
+    );
+  });
 });

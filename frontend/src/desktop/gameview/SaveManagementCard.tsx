@@ -892,13 +892,22 @@ function useDesktopSlotState(
     if (!saveSyncEnabled || syncRefused) return;
     const onDataChanged = ({ detail: ev }: WindowEventMap["romm_data_changed"]) => {
       if (!isSaveSyncForRom(ev, romId)) return;
-      detach(Promise.all([refreshSaveStatus(appId).catch(() => undefined), refreshSlots()]));
+      detach(Promise.all([refreshDesktopSaveStatus(appId), refreshSlots()]));
     };
     globalThis.addEventListener("romm_data_changed", onDataChanged);
     return () => globalThis.removeEventListener("romm_data_changed", onDataChanged);
   }, [appId, romId, saveSyncEnabled, syncRefused, refreshSlots]);
 
   return { slotState, setSlotState, rawSlotConfirmed, setRawSlotConfirmed, refreshSlots };
+}
+
+function refreshDesktopSaveStatus(appId: number): Promise<void> {
+  return refreshSaveStatus(appId).then(
+    () => undefined,
+    (e: unknown) => {
+      logWarn(`DesktopSaveManagementCard: refreshSaveStatus for appId=${appId} failed: ${e}`);
+    },
+  );
 }
 
 const SaveManagementCardContent: FC<{
@@ -945,7 +954,7 @@ const SaveManagementCardContent: FC<{
   useTabSwitchScroll(cardRef);
 
   const refreshStatusAndSlots = async () => {
-    await Promise.all([refreshSaveStatus(appId).catch(() => undefined), refreshSlots()]);
+    await Promise.all([refreshDesktopSaveStatus(appId), refreshSlots()]);
   };
 
   const applyActivatedSlot = async (slotName: string, verb: string) => {

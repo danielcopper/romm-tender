@@ -285,6 +285,7 @@ export async function executeDeleteLocalSaves(appId: number, romId: number): Pro
       noteSaveSyncDisplay(appId, romId, { status: "none", label: "No saves", last_sync_check_at: null });
       announceSaveSync(romId);
     } else {
+      logWarn(`saveSlotFlow: deleteLocalSaves for rom ${romId} failed: ${result.message}`);
       showToast(result.message || DELETE_LOCAL_SAVES_ERROR_TOAST);
     }
   } catch (e) {

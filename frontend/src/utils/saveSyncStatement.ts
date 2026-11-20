@@ -1,5 +1,5 @@
 /**
- * What a game's SAVES tab says of its saves, worded from one answer to whether they sync
+ * What a game's save surface says of its saves, worded from one answer to whether they sync
  * (`get_save_sync_availability`, #2149). Every sentence here is the panel's own; the one
  * that says why a game's saves do not sync is the backend's `message`, passed through.
  */
@@ -23,7 +23,7 @@ export const NOT_DOWNLOADED_NO_SAVE = "Not downloaded — no save on this device
 export const CONTENT_DIR_HINT =
   "The usual cause is RetroArch's 'Write Saves to Content Directory' (RetroArch › Settings › Saving); if it is on, turning it off lets save sync work again.";
 
-/** Whether *answer* refuses the saves of a game that is downloaded: the tab then says why, and is marked (D1, D5). */
+/** Whether *answer* refuses the saves of a game that is downloaded: the save surface then says why (D1, D5). */
 export function refusesDownloadedGame(answer: SaveSyncAvailability | null): boolean {
   return !!answer && !answer.available && answer.installed;
 }
