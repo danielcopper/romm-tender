@@ -226,7 +226,7 @@ description = "Install the newest release tarball under build/ (mise run package
 raw = true
 usage = '''
 flag "--target <name>" help="Install it on the target setup:remote-target prepared under <name>."
-flag "--yes" help="Pass --yes to install.sh: the question a first install asks while install.sh still asks it (until its ACK_UNTIL) cannot be answered over the target's login, which has no terminal."
+flag "--yes" help="Pass --yes to install.sh: the question a first install asks while install.sh still asks it (before its ACK_UNTIL) cannot be answered over the target's login, which has no terminal."
 '''
 # What it sends and runs there, and why --yes is passed only when given:
 # docs/contributing/frontend-dev-loop.md, "Installing the release on a target".
