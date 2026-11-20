@@ -20,7 +20,7 @@ export interface FileVersionHistoryTarget {
   onRestored: () => void;
 }
 
-export interface FileVersionHistoryState {
+interface FileVersionHistoryState {
   expanded: boolean;
   versions: SaveVersionEntry[] | null;
   loading: boolean;

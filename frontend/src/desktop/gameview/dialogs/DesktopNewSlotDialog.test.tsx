@@ -2,7 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { DesktopNewSlotDialog } from "./DesktopNewSlotDialog";
-import { assertDialogEscapeScopedToOwnWindow } from "./popupEscapeTestHelper";
+import { assertDialogEscapeScopedToOwnWindow } from "../../../test-utils/popupEscapeTestHelper";
 
 describe("DesktopNewSlotDialog", () => {
   it("renders title, description, input, tone styles, and action buttons", () => {

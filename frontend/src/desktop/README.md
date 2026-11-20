@@ -16,7 +16,8 @@ page, and the rules every change to that page follows, are in
 - `gameview/GameView.tsx` — what `index.ts` hands the watcher as the page's `gameView`: the page's cards in two columns,
   with `AboutDetails.tsx` and `EmulationSettings.tsx` in the left column, `SaveManagementCard.tsx` (with
   `DesktopSlotPanel.tsx` and `DesktopVersionHistory.tsx`) in the right column, and `MigrationBlockedCard.tsx` taking the
-  columns' place while a RetroDECK migration is pending (behaviour and shared utilities live in the doc linked above).
+  columns' place while a RetroDECK migration is pending (behaviour and cross-surface utilities in `../utils/` live in
+  the doc linked above).
 - `gameview/PlayButton.tsx` — what `index.ts` hands the watcher as the page's `playButton`: Tender's Play button, whose
   launch presses and Uninstall are `gameview/usePlayLaunch.ts`'s and DOWNLOAD's and the bar's its own, with PLAY and the
   game's menu in `gameview/PlayStateButton.tsx`, a download's bar in `gameview/DownloadingButton.tsx`, and the disc and

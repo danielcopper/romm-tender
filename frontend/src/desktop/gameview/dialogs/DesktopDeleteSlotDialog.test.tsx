@@ -2,7 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DesktopDeleteSlotDialog } from "./DesktopDeleteSlotDialog";
-import { assertDialogEscapeScopedToOwnWindow } from "./popupEscapeTestHelper";
+import { assertDialogEscapeScopedToOwnWindow } from "../../../test-utils/popupEscapeTestHelper";
 import type { SlotDeleteInfo } from "../../../types";
 
 describe("DesktopDeleteSlotDialog", () => {

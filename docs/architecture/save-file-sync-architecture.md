@@ -1043,12 +1043,13 @@ kept RomM's platform list is read once (`PlatformSystems.platform_system`).
 
 - **Game detail page (SAVES tab and desktop Saves card):** the panel reads `get_save_sync_availability` when the page
   opens, bound to the ROM it was read for and ordered by its own read sequence (`refreshSaveSyncAnswer`,
-  `bigpicture/panelState.ts`, and `useSaveSurfaceAnswers` in `frontend/src/desktop/gameview/SaveManagementCard.tsx`),
-  and again after a version switch, an emulator change, save sync switched on, a download, an uninstall, and each time
-  the SAVES tab is opened; an answer already shown stays until the new one lands. While no answer is held the tab marks
-  nothing and shows the slots or the setup as for a game that syncs. A downloaded game it refuses gets a warning mark
-  beside the tab's title (`renderTabAddon`), and the tab shows the sentence the sync refuses with under the title "Save
-  Sync", and no slot buttons, whether or not its slot is confirmed (`SaveSyncRefusal`); its set-up mark and its slots on
+  `frontend/src/bigpicture/panelState.ts`, and `useSaveSurfaceAnswers` in
+  `frontend/src/desktop/gameview/SaveManagementCard.tsx`), and again after a version switch, an emulator change, save
+  sync switched on, a download, an uninstall, and each time the SAVES tab is opened; an answer already shown stays until
+  the new one lands. While no answer is held the tab marks nothing and shows the slots or the setup as for a game that
+  syncs. A downloaded game it refuses gets a warning mark beside the tab's title (`renderTabAddon`), and the tab shows
+  the sentence the sync refuses with under the title "Save Sync", and no slot buttons, whether or not its slot is
+  confirmed (`SaveSyncRefusal`, `frontend/src/bigpicture/saves/SaveSyncRefusal.tsx`); its set-up mark and its slots on
   RomM stay untouched. For `savefiles_in_content_dir` RetroArch's setting stands under the sentence. Any other game
   shows the wizard when `slot_confirmed=false`, else the save list. A game not downloaded reads a line above them: whose
   saves will sync once it is, that they will not and why, or — where `established` is false — that whether they will

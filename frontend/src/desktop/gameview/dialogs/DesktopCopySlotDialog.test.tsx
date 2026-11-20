@@ -2,7 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DesktopCopySlotDialog } from "./DesktopCopySlotDialog";
-import { assertDialogEscapeScopedToOwnWindow } from "./popupEscapeTestHelper";
+import { assertDialogEscapeScopedToOwnWindow } from "../../../test-utils/popupEscapeTestHelper";
 import type { SaveSlotSummary } from "../../../types";
 
 describe("DesktopCopySlotDialog", () => {
