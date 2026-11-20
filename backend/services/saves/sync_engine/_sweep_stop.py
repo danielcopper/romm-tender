@@ -1,8 +1,4 @@
-"""What a whole-library save sweep answers when the server stops it partway.
-
-It lives beside the engine rather than inside it because nothing is added to
-the engine's own module.
-"""
+"""What a whole-library save sweep answers when the server stops it partway."""
 
 from __future__ import annotations
 

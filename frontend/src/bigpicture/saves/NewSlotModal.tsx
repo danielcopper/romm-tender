@@ -28,9 +28,8 @@ export const NewSlotModal: FC<{
         label="Slot Name"
         value={value}
         onChange={(e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
-        // Enter (the on-screen keyboard's "Eingabe" key) confirms, same as the OK
-        // button — which is disabled while blank, so guard identically: a blank
-        // Enter is a no-op. ConfirmModal doesn't auto-close this manual path.
+        // Enter is the on-screen keyboard's "Eingabe" key. ConfirmModal doesn't
+        // auto-close this manual path.
         onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
           if (e.key === "Enter" && value.trim() !== "") {
             onSubmit(value.trim());

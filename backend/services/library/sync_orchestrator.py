@@ -29,30 +29,30 @@ ran. The recorder writes that answer, never picks it.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from domain.session_budget import post_run_advisory, session_memory_delta
+from domain.sibling_resolution import AUTO_REGION
 from domain.sync_diff import (
     StaleRow,
     group_keys_of,
     rebuilt_rows_filed_as_kept,
     select_stale_removals,
-    without_running_groups,
 )
 from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.background_tasks import BackgroundTasks
-from lib.errors import Refused, classify_error
+from lib.errors import Refused, RommPlatformListingUnreadable, classify_error
+from services.library._convergence import leave_running_groups_out
 from services.library._stale_rows import settle_stale_rows
 from services.library._state import SYNC_CANCELLED, SYNC_IN_PROGRESS
 from services.library._unit_roms import collection_membership_key
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
 
 if TYPE_CHECKING:
-    import logging
-
     from domain.work_unit import WorkUnit
     from services.library._state import CollectionMembership, LibrarySyncStateBox
     from services.library.collection_fetcher import CollectionDelivery
@@ -83,7 +83,9 @@ _SYNC_INTERRUPTED = "Sync interrupted (Steam UI stopped responding)"
 class SyncOrchestratorConfig:
     """Frozen wiring bundle handed to ``SyncOrchestrator.__init__``.
 
-    Holds runtime infrastructure (loop, logger), the event emitter the
+    Holds runtime infrastructure (loop, logger), the live settings (the
+    preferred region ``start_sync`` reads as it admits a run), the
+    event emitter the
     ``sync_plan`` and ``sync_stale`` events go out through, the Clock/UuidGen
     test seams, the shared :class:`LibrarySyncStateBox`, the
     :class:`LibraryFetcher` peer the orchestrator takes the work queue from and
@@ -107,6 +109,7 @@ class SyncOrchestratorConfig:
 
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
+    settings: dict[str, Any]
     emit: EventEmitter
     clock: Clock
     uuid_gen: UuidGen
@@ -147,6 +150,7 @@ class SyncOrchestrator:
     def __init__(self, *, config: SyncOrchestratorConfig) -> None:
         self._loop = config.loop
         self._logger = config.logger
+        self._settings = config.settings
         self._emit = config.emit
         self._clock = config.clock
         self._uuid_gen = config.uuid_gen
@@ -171,7 +175,8 @@ class SyncOrchestrator:
         if not box.try_begin_run(run_id, kind=SyncRunKind.APPLY):
             raise Refused("sync_in_progress", SYNC_IN_PROGRESS)
         box.sync_last_heartbeat = self._clock.monotonic()
-        self._tasks.spawn(self._do_sync_per_unit(), "library sync run")
+        preferred_region = self._settings.get("preferred_region", AUTO_REGION)
+        self._tasks.spawn(self._do_sync_per_unit(preferred_region=preferred_region), "library sync run")
         return {"success": True, "message": "Sync started"}
 
     def cancel_sync(self, run_id=None):
@@ -215,7 +220,8 @@ class SyncOrchestrator:
             raise Refused("stale_preview", "Preview expired, please re-sync")
         # The read drops an over-age snapshot on its way out, so a repeat apply
         # can't pick it up.
-        if box.read_fresh_preview(self._clock.time()) is None:
+        staged = box.read_fresh_preview(self._clock.time())
+        if staged is None:
             raise Refused("stale_preview", "Preview is older than 30 minutes, please re-run sync")
         # Admission guard: a rapid second apply (or an apply landing while a
         # sync is already in flight) must be rejected without consuming the
@@ -227,14 +233,18 @@ class SyncOrchestrator:
         box.discard_preview()
         box.sync_last_heartbeat = self._clock.monotonic()
 
-        self._tasks.spawn(self._do_sync_per_unit(), "library sync run")
+        self._tasks.spawn(self._do_sync_per_unit(preferred_region=staged.preferred_region), "library sync run")
 
         return {"success": True, "message": "Applying changes"}
 
     # ── Per-unit pipeline ────────────────────────────────────────
 
-    async def _do_sync_per_unit(self):
+    async def _do_sync_per_unit(self, *, preferred_region: str):
         """Per-unit sync pipeline (Phase 0 + per-unit dispatch + finalize).
+
+        *preferred_region* is the one value every unit and every collection
+        delivery of the run ranks by: the setting as the run's admission read
+        it, or the region of the staged preview the run applies (#2776 D2).
 
         Builds a work queue, opens a ``SyncRun`` for the planned counts,
         processes each platform/collection unit to completion (fetch ->
@@ -278,6 +288,7 @@ class SyncOrchestrator:
         # the skipped + committed work as the run proceeds.
         box.run_total_items = None
         box.run_done_items = 0
+        box.run_preferred_region = preferred_region
         # Re-arm the gate's measurement latch and stamp the run-start RSS baseline
         # for the last-run memory delta (#1383) — UNCONDITIONALLY, before any chunk is
         # applied, so even a fully-incremental-skip run reports an honest delta.
@@ -303,15 +314,22 @@ class SyncOrchestrator:
                 await self._progress.emit_cancelled(SYNC_CANCELLED)
                 raise
             except Exception as e:
-                self._logger.error(f"Failed to build work queue: {e}")
+                # An unreadable platform list is a warning, as every reader of
+                # it logs one (#2761 D8); any other failure here is an error.
+                unreadable = isinstance(e, RommPlatformListingUnreadable)
+                self._logger.log(
+                    logging.WARNING if unreadable else logging.ERROR,
+                    f"Failed to build work queue: {e}",
+                    exc_info=not unreadable,
+                )
                 _code, _msg = classify_error(e)
                 await self._progress.emit_progress(SyncStage.ERROR, message=_msg, running=False)
                 return
 
             total_units = len(work_queue)
-            total_roms_planned = sum(u.rom_count for u in work_queue)
+            total_roms_planned = sum(u.planned_count() for u in work_queue)
             # Skip-aware estimate total (#1382): predicted-skip units weigh 0,
-            # the rest their persisted collapsed count (raw ``rom_count``
+            # the rest their persisted collapsed count (``planned_count``
             # fallback). Estimate-only — it prices the frontend's seeds and
             # never feeds the actual skip decision (ADR-0023); ``total_roms``
             # below stays the raw planned total for backward compatibility.
@@ -581,13 +599,8 @@ class SyncOrchestrator:
         )
         converged = [binding for binding in converged if (binding.rom_id, binding.app_id) in removable]
         if converged:
-            # A platform unit's own reading may be minutes old by now: a group
-            # one of whose shortcuts runs at this point keeps them all (#2645 D6).
-            left = without_running_groups(converged, await self._running_rom_ids())
-            if len(left) < len(converged):
-                kept_for_now = len(converged) - len(left)
-                self._logger.info(f"Convergence: {kept_for_now} shortcut(s) of a running game stay until a later sync")
-            converged = left
+            # A platform unit's own reading may be minutes old by now: read again.
+            converged = leave_running_groups_out(converged, await self._running_rom_ids(), self._logger)
         remove = [{"rom_id": row.rom_id, "app_id": row.app_id} for row in stale]
         remove += [binding._asdict() for binding in converged]
         if remove:

@@ -58,7 +58,7 @@ async def _run(library, run_id: str) -> None:
     library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
     box.sync_state = SyncState.RUNNING
     box.current_sync_id = run_id
-    await library.sync._orchestrator._do_sync_per_unit()
+    await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
 
 def _walked_platforms(fake_romm_api) -> set[int]:

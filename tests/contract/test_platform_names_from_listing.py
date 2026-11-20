@@ -81,7 +81,7 @@ async def _apply(harness, run_id: str) -> dict[str, Any]:
     sync = harness.app.services.sync_service
     starts_at = len(harness.emit.call_args_list)
     assert sync._box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
-    await sync._orchestrator._do_sync_per_unit()
+    await sync._orchestrator._do_sync_per_unit(preferred_region="auto")
     (platform_app_ids,) = [
         c.args[1]["platform_app_ids"]
         for c in harness.emit.call_args_list[starts_at:]

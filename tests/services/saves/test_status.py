@@ -977,7 +977,7 @@ class TestMultiFileSlotConflictAggregation:
     game state spread across several files. The Play button's conflict state
     reads this read-only status path's ``conflicts`` array; if only the FIRST
     component's conflict were reported, a conflict on the 2nd/3rd component would
-    go unshown there while the mutating ``do_sync_rom_saves`` correctly flags it.
+    go unshown there while the mutating ``MatrixExecutor.sync_rom_saves`` correctly flags it.
     The status view must collect a row + any conflict for every component.
     """
 
@@ -1047,9 +1047,9 @@ class TestMultiFileSlotConflictAggregation:
 
         The Play button reads ``get_save_status``'s ``conflicts``, so for a slot
         whose non-first component (``.bcr``) is the one in conflict its view must
-        agree with ``do_sync_rom_saves``: both see ``{rally.bcr}``.
+        agree with ``MatrixExecutor.sync_rom_saves``: both see ``{rally.bcr}``.
 
-        Driving ``do_sync_rom_saves`` over this exact fixture does NOT mutate it:
+        Driving ``MatrixExecutor.sync_rom_saves`` over this exact fixture does NOT mutate it:
         ``.bkr`` is ``Skip(synced)`` (no transfer) and ``.bcr`` is ``Conflict``
         (no transfer — conflicts only append to the sink), so the local files
         the status path re-reads are unchanged and the set comparison is clean.
@@ -1327,7 +1327,7 @@ class TestGetSaveStatusRomLockSerialization:
 
     ``get_save_status`` does a get→mutate→save of ``rom_save_sync_states``. Held
     under ``SyncEngine.rom_lock(rom_id)``, it cannot interleave with a
-    concurrent ``do_sync_rom_saves`` and clobber that sync's write (#871).
+    concurrent ``MatrixExecutor.sync_rom_saves`` and clobber that sync's write (#871).
     """
 
     @pytest.mark.asyncio

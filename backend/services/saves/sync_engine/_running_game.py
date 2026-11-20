@@ -38,8 +38,9 @@ class RunningGameGuard:
         self._loop = loop
 
     async def is_running(self, rom_id: int) -> bool:
-        """Whether Steam lists *rom_id*'s shortcut as running right now."""
-        return rom_id in await self._running_rom_ids()
+        """Whether Steam lists *rom_id*'s shortcut as running right now; not where no reading could be taken."""
+        running = await self._running_rom_ids()
+        return running is not None and rom_id in running
 
     async def name_of(self, rom_id: int) -> str:
         """The name a sentence calls *rom_id*'s game by."""

@@ -761,6 +761,98 @@ def _member(rom_id, platform_id, **membership):
     return {"id": rom_id, "platform_id": platform_id, "platform_name": f"P{platform_id}", **membership}
 
 
+class TestACollectionsRomIsNamedAsTheTabNamesItsPlatform:
+    """#2761 D6: a ROM fetched through a collection, walked or rebuilt, carries its platform's tab name."""
+
+    @pytest.mark.asyncio
+    async def test_a_walked_rom_carries_its_platforms_listed_name_not_its_display_name(
+        self, make_library, fake_romm_api
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        library.sync._box.run_listed_platform_names = {"gc": "Nintendo GameCube (gc)"}
+        fake_romm_api.roms = {
+            2: {
+                "id": 2,
+                "platform_id": 12,
+                "platform_slug": "ngc",
+                "platform_fs_slug": "gc",
+                "platform_display_name": "GameCube",
+                "platform_name": "GameCube",
+                "collection_ids": [7],
+            },
+            3: {"id": 3, "platform_id": 13, "platform_slug": "n64", "platform_fs_slug": "n64", "collection_ids": [7]},
+        }
+
+        new_roms, _all_ids, _skipped, _restamp = await library.collection_fetcher.fetch_collection_unit(
+            _standard_unit(member_rom_ids=(2, 3), unwalked_platform_ids=(12, 13)), set()
+        )
+
+        assert [(r["id"], r["platform_name"]) for r in new_roms] == [(2, "Nintendo GameCube (gc)"), (3, "n64")]
+
+    @pytest.mark.asyncio
+    async def test_a_rebuilt_rom_carries_its_platforms_listed_name_not_its_slug(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        library.sync._box.run_listed_platform_names = {"gba": "Game Boy Advance"}
+        _seed_stamp(library.uow, member_rom_ids=(10,))
+        _seed_persisted_rom(library.uow, 10, app_id=1010, group_key="igdb:10:1", platform_slug="gba")
+        fake_romm_api.roms = {10: {"id": 10, "collection_ids": [7], "updated_at": "2026-01-01T00:00:00"}}
+
+        new_roms, _all_ids, skipped, _restamp = await library.collection_fetcher.fetch_collection_unit(
+            _user_collection_unit(rom_count=1, member_rom_ids=(10,)), set()
+        )
+
+        assert skipped is True
+        assert [(r["id"], r["platform_name"]) for r in new_roms] == [(10, "Game Boy Advance")]
+
+    @pytest.mark.asyncio
+    async def test_a_rebuilt_rom_is_named_by_its_platform_s_folder_not_its_slug(self, make_library, fake_romm_api):
+        from domain.rom import Rom
+
+        library = make_library(romm_api=fake_romm_api)
+        library.sync._box.run_listed_platform_names = {"gc": "Nintendo GameCube", "ngc": "Another platform"}
+        _seed_stamp(library.uow, member_rom_ids=(10,))
+        with library.uow as uow:
+            uow.roms.save(
+                Rom(
+                    rom_id=10,
+                    platform_slug="ngc",
+                    platform_fs_slug="gc",
+                    name="G10",
+                    fs_name="g10.iso",
+                    shortcut_app_id=1010,
+                    last_synced_at="2025-01-01T00:00:00",
+                    sibling_group_key="igdb:10:1",
+                )
+            )
+        fake_romm_api.roms = {10: {"id": 10, "collection_ids": [7], "updated_at": "2026-01-01T00:00:00"}}
+
+        new_roms, _all_ids, skipped, _restamp = await library.collection_fetcher.fetch_collection_unit(
+            _user_collection_unit(rom_count=1, member_rom_ids=(10,)), set()
+        )
+
+        assert skipped is True
+        assert [(r["id"], r["platform_name"]) for r in new_roms] == [(10, "Nintendo GameCube")]
+
+    @pytest.mark.asyncio
+    async def test_a_run_names_its_platforms_before_any_collection_brings_a_rom(self, make_library, fake_romm_api):
+        """The names are the run's own listing, read while the work queue is built, before any unit is fetched."""
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = [
+            {"id": 12, "slug": "ngc", "fs_slug": "gc", "name": "Nintendo GameCube", "rom_count": 1}
+        ]
+        fake_romm_api.collections.append({"id": 7, "name": "Faves", "rom_count": 1, "rom_ids": [2]})
+        fake_romm_api.roms = {
+            2: {"id": 2, "platform_id": 12, "platform_slug": "ngc", "platform_fs_slug": "gc", "collection_ids": [7]}
+        }
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_collections"] = {"standard": {"7": True}, "smart": {}, "virtual": {}}
+
+        [unit] = await library.sync._fetcher.build_work_queue()
+        new_roms, _all_ids, _skipped, _restamp = await library.collection_fetcher.fetch_collection_unit(unit, set())
+
+        assert [(r["id"], r["platform_name"]) for r in new_roms] == [(2, "Nintendo GameCube")]
+
+
 class TestCollectionMembersFromTheListing:
     """A collection unit fetches only the listed members no unit delivered (#2356)."""
 
@@ -783,10 +875,11 @@ class TestCollectionMembersFromTheListing:
         self, make_library, fake_romm_api
     ):
         library = make_library(romm_api=fake_romm_api)
+        library.sync._box.run_listed_platform_names = {"p2": "Platform Two"}
         fake_romm_api.roms = {
             1: _member(1, 1, collection_ids=[7]),
-            2: _member(2, 2, collection_ids=[7]),
-            3: _member(3, 3, collection_ids=[7]),
+            2: _member(2, 2, collection_ids=[7], platform_fs_slug="p2"),
+            3: _member(3, 3, collection_ids=[7], platform_fs_slug="p3"),
         }
         synced = {1}
 
@@ -796,7 +889,7 @@ class TestCollectionMembersFromTheListing:
 
         assert _collection_walks(fake_romm_api) == [("list_roms_by_collection", (2, 3))]
         assert [r["id"] for r in new_roms] == [2, 3]
-        assert {r["platform_name"] for r in new_roms} == {"P2", "P3"}
+        assert [r["platform_name"] for r in new_roms] == ["Platform Two", "p3"]
         assert all_ids == [1, 2, 3]
         assert synced == {1, 2, 3}
 

@@ -406,9 +406,14 @@ class SettingsService:
 
     # ── Collection grouping ─────────────────────────────────────────────
 
-    def save_collection_platform_groups(self, enabled: bool) -> dict[str, Any]:
-        """Persist the collection platform-group toggle."""
-        self._settings["collection_create_platform_groups"] = bool(enabled)
+    def save_collection_platform_groups(self, enabled: object) -> dict[str, Any]:
+        """Validate and persist the collection platform-group toggle.
+
+        A non-bool from the untrusted frontend wire is rejected.
+        """
+        if not isinstance(enabled, bool):
+            raise Refused("invalid_value", "Invalid value")
+        self._settings["collection_create_platform_groups"] = enabled
         self._settings_persister.save_settings()
         return {"success": True}
 

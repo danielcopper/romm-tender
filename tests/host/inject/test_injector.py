@@ -253,12 +253,17 @@ class TestWhatItReadsForTheApplication:
 
         assert await running.injector.running_apps() == ()
 
-    async def test_a_list_steam_would_not_give_is_no_reading(self, injecting):
+    async def test_a_list_steam_would_not_give_is_no_reading_and_its_reason_is_logged(self, injecting, caplog):
         running = await injecting()
         await wait_until(lambda: running.page.marker)
         running.page.running_apps = None
 
-        assert await running.injector.running_apps() is None
+        with caplog.at_level(logging.DEBUG, logger="test_injector"):
+            assert await running.injector.running_apps() is None
+        assert any(
+            "Steam's running apps could not be read: Steam's list of running apps could not be read" in r.message
+            for r in caplog.records
+        )
 
     async def test_with_the_panel_not_loaded_at_all_no_reading_can_be_taken(self, injecting):
         running = await injecting(override=INJECT_OFF)

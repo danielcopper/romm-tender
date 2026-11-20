@@ -25,7 +25,8 @@ from domain.fetch_generation import (
     count_rows_for_skip,
     hidden_without_a_listed_version,
 )
-from domain.platform_names import listed_fs_slug, listed_platform_folders, listed_platform_names
+from domain.platform_listing import platform_entries, platform_entry_of
+from domain.platform_names import listed_platform_folders, listed_platform_names, platform_tab_name
 from domain.platform_prefs import platform_sync_enabled, stored_switches, switches_as_read, switches_kept_by_id
 from domain.platform_skip import probe_verdict, stamp_can_match
 from domain.platform_sync_state import stamp_for_skip
@@ -39,7 +40,7 @@ from domain.sync_diff import ExactAnswers
 from domain.sync_state import SyncCancelled
 from domain.virtual_collection_id import virtual_types_to_list
 from domain.work_unit import WorkUnit, collection_units
-from lib.errors import Refused, RommNotFoundError
+from lib.errors import Refused, RommNotFoundError, RommPlatformListingUnreadable
 from lib.romm_paging import LIST_PAGE_SIZE
 from services.library._fetch_pages import emit_fetch_page_progress, raise_if_cancelling
 
@@ -47,6 +48,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable, Collection, Mapping
 
+    from domain.platform_listing import PlatformEntry
     from domain.platform_sync_state import PlatformSyncState
     from domain.sync_diff import RomAnswer
     from services.library._fetch_pages import EmitProgressFn
@@ -151,6 +153,25 @@ class LibraryFetcherConfig:
     platform_switches: PlatformSwitchesWriter
 
 
+def _platform_unit(entry: PlatformEntry, names: Mapping[str, str]) -> WorkUnit:
+    """The work unit of one switched-on platform, named as the Platforms tab names it (#2761 D2, D3).
+
+    A switched-on platform has an ``fs_slug``, and none of those is listed
+    without an id (``RommApiAdapter.list_platforms``); one that is all the same
+    fails the listing rather than being left out (#2761 D4).
+    """
+    if entry.platform_id is None or entry.fs_slug is None:
+        raise RommPlatformListingUnreadable(f"platform {entry.fs_slug or entry.slug} has no usable id")
+    return WorkUnit(
+        type="platform",
+        id=entry.platform_id,
+        name=platform_tab_name(names, entry.fs_slug, entry.slug),
+        slug=entry.slug or "",
+        rom_count=entry.rom_count,
+        platform_folder=entry.fs_slug,
+    )
+
+
 class LibraryFetcher:
     """Library fetch sub-service: platform/collection metadata, the work queue, a platform unit's ROMs."""
 
@@ -181,23 +202,21 @@ class LibraryFetcher:
         platforms = await self._read_listing()
         switches = switches_as_read(stored_switches(self._settings), switches_kept_by_id(self._settings), platforms)
 
-        # One row per platform, by its fs_slug, named as its Steam collection is (#2452 D1, D2).
+        # One row per platform, by its fs_slug, named as its Steam collection is (#2452 D1, D2, #2761 D3).
+        # A rom_count that is no number is unknown, and the row is shown without one (#2761 D5).
         names = listed_platform_names(platforms)
-        result = []
-        for p in platforms:
-            rom_count = p.get("rom_count", 0)
-            fs_slug = listed_fs_slug(p)
-            if rom_count == 0 or fs_slug is None:
-                continue
-            entry = {
-                "id": p["id"],
-                "name": names.get(fs_slug, p.get("name", "")),
-                "slug": p.get("slug", ""),
+        result = [
+            {
+                "id": entry.platform_id,
+                "name": platform_tab_name(names, fs_slug, entry.slug),
+                "slug": entry.slug or "",
                 "fs_slug": fs_slug,
-                "rom_count": rom_count,
+                "rom_count": entry.rom_count,
                 "sync_enabled": platform_sync_enabled(switches, fs_slug),
             }
-            result.append(entry)
+            for entry in platform_entries(platforms)
+            if (fs_slug := entry.fs_slug) is not None and entry.rom_count != 0
+        ]
         return {"success": True, "platforms": result}
 
     async def save_platform_sync(self, platform_folder: str, enabled: bool):
@@ -308,7 +327,7 @@ class LibraryFetcher:
         if kind not in ("standard", "smart", "virtual"):
             raise Refused("invalid_kind", f"Invalid collection kind: {kind}")
         buckets = self._get_enabled_collections_buckets()
-        buckets[kind][str(collection_id)] = bool(enabled)
+        buckets[kind][str(collection_id)] = enabled
         self._settings["enabled_collections"] = buckets
         self._settings_persister.save_settings()
         return {"success": True}
@@ -331,7 +350,7 @@ class LibraryFetcher:
             return {"success": True}
         buckets = self._get_enabled_collections_buckets()
         for cid in collection_ids:
-            buckets[kind][str(cid)] = bool(enabled)
+            buckets[kind][str(cid)] = enabled
         self._settings["enabled_collections"] = buckets
         self._settings_persister.save_settings()
         return {"success": True}
@@ -372,11 +391,19 @@ class LibraryFetcher:
         if by_id is not None:
             self._logger.warning("The per-platform sync toggles kept by RomM's platform ids have not moved; read by id")
         switches = switches_as_read(stored_switches(self._settings), by_id, listed)
-        platforms = [p for p in listed if platform_sync_enabled(switches, listed_fs_slug(p))]
-        self._logger.info(f"Syncing {len(platforms)} platforms: {[p['name'] for p in platforms]}")
-        synced_ids = {int(p["id"]) for p in platforms}
-        left_off_ids = tuple(int(p["id"]) for p in listed if int(p["id"]) not in synced_ids)
-        return platforms, left_off_ids
+        names = self._sync_state.run_listed_platform_names
+        read = list(zip(listed, platform_entries(listed), strict=True))
+        synced = [(p, entry) for p, entry in read if platform_sync_enabled(switches, entry.fs_slug)]
+        self._logger.info(
+            f"Syncing {len(synced)} platforms: {[platform_tab_name(names, e.fs_slug, e.slug) for _p, e in synced]}"
+        )
+        synced_ids = {entry.platform_id for _p, entry in synced}
+        left_off_ids = tuple(
+            platform_id
+            for _p, entry in read
+            if (platform_id := entry.platform_id) is not None and platform_id not in synced_ids
+        )
+        return [p for p, _entry in synced], left_off_ids
 
     def _check_cancelling(self):
         """Raise SyncCancelled if sync is being cancelled."""
@@ -407,17 +434,8 @@ class LibraryFetcher:
         # Asked once per run, and the run's only source of what is hidden (#2502 D2).
         hidden = await self._loop.run_in_executor(None, self._romm_api.read_hidden_rom_ids)
         self._sync_state.run_hidden_rom_ids = hidden
-        platform_units = [
-            WorkUnit(
-                type="platform",
-                id=int(platform["id"]),
-                name=platform.get("name", platform.get("display_name", "Unknown")),
-                slug=platform.get("slug", ""),
-                rom_count=int(platform.get("rom_count", 0)),
-                platform_folder=listed_fs_slug(platform) or "",
-            )
-            for platform in platforms
-        ]
+        names = self._sync_state.run_listed_platform_names
+        platform_units = [_platform_unit(platform_entry_of(platform), names) for platform in platforms]
         units.extend(await self._attach_plan_estimates(platform_units))
 
         buckets = self._get_enabled_collections_buckets()
@@ -694,9 +712,17 @@ class LibraryFetcher:
                     if stamp is not None and all_rows
                     else None
                 )
-                new_shortcuts = new_shortcut_count(
-                    ((rom.sibling_group_key, rom.shortcut_app_id is not None) for rom in all_rows),
-                    unit_rom_count=unit.rom_count,
+                # Without RomM's count no create estimate is sent (#2761 D5); the
+                # plan then weighs the platform at its collapsed count where one
+                # is known, else at 0, which reads short — the exception
+                # docs/architecture/backend-architecture.md names beside the rule.
+                new_shortcuts = (
+                    None
+                    if unit.rom_count is None
+                    else new_shortcut_count(
+                        ((rom.sibling_group_key, rom.shortcut_app_id is not None) for rom in all_rows),
+                        unit_rom_count=unit.rom_count,
+                    )
                 )
                 estimates[unit.platform_folder] = _PlanEstimate(predicted, collapsed, bound_count, new_shortcuts)
         return estimates
@@ -778,7 +804,7 @@ class LibraryFetcher:
     def _decorate_reconstructed(
         roms: list[dict[str, Any]], platform_name: str, platform_slug: str, platform_id: int
     ) -> list[dict[str, Any]]:
-        """Stamp the live platform display name/slug/id onto reconstructed ROM dicts.
+        """Stamp the unit's platform name/slug/id onto reconstructed ROM dicts.
 
         ``platform_id`` is the unit's own platform id (every reconstructed row is
         this one platform's), stamped so a reconstructed dict is shaped like a live
@@ -789,7 +815,6 @@ class LibraryFetcher:
         for rom in roms:
             rom["platform_name"] = platform_name
             rom["platform_slug"] = platform_slug
-            rom["platform_display_name"] = platform_name
             rom["platform_id"] = platform_id
         return roms
 
@@ -943,7 +968,8 @@ class LibraryFetcher:
         unit_roms: list[dict[str, Any]] = []
         offset = 0
         limit = LIST_PAGE_SIZE
-        total_pages = (unit.rom_count + limit - 1) // limit if unit.rom_count else 0
+        planned = unit.planned_count()
+        total_pages = (planned + limit - 1) // limit if planned else 0
         page_num = 0
         while True:
             self._check_cancelling()

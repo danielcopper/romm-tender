@@ -92,6 +92,9 @@ class RommFirmwareApi(Protocol):
         """Fetch every platform with the firmware files RomM holds for it.
 
         Returns /api/platforms, each platform carrying its files as ``firmware``.
+        Raises ``RommPlatformListingUnreadable`` (``lib/errors.py``) for an
+        answer the adapter cannot read; a firmware entry that is no list is the
+        firmware read's to refuse.
         """
         ...
 
@@ -109,7 +112,9 @@ class RommPlatformReader(Protocol):
     def list_platforms(self) -> list[dict[str, Any]]:
         """Fetch all platforms configured on the RomM server.
 
-        Returns a list of platform dicts from /api/platforms.
+        Returns a list of platform dicts from /api/platforms. Raises
+        ``RommPlatformListingUnreadable`` (``lib/errors.py``) where Tender
+        cannot read the answer.
         """
         ...
 
@@ -390,7 +395,11 @@ class RommSaveApi(Protocol):
         device_id: str | None = None,
         optimistic: bool = True,
     ) -> None:
-        """Stream save content; ``optimistic=False`` with ``device_id`` defers the sync ack to ``confirm_download``."""
+        """Stream save content to ``dest_path`` via ``/api/saves/{save_id}/content``.
+
+        Without ``device_id`` the request names no device to RomM;
+        ``optimistic=False`` with one defers the sync ack to ``confirm_download``.
+        """
         ...
 
     def confirm_download(self, save_id: int, device_id: LiveDeviceId, *, content_hash: str) -> dict[str, Any]:
@@ -408,10 +417,6 @@ class RommSaveApi(Protocol):
 
         Each slot carries its save count and its newest save (RomM 5.3.0 ``SlotSummarySchema``).
         """
-        ...
-
-    def download_save(self, save_id: int, dest_path: str) -> None:
-        """Stream a single save file to ``dest_path`` via ``/api/saves/{save_id}/content``."""
         ...
 
     def delete_server_saves(self, save_ids: list[int]) -> dict[str, Any]:

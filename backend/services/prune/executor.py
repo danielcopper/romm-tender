@@ -28,7 +28,7 @@ from services.prune._models import (
 )
 from services.prune.finalize import GroupFinalizer, GroupFinalizerConfig
 from services.prune.liveness import LivenessProber, LivenessProberConfig
-from services.prune.planning import GAME_RUNNING_MESSAGE, GroupPlan, GroupPlanner, GroupPlannerConfig
+from services.prune.planning import GroupPlan, GroupPlanner, GroupPlannerConfig, running_refusal
 from services.prune.results import GroupOutcome, MutationLedger, PruneResultReporter, PruneResultReporterConfig
 from services.prune.save_locks import SaveLockCoordinator, SaveLockCoordinatorConfig
 from services.prune.steam_actions import SteamActionRunner, SteamActionRunnerConfig
@@ -445,12 +445,15 @@ class PruneExecutor:
             return self._results.group_result(
                 plan.rows, "skipped", "download_in_progress", "Cancel active downloads first."
             )
-        if plan.bound_row is not None and plan.bound_row.rom_id in await self._running_rom_ids():
+        refusal = (
+            None if plan.bound_row is None else running_refusal(plan.bound_row.rom_id, await self._running_rom_ids())
+        )
+        if refusal is not None:
             return self._results.group_result(
                 plan.rows,
                 "skipped",
-                "game_running",
-                GAME_RUNNING_MESSAGE,
+                refusal.reason,
+                refusal.message,
                 GroupOutcome(bundle_path=handle.bundle_path if handle else None),
             )
         guard = await self._reprove_liveness(plan)

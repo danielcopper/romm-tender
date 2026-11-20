@@ -459,7 +459,9 @@ export interface ForgetDownloadResult {
   path?: string;
 }
 export const forgetDownload = endpoint<[number], ForgetDownloadResult>("forget_download");
-export const getPlatforms = endpoint<[], { success: boolean; platforms: PlatformSyncSetting[] }>("get_platforms");
+export const getPlatforms = endpoint<[], { success: boolean; platforms: PlatformSyncSetting[]; reason?: WireReason }>(
+  "get_platforms",
+);
 // The toggle is keyed by the platform's fs_slug (#2452 D8).
 // `reason` and `message` only come with a failure: both answer a bare
 // `{success: true}`, so a caller reading either on the success shape reads

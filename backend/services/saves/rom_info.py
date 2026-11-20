@@ -13,13 +13,16 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.emulator_choice import starting_entry
 from domain.emulator_sources import RETRODECK
 from domain.retrodeck_folders import FolderRefused
 from domain.save_answer import UNESTABLISHED_NOT_ASKED, unestablished_answer
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Callable
 
+    from domain.emulator_commands import EmulatorOption
     from domain.save_answer import SaveAnswer
     from services.protocols import (
         ActiveCoreReader,
@@ -86,7 +89,9 @@ class RomInfoService:
         if installed is None:
             return None
         system, file_path, platform_slug = installed
-        answer = save_answer if save_answer is not None else self._installed_answer(rom_id, system, file_path)
+        answer = save_answer
+        if answer is None:
+            answer = self._installed_answer(system, file_path, self._fresh_entry(rom_id))
         return {
             "system": system,
             "rom_name": os.path.splitext(os.path.basename(file_path))[0],
@@ -136,22 +141,36 @@ class RomInfoService:
         row, no name, no platform — the answer is ``unestablished``, which is a
         refusal and never a guess.
         """
+        return self._answer(rom_id, self._fresh_entry(rom_id))
+
+    def save_answer_and_start_label(self, rom_id: int) -> tuple[SaveAnswer, str | None]:
+        """:meth:`save_answer` and the label of the entry this ROM starts with, from one resolution of its emulator.
+
+        The label is the entry's as the emulator menu shows it, ``None`` where
+        the ROM has none — never a name derived from the answer's ``emulator``,
+        which is the emulator's identity rather than anything a user picked by.
+        The entry is resolved even where no question can be put, because the
+        label does not depend on a path.
+        """
+        entry = starting_entry(self._active_core.resolve_rom(int(rom_id)))
+        answer = self._answer(rom_id, lambda: entry)
+        return answer, entry.label if entry is not None else None
+
+    def _fresh_entry(self, rom_id: int) -> Callable[[], EmulatorOption | None]:
+        return lambda: self._active_core.active_emulator_for_rom(int(rom_id))
+
+    def _answer(self, rom_id: int, entry: Callable[[], EmulatorOption | None]) -> SaveAnswer:
+        """The save answer, asked of the entry the ROM starts with as *entry* yields it.
+
+        *entry* is called only where a question can be put, so a ROM with no
+        path to ask about resolves nothing here.
+        """
         installed = self._install_row(rom_id)
         if installed is not None:
-            return self._installed_answer(rom_id, installed[0], installed[1])
-        return self._uninstalled_answer(rom_id)
+            return self._installed_answer(installed[0], installed[1], entry)
+        return self._uninstalled_answer(rom_id, entry)
 
-    def start_label(self, rom_id: int) -> str | None:
-        """The label of the entry this ROM starts with, as the emulator menu shows it, or ``None`` where it has none.
-
-        Never a name derived from a save answer's ``emulator``, which is the
-        emulator's identity rather than anything a user picked by.
-        """
-        resolved = self._active_core.resolve_rom(int(rom_id))
-        option = resolved.choice.option if resolved is not None else None
-        return option.label if option is not None else None
-
-    def _uninstalled_answer(self, rom_id: int) -> SaveAnswer:
+    def _uninstalled_answer(self, rom_id: int, entry: Callable[[], EmulatorOption | None]) -> SaveAnswer:
         """The answer for a ROM the library holds but the disk does not.
 
         Its ``fs_name`` carries the extension the answer turns on, so the
@@ -176,9 +195,9 @@ class RomInfoService:
             # No folder a download could land in, so no path to ask about.
             return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
         content_path = os.path.join(folder, rom.fs_name)
-        return self._ask_resolver(rom_id, system, content_path, installed=False)
+        return self._ask_resolver(system, content_path, entry(), installed=False)
 
-    def _installed_answer(self, rom_id: int, system: str, file_path: str) -> SaveAnswer:
+    def _installed_answer(self, system: str, file_path: str, entry: Callable[[], EmulatorOption | None]) -> SaveAnswer:
         """The answer for an installed ROM, asked about the file on disk.
 
         The system is the NORMALIZED one the install record carries, never the
@@ -188,16 +207,17 @@ class RomInfoService:
         :meth:`_uninstalled_answer` is the other — so the leak has two sites to
         guard here rather than one per caller.
         """
-        return self._ask_resolver(rom_id, system, file_path, installed=True)
+        return self._ask_resolver(system, file_path, entry(), installed=True)
 
-    def _ask_resolver(self, rom_id: int, system: str, content_path: str, *, installed: bool) -> SaveAnswer:
-        """Put the question to the emulator this ROM would launch with.
+    def _ask_resolver(
+        self, system: str, content_path: str, emulator: EmulatorOption | None, *, installed: bool
+    ) -> SaveAnswer:
+        """Put the question to *emulator*, the entry this ROM would launch with.
 
         *installed* says whether *content_path* is a file on disk or the path
         the ROM would occupy, and rides onto the answer so a surface never
         renders a prediction as an observation.
         """
-        emulator = self._active_core.active_emulator_for_rom(int(rom_id))
         return self._save_locations.resolve_save_answer(
             system=system,
             content_path=content_path,

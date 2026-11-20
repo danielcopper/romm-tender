@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
-from domain.collection_name import fold_collection_name
+from domain.collection_name import spelling_by_fold
 from domain.main_sibling import main_sibling_flag
 from domain.rom_file import has_file_on_romm
 from domain.sibling_resolution import AUTO_REGION, canonical_group_name, fs_name_stem, resolve_group_representative
@@ -92,7 +92,7 @@ def classify_roms(
     it is a derived display field, never persisted on the ``roms`` row. The
     registry side resolves it from the enabled-platforms-only ``fs_slug``→name map
     (falling back to the bare slug for a disabled platform), while an entry
-    carries RomM's display name, so a divergence between the two can never be
+    carries the name the Platforms tab gives its platform, so a divergence between the two can never be
     healed by an apply (the upsert writes only platform_slug/name/fs_name) —
     comparing it produced a permanent phantom "changed" delta (#1292). Platform
     display renames are diffed separately by
@@ -452,7 +452,6 @@ def converge_bound_groups(
     *,
     platform_folders: AbstractSet[str],
     preferred_region: str = AUTO_REGION,
-    running_rom_ids: AbstractSet[int] = frozenset(),
     hidden_rom_ids: Collection[int] = frozenset(),
 ) -> list[ConvergedBinding]:
     """Every bound row of *platform_folders* whose group keeps another row's shortcut (#2645).
@@ -484,9 +483,8 @@ def converge_bound_groups(
     (:func:`sort_stale_rows`), so it neither keeps the group's shortcut nor
     hands it to another row (#2502 D1).
 
-    A group one of whose bound rows is in *running_rom_ids* is left out: its
-    shortcut is not removed under a game Steam lists as running, and the group
-    converges on a later run (#2645 D5).
+    Whether a group's game runs is not asked here: :func:`without_running_groups`
+    leaves such a group out of the answer.
     """
     members_by_id = {sd["rom_id"]: sd for sd in listed}
     listed_keys = {sd.get("sibling_group_key") for sd in listed}
@@ -502,8 +500,6 @@ def converge_bound_groups(
     bindings: list[ConvergedBinding] = []
     for key in sorted(converging):
         bound = sorted(bound_by_group[key], key=lambda item: item[0])
-        if any(rom_id in running_rom_ids for rom_id, _reg in bound):
-            continue
         kept_id = _kept_rom_id([rom_id for rom_id, _reg in bound], members_by_id, installed_rom_ids, preferred_region)
         kept_app_id = int(dict(bound)[kept_id]["app_id"])
         bindings.extend(
@@ -1040,8 +1036,8 @@ def compute_collection_diff(
     ``has_changes`` is True if there are any added/removed collections, or if
     there are any current collections at all (covers first-sync case).
     """
-    current = _spelling_by_fold(current_collection_names)
-    previous = _spelling_by_fold(last_synced_collections)
+    current = spelling_by_fold(current_collection_names)
+    previous = spelling_by_fold(last_synced_collections)
     added = sorted(name for fold, name in current.items() if fold not in previous)
     removed = sorted(name for fold, name in previous.items() if fold not in current)
     return {
@@ -1049,14 +1045,6 @@ def compute_collection_diff(
         "added": added,
         "removed": removed,
     }
-
-
-def _spelling_by_fold(names: Iterable[str]) -> dict[str, str]:
-    """Map each folded name to its sorted-first spelling among *names*."""
-    spelling: dict[str, str] = {}
-    for name in sorted(names):
-        spelling.setdefault(fold_collection_name(name), name)
-    return spelling
 
 
 def should_include_in_platform_collection(
@@ -1154,8 +1142,8 @@ def compute_platform_collection_diff(
         if name is not None:
             future_platforms.add(name)
 
-    future = _spelling_by_fold(future_platforms).keys()
-    previous = _spelling_by_fold(last_synced_platforms).keys()
+    future = spelling_by_fold(future_platforms).keys()
+    previous = spelling_by_fold(last_synced_platforms).keys()
     added_count = len(future - previous)
     removed_count = len(previous - future)
     return {

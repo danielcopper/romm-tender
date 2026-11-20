@@ -1,8 +1,8 @@
 # Frontend dev loop
 
 Iterate on the panel from Desktop Mode on the Steam Deck: edit code next to one of Steam's windows — windowed Big
-Picture or the desktop client — with the backend running beside it. Nothing is deployed anywhere and no plugin loader is
-involved.
+Picture or the desktop client — with the backend running beside it. The tasks below run the panel and the backend
+straight from your checkout, with no install and no plugin loader involved.
 
 ## The loop
 
@@ -389,6 +389,132 @@ own game page. The two resets build nothing, so they leave whichever bundle is i
 To inspect it, open a RomM shortcut in the desktop client's library, and select the desktop client window's target in
 DevTools (below). What the watcher found and what failed is in the backend's log, on the lines starting `desktop:`: its
 failures at any log level, the rest only with Tender's log level at Info or Debug.
+
+## A remote target
+
+`setup:remote-target` prepares another machine than the one you write code on — a Steam Deck beside a build host, say —
+as a **target** with a name, for the dev tasks' `--target`. The target needs no checkout and no toolchain; it is
+prepared once, from the build host:
+
+```bash
+mise run setup:remote-target <name> <destination>           # log in, install, and record the target here
+mise run setup:remote-target <name> <destination> --print   # print a script to run on the target instead
+```
+
+`<destination>` is anything your own `ssh` reaches: `deck@192.168.1.20`, or an alias from your `~/.ssh/config`, which
+the setup reads with `ssh -G` and never writes. `<name>` is yours to choose — letters, digits, `.`, `_` and `-`.
+
+### What the setup does
+
+1. **It checks the login before it writes anything**, here or on the target. Where the build host already holds the dev
+   loop's key, it logs in with that key alone first, asking for no password and reading none of your SSH config. It logs
+   in through your own `ssh` instead — with whatever access that already has: a password, or a key from your agent or
+   your SSH config — when there is no key yet, when the target refuses the key, when the target takes the key but its
+   dispatcher runs no install (gone, or older than the setup request), and when a jump host on the way refuses the key's
+   login, since your own config may pass it.
+2. **It creates the build host's key for targets** if there is none: `~/.config/romm-tender-dev/id_ed25519`. One key
+   serves every target.
+3. **It records the target's host key** in the dev loop's own known-hosts file. At first contact `ssh` shows the
+   fingerprint and asks, as it always does — even for a machine your own `~/.ssh/known_hosts` already knows, because
+   that file is not the one the dev loop's entries name. The record is filed under the target's name
+   (`romm-tender-dev.<name>`) rather than its address, so a target at a new address keeps it.
+4. **It installs on the target**, under `~/.local/lib/romm-tender-dev/`: `current/` (the running tree), `incoming/` (the
+   copy the build host sends), and `dispatch.sh` beside them, where no copy reaches it. It rebuilds
+   `~/.ssh/authorized_keys` with one line for the key, a comment above it naming the build host and the time, and every
+   other line as it was; a rebuilt file that came out short, or without the new line last, is not put in place. A
+   symlinked `authorized_keys` is written through: the file it names is replaced, and the link stays; a link into a
+   place that cannot be written stops the setup with the line to add there through whatever manages it. The install is
+   the script `scripts/dev_target_install.sh`, sent with its values filled in.
+5. **It writes the target into the dev loop's own SSH config**, `~/.config/romm-tender-dev/ssh_config`: the address,
+   port, user and jump host or proxy command the destination resolved to, the dev loop's key and nothing else, and its
+   known-hosts file. Your `~/.ssh/config` serves only the setup's `ssh -G` and its login through your own `ssh`; the
+   entry is written to be read with this file alone, and so with the restricted key alone. A jump host is written out as
+   `user@address:port`, since an alias from your config means nothing in this one; a proxy command goes in as `ssh -G`
+   prints it.
+6. **It checks that the dev loop can reach the target** with that file alone: one more login, through the entry just
+   written and the dev loop's key, which sends an empty setup request. Its leg to the target runs in batch mode and asks
+   for nothing, the target's host key being recorded by then; a jump host's leg reads that file too, but no entry the
+   setup writes names it, and the batch mode given on the command line reaches only the target's leg, so it may still
+   ask, about its host key among others. Only when the login gets in does the setup end as done. Otherwise the target is
+   set up all the same, and so is its entry, but the setup ends saying the dev loop cannot reach it with its own config,
+   with what `ssh` said and that the dev loop's config carries none of yours — a jump host your own config lets past,
+   with settings of its own there, is the likely case.
+
+Run again, it changes what changed: one key, one `authorized_keys` line and one config entry, however often it runs.
+That is also how a target is repaired. While the build host's address is the one the line names, the repair needs no
+password: the dev loop's key logs in, and the dispatcher's setup request runs the same install. After the build host's
+address changed, the target refuses the key, and the repair needs a login of your own — or, on a target without one,
+`--print`.
+
+### What the key may do on the target
+
+The `authorized_keys` line restricts the key three ways:
+
+- **`from=`** — to the build host's address **as the target sees it**: the one `$SSH_CLIENT` shows in the setup login,
+  which behind a jump host is the jump host's. This is the bound that holds: the key may copy a tree in and run a script
+  out of it, so a copy of the key used from anywhere else would run code on the target. When the build host's address
+  changes, the target refuses the key — run the setup again.
+- **`command=`** — to the dispatcher, which runs instead of whatever the key asks for and decides from that request
+  alone. It lets four kinds through: the setup's install script; `rsync` receiving into `incoming/` and nowhere else;
+  the incoming copy's `scripts/dev_target.sh`; and reads of the backend's log and of its database. Everything else, a
+  login among it, is refused; the exact requests are in the header of `scripts/dev_dispatch.sh`. The setup request puts
+  the dispatcher itself within the key's reach, which grants nothing the key lacks: `dev_target.sh` already runs
+  whatever tree the key copied in, so `from=` is the bound either way.
+- **`restrict`** — no terminal, no forwarding of any kind.
+
+### A target you cannot log into yet: `--print`
+
+A target with no password login and no key of yours on it cannot be logged into, so `--print` contacts nothing and
+prints a script instead:
+
+```bash
+mise run setup:remote-target deck deck@192.168.1.20 --print > setup-deck.sh
+```
+
+Copy it to the target by any means and run it there with `sh setup-deck.sh`. It does the same install, and shows the
+target's host key fingerprints. By default it restricts the key to the address the build host sends from towards the
+target (`ip route get`), written into the script, and the script says which before it writes anything; if the target
+sees the build host at another address — through NAT, say — give that one instead: `sh setup-deck.sh 10.8.0.6`. Then run
+the setup on the build host again, without `--print`: it logs in with the key, `ssh` shows the fingerprint for you to
+compare with the script's, and the setup installs through the key once more, records the target and finishes. If the key
+is refused at that point, the message names the script's default address as the likely cause.
+
+`--print` refuses a destination behind a jump host or a proxy command: the target would see that hop's address, which
+the build host cannot know.
+
+### When the setup refuses
+
+Four ways the login can fail end the setup with what to do next, and **nothing changed, here or on the target**:
+
+| `ssh` reports                   | What to do                                                                                   |
+| ------------------------------- | -------------------------------------------------------------------------------------------- |
+| a name it cannot resolve        | give the target's address, or a name the network resolves                                    |
+| no SSH server answering         | check the address, and that the target runs an SSH server                                    |
+| no login accepted               | `--print`, as above — behind a jump host or proxy command, a login of yours on the target    |
+| a host key not the recorded one | another machine may answer at that address; if the target was reinstalled, remove its record |
+
+When `ssh` names a jump host on the way as the one that failed — a name this machine cannot resolve, a host key your own
+files record differently, a login it refused, no server answering — the message names the hop, and the setup leaves your
+files alone; where `ssh` names no host, the message names the target or the hop. A host key you decline, or one `ssh`
+cannot ask about without a terminal, ends the setup the same way. A login that runs no install at all ends it too, and
+there the message gives what `ssh` said; when the target took the dev loop's key and its forced command failed, the
+message says so as well.
+
+A failure once the install has started is the target's, not the login's. Where the install refuses to go on, the setup
+gives its reason and this machine is unchanged; running it again as it stands changes nothing, so the reason says what
+to do. The install refuses on three things:
+
+- no address it can restrict the key to;
+- a rebuilt `authorized_keys` that did not come out whole;
+- a symlinked `authorized_keys` that cannot be resolved, or that resolves into a place that cannot be written — the
+  message gives the line to add there through whatever manages it.
+
+Anything else that stops the install is no fault of its own: it builds its files first and moves them into place last,
+so the setup says it stopped part-way, this machine is unchanged, and running it again finishes it. A failure writing
+this machine's side after the target is set up is named with its file, and running the setup again finishes that too.
+
+A target whose address changed is set up again with the new one, and needs no password for it: the key still holds,
+because `from=` bounds the build host's address, not the target's.
 
 ## DevTools
 

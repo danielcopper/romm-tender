@@ -72,6 +72,11 @@ class ResolvedEmulator:
     source: dict[str, Any] | None = None
 
 
+def starting_entry(resolved: ResolvedEmulator | None) -> EmulatorOption | None:
+    """The entry *resolved* starts with, ``None`` where nothing was resolved or no entry is in effect."""
+    return resolved.choice.option if resolved is not None else None
+
+
 def choose_emulator(
     options: list[EmulatorOption], *, game: StoredPick | None, platform: StoredPick | None
 ) -> EmulatorChoice:

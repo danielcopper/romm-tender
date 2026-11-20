@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as backend from "../api/backend";
-import { toaster } from "../api/host";
+import { HostTransportError, toaster } from "../api/host";
 import * as artwork from "./artwork";
 import { _resetArtworkSlotsForTests, isKnownWithoutSgdbGame } from "./artworkSlotsStore";
 import { settleArtworkGame, supersededNotice } from "./artworkGameChange";
@@ -24,6 +24,8 @@ describe("settleArtworkGame (#2381 D17)", () => {
     vi.resetAllMocks();
     _resetArtworkSlotsForTests();
     vi.mocked(backend.keepArtworkCurrent).mockResolvedValue({ status: "not_due", replaced: [] });
+    vi.mocked(backend.debugLog).mockResolvedValue(undefined);
+    vi.mocked(artwork.applyAutomaticArtwork).mockResolvedValue(4);
   });
 
   it("does nothing more where RomM's game replaced nothing", async () => {
@@ -87,6 +89,19 @@ describe("settleArtworkGame (#2381 D17)", () => {
     const [automatic] = vi.mocked(artwork.applyAutomaticArtwork).mock.invocationCallOrder;
     const [check] = vi.mocked(backend.keepArtworkCurrent).mock.invocationCallOrder;
     expect(automatic).toBeLessThan(check ?? 0);
+  });
+
+  it("logs a lost connection while applying and goes on with the cover and keeping current (#2776 D3)", async () => {
+    vi.mocked(backend.getArtworkGame).mockResolvedValue(answer({ name: "Mario Golf", slots: ["logo"] }));
+    vi.mocked(artwork.applyAutomaticArtwork).mockRejectedValue(new HostTransportError("connection_lost", "closed"));
+
+    await expect(settleArtworkGame(5000, 42)).resolves.toBeUndefined();
+
+    expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(
+      expect.stringContaining("The automatic artwork of appId 5000 was not applied"),
+    );
+    expect(vi.mocked(artwork.applySteamGridDbCover)).toHaveBeenCalledWith(42, 5000);
+    expect(vi.mocked(backend.keepArtworkCurrent)).toHaveBeenCalled();
   });
 
   it("holds whether the ROM has a SteamGridDB game", async () => {

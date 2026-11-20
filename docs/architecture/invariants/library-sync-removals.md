@@ -62,11 +62,12 @@ other areas: [the register's index](index.md).
   Beside it, a group holding more than one bound shortcut converges (#2645): on a platform unit the run fetched in full,
   every bound row of such a group but the one `domain/sync_diff.py::converge_bound_groups` keeps is removed on a run
   that was not stopped — never sorted as stale, never over an appId the run bound, and never while Steam lists one of
-  the group's shortcuts as running, read at the platform unit and again before the removal — with the preview counting
-  the same removals unless a game starts or quits between the preview and the removal (#2645 D5, D6), and no platform
-  whose rows still hold such a group is skipped; on a platform the sync leaves off, the run's collection deliveries
-  converge a group they bring in the same way (#2661), once for the run, over the bound rows they deliver and the bound
-  rows of the same stored key a delivered member lists in `sibling_roms`
+  the group's shortcuts as running or no reading of Steam's running apps can be taken (#2776 D5), read at the platform
+  unit and again before the removal — with the preview counting the same removals unless a game starts or quits, or
+  Steam's running apps become readable or unreadable, between the preview and the removal (#2645 D5, D6), and no
+  platform whose rows still hold such a group is skipped; on a platform the sync leaves off, the run's collection
+  deliveries converge a group they bring in the same way (#2661), once for the run, over the bound rows they deliver and
+  the bound rows of the same stored key a delivered member lists in `sibling_roms`
   (`domain/sync_diff.py::brought_in_by_delivery`), a row no collection delivered ranked by its stored version fields and
   the sibling list's default, while the convergence leaves a bound row no delivered member lists to the stale sort, and
   no collection holding a member of such a group is skipped; a bound version RomM joined to the game after Tender last

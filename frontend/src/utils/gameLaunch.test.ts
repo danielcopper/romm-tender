@@ -589,6 +589,18 @@ describe("startCheckFailureSentence — what went wrong with the page's check (#
   ])("words %o", (error, words) => {
     expect(startCheckFailureSentence(error)).toBe(`Tender could not check whether this game can start: ${words}.`);
   });
+
+  it("answers a stranded panel with the panel's own sentence (#2776 D9)", () => {
+    const stranded = new HostTransportError("stranded_panel", "Tender was restarted — restart Steam to use it again.");
+
+    expect(startCheckFailureSentence(stranded)).toBe("Tender was restarted — restart Steam to use it again.");
+  });
+
+  it("names no cause for a transport failure that is no lost connection (#2776 D9)", () => {
+    const raised = new HostTransportError("backend_exception", "KeyError: 'rom'");
+
+    expect(startCheckFailureSentence(raised)).toBe("Tender could not check whether this game can start.");
+  });
 });
 
 describe("entryLaunchLine for an entry Tender cannot start (#2195 D42)", () => {

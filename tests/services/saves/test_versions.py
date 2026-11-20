@@ -1037,7 +1037,7 @@ class TestRollbackToVersion:
     async def test_preflight_state_persisted_when_switch_raises(self, tmp_path):
         """#1012: a raising switch still persists the pre-flight's state mutations.
 
-        The pre-flight ``do_sync_rom_saves`` performs REAL uploads/downloads
+        The pre-flight ``MatrixExecutor.sync_rom_saves`` performs REAL uploads/downloads
         whose baselines/tracked-ids live only in the in-memory aggregate. If the
         destructive switch (``_rollback_to_version_io``) raises, the exception
         must propagate AND the persist must still run — otherwise the next sync

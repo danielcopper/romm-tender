@@ -75,7 +75,7 @@ async def test_the_shortcut_follows_the_same_dump_and_its_page_offers_the_instal
 
     sync._orchestrator._unit_applier._chunk_dispatcher._wait_for_unit_complete = ack_reuse
     assert sync._box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
-    await sync._orchestrator._do_sync_per_unit()
+    await sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
     with harness.uow_factory() as uow:
         assert uow.roms.get(_SAME_DUMP_ID).shortcut_app_id == _APP_ID

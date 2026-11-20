@@ -7,7 +7,7 @@ one of the files below. Most update automatically (Renovate); a few are pinned b
 
 | File                                               | Holds                                                                                                                       | Updated by                                                         |
 | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `mise.toml`                                        | the dev **toolchain**: `node`, `pnpm`, `python`, `uv`, `deno`                                                               | **by hand** (see [Bumping by hand](#bumping-by-hand))              |
+| `mise.toml`                                        | the dev **toolchain**: `node`, `pnpm`, `python`, `uv`, `deno`, `shellcheck`                                                 | **by hand** (see [Bumping by hand](#bumping-by-hand))              |
 | `frontend/package.json`                            | npm deps (`^` ranges), `packageManager` (pnpm), `pnpm.peerDependencyRules`                                                  | Renovate (npm)                                                     |
 | `frontend/pnpm-lock.yaml`                          | resolved npm versions                                                                                                       | generated from `frontend/package.json` (Renovate keeps it in sync) |
 | `requirements-dev.txt` / `docs/requirements.txt`   | Python dep **ranges** — the **source of truth**, incl. deliberate ceilings                                                  | by hand for ceilings; Renovate refreshes within them               |
@@ -26,6 +26,7 @@ all copies must agree:
 | `python`       | the toolchain, 3.14: `mise.toml` + workflow `setup-python`; the floor, 3.12: `pyproject.toml` + `install.sh` + the `lock-update` task in `mise.toml`; the supported range, 3.12 to 3.14: `sonar-project.properties` | Tender runs on the system interpreter, so the floor is the oldest `python3` a supported system ships: Ubuntu 24.04 LTS and Linux Mint 22 ship 3.12. ruff's and basedpyright's targets sit at the floor, so code that names something newer fails the lint; the locks are compiled for it (`--python-version`), and the installer refuses anything older. The toolchain runs 3.14, the version most target systems ship (Fedora 43 and 44, Bazzite, CachyOS and Arch, Ubuntu 26.04 LTS, and SteamOS 3.9, not yet stable, with 3.14.6 in Valve's package mirror, `core-3.9`), and the `test` job runs the backend suite there with coverage. CI also runs the suite on 3.12 (`test-3.12`) and on 3.13 (`test-3.13`), which SteamOS 3.8, the current stable, ships as 3.13.5 (`core-3.8`); those two jobs' `setup-python` are copies of neither value. Sonar's `sonar.python.version` is no copy of either value: the key lists every version the code supports, from the floor to the toolchain's. |
 | `uv`           | `mise.toml` + workflow `setup-uv`                                                                                                                                                                                   | the local resolver must equal the lock author (reproducible locks)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `node`, `deno` | `mise.toml` + workflows                                                                                                                                                                                             | local == CI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `shellcheck`   | `mise.toml` (`aqua:koalaman/shellcheck`) + the lint job's install step in `ci.yml`, which pins the release archive's SHA-256 beside the version                                                                     | local == CI: two shellcheck versions can disagree on a rule, so `mise run lint` and the CI step must run the same one; the step checks the version it runs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 These are the only real duplicates, and **Renovate is configured to never touch them** (excluded by dependency name in
 `renovate.json`). So a bot can't bump one copy and desync the rest — they only move when **you** move them, together.
@@ -43,16 +44,16 @@ window too. Three kinds of PR keep a schedule of their own: lock-file maintenanc
 `@decky/ui` on any day ([below](#deckyui-ships-as-a-fix)), and a fix for a reported vulnerability as soon as it is
 found, which is Renovate's default for those.
 
-| Category                                           | Auto-merges?                    |
-| -------------------------------------------------- | ------------------------------- |
-| Python (pip) in-range minor/patch + lock refreshes | ✅                              |
-| npm / GitHub-Actions minor / patch / digest        | ✅                              |
-| `@decky/ui` minor / patch — any day, as a fix      | ✅ (see below)                  |
-| Monthly lock-file maintenance (transitive refresh) | ✅                              |
-| **Any major** (any ecosystem)                      | ❌ → human review               |
-| **Shared workflows** (`danielcopper/.github`)      | ❌ → human review               |
-| **Toolchain** (`node`/`pnpm`/`python`/`uv`/`deno`) | ❌ not even proposed (excluded) |
-| **Raising a deliberate ceiling** (see below)       | ❌ not even proposed            |
+| Category                                                        | Auto-merges?                    |
+| --------------------------------------------------------------- | ------------------------------- |
+| Python (pip) in-range minor/patch + lock refreshes              | ✅                              |
+| npm / GitHub-Actions minor / patch / digest                     | ✅                              |
+| `@decky/ui` minor / patch — any day, as a fix                   | ✅ (see below)                  |
+| Monthly lock-file maintenance (transitive refresh)              | ✅                              |
+| **Any major** (any ecosystem)                                   | ❌ → human review               |
+| **Shared workflows** (`danielcopper/.github`)                   | ❌ → human review               |
+| **Toolchain** (`node`/`pnpm`/`python`/`uv`/`deno`/`shellcheck`) | ❌ not even proposed (excluded) |
+| **Raising a deliberate ceiling** (see below)                    | ❌ not even proposed            |
 
 ### `@decky/ui` ships as a fix
 
@@ -102,7 +103,9 @@ cap Renovate was still enforcing, so the next release would have been withheld w
 ## Bumping by hand
 
 - **Toolchain** (`mise.toml`): edit the pin, then update every coupled copy in the same commit — `frontend/package.json`
-  `packageManager` for pnpm, the workflow `setup-*` inputs for python/uv/node/deno. Run `mise install` to pick it up.
+  `packageManager` for pnpm, the workflow `setup-*` inputs for python/uv/node/deno, and for shellcheck the version, URL
+  and SHA-256 of the lint job's install step in `ci.yml` (the asset's `digest` from
+  `gh api repos/koalaman/shellcheck/releases/tags/v<X>`). Run `mise install` to pick it up.
 - **A Python ceiling**: three places, then the lock — raise the `<X` in the `.txt` source, raise the matching
   `allowedVersions` in `renovate.json`, raise the `Ceiling` column in the table above, run `mise run lock-update`,
   commit together. Dropping one is the same three in reverse — widen the `.txt` constraint **and** delete the

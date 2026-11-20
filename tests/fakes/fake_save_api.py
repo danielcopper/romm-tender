@@ -777,13 +777,6 @@ class FakeSaveApi:
         response["content_hash"] = self._server_content_hash(file_path)
         return response
 
-    def download_save(self, save_id: int, dest_path: str) -> None:
-        self.call_log.append(("download_save", (save_id, dest_path), {}))
-        self._check_fail()
-
-        self.downloaded_files[save_id] = dest_path
-        self._materialize_download(save_id, dest_path)
-
     # ------------------------------------------------------------------
     # RommPlaytimeApi (native play-session ingest, ADR-0018)
     # ------------------------------------------------------------------

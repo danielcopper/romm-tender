@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from services.saves.rom_info import RomInfoService
     from services.saves.save_transfer import SaveTransfer
     from services.saves.sync_engine import SyncEngine
+    from services.saves.sync_engine.matrix import MatrixExecutor
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,8 @@ class SaveCopyServiceConfig:
     live ``settings.json`` dict (default-slot seeding), the Unit-of-Work
     factory (the transactional seam over the SQLite repositories), the peer
     save sub-services consumed during orchestration (sync_engine, whose
-    ``live_device_id`` answers the device id, and rom_info), the core resolver
+    ``live_device_id`` answers the device id, the matrix executor the
+    pre-flight sync runs, and rom_info), the core resolver
     used to stamp the upload emulator tag, the Protocol-typed RomM adapter and
     retry strategy, the backend's event loop, the standard-library logger, the
     ``DebugLogger`` seam, and the save transfer every file write of the copy
@@ -62,6 +64,7 @@ class SaveCopyServiceConfig:
     settings: dict[str, Any]
     uow_factory: UnitOfWorkFactory
     sync_engine: SyncEngine
+    matrix: MatrixExecutor
     rom_info: RomInfoService
     resolve_core: Callable[[int], str | None]
     romm_api: RommSaveApi
@@ -85,6 +88,7 @@ class SaveCopyService:
         self._settings = config.settings
         self._uow_factory = config.uow_factory
         self._sync_engine = config.sync_engine
+        self._matrix = config.matrix
         self._rom_info = config.rom_info
         self._resolve_core = config.resolve_core
         self._romm_api = config.romm_api
@@ -368,7 +372,7 @@ class SaveCopyService:
         6. Take the device id from ``SyncEngine.live_device_id``, which registers
            or heals the device first; its refusal (``device_not_registered`` or
            ``server_unreachable``) is raised, before anything is synced.
-        7. Pre-flight ``do_sync_rom_saves`` on the current (confirmed) slot,
+        7. Pre-flight ``MatrixExecutor.sync_rom_saves`` on the current (confirmed) slot,
            unconditionally, to protect its dirty local before the copy overwrites
            it — ``conflict_blocked`` / ``preflight_failed`` on a bad pre-flight.
         8. ``list_saves`` with no slot filter (the source may be in any slot);
@@ -455,7 +459,7 @@ class SaveCopyService:
             # first (or surface a conflict), so the download below never overwrites
             # a dirty local that lives nowhere else.
             _uploaded, _downloaded, errors, conflicts = await self._loop.run_in_executor(
-                None, self._sync_engine.do_sync_rom_saves, rom_id, save_state, device_id, core_so, default_slot
+                None, self._matrix.sync_rom_saves, rom_id, save_state, device_id, core_so, default_slot
             )
             if conflicts:
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)

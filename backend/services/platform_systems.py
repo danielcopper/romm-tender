@@ -186,7 +186,8 @@ class PlatformSystemService:
         # The names cache is keyed by fs_slug; an entry kept before it recorded
         # one was kept under its slug.
         named_by = entry.fs_slug if entry is not None and entry.fs_slug else platform_slug
-        return ids, names.get(named_by) or ids.name or platform_slug
+        # A platform listed without a name is named by its fs_slug (#2761 D3).
+        return ids, names.get(named_by) or ids.name or named_by
 
     def _read_and_keep(self, platform_slug: str) -> KeptPlatform | None:
         """*platform_slug*'s platform from RomM's listing; the listing is kept by the refiling's keep step.

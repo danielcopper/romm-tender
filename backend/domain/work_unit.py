@@ -29,7 +29,10 @@ class WorkUnit:
     id: int | str
     name: str
     slug: str
-    rom_count: int
+    # RomM's count of the unit's ROMs; ``None`` for a platform whose listing
+    # entry gave no usable count (#2761 D5), which :meth:`planned_count` weighs
+    # at 0 and the plan sends as ``None``, so no surface shows a count for it.
+    rom_count: int | None
     # Platform-only: the platform's ``fs_slug``, by
     # which the sync knows the platform (#2452 D1); the slug stays the console.
     # ``""`` for a collection.
@@ -84,17 +87,21 @@ class WorkUnit:
     bound_count: int | None = None
     new_shortcut_count: int | None = None
 
+    def planned_count(self) -> int:
+        """The ROMs the run's progress weighs this unit at: :attr:`rom_count`, and 0 where it is unknown."""
+        return 0 if self.rom_count is None else self.rom_count
+
     def estimated_items(self) -> int:
         """This unit's weight in the plan's skip-aware estimate total.
 
         ``0`` when the plan predicts the wholesale skip, else the persisted
-        post-collapse shortcut count, falling back to the raw ``rom_count``
+        post-collapse shortcut count, falling back to :meth:`planned_count`
         when no collapsed count is known. Estimate-only — prices the
         ``sync_plan`` payload, never the actual skip decision (ADR-0023).
         """
         if self.predicted_skip:
             return 0
-        return self.collapsed_count if self.collapsed_count is not None else self.rom_count
+        return self.collapsed_count if self.collapsed_count is not None else self.planned_count()
 
     def to_event_payload(self) -> dict[str, Any]:
         """Serialise to the shape emitted in ``sync_plan`` / ``sync_apply_unit``."""

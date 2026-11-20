@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from domain.achievements import AchievementSummary
 from domain.bios_status import BIOS_LABEL_UNKNOWN, BIOS_LEVEL_UNKNOWN
+from domain.emulator_choice import starting_entry
 from domain.emulator_sources import RETRODECK
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 from domain.retrodeck_folders import FolderRefused
@@ -435,8 +436,7 @@ class GameDetailService:
         # where ``active_core_for_rom`` would answer ``None`` for the first — and
         # names it by its LABEL, and a caller splitting those is how a page comes
         # to name one emulator and judge by another.
-        resolved = await self._loop.run_in_executor(None, self._active_core.resolve_rom, rom_id)
-        emulator = resolved.choice.option if resolved is not None else None
+        emulator = starting_entry(await self._loop.run_in_executor(None, self._active_core.resolve_rom, rom_id))
 
         try:
             bios = await self._bios_checker.check_platform_bios(

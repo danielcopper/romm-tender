@@ -1094,7 +1094,7 @@ class TestConvergeBoundGroups:
 
 
 class TestAGroupWithARunningGameIsLeftOut:
-    """``converge_bound_groups(running_rom_ids=...)`` — a group one of whose shortcuts runs waits (#2645 D5)."""
+    """``without_running_groups`` over a convergence — a group one of whose shortcuts runs waits (#2645 D5)."""
 
     @staticmethod
     def _converged(running):
@@ -1105,8 +1105,8 @@ class TestAGroupWithARunningGameIsLeftOut:
             "3": _greg(3, app_id=1003, group_key="b"),
             "4": _greg(4, app_id=1004, group_key="b"),
         }
-        converged = converge_bound_groups(members, registry, set(), platform_folders={"n64"}, running_rom_ids=running)
-        return sorted((binding.rom_id, binding.kept_rom_id) for binding in converged)
+        converged = converge_bound_groups(members, registry, set(), platform_folders={"n64"})
+        return sorted((binding.rom_id, binding.kept_rom_id) for binding in without_running_groups(converged, running))
 
     @pytest.mark.parametrize("running", [{1}, {2}], ids=["the-kept-one", "the-other"])
     def test_a_running_shortcut_leaves_its_group_as_it_is_and_the_others_converge(self, running):

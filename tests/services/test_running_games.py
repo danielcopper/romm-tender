@@ -97,27 +97,38 @@ class TestWhichGamesRun:
 
 
 class TestWhereNoReadingCouldBeTaken:
-    async def test_no_reading_is_nothing_running(self):
-        assert await _games(_Steam(None)).running_rom_ids() == frozenset()
+    """No reading is told apart from a reading that lists none of Tender's games (#2776 D5)."""
 
-    async def test_a_reader_that_raised_is_nothing_running_and_is_logged(self):
+    async def test_a_reading_that_lists_none_of_tenders_games_is_nothing_running(self):
+        assert await _games(_Steam((_Listed("Celeste", app_id=504230),))).running_rom_ids() == frozenset()
+
+    async def test_an_empty_reading_is_nothing_running(self):
+        assert await _games(_Steam(())).running_rom_ids() == frozenset()
+
+    async def test_no_debugger_is_no_reading_and_is_logged(self):
+        debug: list[str] = []
+
+        assert await _games(_Steam(None), debug).running_rom_ids() is None
+        assert any("the host took no reading" in line for line in debug)
+
+    async def test_a_reader_that_raised_is_no_reading_and_is_logged(self):
         debug: list[str] = []
         games = _games(_Steam(raises=RuntimeError("debugger gone")), debug)
 
-        assert await games.running_rom_ids() == frozenset()
+        assert await games.running_rom_ids() is None
         assert any("debugger gone" in line for line in debug)
 
-    async def test_a_reading_that_does_not_answer_in_time_is_nothing_running(self, monkeypatch):
+    async def test_a_reading_that_does_not_answer_in_time_is_no_reading(self, monkeypatch):
         monkeypatch.setattr("services.running_games.READING_TIMEOUT_SECONDS", 0.01)
         steam = _Steam((_Listed("Game 7", app_id=3_000_000_007),))
         steam.hangs = True
         debug: list[str] = []
         games = _games(steam, debug)
 
-        assert await asyncio.wait_for(games.running_rom_ids(), 1) == frozenset()
+        assert await asyncio.wait_for(games.running_rom_ids(), 1) is None
         assert any("TimeoutError" in line for line in debug)
 
-    async def test_a_failed_read_of_the_roms_is_nothing_running_and_is_logged(self):
+    async def test_a_failed_read_of_the_roms_is_no_reading_and_is_logged(self):
         debug: list[str] = []
         games = _games(_Steam((_Listed("Game 7", app_id=3_000_000_007),)), debug)
 
@@ -126,5 +137,5 @@ class TestWhereNoReadingCouldBeTaken:
 
         games._roms_of = broken_roms  # type: ignore[method-assign]
 
-        assert await games.running_rom_ids() == frozenset()
+        assert await games.running_rom_ids() is None
         assert any("database is locked" in line for line in debug)

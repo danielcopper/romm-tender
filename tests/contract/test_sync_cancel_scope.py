@@ -97,7 +97,7 @@ async def test_cancel_sync_stale_run_does_not_abort_fresh_run(harness):
     assert harness.app.services.sync_service._box.sync_state == SyncState.RUNNING
 
     # Drive run B to completion. It was never cancelled.
-    await orch._do_sync_per_unit()
+    await orch._do_sync_per_unit(preferred_region="auto")
 
     completes = _sync_complete_payloads(harness)
     assert completes, "run B must emit a terminal sync_complete"
@@ -164,7 +164,7 @@ async def test_apply_rejected_while_run_in_flight_emits_single_complete(harness)
     assert box.pending_delta is not None
 
     # Drive the in-flight run — exactly one terminal sync_complete.
-    await orch._do_sync_per_unit()
+    await orch._do_sync_per_unit(preferred_region="auto")
     completes = _sync_complete_payloads(harness)
     assert len(completes) == 1
     assert harness.app.services.sync_service._box.sync_state == SyncState.IDLE

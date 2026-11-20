@@ -114,6 +114,44 @@ class _Harness:
         return {(r.platform_folder, r.file_name, r.file_path) for r in self.uow.bios_files.iter_all()}
 
 
+_WITH_FIRMWARE_THAT_IS_NO_LIST: list[dict[str, Any]] = [
+    *_PLATFORMS,
+    {"id": 9, "slug": "arcade", "fs_slug": "arcade", "firmware": {}},
+]
+
+
+class TestOnePlatformsFirmwareThatIsNoList:
+    """A platform whose firmware is no list costs only the moves that read the firmware; everything else still runs."""
+
+    def test_the_listing_is_kept_and_the_moves_by_slug_still_run(self):
+        harness = _Harness(
+            _record("psx", firmware_id=None, path="/bios/a.bin", file_name="a.bin"),
+            picks={"psx": "DuckStation"},
+        )
+
+        harness.refiling.do_refile(_WITH_FIRMWARE_THAT_IS_NO_LIST)
+
+        assert harness.keeper.listings == [_WITH_FIRMWARE_THAT_IS_NO_LIST]
+        assert harness.refiling.listed_folders() == frozenset({"ps", "gc", "ngc", "snes", "snes-hacks", "arcade"})
+        assert harness.records() == {("ps", "a.bin", "/bios/a.bin")}
+        assert harness.settings["platform_cores"] == {"ps": "DuckStation"}
+
+    def test_a_record_found_in_the_readable_firmware_still_moves_by_its_id(self):
+        harness = _Harness(_record("bios_from_user"))
+
+        harness.refiling.do_refile(_WITH_FIRMWARE_THAT_IS_NO_LIST)
+
+        assert harness.records() == {("ps", "scph5501.bin", "/bios/scph5501.bin")}
+
+    def test_a_record_whose_id_no_readable_file_names_stays_rather_than_moving_by_its_key(self):
+        """Its file may be the unreadable platform's, so its key is no safer a guess than before."""
+        harness = _Harness(_record("psx", firmware_id=77, path="/bios/x.bin", file_name="x.bin"))
+
+        harness.refiling.do_refile(_WITH_FIRMWARE_THAT_IS_NO_LIST)
+
+        assert harness.records() == {("psx", "x.bin", "/bios/x.bin")}
+
+
 class TestDownloadRecords:
     def test_a_record_under_a_slug_moves_to_the_one_folder_with_that_slug(self):
         harness = _Harness(_record("psx", firmware_id=None))

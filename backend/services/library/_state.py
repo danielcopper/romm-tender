@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from domain.preview_delta import PreviewDelta, preview_expires_at
+from domain.sibling_resolution import AUTO_REGION
 from domain.sync_state import SyncState
 
 if TYPE_CHECKING:
@@ -249,8 +250,9 @@ class LibrarySyncStateBox:
     run_listed_platform_folders: frozenset[str] | None = None
     # Every listed platform's name from that same listing, by ``fs_slug``
     # (``domain.platform_names.listed_platform_names``): what the run names a
-    # platform by — in its Steam collections, the name cache and the preview —
-    # whether its sync is on or not. Empty until the run has listed. Reset by
+    # platform by — in its Steam collections, the name cache, the preview, its
+    # platform units and every ROM a collection brings — whether its sync is on
+    # or not. Empty until the run has listed. Reset by
     # ``try_begin_run``.
     run_listed_platform_names: dict[str, str] = field(default_factory=dict)
     # Every ROM the user hid in RomM (``domain.hidden_roms.hidden_rom_ids``), read
@@ -269,6 +271,9 @@ class LibrarySyncStateBox:
     # finalize of a run that was not stopped removes their shortcuts.
     # Reset by ``try_begin_run``.
     run_converged: dict[int, ConvergedBinding] = field(default_factory=dict)
+    # The preferred region every unit and collection delivery of the run ranks
+    # its sibling groups by. Set by the orchestrator at the run's start.
+    run_preferred_region: str = AUTO_REGION
     # Count of apply chunks emitted so far this run — the session-budget gate
     # skips its very first chunk (this counter still 0) so every run/resume makes
     # at least one chunk of forward progress before it can pause, never an
@@ -425,6 +430,7 @@ class LibrarySyncStateBox:
         preview_id: str,
         created_at: float,
         answer: Mapping[str, Any],
+        preferred_region: str,
     ) -> None:
         """Hold the computed preview for the apply — and for a panel that comes back to it.
 
@@ -436,6 +442,7 @@ class LibrarySyncStateBox:
             preview_id=preview_id,
             created_at=created_at,
             answer=answer,
+            preferred_region=preferred_region,
         )
 
     def preview_deadline(self, created_at: float) -> float:

@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING, Any
 from domain.firmware_cache import FirmwareCacheEntry
 from domain.firmware_platforms import library_firmware
 from domain.firmware_rows import platform_library
+from domain.platform_listing import UnreadableFirmware
+from lib.errors import RommPlatformListingUnreadable
 
 if TYPE_CHECKING:
     import logging
@@ -142,7 +144,10 @@ class FirmwareListing:
 
         try:
             platforms = self._romm_api.list_platforms()
-            result = library_firmware(platforms)
+            try:
+                result = library_firmware(platforms)
+            except UnreadableFirmware as e:
+                raise RommPlatformListingUnreadable(str(e)) from e
             self._firmware_cache = result
             self._firmware_cache_epoch = self._clock.time()
             self._persist_firmware_cache()

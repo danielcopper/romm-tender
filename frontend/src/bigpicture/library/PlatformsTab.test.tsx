@@ -974,6 +974,21 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain("Could not read your platforms");
     });
 
+    it("says RomM's platform list could not be read, not the connection, when RomM answered with one it cannot", async () => {
+      vi.mocked(backend.getPlatforms).mockResolvedValue({
+        success: false,
+        platforms: [],
+        reason: "platform_listing_unreadable",
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "RomM answered, but its platform list could not be read. Check your platforms in RomM and open the page again.",
+      );
+      expect(container.textContent).not.toContain("Check the connection to RomM");
+    });
+
     it("says so when the platform read throws", async () => {
       vi.mocked(backend.getPlatforms).mockRejectedValue(new Error("net"));
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
@@ -1433,6 +1448,18 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(countTexts(container)).toEqual(["12 versions on RomM", "3 versions in Steam"]);
+    });
+
+    it("leaves out the count on RomM where RomM sent no number for it", async () => {
+      vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: [platform({ rom_count: null })] });
+      vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
+        platforms: [{ slug: "gba", fs_slug: "gba", name: "GBA", count: 3, reachable_count: 3 }],
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(countParts(container).map((el) => el.textContent)).toEqual(["3 versions in Steam"]);
+      expect(container.textContent).not.toContain("on RomM");
     });
 
     it("counts a single version in the singular", async () => {

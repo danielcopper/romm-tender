@@ -64,7 +64,7 @@ def _seed_library(harness) -> None:
 
 async def _run_sync(harness, run_id: str) -> None:
     assert harness.app.services.sync_service._box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
-    await _orchestrator(harness)._do_sync_per_unit()
+    await _orchestrator(harness)._do_sync_per_unit(preferred_region="auto")
 
 
 async def _drain_apply(harness, tries: int = 5000) -> None:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
@@ -20,6 +20,9 @@ from tests.services.saves._helpers import (
     make_service,
 )
 
+if TYPE_CHECKING:
+    from fakes.fake_active_core_resolver import FakeActiveCoreResolver
+
 
 def _fake(svc) -> FakeSaveLocationReader:
     return cast("FakeSaveLocationReader", svc._rom_info._save_locations)
@@ -28,6 +31,11 @@ def _fake(svc) -> FakeSaveLocationReader:
 def _asked(svc) -> list[tuple[str, str, str | None]]:
     """Every question the save-location seam was put, as the fake recorded them."""
     return cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls
+
+
+def _resolutions(svc) -> list[int]:
+    """Every resolution of a ROM's entry, as the fake recorded them."""
+    return cast("FakeActiveCoreResolver", svc._rom_info._active_core).emulator_calls
 
 
 def _seed_amiga_inside_content(svc) -> None:
@@ -194,6 +202,7 @@ class TestFindSaveFiles:
         answer = svc._rom_info.save_answer(80)
 
         assert _asked(svc) == []
+        assert _resolutions(svc) == []
         assert answer.state == "unestablished"
         assert answer.syncable is False
 
@@ -213,6 +222,7 @@ class TestFindSaveFiles:
 
         assert _asked(svc) == []
         assert asked_folders == []
+        assert _resolutions(svc) == []
         assert answer.state == "unestablished"
         assert answer.syncable is False
 
@@ -224,6 +234,19 @@ class TestFindSaveFiles:
         answer = svc._rom_info.save_answer(999)
 
         assert _asked(svc) == []
+        assert _resolutions(svc) == []
+        assert answer.state == "unestablished"
+        assert answer.syncable is False
+
+    def test_an_uninstalled_rom_with_no_name_asks_nothing(self, tmp_path):
+        # No name, so no extension: there is no path to put the question about.
+        svc, _ = make_service(tmp_path)
+        _seed_rom(svc, 80, platform_slug="commodore-amiga", fs_name="")
+
+        answer = svc._rom_info.save_answer(80)
+
+        assert _asked(svc) == []
+        assert _resolutions(svc) == []
         assert answer.state == "unestablished"
         assert answer.syncable is False
 

@@ -139,7 +139,9 @@ export const PlatformsTab: FC<{ state: PlatformsPageState }> = ({ state }) => {
   if (state.failed) {
     return (
       <div style={{ padding: "16px", color: "#8f98a0" }}>
-        Could not read your platforms. Check the connection to RomM and open the page again.
+        {state.listingUnreadable
+          ? "RomM answered, but its platform list could not be read. Check your platforms in RomM and open the page again."
+          : "Could not read your platforms. Check the connection to RomM and open the page again."}
       </div>
     );
   }

@@ -30,6 +30,7 @@ import {
 type AnyProps = Record<string, unknown> & { children?: unknown };
 interface ConfirmModalProps {
   onOK?: () => void | Promise<void>;
+  bOKDisabled?: boolean;
   strTitle?: string;
   strDescription?: string;
   children?: unknown;
@@ -47,7 +48,7 @@ vi.mock("@decky/ui", () => {
   // slot modal (CustomSlotModal owns its own state and is mounted via RTL).
   // Modals passed *through* showModal still expose their onOK via the captured
   // showModal mock-call element — confirmModalPropsAt(...) handles that path.
-  const ConfirmModal = (p: AnyProps & { onOK?: () => void | Promise<void> }) =>
+  const ConfirmModal = (p: AnyProps & { onOK?: () => void | Promise<void>; bOKDisabled?: boolean }) =>
     createElement(
       "div",
       { "data-testid": "confirm-modal" },
@@ -55,6 +56,7 @@ vi.mock("@decky/ui", () => {
         "button",
         {
           "data-testid": "confirm-modal-ok",
+          disabled: p.bOKDisabled === true,
           onClick: () => {
             detach(Promise.resolve(p.onOK?.()));
           },
@@ -1118,8 +1120,7 @@ describe("SlotSetupWizard", () => {
       if (!modal) throw new Error("CustomSlotModal element not captured");
 
       const sub = render(<>{modal}</>);
-      // Don't type anything — a blank Enter must be a no-op (unlike the OK button,
-      // which sends "" straight to the backend guard).
+      // Don't type anything — a blank Enter must be a no-op, as the disabled OK is.
       await act(async () => {
         fireEvent.keyDown(sub.getByTestId("text-field"), { key: "Enter" });
         await Promise.resolve();
@@ -1154,63 +1155,48 @@ describe("SlotSetupWizard", () => {
       sub.unmount();
     });
 
-    it("sends an empty custom name straight to the backend guard (no legacy-mode modal)", async () => {
-      // #1276: an empty custom name is passed to the backend, which rejects it
-      // via invalid_slot_name — it is NEVER reinterpreted as the retired legacy
-      // no-slot mode, so no second modal opens.
+    async function openCustomSlotModal(romId: number) {
       const info = makeSetupInfo({ server_slots: [] });
       vi.mocked(applyWizardInitialSetupResult).mockImplementation(async (_r, deps) => {
         deps.setInfo(info);
       });
-      const { getByText } = render(<SlotSetupWizard {...defaultProps({ romId: 8 })} />);
+      const { getByText } = render(<SlotSetupWizard {...defaultProps({ romId })} />);
       await flushAsync();
-
       fireEvent.click(getByText("Custom slot..."));
       const modal = modalElementAt(0);
       if (!modal) throw new Error("CustomSlotModal element not captured");
+      return render(<>{modal}</>);
+    }
 
-      const sub = render(<>{modal}</>);
-      // Don't type anything — value stays "".
+    it.each([
+      ["empty", ""],
+      ["whitespace-only", "   "],
+    ])("disables OK for a name that is %s and confirms nothing (#2776)", async (_kind, typed) => {
+      const sub = await openCustomSlotModal(8);
       await act(async () => {
-        fireEvent.click(sub.getByTestId("confirm-modal-ok"));
+        fireEvent.change(sub.getByTestId("text-field"), { target: { value: typed } });
+      });
+      const ok = sub.getByTestId("confirm-modal-ok") as HTMLButtonElement;
+      expect(ok.disabled).toBe(true);
+
+      await act(async () => {
+        fireEvent.click(ok);
         await Promise.resolve();
       });
 
-      // The empty name goes straight to the backend guard; only the one modal opened.
-      expect(vi.mocked(backend.confirmSlotChoice)).toHaveBeenCalledWith(8, "", false, null, false);
+      expect(vi.mocked(backend.confirmSlotChoice)).not.toHaveBeenCalled();
+      // The retired legacy no-slot mode is never offered (#1276): no second modal opens.
       expect(vi.mocked(showModal)).toHaveBeenCalledTimes(1);
       sub.unmount();
     });
 
-    it("sends a whitespace-only custom name as '' to the backend guard (no legacy modal)", async () => {
-      // #1276: whitespace trims to "" and is handed to the backend, which
-      // rejects it — the retired legacy no-slot mode is never offered, and no
-      // second modal opens.
-      const info = makeSetupInfo({ server_slots: [] });
-      vi.mocked(applyWizardInitialSetupResult).mockImplementation(async (_r, deps) => {
-        deps.setInfo(info);
-      });
-      const { getByText } = render(<SlotSetupWizard {...defaultProps({ romId: 7 })} />);
-      await flushAsync();
-
-      fireEvent.click(getByText("Custom slot..."));
-      const modal = modalElementAt(0);
-      if (!modal) throw new Error("CustomSlotModal element not captured");
-
-      const sub = render(<>{modal}</>);
-      // Type whitespace — trims to empty, handed straight to the backend guard.
+    it("enables OK once a real name is typed (#2776)", async () => {
+      const sub = await openCustomSlotModal(8);
       await act(async () => {
-        fireEvent.change(sub.getByTestId("text-field"), { target: { value: "   " } });
-      });
-      await act(async () => {
-        fireEvent.click(sub.getByTestId("confirm-modal-ok"));
-        await Promise.resolve();
+        fireEvent.change(sub.getByTestId("text-field"), { target: { value: " myslot " } });
       });
 
-      expect(vi.mocked(backend.confirmSlotChoice)).toHaveBeenCalledWith(7, "", false, null, false);
-      // Never confirms the retired legacy null slot, and no second modal opens.
-      expect(vi.mocked(backend.confirmSlotChoice)).not.toHaveBeenCalledWith(7, null, false, null, false);
-      expect(vi.mocked(showModal)).toHaveBeenCalledTimes(1);
+      expect((sub.getByTestId("confirm-modal-ok") as HTMLButtonElement).disabled).toBe(false);
       sub.unmount();
     });
   });

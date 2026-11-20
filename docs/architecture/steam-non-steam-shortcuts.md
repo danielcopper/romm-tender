@@ -533,9 +533,10 @@ field. Tender owns machine-scoped collections named `RomM: <platform> (<hostname
 it receives and then runs a **stale-collection cleanup** that deletes any `RomM: …` collection for this machine whose
 platform/collection name is absent from those maps.
 
-`<platform>` is the `name` RomM's platform listing gives the platform, never the `custom_name` a user set in RomM, for
-every platform the run's listing names, its sync on in Tender or not: the fetcher records each listed platform's name
-beside its `fs_slug` (`LibrarySyncStateBox.run_listed_platform_names`, through
+`<platform>` is the `name` RomM's platform listing gives the platform, never the `custom_name` a user set in RomM, and
+its `fs_slug` where the listing gives no usable name ([#2761](https://github.com/danielcopper/romm-tender/issues/2761)
+D3), for every platform the run's listing names, its sync on in Tender or not: the fetcher records each listed
+platform's name beside its `fs_slug` (`LibrarySyncStateBox.run_listed_platform_names`, through
 `domain/platform_names.py::listed_platform_names`) ([#2564](https://github.com/danielcopper/romm-tender/issues/2564) D1,
 D2). Two listed platforms can share a name — two folders RomM files under one slug, a version folder beside its
 console's — so a platform whose `fs_slug` is not its slug, and whose name another listed platform carries too, is named
@@ -581,8 +582,8 @@ is decided **entirely by the run finalizer's dict key**, which `RunFinalizer._re
   Collections whose keys match still union: two of the same name and kind, and — accepted, since it takes a name
   spelling out another kind's label — a standard collection named `"Foo (Smart)"` with a smart one named `"Foo"`.
 
-`IGDB Collection` keeps its capital C: Steam tells collection names apart without regard to case, and Tender finds an
-existing collection the same way (below), so a change of case alone would not rename a collection that already exists.
+`IGDB Collection` keeps its capital C: a change of case alone does not rename a collection that already exists ("Name
+identity is case-insensitive", below).
 
 The Collections page does not quote the label strings. Besides the kernel, its test and this section's own examples,
 they are spelled in these places, and a label change is a change in each:
@@ -635,17 +636,25 @@ dotless `ı` and `i` (measured: CPython 3.13 / Unicode 15.1 against Node 24 / Un
 create/find, joining more is the safe direction: what loses games is a pair Steam holds as one and Tender keeps apart.
 On the delete matchers, joining more means deleting more.
 
+A change of case alone does not reach a collection Steam already holds: the create/find matches it by its folded name
+and rewrites only its games (`replaceCollectionApps`, `frontend/src/utils/collections.ts`), never its name. Measured
+([#2776](https://github.com/danielcopper/romm-tender/issues/2776)): a collection created as `RomM: [7 up] (<host>)` and
+synced again with only `7 Up` in RomM stays one collection, which Steam stores as `RomM: [7 up] (<host>)`.
+
 Where the fold applies: the run finalizer groups both `romm_collection_app_ids` and `platform_app_ids` by the folded
-key, keeping the first-seen original casing for display (which casing wins is irrelevant — every match folds both
-sides); the preview's `collection_diff` and `platform_collection_diff` compare folded names the same way; and the
-frontend create/find (`createOrUpdateCollections` / `createOrUpdateRomMCollections`), the cleanup matchers
-(`clearPlatformCollection` / `clearAllRomMCollections`) and the `onSyncComplete` stale-delete (`removeStaleCollections`,
-`frontend/src/index.tsx`) fold the whole name, the `RomM:` prefix and the host suffix included — so a case variant of
-one of this machine's names matches as that name does, while one carrying another machine's suffix does not — a hostname
-differing from this one only by case counts as this machine, as it does for Steam. This is safe because Steam's identity
-is case-insensitive: two collections differing only by case can never coexist, so there is never an ambiguous match to
-disambiguate. The DB is unaffected — `collection_sync_state` is keyed by `(collection_id, collection_kind)`, never by
-name — so there is no migration.
+key. A merged collection, a RomM collection's or a platform's, is named by its sorted-first spelling, which
+`spelling_by_fold` (`backend/domain/collection_name.py`) answers whatever order RomM lists the collections and platforms
+in ([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D4, D8); the preview's `collection_diff` takes a
+RomM collection's name from it too, so it lists a merged one under the name the apply creates, and its
+`platform_collection_diff` names no platform collection, it only counts them. The preview's `collection_diff` and
+`platform_collection_diff` compare folded names the same way; and the frontend create/find (`createOrUpdateCollections`
+/ `createOrUpdateRomMCollections`), the cleanup matchers (`clearPlatformCollection` / `clearAllRomMCollections`) and the
+`onSyncComplete` stale-delete (`removeStaleCollections`, `frontend/src/index.tsx`) fold the whole name, the `RomM:`
+prefix and the host suffix included — so a case variant of one of this machine's names matches as that name does, while
+one carrying another machine's suffix does not — a hostname differing from this one only by case counts as this machine,
+as it does for Steam. This is safe because Steam's identity is case-insensitive: two collections differing only by case
+can never coexist, so there is never an ambiguous match to disambiguate. The DB is unaffected — `collection_sync_state`
+is keyed by `(collection_id, collection_kind)`, never by name — so there is no migration.
 
 ## App IDs and Artwork
 
@@ -739,28 +748,32 @@ Tender's pick among SteamGridDB's covers until RomM's arrives ("The cover where 
 to a game's page in a session sets each of the four, and the cover, **only where the slot is not filled**
 (`fillEmptyArtwork` in `utils/artwork.ts`). **Refresh Artwork** and a change of SteamGridDB game are an explicit request
 and replace the slots on automatic only (`applyAutomaticArtwork`, which reads the ARTWORK tab's slots first and leaves a
-chosen slot and one set in Steam alone, [#2381](https://github.com/danielcopper/romm-tender/issues/2381) D6, D12). A
-version switch still replaces every slot (`applyArtwork`): once artwork was applied for one ROM of an app id, the newly
-bound ROM's is applied in the replacing mode, which sets Tender's image over one set by hand too; whether Steam then
-shows it over a hand-set file kept under another extension is not measured (the order Steam tries a slot's files in is
-under "The ARTWORK tab", below). A version switched back to brings back the images chosen for it: the replacing fetch
-serves the chosen image, downloading exactly that one where the cache lost it, and the switch sets a cover chosen for
-the version rather than RomM's — it asks `get_sgdb_artwork_base64(rom_id, 0)`, Steam's own number for the cover, which
-serves only a chosen cover, reports what Steam made of it, and sets RomM's cover only where that answers no image (D16,
-`setChosenCover` in `utils/artwork.ts`). Where `fetch_cover_base64` answers no RomM cover — RomM has none for the
-version, or it cannot be read at that moment — it sets that version's SteamGridDB pick through `get_sgdb_slot_artwork`
-with `replace` and reports it, as the fill does (`setSteamGridDbSwitchCover`); the next sync that reads RomM's cover
-replaces that pick (D24). Whenever a version becomes the one a shortcut is bound to — the switch's bind
-(`VersionSwitchService._rebind_local_io`) and the sync commit's (`SyncReporter._forget_cover_record_on_bind`: a rebind,
-a shortcut created anew after removal, an adopted orphan) — the same write forgets that version's cover record and
-hand-over unless the cover is chosen (`domain/artwork_slot_outcome.py`, `binding_forgets_cover_record`), so the cover
-written next is the one "Set in Steam" judges by, and a SteamGridDB cover Tender set for the version earlier never reads
-as set in Steam under another image (D28). The replacing mode records the hero, the wide grid, the logo and the icon it
-set, or Steam refused, under the ROM now bound, as the fill does below: what the report passes back — the image id, the
-hash of the bytes and the ROM's SteamGridDB id — comes with `get_sgdb_artwork_base64`'s answer for a hero, wide grid or
-logo, and with `save_shortcut_icon`'s for the icon. The shortcut artwork job fills the icon, the wide grid, the cover
-and the logo in the background by the same rules ([Shortcut artwork](#shortcut-artwork)), so a first visit usually finds
-them filled; the hero is the game page's alone. The icon is fetched only as a slot — on the game page through
+chosen slot and one set in Steam alone, [#2381](https://github.com/danielcopper/romm-tender/issues/2381) D6, D12). The
+replacing apply (`applySgdbArtwork`) throws a transport failure of any image's fetch to its caller and applies nothing:
+Refresh Artwork and a change of SteamGridDB game word it by its reason, a version switch's apply and a superseded game's
+log it. Any other failure of a fetch is logged and counts as no image
+([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D9, D10). A version switch still replaces every slot
+(`applyArtwork`): once artwork was applied for one ROM of an app id, the newly bound ROM's is applied in the replacing
+mode, which sets Tender's image over one set by hand too; whether Steam then shows it over a hand-set file kept under
+another extension is not measured (the order Steam tries a slot's files in is under "The ARTWORK tab", below). A version
+switched back to brings back the images chosen for it: the replacing fetch serves the chosen image, downloading exactly
+that one where the cache lost it, and the switch sets a cover chosen for the version rather than RomM's — it asks
+`get_sgdb_artwork_base64(rom_id, 0)`, Steam's own number for the cover, which serves only a chosen cover, reports what
+Steam made of it, and sets RomM's cover only where that answers no image (D16, `setChosenCover` in `utils/artwork.ts`).
+Where `fetch_cover_base64` answers no RomM cover — RomM has none for the version, or it cannot be read at that moment —
+it sets that version's SteamGridDB pick through `get_sgdb_slot_artwork` with `replace` and reports it, as the fill does
+(`setSteamGridDbSwitchCover`); the next sync that reads RomM's cover replaces that pick (D24). Whenever a version
+becomes the one a shortcut is bound to — the switch's bind (`VersionSwitchService._rebind_local_io`) and the sync
+commit's (`SyncReporter._forget_cover_record_on_bind`: a rebind, a shortcut created anew after removal, an adopted
+orphan) — the same write forgets that version's cover record and hand-over unless the cover is chosen
+(`domain/artwork_slot_outcome.py`, `binding_forgets_cover_record`), so the cover written next is the one "Set in Steam"
+judges by, and a SteamGridDB cover Tender set for the version earlier never reads as set in Steam under another image
+(D28). The replacing mode records the hero, the wide grid, the logo and the icon it set, or Steam refused, under the ROM
+now bound, as the fill does below: what the report passes back — the image id, the hash of the bytes and the ROM's
+SteamGridDB id — comes with `get_sgdb_artwork_base64`'s answer for a hero, wide grid or logo, and with
+`save_shortcut_icon`'s for the icon. The shortcut artwork job fills the icon, the wide grid, the cover and the logo in
+the background by the same rules ([Shortcut artwork](#shortcut-artwork)), so a first visit usually finds them filled;
+the hero is the game page's alone. The icon is fetched only as a slot — on the game page through
 `get_sgdb_slot_artwork`, in the job through `do_fetch_slot_artwork` — and `get_sgdb_artwork_base64` refuses its asset
 type (4) with `invalid_payload`.
 

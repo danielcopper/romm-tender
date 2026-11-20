@@ -416,13 +416,14 @@ class ChunkDispatcher:
         set with.
         """
         if unit.type == "platform" and unit.platform_folder and chunk_index == chunk_count - 1:
+            fetched = set(fetched_rom_ids)
             return PlatformSyncState.stamp(
                 platform_folder=unit.platform_folder,
                 at=self._clock.now().isoformat(),
-                rom_count=unit.rom_count,
+                rom_count=len(fetched) if unit.rom_count is None else unit.rom_count,
                 fetch_id=fetch_id,
                 fetch_started_at=fetch_started_at,
-                rom_id_checksum=rom_id_checksum(fetched_rom_ids),
+                rom_id_checksum=rom_id_checksum(fetched),
             )
         return None
 
@@ -463,7 +464,7 @@ class ChunkDispatcher:
             # one for a standard or smart collection should the two ever diverge.
             updated_at=recorded_updated_at(unit.collection_kind, unit.collection_updated_at) or "",
             completed_at=self._clock.now().isoformat(),
-            rom_count=unit.rom_count,
+            rom_count=unit.planned_count(),
             member_rom_ids=tuple(member_rom_ids),
             fetch_started_at=fetch_started_at,
             listing_rom_id_checksum=rom_id_checksum(unit.member_rom_ids),

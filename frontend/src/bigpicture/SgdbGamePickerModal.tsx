@@ -31,9 +31,14 @@ import {
 import { applyAutomaticArtwork, applySteamGridDbCover } from "../utils/artwork";
 import { GAME_CHANGE_DISCARDS_CHOICES } from "../utils/artworkTabWording";
 import { artworkApplyMessage } from "../utils/artworkApplyMessage";
+import { capturePruneLeaseAdmission, isPruneLeaseCancellation } from "../utils/pruneLease";
+import { transportFailureSentence } from "../utils/transportFailureWording";
 import { scrollToTop, scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { detach } from "../utils/detach";
 import { Throbber, ThrobberLabel } from "../shared/Throbber";
+
+/** What the picker says where applying the chosen game's artwork failed without a reason of its own. */
+const APPLY_ARTWORK_FAILED = "Failed to apply artwork";
 
 export interface SgdbGamePickerModalProps {
   romId: number;
@@ -161,14 +166,25 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
         showToast(result.message);
         return;
       }
-      const applied = await applyAutomaticArtwork(romId, appId).catch((e): number => {
+      const admission = capturePruneLeaseAdmission(`game-detail:${appId}`);
+      let applied: number | EndpointFailure = 0;
+      let failure: string | null = null;
+      try {
+        applied = await applyAutomaticArtwork(romId, appId);
+      } catch (e) {
+        // Leaving the game page cancels the apply mid-way: teardown, not a failure to report.
+        if (isPruneLeaseCancellation(e, admission)) {
+          detach(debugLog(`SgdbGamePickerModal: the artwork apply was cancelled: ${e}`));
+          closeModal?.();
+          return;
+        }
         detach(debugLog(`SgdbGamePickerModal: applyAutomaticArtwork rejected: ${e}`));
-        return 0;
-      });
+        failure = transportFailureSentence(APPLY_ARTWORK_FAILED, e) ?? APPLY_ARTWORK_FAILED;
+      }
       await applySteamGridDbCover(romId, appId).catch((e: unknown) => {
         detach(debugLog(`SgdbGamePickerModal: applySteamGridDbCover rejected: ${e}`));
       });
-      showToast(artworkApplyMessage(applied));
+      showToast(failure ?? artworkApplyMessage(applied));
       onApplied(applied);
       closeModal?.();
     } finally {
