@@ -3000,5 +3000,191 @@ describe("SaveManagementCard", () => {
       const countSpan = within(headerButton!).getByText("1 save");
       expect(countSpan.parentElement?.children).toHaveLength(1);
     });
+
+    it("clears Connecting indicator when going offline mid-load, logs slot load failures with exact message, and reloads on reconnect", async () => {
+      const warnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+      try {
+        let resolveOnlineLoad!: (v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void;
+        let resolveOfflineSnapshot!: (v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void;
+        vi.mocked(backend.getSaveSlots)
+          .mockImplementationOnce(
+            () =>
+              new Promise((res) => {
+                resolveOnlineLoad = res;
+              }),
+          )
+          .mockImplementationOnce(
+            () =>
+              new Promise((res) => {
+                resolveOfflineSnapshot = res;
+              }),
+          )
+          .mockResolvedValueOnce({
+            success: false,
+            reason: "server_error",
+            message: "slot load refused",
+          });
+
+        render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        expect(await screen.findByTestId("desktop-saves-connecting")).toBeInTheDocument();
+
+        act(() => {
+          setRommConnectionState("offline", "drop");
+        });
+        expect(screen.queryByTestId("desktop-saves-connecting")).not.toBeInTheDocument();
+
+        await act(async () => {
+          resolveOnlineLoad({ success: false, reason: "server_unreachable", message: "aborted" });
+          resolveOfflineSnapshot({ success: false, reason: "server_unreachable", message: "offline" });
+          await new Promise((r) => setTimeout(r, 0));
+        });
+
+        act(() => {
+          setRommConnectionState("connected", "reconnect");
+        });
+
+        await waitFor(() =>
+          expect(warnSpy).toHaveBeenCalledWith(
+            "DesktopSaveManagementCard: Failed to load save slots: slot load refused",
+          ),
+        );
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    it("updates listeners and clears stale unconfirmed state when saveSyncEnabled and syncRefused transition dynamically", async () => {
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
+        configured: false,
+        active_slot: "default",
+        setup_needed: false,
+      });
+      const viewA = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      expect(await screen.findByTestId("unconfirmed-slot-banner")).toBeInTheDocument();
+
+      viewA.rerender(<SaveManagementCard appId={100} detail={{ ...baseDetail, saveSyncEnabled: false }} />);
+      await waitFor(() => expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument());
+
+      let resolveTracking!: (v: Awaited<ReturnType<typeof backend.isSaveTrackingConfigured>>) => void;
+      vi.mocked(backend.isSaveTrackingConfigured).mockImplementationOnce(
+        () =>
+          new Promise((res) => {
+            resolveTracking = res;
+          }),
+      );
+      viewA.rerender(<SaveManagementCard appId={100} detail={baseDetail} />);
+      await waitFor(() => expect(screen.getByText("default")).toBeInTheDocument());
+      expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument();
+      await act(async () => {
+        resolveTracking({ configured: true, active_slot: "default", setup_needed: false });
+      });
+      viewA.unmount();
+
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValueOnce({
+        available: false,
+        installed: true,
+        established: false,
+        emulator_label: null,
+        reason: "savefiles_in_content_dir",
+        message: "Initial refusal",
+      });
+      const viewB = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      expect(await screen.findByTestId("desktop-saves-refusal")).toBeInTheDocument();
+      vi.mocked(backend.getSaveSlots).mockClear();
+
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+      });
+      await waitFor(() => expect(backend.getSaveSlots).toHaveBeenCalledTimes(1));
+      viewB.unmount();
+
+      vi.mocked(backend.getSaveSlots).mockClear();
+      const viewC = render(<SaveManagementCard appId={100} detail={{ ...baseDetail, saveSyncEnabled: false }} />);
+      await waitFor(() => expect(backend.getLocalSaveFiles).toHaveBeenCalled());
+      expect(backend.getSaveSlots).not.toHaveBeenCalled();
+
+      viewC.rerender(<SaveManagementCard appId={100} detail={baseDetail} />);
+      await waitFor(() => expect(backend.getSaveSlots).toHaveBeenCalledTimes(1));
+
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+      });
+      await waitFor(() => expect(backend.getSaveSlots).toHaveBeenCalledTimes(2));
+    });
+
+    it("falls back cleanly on surface/tracking catch errors and ignores stale out-of-order saveSyncAnswer responses", async () => {
+      const warnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+      try {
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
+          configured: false,
+          active_slot: "default",
+          setup_needed: false,
+        });
+        const first = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        expect(await screen.findByTestId("unconfirmed-slot-banner")).toBeInTheDocument();
+
+        vi.mocked(backend.isSaveTrackingConfigured).mockRejectedValueOnce(new Error("tracking boom"));
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+        });
+        await waitFor(() => expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument());
+        first.unmount();
+
+        const refusal = {
+          available: false,
+          installed: true,
+          established: false,
+          emulator_label: null,
+          reason: "savefiles_in_content_dir" as const,
+          message: "Initial refusal",
+        };
+        let resolveStale!: (v: Awaited<ReturnType<typeof backend.getSaveSyncAvailability>>) => void;
+        vi.mocked(backend.getSaveSyncAvailability)
+          .mockResolvedValueOnce(refusal)
+          .mockImplementationOnce(
+            () =>
+              new Promise((res) => {
+                resolveStale = res;
+              }),
+          )
+          .mockResolvedValueOnce({
+            available: true,
+            installed: true,
+            established: true,
+            emulator_label: "mGBA",
+          })
+          .mockResolvedValueOnce(refusal)
+          .mockRejectedValueOnce(new Error("avail boom"));
+
+        render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        expect(await screen.findByTestId("desktop-saves-refusal")).toBeInTheDocument();
+
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+        });
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+        });
+        await waitFor(() => expect(screen.queryByTestId("desktop-saves-refusal")).not.toBeInTheDocument());
+
+        await act(async () => {
+          resolveStale({ ...refusal, message: "Stale refusal" });
+        });
+        await flushMacrotask();
+        expect(screen.queryByTestId("desktop-saves-refusal")).not.toBeInTheDocument();
+
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+        });
+        expect(await screen.findByTestId("desktop-saves-refusal")).toBeInTheDocument();
+
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+        });
+        await waitFor(() => expect(screen.queryByTestId("desktop-saves-refusal")).not.toBeInTheDocument());
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
   });
 });
