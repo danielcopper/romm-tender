@@ -51,6 +51,8 @@ TARGET_SAYS = "tender-dev"
 # (scripts/dev_dispatch.sh, check_words).
 _WORD = re.compile(r"[A-Za-z0-9._,:=+-]+")
 _SHIPPED = re.compile(r"^SHIPPED=\(([^)]*)\)", re.MULTILINE)
+# The line scripts/package.sh writes beside the tarball (checksum): sha256sum's own, with the bare file name.
+_CHECKSUM_LINE = re.compile(r"([0-9a-f]{64})  (\S+)\n?")
 
 RemoteTask = Literal[
     "dev",
@@ -84,7 +86,8 @@ class TaskSpec:
     reads_only: bool = False
     """Changes nothing on the target: cut short, it left nothing part-way."""
     installs: bool = False
-    """Sends :func:`newest_tarball` on stdin, its name among the words, and ``--yes`` where given."""
+    """Sends :func:`newest_tarball` on stdin, its name and :func:`checksum` among the words, and ``--yes`` where
+    given."""
 
 
 SPECS: dict[RemoteTask, TaskSpec] = {
@@ -151,6 +154,18 @@ def newest_tarball(target: Target) -> pathlib.Path:
             " nothing was done there.\n  Build one first: mise run package"
         )
     return tarballs[-1]
+
+
+def checksum(tarball: pathlib.Path, target: Target) -> str:
+    """The SHA-256 the ``.sha256`` beside *tarball* records for it, which install.sh on the target checks."""
+    sidecar = tarball.with_name(tarball.name + ".sha256")
+    rebuild = f"nothing was done on {target.name}.\n  Build it again: mise run package"
+    if not sidecar.is_file():
+        raise TargetError(f"tender-dev: {tarball} has no checksum beside it ({sidecar.name}); {rebuild}")
+    line = _CHECKSUM_LINE.fullmatch(setup.read_text(sidecar))
+    if line is None or line.group(2) != tarball.name:
+        raise TargetError(f"tender-dev: {sidecar} is not sha256sum's line for {tarball.name}; {rebuild}")
+    return line.group(1)
 
 
 def find_target(name: str) -> Target:
@@ -461,11 +476,23 @@ def stop_after_ctrl_c(follows: Literal["backend", "ui-scale"], target: Target) -
     return 1
 
 
-def cut_short(target: Target, why: str, *, reads_only: bool) -> str:
-    """For a call that ended before it followed anything: what it was doing there may have stopped part-way."""
+def cut_short(target: Target, why: str, *, reads_only: bool, installs: bool = False) -> str:
+    """For a call that ended before it followed anything: what it was doing there may have stopped part-way.
+
+    install.sh says where an update it ended part-way stands (its EXIT trap,
+    ``say_the_service_is_stopped``), but to the connection that is gone; and
+    it names ``--rollback`` only once the new version is in place, which
+    nothing here can tell — so the message here names the install run again.
+    """
     name = target.name
     if reads_only:
         return f"tender-dev: {why}."
+    if installs:
+        return (
+            f"tender-dev: {why}; the install on {name} may have stopped part-way, and an update cut short there can"
+            f" leave the installed service stopped. Run the install again;"
+            f" `mise run dev:status --target {name}` says whether the service runs."
+        )
     return (
         f"tender-dev: {why}; what the task was doing on {name} may have stopped part-way —"
         f" `mise run dev:status --target {name}` says what holds the lock; check Steam there."
@@ -479,6 +506,7 @@ def on_target(
     follows: Follows | None,
     reads_only: bool,
     stdin: pathlib.Path | None = None,
+    installs: bool = False,
 ) -> int:
     """*words* run on the target with their output passed on; *follows* names what a following there is of.
 
@@ -491,7 +519,7 @@ def on_target(
     outcome = run_streaming([*ssh(target), "--", target.name, *words], from_first_line=from_first_line, stdin=stdin)
     following = outcome.following or (outcome.interrupted and from_first_line)
     if outcome.interrupted and not following:
-        print(cut_short(target, "interrupted here", reads_only=reads_only), file=sys.stderr)
+        print(cut_short(target, "interrupted here", reads_only=reads_only, installs=installs), file=sys.stderr)
         return INTERRUPTED
     if outcome.interrupted and (follows == "backend" or follows == "ui-scale"):
         return stop_after_ctrl_c(follows, target)
@@ -506,7 +534,9 @@ def on_target(
         explained = connection_failure(outcome.stderr, target) if lost and not outcome.answered else None
         explained = explained or dispatcher_refusal(outcome.stderr, target)
         if explained is None and lost:
-            explained = cut_short(target, f"the connection to {target.name} ended", reads_only=reads_only)
+            explained = cut_short(
+                target, f"the connection to {target.name} ended", reads_only=reads_only, installs=installs
+            )
         if explained is not None:
             print(explained, file=sys.stderr)
     return outcome.returncode
@@ -537,13 +567,15 @@ def run(arguments: argparse.Namespace) -> int:
     tarball = newest_tarball(target) if spec.installs else None
     if tarball is not None:
         assume_yes: bool = arguments.yes
-        words += [check_word(tarball.name), *(["--yes"] if assume_yes else [])]
+        words += [check_word(tarball.name), checksum(tarball, target), *(["--yes"] if assume_yes else [])]
     if spec.builds:
         build(target, surface=arguments.surface)
     copy(target, whole=spec.builds)
     if tarball is not None:
         print(f"tender-dev: installing {tarball} on {target.name} …", file=sys.stderr, flush=True)
-    return on_target(target, words, follows=spec.follows, reads_only=spec.reads_only, stdin=tarball)
+    return on_target(
+        target, words, follows=spec.follows, reads_only=spec.reads_only, stdin=tarball, installs=spec.installs
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

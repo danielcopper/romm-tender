@@ -653,13 +653,19 @@ mise run install --target <name>          # install it on the target
 mise run install --target <name> --yes    # ...passing --yes to install.sh, for a first install
 ```
 
-It sends the newest `build/romm-tender-*.tar.gz` — the one written last, whatever its version. With none there it
+It sends the newest `build/romm-tender-*.tar.gz` — the one written last, whatever its version — and the checksum
+`scripts/package.sh` wrote beside it, `<tarball>.sha256`. With no tarball there, or none with its checksum beside it, it
 refuses before it connects and names `mise run package`. It copies the tree to `incoming/` as the tasks that build
 nothing do, and leaves `current/` alone; then `scripts/dev_target.sh` from that copy receives the tarball on the same
-connection, writes it to a directory of its own under `~/.local/lib/romm-tender-dev/`, runs the copy's `install.sh` with
-`--from` on it, and removes it again. The task shows what `install.sh` says and ends with its status. The installer is
-the copy's, not the one inside the tarball: this checkout's, as `curl … | bash` hands a user the installer from `main`
-whatever release it installs. The tarball travels without its `.sha256`, so `install.sh` marks it `(not verified)`.
+connection, writes it and its checksum to a directory of its own under `~/.local/lib/romm-tender-dev/`, runs the copy's
+`install.sh` with `--from` on it, and removes both again. `install.sh` verifies the tarball against the checksum beside
+it, as it verifies a download, and refuses one that does not match. The task shows what `install.sh` says and ends with
+its status. The installer is the copy's, not the one inside the tarball: this checkout's, as `curl … | bash` hands a
+user the installer from `main` whatever release it installs.
+
+`install.sh` runs there with `TENDER_PYTHON` set to the interpreter the installed service runs on, read from its unit as
+the dev backend's is, so an update keeps the unit on the interpreter it was installed with; where no service is
+installed, `install.sh` picks its own default.
 
 **`--yes` reaches `install.sh` only when given.** The login has no terminal, so the question a first install asks —
 whether you come from the Decky plugin — cannot be answered there: without `--yes`, a first install ends with
@@ -672,7 +678,10 @@ points at a terminal the target does not have. Over the installed service the in
 handles itself; any other holder of the lock `install.sh` names.
 
 A target that cannot be used ends the install as it ends a dev task, [above](#when-a-target-cannot-be-used): no such
-target before the tarball is looked for, the other three at the copy.
+target before the tarball is looked for, the other three at the copy. A Ctrl-C during the install, or a connection lost
+then, ends `install.sh` on the target at its next line of output, and what it says about where it stopped goes to the
+connection that is gone. So the task says the install may have stopped part-way — an update cut short can leave the
+installed service stopped — and to run it again; `dev:status` says whether the service runs.
 
 ## DevTools
 

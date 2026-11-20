@@ -25,10 +25,11 @@
 #   dev_target.sh stop-dev <name>
 #       stop the dev backend's unit alone, never the installed service: what a
 #       Ctrl-C on the build host sends while a task follows the backend
-#   dev_target.sh install <name> <tarball> [--yes]
+#   dev_target.sh install <name> <tarball> <sha256> [--yes]
 #       refuse while the dev backend runs; otherwise write the tarball sent on
-#       stdin as <tarball> in a temporary directory under the root, run the
-#       copy's install.sh --from on it (--yes only when given), remove it, and
+#       stdin as <tarball> in a temporary directory under the root, its
+#       checksum beside it, run the copy's install.sh --from on it (--yes only
+#       when given) on the installed service's interpreter, remove both, and
 #       end with install.sh's status
 #
 # <name> is the target's name on the build host, for the messages. Everything
@@ -82,7 +83,8 @@ systemctl_said() {
 
 # Sets PYTHON to the interpreter the installed service runs on, so the dev
 # backend runs on the same one: the path= field of its ExecStart, which install.sh
-# wrote from TENDER_PYTHON or its default. Why TENDER_PYTHON is not read here:
+# wrote from TENDER_PYTHON or its default. SERVICE_PYTHON holds the same, and is
+# empty where no service is installed. Why TENDER_PYTHON is not read here:
 # docs/contributing/frontend-dev-loop.md, "The dev tasks on a target".
 need_python() {
     exec_start=$(systemctl --user show -p ExecStart --value "$SERVICE_UNIT" 2>&1) || manager_unreachable "$exec_start"
@@ -90,10 +92,12 @@ need_python() {
         *"path="*)
             PYTHON="${exec_start#*path=}"
             PYTHON="${PYTHON%% ;*}"
+            SERVICE_PYTHON="$PYTHON"
             source="the installed service's interpreter"
             ;;
         *)
             PYTHON="$DEFAULT_PYTHON"
+            SERVICE_PYTHON=""
             source="the interpreter without an installed service"
             ;;
     esac
@@ -513,16 +517,24 @@ stop_dev() {
 # checkout's, as `curl | bash` hands a user main's installer for whichever
 # release it installs. Beside the dev backend the service could not take the
 # lock, and install.sh's own refusal there names a Ctrl-C in a terminal this
-# target has none of; every other holder is install.sh's to judge.
+# target has none of; every other holder is install.sh's to judge. The
+# checksum goes where install.sh --from looks for one (verify_local: the
+# tarball's name with .sha256, in sha256sum's own format), and TENDER_PYTHON
+# keeps an update on the interpreter the unit was written with.
 install_release() {
-    [ $# -ge 1 ] && [ $# -le 2 ] || usage
+    [ $# -ge 2 ] && [ $# -le 3 ] || usage
     tarball="$1"
+    checksum="$2"
     case "$tarball" in
         romm-tender-*.tar.gz) ;;
         *) usage ;;
     esac
+    case "$checksum" in
+        '' | *[!0-9a-f]*) usage ;;
+    esac
+    [ "${#checksum}" -eq 64 ] || usage
     assume_yes=""
-    case "${2:-}" in
+    case "${3:-}" in
         '') ;;
         --yes) assume_yes="--yes" ;;
         *) usage ;;
@@ -549,6 +561,13 @@ install_release() {
     if [ ! -s "$work/$tarball" ]; then
         say "no tarball arrived on $name; nothing was installed."
         exit 1
+    fi
+    printf '%s  %s\n' "$checksum" "$tarball" > "$work/$tarball.sha256"
+    if [ -n "$SERVICE_PYTHON" ]; then
+        TENDER_PYTHON="$SERVICE_PYTHON"
+        export TENDER_PYTHON
+    else
+        unset TENDER_PYTHON
     fi
     install_status=0
     bash "$installer" --from "$work/$tarball" ${assume_yes:+"$assume_yes"} || install_status=$?

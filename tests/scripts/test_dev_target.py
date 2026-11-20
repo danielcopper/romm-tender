@@ -19,6 +19,7 @@ the target's home, with its bytes, before and after.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import os
 import re
@@ -1620,24 +1621,35 @@ def _tarball(loop: Loop, name: str, *, written: float) -> Path:
     tarball = loop.repo / "build" / name
     tarball.parent.mkdir(exist_ok=True)
     tarball.write_bytes(f"the bytes of {name}\n".encode())
-    tarball.with_name(name + ".sha256").write_text(f"0000  {name}\n", encoding="utf-8")
+    digest = hashlib.sha256(tarball.read_bytes()).hexdigest()
+    tarball.with_name(name + ".sha256").write_text(f"{digest}  {name}\n", encoding="utf-8")
     os.utime(tarball, (written, written))
     return tarball
 
 
-def _installer_stand_in(loop: Loop, record: Path, *, status: int = 0) -> None:
-    """The checkout's install.sh, as the copy carries it to the target, replaced by one that keeps its arguments
-    and the file ``--from`` names in *record*, says a line on each stream, and ends with *status*."""
+def _installer_stand_in(loop: Loop, record: Path, *, status: int = 0, holds: bool = False) -> None:
+    """The checkout's install.sh, as the copy carries it to the target, replaced by one that keeps its arguments,
+    the file ``--from`` names, the checksum beside it and ``TENDER_PYTHON`` in *record*, says a line on each
+    stream, and ends with *status* — or, *holds*, waits to be ended."""
     record.mkdir()
     (loop.repo / "install.sh").write_text(
         "#!/bin/sh\n"
         f'printf "%s\\n" "$@" > "{record}/argv"\n'
         f'cp "$2" "{record}/tarball"\n'
+        f'cp "$2.sha256" "{record}/checksum"\n'
+        f'printf "%s" "${{TENDER_PYTHON-unset}}" > "{record}/python"\n'
         'echo "install.sh: installed it"\n'
         'echo "install.sh: a line on stderr" >&2\n'
+        f"{'sleep 30' if holds else ''}\n"
         f"exit {status}\n",
         encoding="utf-8",
     )
+
+
+def _real_installer_up_to_the_unpack(loop: Loop) -> None:
+    """The checkout's own install.sh, run with --yes on a target with Steam: its checks pass, and it stops at the
+    unpack — the bytes sent are no tarball, and the target has no tar — with nothing changed."""
+    (loop.target_home / ".local/share/Steam").mkdir(parents=True)
 
 
 def _left_under_the_root(loop: Loop) -> list[str]:
@@ -1682,6 +1694,109 @@ class TestInstallingTheRelease:
         argv = (record / "argv").read_text(encoding="utf-8").splitlines()
         assert argv[0] == "--from"
         assert argv[2:] == ["--yes"]
+
+    def test_the_checksum_lies_beside_the_tarball_as_install_sh_looks_for_it(self, loop: Loop, tmp_path: Path) -> None:
+        """#2847 D4: install.sh --from verifies against ``<file>.sha256`` in sha256sum's format."""
+        record = tmp_path / "installed"
+        _installer_stand_in(loop, record)
+        tarball = _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+
+        result = loop.run("install")
+
+        assert result.returncode == 0, result.stderr
+        sidecar = tarball.with_name(tarball.name + ".sha256")
+        assert (record / "checksum").read_text(encoding="utf-8") == sidecar.read_text(encoding="utf-8")
+        assert 'if [ -f "$file.sha256" ]; then' in (_REPO / "install.sh").read_text(encoding="utf-8")
+
+    def test_install_sh_verifies_the_tarball_with_the_checksum_sent(self, loop: Loop) -> None:
+        """#2847 D4."""
+        _real_installer_up_to_the_unpack(loop)
+        _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+
+        result = loop.run("install", "--yes")
+
+        assert "verified romm-tender-1.0.0.tar.gz" in result.stdout, result.stderr
+        assert "not verified" not in result.stdout + result.stderr
+        assert "install.sh: the tarball could not be unpacked" in result.stderr
+        assert result.returncode == 1
+        assert not (loop.target_home / ".local/lib/romm-tender").exists()
+        assert _left_under_the_root(loop) == []
+
+    def test_a_tarball_its_checksum_does_not_match_is_refused_by_install_sh(self, loop: Loop) -> None:
+        _real_installer_up_to_the_unpack(loop)
+        tarball = _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+        tarball.with_name(tarball.name + ".sha256").write_text(f"{'0' * 64}  {tarball.name}\n", encoding="utf-8")
+
+        result = loop.run("install", "--yes")
+
+        assert result.returncode == 1
+        assert "romm-tender-1.0.0.tar.gz does not match" in result.stderr
+        assert "could not be unpacked" not in result.stderr
+        assert not (loop.target_home / ".local/lib/romm-tender").exists()
+
+    @pytest.mark.parametrize(
+        "sidecar", [None, "0000  romm-tender-1.0.0.tar.gz\n", f"{'a' * 64}  romm-tender-0.9.0.tar.gz\n"],
+        ids=["missing", "not-a-checksum", "another-tarballs"],
+    )  # fmt: skip
+    def test_without_its_checksum_beside_the_tarball_it_refuses_before_connecting(
+        self, loop: Loop, sidecar: str | None
+    ) -> None:
+        """#2847 D4: no unverified install."""
+        tarball = _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+        checksum = tarball.with_name(tarball.name + ".sha256")
+        if sidecar is None:
+            checksum.unlink()
+        else:
+            checksum.write_text(sidecar, encoding="utf-8")
+        logins = len(ssh_calls(loop.world))
+        before = _snapshot(loop.target_home)
+
+        result = loop.run("install")
+
+        assert result.returncode == 1
+        assert "Build it again: mise run package" in result.stderr
+        assert len(ssh_calls(loop.world)) == logins
+        assert _snapshot(loop.target_home) == before
+
+    def test_install_sh_runs_on_the_interpreter_the_installed_service_runs_on(self, loop: Loop, tmp_path: Path) -> None:
+        """#2847 D3: an update keeps the unit on the interpreter it was written with."""
+        other = tmp_path / "python-of-the-service"
+        other.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+        other.chmod(0o755)
+        loop.world.service_python = str(other)
+        record = tmp_path / "installed"
+        _installer_stand_in(loop, record)
+        _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+
+        result = loop.run("install")
+
+        assert result.returncode == 0, result.stderr
+        assert (record / "python").read_text(encoding="utf-8") == str(other)
+
+    def test_with_no_service_installed_install_sh_picks_its_own_interpreter(self, loop: Loop, tmp_path: Path) -> None:
+        """#2847 D3. The lock is read with /usr/bin/python3 itself, so this machine needs one of 3.12 or newer."""
+        loop.world.service_python = None
+        record = tmp_path / "installed"
+        _installer_stand_in(loop, record)
+        _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+
+        result = loop.run("install")
+
+        assert result.returncode == 0, result.stderr
+        assert (record / "python").read_text(encoding="utf-8") == "unset"
+
+    def test_ctrl_c_during_the_install_says_it_may_have_stopped_part_way(self, loop: Loop, tmp_path: Path) -> None:
+        _installer_stand_in(loop, tmp_path / "installed", holds=True)
+        _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+
+        process = loop.start("install")
+        _, err = _interrupt(process, "install.sh: installed it")
+
+        assert process.returncode == 130
+        assert "interrupted here; the install on deck may have stopped part-way" in err
+        assert "can leave the installed service stopped. Run the install again;" in err
+        assert "`mise run dev:status --target deck` says whether the service runs." in err
+        assert "check Steam" not in err
 
     def test_install_shs_status_ends_the_task_and_the_file_is_removed(self, loop: Loop, tmp_path: Path) -> None:
         _installer_stand_in(loop, tmp_path / "installed", status=3)
@@ -1897,7 +2012,15 @@ class TestTheGuide:
     def test_the_guide_covers_install_target_where_its_task_points(self) -> None:
         guide = (_REPO / "docs/contributing/frontend-dev-loop.md").read_text(encoding="utf-8")
         section = guide.split("\n### Installing the release on a target\n", 1)[1].split("\n## ", 1)[0]
-        for words in ("mise run install --target <name>", "--yes", "mise run package", "install.sh --from"):
+        for words in (
+            "mise run install --target <name>",
+            "--yes",
+            "mise run package",
+            "install.sh --from",
+            "<tarball>.sha256",
+            "TENDER_PYTHON",
+            "Ctrl-C",
+        ):
             assert words in section, words
         headings = {line.lstrip("#").strip() for line in guide.splitlines() if line.startswith("#")}
         text = " ".join((_REPO / "mise.toml").read_text(encoding="utf-8").replace("#", " ").split())
