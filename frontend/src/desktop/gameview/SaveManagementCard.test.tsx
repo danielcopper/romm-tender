@@ -1,8 +1,10 @@
+import type { FC } from "react";
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { DesktopSlotPanel } from "./DesktopSlotPanel";
 import { SaveManagementCard } from "./SaveManagementCard";
+import { useRomSaveSyncListener } from "../../utils/savePanelHooks";
 import * as backend from "../../api/backend";
 import {
   getRommConnectionState,
@@ -3406,6 +3408,34 @@ describe("SaveManagementCard", () => {
         globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
       });
       await waitFor(() => expect(backend.getSlotSaves).toHaveBeenCalledExactlyOnceWith(42, "speedrun"));
+    });
+
+    it("applies online enabled opacity and cursor on active-slot Copy to slot button", async () => {
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      const activeCopyBtn = await screen.findByRole("button", { name: "Copy to slot..." });
+      expect(activeCopyBtn).toHaveStyle({ opacity: "1", cursor: "pointer" });
+    });
+
+    it("re-binds useRomSaveSyncListener when romId changes while onSaveSync identity stays stable", async () => {
+      const onSync = vi.fn();
+      const Probe: FC<{ romId: number }> = ({ romId }) => {
+        useRomSaveSyncListener(romId, true, onSync);
+        return null;
+      };
+
+      const { rerender } = render(<Probe romId={1} />);
+      rerender(<Probe romId={2} />);
+
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 2 } }));
+      });
+      expect(onSync).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 1 } }));
+      });
+      await flushMacrotask();
+      expect(onSync).toHaveBeenCalledTimes(1);
     });
   });
 });

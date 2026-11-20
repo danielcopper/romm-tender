@@ -1452,10 +1452,10 @@ export const isSaveTrackingConfigured = endpoint<
   { configured: boolean; active_slot: string | null; setup_needed: boolean }
 >("is_save_tracking_configured");
 export const getSaveSetupInfo = endpoint<[number], SaveSetupInfo>("get_save_setup_info");
-// No device registration and no save listing: what a game's save surface says of its saves (#2149), and the wizard's
+// No device registration and no save listing: what the SAVES tab says of a game's saves (#2149), and the wizard's
 // question while the panel holds RomM as unreachable (#2153 D6).
 export const getSaveSyncAvailability = endpoint<[number], SaveSyncAvailability>("get_save_sync_availability");
-// No device registration and no request to RomM: what a game's save surface lists while save sync is off (#2527 D1).
+// No device registration and no request to RomM: what the SAVES tab lists while save sync is off (#2527 D1).
 export const getLocalSaveFiles = endpoint<[number], LocalSaveFiles>("get_local_save_files");
 // confirm_slot_choice(rom_id, chosen_slot, migrate, migrate_from_slot, use_server_on_conflict):
 // `chosen_slot` must be a non-empty named slot — legacy `slot:null` confirmation
