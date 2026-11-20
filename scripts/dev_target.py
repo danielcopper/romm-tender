@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Run a dev task on a target: build here, copy the tree there, and do the rest there.
 
-    python scripts/dev_target.py --target <name> [--surface] [--follow] [--stop] -- <task> [argument]
+    python scripts/dev_target.py --target <name> [--surface] [--follow] [--stop] [--yes] -- <task> [argument]
 
-The dev tasks call this when given ``--target``; <task> is the task's name
-(``dev``, ``dev:bpm``, ... ``dev:status``) and [argument] its display or mode.
+The dev tasks and ``install`` call this when given ``--target``; <task> is the
+task's name (``dev``, ``dev:bpm``, ... ``dev:status``, ``install``) and
+[argument] its display or mode.
 The target is one ``mise run setup:remote-target`` prepared, and every ``ssh``
 and ``rsync`` here reads the dev loop's own SSH config and nothing else.
 
@@ -15,6 +16,7 @@ docs/contributing/frontend-dev-loop.md, "The dev tasks on a target".
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import re
 import shlex
@@ -30,6 +32,9 @@ import setup_remote_target as setup
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 PACKAGE_SCRIPT = REPO / "scripts" / "package.sh"
+# Where `mise run package` puts the release tarball, and its name (scripts/package.sh, archive).
+BUILD = REPO / "build"
+TARBALL_GLOB = "romm-tender-*.tar.gz"
 INCOMING = f"{setup.TARGET_ROOT}/incoming/"
 DEV_TARGET = "scripts/dev_target.sh"
 
@@ -58,6 +63,7 @@ RemoteTask = Literal[
     "dev:ui-scale",
     "dev:stop",
     "dev:status",
+    "install",
 ]
 """The tasks that copy the tree and run :data:`DEV_TARGET`."""
 Task = Literal[RemoteTask, "dev:log"]
@@ -77,6 +83,8 @@ class TaskSpec:
     follows: Follows | None = None
     reads_only: bool = False
     """Changes nothing on the target: cut short, it left nothing part-way."""
+    installs: bool = False
+    """Sends :func:`newest_tarball` on stdin, its name among the words, and ``--yes`` where given."""
 
 
 SPECS: dict[RemoteTask, TaskSpec] = {
@@ -92,6 +100,7 @@ SPECS: dict[RemoteTask, TaskSpec] = {
     "dev:ui-scale": TaskSpec("ui-scale", takes_argument=True, follows="ui-scale"),
     "dev:stop": TaskSpec("stop"),
     "dev:status": TaskSpec("status", reads_only=True),
+    "install": TaskSpec("install", installs=True),
 }
 
 UI_SCALE_STOP = TaskSpec("ui-scale-stop")
@@ -131,6 +140,17 @@ def shipped() -> list[str]:
 def copied_tree() -> list[str]:
     """The top-level paths copied to a target: what a release ships, and the scripts that run there."""
     return [*shipped(), "scripts"]
+
+
+def newest_tarball(target: Target) -> pathlib.Path:
+    """The release tarball under :data:`BUILD` written last."""
+    tarballs = sorted(BUILD.glob(TARBALL_GLOB), key=lambda path: (path.stat().st_mtime, path.name))
+    if not tarballs:
+        raise TargetError(
+            f"tender-dev: {BUILD} holds no release tarball ({TARBALL_GLOB}) to install on {target.name};"
+            " nothing was done there.\n  Build one first: mise run package"
+        )
+    return tarballs[-1]
 
 
 def find_target(name: str) -> Target:
@@ -323,8 +343,8 @@ def _a_changed_file(line: str) -> bool:
     return bool(line) and not line.startswith(_NOT_A_FILE) and not line.endswith("/")
 
 
-def run_streaming(command: list[str], *, from_first_line: bool = False) -> Outcome:
-    """*command* run with its output passed on as it comes, and its stderr kept besides.
+def run_streaming(command: list[str], *, from_first_line: bool = False, stdin: pathlib.Path | None = None) -> Outcome:
+    """*command* run with its output passed on as it comes, and its stderr kept besides; *stdin* is read into it.
 
     The following starts at the line :data:`FOLLOWING`, which is taken out of
     stdout — or, *from_first_line* (``dev:log --follow``), at the first line
@@ -332,15 +352,16 @@ def run_streaming(command: list[str], *, from_first_line: bool = False) -> Outco
     On Ctrl-C the terminal has sent ``ssh`` the same signal; letting go of its
     output ends whatever on the far side still writes to it.
     """
-    process = subprocess.Popen(
-        command,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        errors="replace",
-        bufsize=1,
-    )
+    with open(stdin if stdin is not None else os.devnull, "rb") as source:
+        process = subprocess.Popen(
+            command,
+            stdin=source,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="replace",
+            bufsize=1,
+        )
     assert process.stdout is not None
     assert process.stderr is not None
     errors: list[str] = []
@@ -451,7 +472,14 @@ def cut_short(target: Target, why: str, *, reads_only: bool) -> str:
     )
 
 
-def on_target(target: Target, words: list[str], *, follows: Follows | None, reads_only: bool) -> int:
+def on_target(
+    target: Target,
+    words: list[str],
+    *,
+    follows: Follows | None,
+    reads_only: bool,
+    stdin: pathlib.Path | None = None,
+) -> int:
     """*words* run on the target with their output passed on; *follows* names what a following there is of.
 
     What ssh said is read as a failure before the login only while the far
@@ -460,7 +488,7 @@ def on_target(target: Target, words: list[str], *, follows: Follows | None, read
     same.
     """
     from_first_line = follows == "log"
-    outcome = run_streaming([*ssh(target), "--", target.name, *words], from_first_line=from_first_line)
+    outcome = run_streaming([*ssh(target), "--", target.name, *words], from_first_line=from_first_line, stdin=stdin)
     following = outcome.following or (outcome.interrupted and from_first_line)
     if outcome.interrupted and not following:
         print(cut_short(target, "interrupted here", reads_only=reads_only), file=sys.stderr)
@@ -506,10 +534,16 @@ def run(arguments: argparse.Namespace) -> int:
         )
     spec = UI_SCALE_STOP if task == "dev:ui-scale" and stop else SPECS[task]
     words = remote_words(spec, target.name, argument)
+    tarball = newest_tarball(target) if spec.installs else None
+    if tarball is not None:
+        assume_yes: bool = arguments.yes
+        words += [check_word(tarball.name), *(["--yes"] if assume_yes else [])]
     if spec.builds:
         build(target, surface=arguments.surface)
     copy(target, whole=spec.builds)
-    return on_target(target, words, follows=spec.follows, reads_only=spec.reads_only)
+    if tarball is not None:
+        print(f"tender-dev: installing {tarball} on {target.name} …", file=sys.stderr, flush=True)
+    return on_target(target, words, follows=spec.follows, reads_only=spec.reads_only, stdin=tarball)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -518,6 +552,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--surface", action="store_true", help="build the desktop surface into the panel")
     parser.add_argument("--follow", action="store_true", help="dev:log: follow the log rather than show it once")
     parser.add_argument("--stop", action="store_true", help="dev:ui-scale: stop the one running on the target")
+    parser.add_argument("--yes", action="store_true", help="install: pass --yes to install.sh on the target")
     parser.add_argument("task", choices=TASKS)
     parser.add_argument("argument", nargs="?", help="the task's display or mode")
     try:

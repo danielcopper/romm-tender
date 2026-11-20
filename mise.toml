@@ -221,6 +221,23 @@ description = "Build the frontend and assemble the release tarball under build/ 
 # runs the same two steps and there is one layout with one producer.
 run = ["pnpm -C frontend build", "bash scripts/package.sh --source . --out build"]
 
+[tasks.install]
+description = "Install the newest release tarball under build/ (mise run package) on a target with install.sh --from there, as a user installs a release (--target only)"
+raw = true
+usage = '''
+flag "--target <name>" help="Install it on the target setup:remote-target prepared under <name>."
+flag "--yes" help="Pass --yes to install.sh: a first install's question cannot be answered over the target's login, which has no terminal."
+'''
+# What it sends and runs there, and why --yes is passed only when given:
+# docs/contributing/frontend-dev-loop.md, "Installing the release on a target".
+run = '''
+if [ -z "${usage_target:-}" ]; then
+  echo "install installs the release tarball on a target: give --target <name>. Here, run install.sh --from build/romm-tender-<version>.tar.gz." >&2
+  exit 2
+fi
+exec python scripts/dev_target.py --target "$usage_target" ${usage_yes:+--yes} -- install
+'''
+
 [tasks.docs]
 description = "Serve the documentation site locally with live reload"
 run = "mkdocs serve"

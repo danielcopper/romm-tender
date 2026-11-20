@@ -87,7 +87,7 @@ RSYNC_RECORD_VARIABLE = "FAKE_RSYNC_RECORD"
 # What the scripts under test call besides the stand-ins.
 SYSTEM_TOOLS = (
     "sh", "bash", "cat", "mkdir", "chmod", "mv", "rm", "cp", "grep", "awk", "readlink", "wc", "date", "id",
-    "dirname", "seq", "tr", "sleep", "python3",
+    "dirname", "seq", "tr", "sleep", "python3", "mktemp",
 )  # fmt: skip
 STAND_INS = (
     "ssh", "ssh-keygen", "ip", "rsync", "mise", "systemctl", "systemd-run", "pgrep", "journalctl", "tail",

@@ -134,6 +134,18 @@ def test_dev_target_sh_runs_from_the_incoming_copy_with_its_words(home: Path, tm
     assert result.stdout == f"ran in {home} with:restart bpm dp-2 --surface\n"
 
 
+def test_dev_target_sh_reads_what_the_request_sends_on_stdin(home: Path, tmp_path: Path) -> None:
+    """install --target sends the tarball on the stdin of the copy's dev_target.sh."""
+    _dev_target(home).write_text('printf "%s|" "$*"; cat\n', encoding="utf-8")
+
+    result = _run(
+        home, tmp_path, "scripts/dev_target.sh install deck romm-tender-1.0.0.tar.gz --yes", stdin="the tarball"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "install deck romm-tender-1.0.0.tar.gz --yes|the tarball"
+
+
 def test_dev_target_sh_before_any_copy_says_none_has_arrived(home: Path, tmp_path: Path) -> None:
     result = _run(home, tmp_path, "scripts/dev_target.sh restart")
 

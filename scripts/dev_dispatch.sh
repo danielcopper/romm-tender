@@ -15,7 +15,8 @@
 #       rsync receiving into the incoming copy, named relative to the home
 #       directory sshd starts a forced command in
 #   scripts/dev_target.sh [word ...]
-#       the incoming copy's scripts/dev_target.sh, with those words
+#       the incoming copy's scripts/dev_target.sh, with those words and the
+#       request's stdin, on which install --target sends the tarball
 #   read log
 #   read database
 #       the backend's log, and its database dumped as SQL through Python's

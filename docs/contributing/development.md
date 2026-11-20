@@ -244,9 +244,11 @@ bash install.sh --from build/romm-tender-<V>.tar.gz
 ```
 
 That is the same path a release takes, with the download skipped — `install.sh --uninstall` takes it back out, and
-leaves the database, the settings and the launcher where they are. Neither the packager nor the installer is ever run
-against your own machine from a test: `tests/scripts/` runs under a throwaway HOME (the suite's autouse fixture), and
-the installer's tests also under a stub `PATH`.
+leaves the database, the settings and the launcher where they are. On a dev target, `mise run install --target <name>`
+installs the same tarball there:
+[Installing the release on a target](frontend-dev-loop.md#installing-the-release-on-a-target). Neither the packager nor
+the installer is ever run against your own machine from a test: `tests/scripts/` runs under a throwaway HOME (the
+suite's autouse fixture), and the installer's tests also under a stub `PATH`.
 
 Literally the same path: the release workflow's second job runs those same two steps on the tagged tree and attaches
 what comes out, so there is one producer for a local build and a published one. What it attaches is held to

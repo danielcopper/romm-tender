@@ -25,6 +25,11 @@
 #   dev_target.sh stop-dev <name>
 #       stop the dev backend's unit alone, never the installed service: what a
 #       Ctrl-C on the build host sends while a task follows the backend
+#   dev_target.sh install <name> <tarball> [--yes]
+#       refuse while the dev backend runs; otherwise write the tarball sent on
+#       stdin as <tarball> in a temporary directory under the root, run the
+#       copy's install.sh --from on it (--yes only when given), remove it, and
+#       end with install.sh's status
 #
 # <name> is the target's name on the build host, for the messages. Everything
 # here needs nothing beyond /usr/bin.
@@ -504,6 +509,52 @@ stop_dev() {
     printf 'tender-dev: stopped the dev backend on %s (%s.service). Steam was left as it is.\n' "$name" "$DEV_UNIT"
 }
 
+# The installer is the copy's rather than the one inside the tarball: this
+# checkout's, as `curl | bash` hands a user main's installer for whichever
+# release it installs. Beside the dev backend the service could not take the
+# lock, and install.sh's own refusal there names a Ctrl-C in a terminal this
+# target has none of; every other holder is install.sh's to judge.
+install_release() {
+    [ $# -ge 1 ] && [ $# -le 2 ] || usage
+    tarball="$1"
+    case "$tarball" in
+        romm-tender-*.tar.gz) ;;
+        *) usage ;;
+    esac
+    assume_yes=""
+    case "${2:-}" in
+        '') ;;
+        --yes) assume_yes="--yes" ;;
+        *) usage ;;
+    esac
+    installer="$root/incoming/install.sh"
+    if [ ! -f "$installer" ]; then
+        say "the copy on $name holds no install.sh ($installer); nothing was installed."
+        exit 1
+    fi
+    need_python
+    lock_holder
+    if [ "$holder" = dev ] || { [ "$holder" = none ] && [ "$dev_running" = yes ]; }; then
+        say "the dev backend runs on $name ($DEV_UNIT.service${pid:+, pid $pid}), and the installed service could not start beside it."
+        printf '%s\n' "Stop it with \`mise run dev:stop --target $name\`, then run the install again." \
+            "Nothing was installed." >&2
+        exit 1
+    fi
+    work=$(mktemp -d "$root/.install.XXXXXX")
+    trap 'rm -rf "$work"' EXIT
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    cat > "$work/$tarball"
+    if [ ! -s "$work/$tarball" ]; then
+        say "no tarball arrived on $name; nothing was installed."
+        exit 1
+    fi
+    install_status=0
+    bash "$installer" --from "$work/$tarball" ${assume_yes:+"$assume_yes"} || install_status=$?
+    exit "$install_status"
+}
+
 status() {
     need_python
     lock_holder
@@ -532,7 +583,7 @@ status() {
 }
 
 usage() {
-    say "usage: dev_target.sh start|frontend|reset|ui-scale|ui-scale-stop|stop|stop-dev|status <name> [word ...]"
+    say "usage: dev_target.sh start|frontend|reset|ui-scale|ui-scale-stop|stop|stop-dev|status|install <name> [word ...]"
     exit 2
 }
 
@@ -562,5 +613,6 @@ case "$verb" in
     stop) stop ;;
     stop-dev) stop_dev ;;
     status) status ;;
+    install) install_release "$@" ;;
     *) usage ;;
 esac

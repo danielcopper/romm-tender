@@ -1615,6 +1615,155 @@ class TestTheTargetsHalf:
         assert f'readonly SERVICE_UNIT="{unit.group(1)}"' in script
 
 
+def _tarball(loop: Loop, name: str, *, written: float) -> Path:
+    """A release tarball under the checkout's build/, as `mise run package` leaves one, written at *written*."""
+    tarball = loop.repo / "build" / name
+    tarball.parent.mkdir(exist_ok=True)
+    tarball.write_bytes(f"the bytes of {name}\n".encode())
+    tarball.with_name(name + ".sha256").write_text(f"0000  {name}\n", encoding="utf-8")
+    os.utime(tarball, (written, written))
+    return tarball
+
+
+def _installer_stand_in(loop: Loop, record: Path, *, status: int = 0) -> None:
+    """The checkout's install.sh, as the copy carries it to the target, replaced by one that keeps its arguments
+    and the file ``--from`` names in *record*, says a line on each stream, and ends with *status*."""
+    record.mkdir()
+    (loop.repo / "install.sh").write_text(
+        "#!/bin/sh\n"
+        f'printf "%s\\n" "$@" > "{record}/argv"\n'
+        f'cp "$2" "{record}/tarball"\n'
+        'echo "install.sh: installed it"\n'
+        'echo "install.sh: a line on stderr" >&2\n'
+        f"exit {status}\n",
+        encoding="utf-8",
+    )
+
+
+def _left_under_the_root(loop: Loop) -> list[str]:
+    return sorted(entry.name for entry in loop.root.iterdir() if entry.name.startswith(".install"))
+
+
+class TestInstallingTheRelease:
+    """#2847: ``install --target`` installs the tarball ``mise run package`` built, with install.sh --from there."""
+
+    def test_it_sends_the_newest_tarball_and_runs_install_sh_from_on_it(self, loop: Loop, tmp_path: Path) -> None:
+        """The newest is the one written last, whatever its version: a checkout moved back builds an older one."""
+        record = tmp_path / "installed"
+        _installer_stand_in(loop, record)
+        _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time() - 3600)
+        newest = _tarball(loop, "romm-tender-0.9.0.tar.gz", written=time.time())
+        (loop.root / "current/sentinel").write_text("running\n", encoding="utf-8")
+
+        result = loop.run("install")
+
+        assert result.returncode == 0, result.stderr
+        argv = (record / "argv").read_text(encoding="utf-8").splitlines()
+        assert argv[0] == "--from"
+        assert len(argv) == 2
+        assert Path(argv[1]).name == "romm-tender-0.9.0.tar.gz"
+        assert Path(argv[1]).parent.parent == loop.root
+        assert (record / "tarball").read_bytes() == newest.read_bytes()
+        assert f"installing {newest} on deck" in result.stderr
+        assert "install.sh: installed it" in result.stdout
+        assert "install.sh: a line on stderr" in result.stderr
+        assert [entry.name for entry in (loop.root / "current").iterdir()] == ["sentinel"]
+        assert _left_under_the_root(loop) == []
+
+    def test_yes_reaches_install_sh_only_when_given(self, loop: Loop, tmp_path: Path) -> None:
+        """#2847 D1."""
+        record = tmp_path / "installed"
+        _installer_stand_in(loop, record)
+        _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+
+        result = loop.run("install", "--yes")
+
+        assert result.returncode == 0, result.stderr
+        argv = (record / "argv").read_text(encoding="utf-8").splitlines()
+        assert argv[0] == "--from"
+        assert argv[2:] == ["--yes"]
+
+    def test_install_shs_status_ends_the_task_and_the_file_is_removed(self, loop: Loop, tmp_path: Path) -> None:
+        _installer_stand_in(loop, tmp_path / "installed", status=3)
+        _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+
+        result = loop.run("install")
+
+        assert result.returncode == 3
+        assert "install.sh: installed it" in result.stdout
+        assert _left_under_the_root(loop) == []
+
+    @pytest.mark.parametrize("leftover", [None, "romm-tender-1.0.0.tar.gz.sha256"], ids=["no-build", "checksum-only"])
+    def test_with_no_tarball_it_refuses_before_connecting_and_names_mise_run_package(
+        self, loop: Loop, leftover: str | None
+    ) -> None:
+        if leftover is not None:
+            (loop.repo / "build").mkdir()
+            (loop.repo / "build" / leftover).write_text("0000\n", encoding="utf-8")
+        logins = len(ssh_calls(loop.world))
+        before = _snapshot(loop.target_home)
+
+        result = loop.run("install")
+
+        assert result.returncode == 1
+        assert "holds no release tarball" in result.stderr
+        assert "Build one first: mise run package" in result.stderr
+        assert len(ssh_calls(loop.world)) == logins
+        assert _snapshot(loop.target_home) == before
+
+    def test_a_first_install_without_yes_ends_with_install_shs_own_refusal(self, loop: Loop) -> None:
+        """#2847 D1: the login has no terminal, so the first install's question ends it as install.sh words it."""
+        installer = loop.repo / "install.sh"
+        text = installer.read_text(encoding="utf-8")
+        # The question is asked until a date; moved out of reach so the case does not expire with it.
+        asked_until = re.sub(r'^ACK_UNTIL="\$\{TENDER_ACK_UNTIL:-[^}]+\}"$', 'ACK_UNTIL="9999-12-31"', text, flags=re.M)
+        assert asked_until != text
+        installer.write_text(asked_until, encoding="utf-8")
+        _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+
+        result = loop.run("install")
+
+        assert result.returncode == 1
+        assert "install.sh: there is no terminal to ask on" in result.stderr
+        assert "run with --yes" in result.stderr
+        assert not (loop.target_home / ".local/lib/romm-tender").exists()
+        assert _left_under_the_root(loop) == []
+
+    @pytest.mark.parametrize("dev_unit", ["holding the lock", "holding no lock"])
+    def test_beside_the_dev_backend_it_refuses_and_names_dev_stop(
+        self, loop: Loop, tmp_path: Path, dev_unit: str
+    ) -> None:
+        """#2844 D2: a task whose backend the lock would refuse names dev:stop --target."""
+        record = tmp_path / "installed"
+        _installer_stand_in(loop, record)
+        _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+        if dev_unit == "holding the lock":
+            loop.hold_lock("romm-tender-dev")
+        else:
+            loop.run_unit("romm-tender-dev")
+
+        result = loop.run("install")
+
+        assert result.returncode == 1
+        assert "the dev backend runs on deck (romm-tender-dev.service" in result.stderr
+        assert "mise run dev:stop --target deck" in result.stderr
+        assert "Nothing was installed." in result.stderr
+        assert not record.joinpath("argv").exists()
+        assert _left_under_the_root(loop) == []
+
+    def test_over_the_installed_service_holding_the_lock_it_installs(self, loop: Loop, tmp_path: Path) -> None:
+        """An update: install.sh replaces the service that holds the lock."""
+        record = tmp_path / "installed"
+        _installer_stand_in(loop, record)
+        _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+        loop.hold_lock("romm-tender")
+
+        result = loop.run("install")
+
+        assert result.returncode == 0, result.stderr
+        assert (record / "argv").exists()
+
+
 class TestTheTasks:
     """Without --target every dev task runs what it ran before; with it, scripts/dev_target.py."""
 
@@ -1685,6 +1834,8 @@ class TestTheTasks:
             ("dev:log", {}, "--target deck -- dev:log"),
             ("dev:log", {"follow": "true"}, "--target deck --follow -- dev:log"),
             ("dev:status", {}, "--target deck -- dev:status"),
+            ("install", {}, "--target deck -- install"),
+            ("install", {"yes": "true"}, "--target deck --yes -- install"),
         ],
     )
     def test_with_target_each_task_hands_over_to_dev_target_py(
@@ -1692,7 +1843,7 @@ class TestTheTasks:
     ) -> None:
         assert self._run_block(task, tmp_path, target="deck", **usage) == [f"python scripts/dev_target.py {words}"]
 
-    @pytest.mark.parametrize("task", ["dev:stop", "dev:log", "dev:status"])
+    @pytest.mark.parametrize("task", ["dev:stop", "dev:log", "dev:status", "install"])
     def test_the_tasks_only_a_target_has_refuse_without_one(self, tmp_path: Path, task: str) -> None:
         script = tomllib.loads((_REPO / "mise.toml").read_text(encoding="utf-8"))["tasks"][task]["run"]
 
@@ -1742,3 +1893,14 @@ class TestTheGuide:
             pointers = re.findall(r'docs/contributing/frontend-dev-loop\.md, "([^"]+)"', text)
             assert pointers, script
             assert set(pointers) <= headings, script
+
+    def test_the_guide_covers_install_target_where_its_task_points(self) -> None:
+        guide = (_REPO / "docs/contributing/frontend-dev-loop.md").read_text(encoding="utf-8")
+        section = guide.split("\n### Installing the release on a target\n", 1)[1].split("\n## ", 1)[0]
+        for words in ("mise run install --target <name>", "--yes", "mise run package", "install.sh --from"):
+            assert words in section, words
+        headings = {line.lstrip("#").strip() for line in guide.splitlines() if line.startswith("#")}
+        text = " ".join((_REPO / "mise.toml").read_text(encoding="utf-8").replace("#", " ").split())
+        pointers = re.findall(r'docs/contributing/frontend-dev-loop\.md, "([^"]+)"', text)
+        assert "Installing the release on a target" in pointers
+        assert set(pointers) <= headings
