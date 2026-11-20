@@ -189,6 +189,10 @@ class World:
     """``systemctl --user show -p MainPID`` fails for a unit only once it runs — the user manager lost after a start."""
     unit_states: dict[str, str] = field(default_factory=dict)
     """An ``ActiveState`` a unit reports whatever its process does — ``activating``, ``deactivating``."""
+    dev_backend_takes_the_lock: bool = True
+    """Whether the backend ``systemd-run`` starts takes the lock; without, another process can hold it beside."""
+    stop_is_slow: bool = False
+    """``systemctl --user stop`` takes five seconds before it acts."""
     stop_fails: bool = False
     """``systemctl --user stop`` fails and stops nothing."""
     journal_late: bool = False
@@ -834,6 +838,8 @@ def _systemctl(argv: list[str]) -> int:
         else:
             print()
         return 0
+    if words[:1] == ["stop"] and world.stop_is_slow:
+        time.sleep(5)
     if words[:1] == ["stop"] and world.stop_fails:
         print(f"Job for {words[1]}.service failed.", file=sys.stderr)
         return 1
@@ -859,8 +865,9 @@ def _systemd_run(argv: list[str]) -> int:
     if unit is None:
         return 0
     role = "backend" if command[-1].endswith("backend/main.py") else "process"
+    lockless = ["--no-lock"] if role == "backend" and not world.dev_backend_takes_the_lock else []
     started = subprocess.Popen(
-        [sys.executable, __file__, role],
+        [sys.executable, __file__, role, *lockless],
         start_new_session=True,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -883,13 +890,15 @@ def _backend_log() -> Path:
     return Path(os.environ["HOME"]) / ".local/state/romm-tender/backend.log"
 
 
-def _backend(_argv: list[str]) -> int:
-    """A backend: it takes the single-instance lock where the backend does, and writes one log line."""
+def _backend(argv: list[str]) -> int:
+    """A backend: it takes the single-instance lock where the backend does (unless ``--no-lock``), and writes one
+    log line."""
     world = _world()
     lock = Path(os.environ["HOME"]) / ".local/share/romm-tender/backend.lock"
     lock.parent.mkdir(parents=True, exist_ok=True)
     handle = open(lock, "a")  # noqa: SIM115 — held for the life of the process, as the backend's is
-    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    if "--no-lock" not in argv:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
     log = _backend_log()
     log.parent.mkdir(parents=True, exist_ok=True)
     with open(log, "a", encoding="utf-8") as written:

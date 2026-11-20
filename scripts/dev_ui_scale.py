@@ -129,7 +129,8 @@ _TIMEOUT_SEC = 8.0
 _STEAM_CONFIG_VDF = os.path.expanduser("~/.local/share/Steam/config/config.vdf")
 
 # Set by scripts/dev_target.sh on a target: the tasks a hint names are then the
-# build host's, with --target, and the run there is stopped by --stop, not Ctrl-C.
+# build host's, with --target, and the run there is stopped by a Ctrl-C on the
+# build host or by --stop.
 _TARGET = os.environ.get("TENDER_DEV_TARGET", "")
 
 
@@ -145,7 +146,7 @@ RESTORE_INCOMPLETE = "Restore incomplete: see the lines above."
 
 
 def _stopper() -> str:
-    return f"`{_task('dev:ui-scale --stop')}`" if _TARGET else "Ctrl-C"
+    return f"Ctrl-C on the build host, or `{_task('dev:ui-scale --stop')}`," if _TARGET else "Ctrl-C"
 
 
 # Steam re-lays out the views asynchronously after the scale call: measured on-device, the

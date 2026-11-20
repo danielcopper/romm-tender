@@ -250,8 +250,6 @@ flag "--target <name>" help="Run it on the target setup:remote-target prepared u
 # forced factor to config.vdf, so leaving it forced is not harmless.
 # `exec` so Ctrl-C / SIGTERM reach the script itself (mise is not left in the
 # signal path, which is what makes the restore reliable).
-# With --target it runs on the target as a user unit: a Ctrl-C while the task
-# follows it stops it there, and --stop stops one whose terminal is gone.
 run = '''
 if [ -n "${usage_target:-}" ]; then
   exec python scripts/dev_target.py --target "$usage_target" ${usage_stop:+--stop} -- dev:ui-scale "$usage_mode"
@@ -397,9 +395,6 @@ raw = true
 usage = '''
 flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
 '''
-# The tasks with --target start the backend as a user unit on the target, and a
-# Ctrl-C while they follow it stops it there; this is for a following that ended
-# otherwise (a connection lost, a terminal closed). Locally, Ctrl-C is the stop.
 run = '''
 if [ -z "${usage_target:-}" ]; then
   echo "dev:stop stops the backend on a target: give --target <name>. Here, Ctrl-C stops it." >&2

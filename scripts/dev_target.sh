@@ -23,11 +23,8 @@
 #       lock, and leave Steam and the service's enablement alone
 #   dev_target.sh status <name>
 #   dev_target.sh stop-dev <name>
-#       stop the dev backend's unit and nothing else: what a Ctrl-C on a task
-#       that follows the backend sends
-#   dev_target.sh running <name> backend|ui-scale
-#       exit 0 while that unit runs, 1 when it does not, 4 when the user
-#       manager could not be asked
+#       stop the dev backend's unit alone, never the installed service: what a
+#       Ctrl-C on the build host sends while a task follows the backend
 #
 # <name> is the target's name on the build host, for the messages. Everything
 # here needs nothing beyond /usr/bin.
@@ -36,8 +33,8 @@ set -eu
 here=$(cd "${0%/*}" && pwd)
 root="${here%/incoming/scripts}"
 
-# Printed alone on stdout once what follows is the output being followed, so
-# the build host knows Ctrl-C from then on ends only the following.
+# Printed alone on stdout where the following starts: the build host tells a
+# task that follows what it started from one cut short before it by this line.
 readonly FOLLOWING="tender-dev-target: following"
 
 # The installed service's unit (install.sh UNIT_NAME) and the two this script
@@ -320,7 +317,7 @@ start_backend() {
     fi
     since=$(date +%s)
     systemd-run --user --unit="$DEV_UNIT" --collect --quiet -- "$PYTHON" "$root/current/backend/main.py"
-    printf 'tender-dev: the backend runs on %s as %s.service; its log follows. Ctrl-C ends only the following.\n' \
+    printf 'tender-dev: the backend runs on %s as %s.service; its log follows; Ctrl-C stops it.\n' \
         "$name" "$DEV_UNIT" >&2
     backend=$(main_pid "$DEV_UNIT") || manager_lost "the backend ($DEV_UNIT.service)" \
         "\`mise run dev:stop --target $name\` stops it." "$backend"
@@ -399,10 +396,20 @@ ui_scale() {
 # window back on SIGTERM and ends with one of its RESTORE_DONE or
 # RESTORE_INCOMPLETE lines, which journald may hand on a moment after the stop.
 ui_scale_stop() {
-    if ! unit_runs "$UI_SCALE_UNIT"; then
-        printf 'tender-dev: no dev:ui-scale runs on %s; nothing was stopped.\n' "$name"
-        return 0
-    fi
+    scale_state=0
+    unit_state "$UI_SCALE_UNIT" || scale_state=$?
+    case "$scale_state" in
+        0) ;;
+        1)
+            printf 'tender-dev: no dev:ui-scale runs on %s; nothing was stopped.\n' "$name"
+            return 0
+            ;;
+        *)
+            say "could not ask the user manager on $name (systemctl --user); nothing was stopped."
+            systemctl_said "$state_said"
+            exit 4
+            ;;
+    esac
     since=$(date +%s)
     stop_status=0
     systemctl --user stop "$UI_SCALE_UNIT" || stop_status=$?
@@ -470,8 +477,8 @@ stop() {
     esac
 }
 
-# The dev unit alone, never the installed service: a Ctrl-C here ends what the
-# task started, as it ends the backend locally.
+# A Ctrl-C on the build host ends what the task started, as it ends the backend
+# locally.
 stop_dev() {
     dev_state=0
     unit_state "$DEV_UNIT" || dev_state=$?
@@ -524,29 +531,8 @@ status() {
     fi
 }
 
-# Exit 0 while the unit runs, 1 when it does not, 4 when the user manager could
-# not be asked: what the build host asks after a Ctrl-C, before it says what
-# keeps running.
-running() {
-    case "${1:-}" in
-        backend) unit="$DEV_UNIT" ;;
-        ui-scale) unit="$UI_SCALE_UNIT" ;;
-        *) usage ;;
-    esac
-    running_status=0
-    unit_state "$unit" || running_status=$?
-    case "$running_status" in
-        0) exit 0 ;;
-        1) exit 1 ;;
-        *)
-            systemctl_said "$state_said"
-            exit 4
-            ;;
-    esac
-}
-
 usage() {
-    say "usage: dev_target.sh start|frontend|reset|ui-scale|ui-scale-stop|stop|stop-dev|status|running <name> [word ...]"
+    say "usage: dev_target.sh start|frontend|reset|ui-scale|ui-scale-stop|stop|stop-dev|status <name> [word ...]"
     exit 2
 }
 
@@ -576,6 +562,5 @@ case "$verb" in
     stop) stop ;;
     stop-dev) stop_dev ;;
     status) status ;;
-    running) running "$@" ;;
     *) usage ;;
 esac

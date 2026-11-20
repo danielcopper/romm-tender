@@ -563,8 +563,7 @@ Without `--target`, every task does what the sections above describe and nothing
    refused below 3.12. `TENDER_PYTHON` is not read there: a login over `ssh` carries none of the installer's
    environment. The display a task names is one of the target's, and the
    [remembered window](#why-the-window-is-remembered-rather-than-read) is the target's memory file.
-5. **It follows what it started** — the backend's log, or what `dev:ui-scale` prints — until Ctrl-C, which stops it
-   there, as Ctrl-C stops it locally (below).
+5. **It follows what it started** — the backend's log, or what `dev:ui-scale` prints (below).
 
 On the target everything runs in the user manager's environment: the units do by being units, and the steps between take
 the display and the session bus from it, since a login over `ssh` carries neither. It needs nothing beyond `/usr/bin`. A
@@ -579,8 +578,8 @@ stderr since it started — an import that failed before the log was opened amon
 stops the dev backend there**, as it ends the backend locally: the task catches it here, since a Ctrl-C does not reach
 the target, and stops the `romm-tender-dev` unit — never the installed service — and says so. A stop that cannot be
 sent, the connection gone, says the backend may still run and names `dev:stop`; a second Ctrl-C abandons the stop and
-says the same. A following that ends without a Ctrl-C here — a connection lost, a terminal closed — leaves the backend
-running, and the task says so and names `dev:stop`.
+says the same. A following that ends without a Ctrl-C here leaves the backend running: a connection lost says so and
+names `dev:stop`; a terminal closed says nothing, and `dev:status` shows what runs.
 
 **`dev:stop` stops whichever holds the lock on the target**: the dev backend, or the installed service. It is for a dev
 backend whose following ended without a Ctrl-C, and for the installed service. It leaves Steam as it is — the next task

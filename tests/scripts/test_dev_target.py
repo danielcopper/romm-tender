@@ -355,6 +355,51 @@ class TestStartingABackend:
         unit = [call for call in commands(loop.world, "systemd-run") if "--unit=romm-tender-dev" in call["argv"]]
         assert [call["argv"][-2:] for call in unit] == [[sys.executable, str(loop.root / "current/backend/main.py")]]
 
+    def test_the_start_says_ctrl_c_stops_the_backend(self, loop: Loop) -> None:
+        loop.world.backend_exits = True
+
+        result = loop.run("dev:backend")
+
+        assert "its log follows; Ctrl-C stops it." in result.stderr
+        assert "ends only the following" not in result.stderr
+
+    def test_ctrl_c_stops_the_dev_backend_and_never_the_installed_service_beside_it(self, loop: Loop) -> None:
+        """The installed service holds the lock beside a dev backend that does not: a stop of the lock's holder
+        would end the service."""
+        loop.world.dev_backend_takes_the_lock = False
+        process = loop.start("dev:backend")
+        assert process.stdout is not None
+        while "backend started" not in process.stdout.readline():
+            assert process.poll() is None, process.communicate()
+        backend = units(loop.world)["romm-tender-dev"]["pid"]
+        service = loop.hold_lock("romm-tender")
+
+        os.killpg(process.pid, signal.SIGINT)
+        out, err = process.communicate(timeout=_TIMEOUT)
+
+        assert process.returncode == 0, err
+        assert "stopped the dev backend on deck" in out + err
+        assert not _alive(backend)
+        assert _alive(service)
+        assert ["--user", "stop", "romm-tender"] not in [call["argv"] for call in commands(loop.world, "systemctl")]
+
+    def test_a_second_ctrl_c_abandons_the_stop_and_says_what_may_still_run(self, loop: Loop) -> None:
+        loop.world.stop_is_slow = True
+        process = loop.start("dev:backend")
+        assert process.stdout is not None
+        while "backend started" not in process.stdout.readline():
+            assert process.poll() is None, process.communicate()
+        loop.save()
+
+        os.killpg(process.pid, signal.SIGINT)
+        _wait_for(lambda: any(call["argv"][1:2] == ["stop"] for call in commands(loop.world, "systemctl")))
+        os.killpg(process.pid, signal.SIGINT)
+        _, err = process.communicate(timeout=_TIMEOUT)
+
+        assert process.returncode == 130
+        assert "the stop was abandoned; the backend may still run on deck" in err
+        assert "`mise run dev:stop --target deck` stops it" in err
+
     def test_ctrl_c_on_dev_backend_restarts_nothing_while_it_stops_the_backend(self, loop: Loop) -> None:
         process = loop.start("dev:backend")
         assert process.stdout is not None
@@ -644,6 +689,22 @@ class TestTheTasksThatStartNothing:
         assert started.returncode == 1
         assert "the restore on deck did not land" in err
 
+    def test_a_ui_scale_stop_the_target_cannot_ask_after_ctrl_c_names_ui_scale_stop(self, loop: Loop) -> None:
+        """Only a line about the restore stands for the stop's verdict; any other failure names --stop."""
+        started, scale = loop.start_ui_scale()
+        loop.world.manager_unreachable = True
+        loop.save()
+
+        os.killpg(started.pid, signal.SIGINT)
+        _, err = started.communicate(timeout=_TIMEOUT)
+
+        assert started.returncode == 1
+        assert "could not ask the user manager on deck" in err
+        assert "Nothing was started" not in err
+        assert "dev:ui-scale may still run on deck" in err
+        assert "`mise run dev:ui-scale --stop --target deck`" in err
+        assert _alive(scale)
+
     def test_a_ui_scale_stop_that_cannot_be_sent_after_ctrl_c_names_ui_scale_stop(self, loop: Loop) -> None:
         started, scale = loop.start_ui_scale()
         loop.world.targets[_ADDRESS].serving = False
@@ -857,6 +918,8 @@ class TestTheConnection:
 
         assert result.returncode == 255
         assert f"the connection to deck ended while following {follows}" in result.stderr
+        stopper = "dev:ui-scale --stop" if task == "dev:ui-scale" else "dev:stop"
+        assert f"`mise run {stopper} --target deck` stops it" in result.stderr
 
     def test_a_connection_that_ends_while_following_is_said(self, loop: Loop) -> None:
         loop.log.parent.mkdir(parents=True)
@@ -968,32 +1031,6 @@ class TestAUnitsState:
 
         assert result.returncode == 1
         assert "romm-tender-dev.service runs on deck but holds no lock" in result.stderr
-
-    def test_running_names_what_systemctl_said_when_it_cannot_ask(self, loop: Loop) -> None:
-        loop.run("dev:status")
-        loop.world.manager_unreachable = True
-        loop.save()
-
-        asked = subprocess.run(
-            [
-                "ssh",
-                "-F",
-                str(loop.build_home / ".config/romm-tender-dev/ssh_config"),
-                "--",
-                "deck",
-                "scripts/dev_target.sh",
-                "running",
-                "deck",
-                "backend",
-            ],
-            env=loop.env(),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-        assert asked.returncode == 4
-        assert "systemctl said: Failed to connect to bus: No medium found" in asked.stderr
 
 
 class TestADevUnitThatHoldsNoLock:
@@ -1193,7 +1230,9 @@ class TestWhatTheScriptsOnTheTargetSay:
         ).stdout.splitlines()
 
         assert said[0] == f"mise run dev:ui-scale auto{hint}"
-        assert said[1] == (f"`mise run dev:ui-scale --stop{hint}`" if target else "Ctrl-C")
+        assert said[1] == (
+            f"Ctrl-C on the build host, or `mise run dev:ui-scale --stop{hint}`," if target else "Ctrl-C"
+        )
 
     def test_dev_steams_hint_names_the_target(self, loop: Loop) -> None:
         memory = loop.target_home / ".local/state/tender-dev/steam-window"

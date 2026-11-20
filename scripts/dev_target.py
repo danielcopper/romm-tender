@@ -33,8 +33,7 @@ PACKAGE_SCRIPT = REPO / "scripts" / "package.sh"
 INCOMING = f"{setup.TARGET_ROOT}/incoming/"
 DEV_TARGET = "scripts/dev_target.sh"
 
-# What scripts/dev_target.sh prints alone on stdout once the rest is output being
-# followed: Ctrl-C from then on ends only the following.
+# scripts/dev_target.sh, FOLLOWING.
 FOLLOWING = "tender-dev-target: following"
 
 # How the dispatcher opens a refusal (scripts/dev_dispatch.sh, refuse).
@@ -346,68 +345,14 @@ def run_streaming(command: list[str], *, from_first_line: bool = False) -> Outco
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
+        except KeyboardInterrupt:
+            # A second Ctrl-C while letting go: the call is ended either way.
+            process.kill()
+            process.wait()
         relay.join(timeout=1)
         return Outcome(process.returncode, "".join(errors), following, interrupted=True, answered=answered)
     relay.join()
     return Outcome(process.returncode, "".join(errors), following, interrupted=False, answered=answered)
-
-
-def still_running(target: Target, unit: str) -> tuple[bool | None, str]:
-    """Whether *unit* (``backend`` or ``ui-scale``) runs on the target, and what the asking said on stderr.
-
-    ``None`` where that could not be asked: the connection failed, or the
-    target's user manager did not answer (``dev_target.sh running`` ends with 4
-    and says what systemctl said).
-    """
-    result = subprocess.run(
-        [*ssh(target), "--", target.name, DEV_TARGET, "running", target.name, unit],
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return {0: True, 1: False}.get(result.returncode), result.stderr.strip()
-
-
-def after_following(follows: Follows, target: Target) -> str:
-    """What to say once a following has ended by itself: what still runs there, as the target answers."""
-    name = target.name
-    unknown = f" Whether it still runs could not be asked; `mise run dev:status --target {name}` says what runs there."
-    match follows:
-        case "log":
-            return f"tender-dev: stopped following the log on {name}."
-        case "ui-scale":
-            stopped = "tender-dev: stopped following dev:ui-scale."
-            running, said = still_running(target, "ui-scale")
-            if running is None:
-                return stopped + unknown + _indented(said)
-            if not running:
-                return f"{stopped} dev:ui-scale no longer runs on {name}."
-            return (
-                f"{stopped} It keeps running on {name}, holding the scale;"
-                f" `mise run dev:ui-scale --stop --target {name}` restores the scale and the window."
-            )
-        case "backend":
-            stopped = "tender-dev: stopped following the log."
-            running, said = still_running(target, "backend")
-            if running is None:
-                return stopped + unknown + _indented(said)
-            if not running:
-                return (
-                    f"{stopped} The backend no longer runs on {name};"
-                    f" `mise run dev:log --target {name}` shows what it logged."
-                )
-            return (
-                f"{stopped} The backend keeps running on {name};"
-                f" `mise run dev:stop --target {name}` stops it, and `mise run dev:log --follow --target {name}`"
-                " follows its log again."
-            )
-        case unknown_follows:
-            assert_never(unknown_follows)
-
-
-def _indented(said: str) -> str:
-    return "".join(f"\n  {line.strip()}" for line in said.splitlines() if line.strip())
 
 
 def connection_ended(follows: Follows, target: Target) -> str:
@@ -434,9 +379,8 @@ def connection_ended(follows: Follows, target: Target) -> str:
 def stop_after_ctrl_c(follows: Literal["backend", "ui-scale"], target: Target) -> int:
     """Ctrl-C on a task that follows what it started: stop that there, as Ctrl-C stops it locally.
 
-    The backend's stop is the dev unit's alone — never the installed service's —
-    and dev:ui-scale's runs its restore and says whether it landed. A second
-    Ctrl-C abandons the stop and says what may still run.
+    dev:ui-scale's stop runs its restore, and the target says whether it
+    landed. A second Ctrl-C abandons the stop and says what may still run.
     """
     name = target.name
     if follows == "backend":
@@ -447,14 +391,20 @@ def stop_after_ctrl_c(follows: Literal["backend", "ui-scale"], target: Target) -
             "dev:ui-scale",
             f"`mise run dev:ui-scale --stop --target {name}` stops it",
         )
-    print(f"tender-dev: stopping {what} on {name} …", file=sys.stderr, flush=True)
-    outcome = run_streaming([*ssh(target), "--", name, DEV_TARGET, verb, name])
+    abandoned = f"tender-dev: the stop was abandoned; {what} may still run on {name}: {stopper}."
+    try:
+        print(f"tender-dev: stopping {what} on {name} …", file=sys.stderr, flush=True)
+        outcome = run_streaming([*ssh(target), "--", name, DEV_TARGET, verb, name])
+    except KeyboardInterrupt:
+        print(abandoned, file=sys.stderr)
+        return INTERRUPTED
     if outcome.interrupted:
-        print(f"tender-dev: the stop was abandoned; {what} may still run on {name}: {stopper}.", file=sys.stderr)
+        print(abandoned, file=sys.stderr)
         return INTERRUPTED
     if outcome.returncode == 0:
         return 0
-    restore_said = follows == "ui-scale" and outcome.returncode == 1 and outcome.answered
+    # dev_target.sh ui-scale-stop's verdict on a restore that did not land, or is not confirmed.
+    restore_said = follows == "ui-scale" and outcome.returncode == 1 and f"the restore on {name} " in outcome.stderr
     if not restore_said:
         print(f"tender-dev: {what} may still run on {name}: {stopper}.", file=sys.stderr)
     return 1
@@ -487,8 +437,8 @@ def on_target(target: Target, words: list[str], *, follows: Follows | None, read
         return INTERRUPTED
     if outcome.interrupted and (follows == "backend" or follows == "ui-scale"):
         return stop_after_ctrl_c(follows, target)
-    if follows is not None and (outcome.interrupted or (following and outcome.returncode == 0)):
-        print(after_following(follows, target), file=sys.stderr)
+    if follows == "log" and (outcome.interrupted or (following and outcome.returncode == 0)):
+        print(f"tender-dev: stopped following the log on {target.name}.", file=sys.stderr)
         return 0
     if follows is not None and following and outcome.returncode == setup.SSH_FAILED:
         print(connection_ended(follows, target), file=sys.stderr)
