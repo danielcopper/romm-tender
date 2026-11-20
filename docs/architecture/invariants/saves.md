@@ -67,11 +67,11 @@ and binds, and the other areas: [the register's index](index.md).
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes
-  that record each installed ROM's save directory, the local-save check (`check_local_drift`) and the SAVES tab's read
+  that record each installed ROM's save directory, the local-save check (`check_local_drift`) and the save-surface read
   with save sync off (`get_local_save_files`) hold the lock (the count, the record passes, the check and that read for
   the directory follow, not for a write of the save state), and following a moved save directory runs inside the lock of
-  whichever holder calls it. Tests pin the status
-  (`tests/services/saves/test_status.py::TestGetSaveStatusRomLockSerialization`), the three slot mutations
+  whichever holder calls it ([Per-rom asyncio.Lock](../save-file-sync-architecture.md#per-rom-asynciolock)). Tests pin
+  the status (`tests/services/saves/test_status.py::TestGetSaveStatusRomLockSerialization`), the three slot mutations
   (`tests/services/saves/test_slots.py::TestSlotMutationLocking`), the slot list
   (`test_slots.py::TestSaveSlotsUnderRomLock`), a sync
   (`tests/services/saves/test_service.py::TestPerRomLockSerialization::test_per_rom_lock_serializes_concurrent_sync`),
@@ -112,62 +112,62 @@ and binds, and the other areas: [the register's index](index.md).
   `tests/services/saves/test_slots.py::TestAGameWhoseSavesCannotSync` the slot choice's plain path and the setup info;
   nothing pins the list: a sixth write path that keys its refusal on `saves_dir` instead writes into a directory the
   answer never offered a sync. The same holds for following a moved directory first: `SyncEngine.follow_save_directory`
-  is called before any local file is looked at by the sync, write, delete, count and status paths that
-  `docs/architecture/save-file-sync-architecture.md` lists: the four sync paths, the five write paths, the two deletes,
-  the two counting reads (`count_platform_saves`, `get_save_status`), the local-save check (`check_local_drift`) and the
-  SAVES tab's read with save sync off (`get_local_save_files`), and a new reader of local save files that skips it looks
-  in the directory the files have just left — nothing mechanical finds such a reader. (2) A configuration-role file is
-  excluded by `SaveAnswer.synced_files` and included by `owned_files`, which is what a directory move must carry — a
-  caller reading `components` directly gets neither rule, and syncing Saturn's `.smpc` overwrites the console settings
-  the user chose on the other device. Saturn is the only example that actually reaches the rule on a stock RetroDECK:
-  MAME states a per-game `.cfg` too, but its answer classifies as not-established, so the sync refuses before any role
-  is consulted. The rule is a DENIAL — `CONFIGURATION_ROLES` names what to hold back — and turning it into an allow-list
-  of the roles known today is the one change here that fails in silence and in the expensive direction: the resolver's
-  own `unknown` role (a file on the machine no declaration describes) and a component with no role at all are both
-  carried today, and an allow-list drops them, along with every role upstream names next.
-  `tests/domain/test_save_answer.py` and `tests/adapters/test_atlas_saves.py` pin both directions; nothing else would
-  notice, because a dropped file is simply a file the page does not mention. (3) The two axes a rendering must read
-  alongside the state are single fields nothing forces a consumer to touch. `SaveAnswer.unestablished` holds three
-  shapes, and a truthiness test on `state == "unestablished"` collapses "nobody has audited this core" into "the folder
-  is known and the names are not" and into "the question was never put". `content_installed` is worse, because ignoring
-  it is invisible: an uninstalled ROM answers with a state, a directory and a full file list, every name a prediction
-  about the path the game WOULD occupy, so a surface that renders them tells a user their uninstalled game already has
-  three save files. The wire flag beside each name is `carried`, not `synced`, for the same reason — it names the RULE
-  applied to a file, never that file's sync state. (4) **The question must carry the ROM's REAL content path**, because
-  the answer turns on the content file's own EXTENSION — PUAE answers `save-inside-content` for an Amiga `.adf` and
-  establishes nothing for an `.hdf`; Genesis Plus GX answers a shared `scd_*.brm` for a Sega CD `.chd` and a per-game
-  `.srm` for a `.bin`. Within `RomInfoService` the system and the path are decided in exactly two places —
-  `_installed_answer` for a ROM on disk and `_uninstalled_answer` for one the library only knows about — so ADR-0010's
-  slug leak has two sites to guard there rather than one per caller. A **third** site exists outside it:
-  `services/rom_adoption/renamer.py` asks the resolver directly for the save and the savestate directory of both launch
-  paths of a rename, taking the system off the adoption target the service resolved — so it cannot leak the slug, and it
-  is a site the same rule has to hold at. A synthetic stem passed anywhere else answers a different question in a shape
-  that looks like an answer to this one, and nothing would say so. It is also why every per-system pin in
-  `tests/adapters/test_atlas_saves.py` is keyed by `(system, extension)`: a pin that does not name the extension it
-  asked with is pinning nothing, which is how two independent measurements of the same systems produced contradictory
-  fact lists. **Every path asks live and nothing caches an answer** — every call detects the emulator sources afresh,
-  and only the resolver's machine, which remembers a core's probe by the core file's path, modification time and size,
-  outlives it — because the user changes a core's options in the emulator's own quick menu between a launch and the next
-  sync; a display cache added without invalidating it on every sync entry is the one change that makes this rule fail
-  silently and expensively. **A place not read from the emulator's own settings** — a settings file missing or
-  unreadable, a source not set up, a bare RetroArch's marker, which is its `retroarch.cfg` — refuses as its own state,
-  and what decides it is the answer's own findings (`domain/save_answer.py::place_not_read_finding`), never the source's
-  health: ES-DE's settings and EmuDeck's RetroArch beside a standalone emulator are health findings about files no save
-  of that emulator is placed by, and reading them would refuse a save whose place was read. RetroDECK's and EmuDeck's
-  marker findings alone refuse nothing, because their marker names the source's folders and never where an emulator
-  writes; a missing saves root refuses only where the source's roots answer states that root `read`, since a root it
-  only assumed says nothing about a drive. `TestAPlaceNotReadFromTheSettings`,
-  `TestTheRealResolverStatesWhereAPlaceWasNotRead` and `TestAMissingSavesRoot` in `tests/adapters/test_atlas_saves.py`
-  pin both directions, the real resolver's included. Unchecked: such a refusal keeps the directory the resolver named,
-  because the rename on adoption carries a game's saves there, so anything that moves files by `SaveAnswer.directory`
-  has to check the state itself, as `services/saves/save_directory.py::_followable_directory` does — a new mover that
-  does not carries files into a place the emulator's settings never named, and nothing would say so. Prompt-only: every
-  per-ROM entry point refuses through `sync_engine/_shape_refusal.py` and every sync path crosses the
-  `MatrixExecutor.sync_rom_saves` backstop; the five write paths (`slots/switching.py`, `copies.py`, `versions.py`,
-  `slots/setup.py`, `sync_engine/rollback.py`) each refuse on the answer's `sync_directory` (the slot choice through
-  `refuse_unsyncable`, which reads the same), never on `saves_dir` — `test_save_shape_gate.py` pins those five, not the
-  list, and `tests/services/saves/test_slots.py::TestAGameWhoseSavesCannotSync` the slot choice's plain path; the sync,
-  write, delete, count and status paths that `docs/architecture/save-file-sync-architecture.md` lists call
+  is called before any local file is looked at by the sync, write, delete, count, local-save check and save-surface
+  sync-off read paths that
+  [Following a Moved Save Directory](../save-file-sync-architecture.md#following-a-moved-save-directory) lists, and a
+  new reader of local save files that skips it looks in the directory the files have just left — nothing mechanical
+  finds such a reader. (2) A configuration-role file is excluded by `SaveAnswer.synced_files` and included by
+  `owned_files`, which is what a directory move must carry — a caller reading `components` directly gets neither rule,
+  and syncing Saturn's `.smpc` overwrites the console settings the user chose on the other device. Saturn is the only
+  example that actually reaches the rule on a stock RetroDECK: MAME states a per-game `.cfg` too, but its answer
+  classifies as not-established, so the sync refuses before any role is consulted. The rule is a DENIAL —
+  `CONFIGURATION_ROLES` names what to hold back — and turning it into an allow-list of the roles known today is the one
+  change here that fails in silence and in the expensive direction: the resolver's own `unknown` role (a file on the
+  machine no declaration describes) and a component with no role at all are both carried today, and an allow-list drops
+  them, along with every role upstream names next. `tests/domain/test_save_answer.py` and
+  `tests/adapters/test_atlas_saves.py` pin both directions; nothing else would notice, because a dropped file is simply
+  a file the page does not mention. (3) The two axes a rendering must read alongside the state are single fields nothing
+  forces a consumer to touch. `SaveAnswer.unestablished` holds three shapes, and a truthiness test on
+  `state == "unestablished"` collapses "nobody has audited this core" into "the folder is known and the names are not"
+  and into "the question was never put". `content_installed` is worse, because ignoring it is invisible: an uninstalled
+  ROM answers with a state, a directory and a full file list, every name a prediction about the path the game WOULD
+  occupy, so a surface that renders them tells a user their uninstalled game already has three save files. The wire flag
+  beside each name is `carried`, not `synced`, for the same reason — it names the RULE applied to a file, never that
+  file's sync state. (4) **The question must carry the ROM's REAL content path**, because the answer turns on the
+  content file's own EXTENSION — PUAE answers `save-inside-content` for an Amiga `.adf` and establishes nothing for an
+  `.hdf`; Genesis Plus GX answers a shared `scd_*.brm` for a Sega CD `.chd` and a per-game `.srm` for a `.bin`. Within
+  `RomInfoService` the system and the path are decided in exactly two places — `_installed_answer` for a ROM on disk and
+  `_uninstalled_answer` for one the library only knows about — so ADR-0010's slug leak has two sites to guard there
+  rather than one per caller. A **third** site exists outside it: `services/rom_adoption/renamer.py` asks the resolver
+  directly for the save and the savestate directory of both launch paths of a rename, taking the system off the adoption
+  target the service resolved — so it cannot leak the slug, and it is a site the same rule has to hold at. A synthetic
+  stem passed anywhere else answers a different question in a shape that looks like an answer to this one, and nothing
+  would say so. It is also why every per-system pin in `tests/adapters/test_atlas_saves.py` is keyed by
+  `(system, extension)`: a pin that does not name the extension it asked with is pinning nothing, which is how two
+  independent measurements of the same systems produced contradictory fact lists. **Every path asks live and nothing
+  caches an answer** — every call detects the emulator sources afresh, and only the resolver's machine, which remembers
+  a core's probe by the core file's path, modification time and size, outlives it — because the user changes a core's
+  options in the emulator's own quick menu between a launch and the next sync; a display cache added without
+  invalidating it on every sync entry is the one change that makes this rule fail silently and expensively. **A place
+  not read from the emulator's own settings** — a settings file missing or unreadable, a source not set up, a bare
+  RetroArch's marker, which is its `retroarch.cfg` — refuses as its own state, and what decides it is the answer's own
+  findings (`domain/save_answer.py::place_not_read_finding`), never the source's health: ES-DE's settings and EmuDeck's
+  RetroArch beside a standalone emulator are health findings about files no save of that emulator is placed by, and
+  reading them would refuse a save whose place was read. RetroDECK's and EmuDeck's marker findings alone refuse nothing,
+  because their marker names the source's folders and never where an emulator writes; a missing saves root refuses only
+  where the source's roots answer states that root `read`, since a root it only assumed says nothing about a drive.
+  `TestAPlaceNotReadFromTheSettings`, `TestTheRealResolverStatesWhereAPlaceWasNotRead` and `TestAMissingSavesRoot` in
+  `tests/adapters/test_atlas_saves.py` pin both directions, the real resolver's included. Unchecked: such a refusal
+  keeps the directory the resolver named, because the rename on adoption carries a game's saves there, so anything that
+  moves files by `SaveAnswer.directory` has to check the state itself, as
+  `services/saves/save_directory.py::_followable_directory` does — a new mover that does not carries files into a place
+  the emulator's settings never named, and nothing would say so. Prompt-only: every per-ROM entry point refuses through
+  `sync_engine/_shape_refusal.py` and every sync path crosses the `MatrixExecutor.sync_rom_saves` backstop; the five
+  write paths (`slots/switching.py`, `copies.py`, `versions.py`, `slots/setup.py`, `sync_engine/rollback.py`) each
+  refuse on the answer's `sync_directory` (the slot choice through `refuse_unsyncable`, which reads the same), never on
+  `saves_dir` — `test_save_shape_gate.py` pins those five, not the list, and
+  `tests/services/saves/test_slots.py::TestAGameWhoseSavesCannotSync` the slot choice's plain path; the sync, write,
+  delete, count and status paths that `docs/architecture/save-file-sync-architecture.md` lists call
   `SyncEngine.follow_save_directory` before they look at local files; configuration-role files are held back through
   `SaveAnswer.synced_files` by the denial `CONFIGURATION_ROLES`, never an allow-list, a directory move carries
   `owned_files`, and nothing reads `components` directly; a rendering reads `unestablished`'s shape and

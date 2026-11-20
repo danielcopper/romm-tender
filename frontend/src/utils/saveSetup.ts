@@ -254,9 +254,12 @@ function heldWizardMessage(result: SaveSetupInfo): string | null {
 }
 
 /** Apply the initial `getSaveSetupInfo` result for a save setup wizard's
- *  fetch effect. Routes server_unreachable to a held-wizard error banner,
- *  auto_confirm_default through a backend confirm, and everything else into
- *  the per-slot picker by calling `setInfo`. */
+ *  fetch effect. Held states (`server_unreachable`, `not_found`,
+ *  `romm_refused`, `device_not_registered`) route to `deps.setError`,
+ *  `sync_unavailable` routes to `deps.setUnavailable`, `auto_confirm_default`
+ *  auto-confirms (calling `deps.onComplete` on success, or surfacing the error
+ *  via `setError` and falling back to `setInfo`), and all other outcomes open
+ *  the per-slot picker via `deps.setInfo`. */
 export async function applyWizardInitialSetupResult(result: SaveSetupInfo, deps: WizardSetupDeps): Promise<void> {
   const held = heldWizardMessage(result);
   if (held !== null) {

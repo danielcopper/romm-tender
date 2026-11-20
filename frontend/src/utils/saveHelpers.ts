@@ -63,10 +63,10 @@ export function attributionLabel(uploadedByUs: boolean | null | undefined): stri
 }
 
 /**
- * Format the per-save attribution+checkmark segment for the sync-time line.
+ * Format the per-save attribution+checkmark segment appended after the sync time.
  *
- * Formats the sync time, device attribution, and optional trailing checkmark
- * into one ready-to-render string, or null when nothing meaningful can be shown.
+ * Formats device attribution and an optional trailing checkmark into one
+ * ready-to-render string, or null when nothing meaningful can be shown.
  * When `showCheck=false`, pending upload/download work suppresses the ✓ so a
  * failed post-exit sync does not render a false checkmark (#1334). Version rows
  * keep the default (`showCheck=true`): the ✓ there is the per-version

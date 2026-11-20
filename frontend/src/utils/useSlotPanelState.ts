@@ -115,6 +115,10 @@ export function useSlotPanelState({
         await onSlotActivated(outcome.saveStatus);
         return;
       }
+      // Partial switches toast rather than setting inline switchError:
+      // `switch_incomplete` flips `isActive` after announcing the sync,
+      // remounting the keyed panel and dropping local state; `switch_stopped`
+      // toasts for parity.
       if (outcome.partial) {
         showToast(outcome.message);
         return;
