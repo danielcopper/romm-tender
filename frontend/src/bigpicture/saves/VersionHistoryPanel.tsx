@@ -4,7 +4,7 @@
  * fallback to the standard sync-conflict modal).
  */
 
-import { FC, type ReactElement } from "react";
+import { FC, type CSSProperties, type ReactElement } from "react";
 import { DialogButton } from "@decky/ui";
 import type { SaveVersionEntry } from "../../types";
 import { showSyncConflictModal } from "../../shared/SyncConflictModal";
@@ -16,6 +16,16 @@ import { useFileVersionHistory, type FileVersionHistoryTarget } from "../../util
 import { renderCopyToSlotButton, type CopyToSlotHandler } from "./CopyToSlotButton";
 import { detach } from "../../utils/detach";
 import { ThrobberLabel } from "../../shared/Throbber";
+
+const MUTED_NOTE_STYLE: CSSProperties = { fontSize: "11px", color: "#8f98a0", fontStyle: "italic" };
+const MUTED_TEXT_STYLE: CSSProperties = { fontSize: "11px", color: "#8f98a0" };
+const COMPACT_BUTTON_STYLE: CSSProperties = {
+  padding: "2px 8px",
+  minWidth: "auto",
+  fontSize: "11px",
+  width: "auto",
+  flexShrink: 0,
+};
 
 interface VersionHistoryPanelProps extends FileVersionHistoryTarget {
   /** Opens the copy-to-slot picker for a version row's save id (source = this slot). */
@@ -88,19 +98,11 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = (props) => {
           {/* Restore button (disabled when offline) */}
           <DialogButton
             key="restore"
-            style={{
-              padding: "2px 8px",
-              minWidth: "auto",
-              fontSize: "11px",
-              width: "auto",
-              flexShrink: 0,
-            }}
+            style={COMPACT_BUTTON_STYLE}
             noFocusRing={false}
             onFocus={scrollFocusedToCenter}
             disabled={isThisRestoring || restoringVersionId !== null || isOffline}
-            onClick={() => {
-              detach(handleRestore(v));
-            }}
+            onClick={() => detach(handleRestore(v))}
           >
             <ThrobberLabel busy={isThisRestoring}>{isThisRestoring ? "Restoring..." : "Restore"}</ThrobberLabel>
           </DialogButton>
@@ -113,13 +115,11 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = (props) => {
 
   const renderBody = (): ReactElement | ReactElement[] => {
     if (isOffline) {
-      return (
-        <div style={{ fontSize: "11px", color: "#8f98a0", fontStyle: "italic" as const }}>{VERSIONS_OFFLINE_TEXT}</div>
-      );
+      return <div style={MUTED_NOTE_STYLE}>{VERSIONS_OFFLINE_TEXT}</div>;
     }
     if (loading) {
       return (
-        <div style={{ fontSize: "11px", color: "#8f98a0" }}>
+        <div style={MUTED_TEXT_STYLE}>
           <ThrobberLabel busy>Loading...</ThrobberLabel>
         </div>
       );
@@ -132,12 +132,10 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = (props) => {
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <span style={{ fontSize: "11px", color: "#c46161", fontStyle: "italic" as const }}>{loadError}</span>
           <DialogButton
-            style={{ padding: "2px 8px", minWidth: "auto", fontSize: "11px", width: "auto", flexShrink: 0 }}
+            style={COMPACT_BUTTON_STYLE}
             noFocusRing={false}
             onFocus={scrollFocusedToCenter}
-            onClick={() => {
-              detach(fetchVersions());
-            }}
+            onClick={() => detach(fetchVersions())}
           >
             Retry
           </DialogButton>
@@ -145,11 +143,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = (props) => {
       );
     }
     if (versionCount === 0) {
-      return (
-        <div style={{ fontSize: "11px", color: "#8f98a0", fontStyle: "italic" as const }}>
-          No older versions available
-        </div>
-      );
+      return <div style={MUTED_NOTE_STYLE}>No older versions available</div>;
     }
     return (versions ?? []).map(renderVersionRow);
   };

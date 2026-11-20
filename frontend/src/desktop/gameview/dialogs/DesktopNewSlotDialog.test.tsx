@@ -1,8 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { Window as HappyWindow } from "happy-dom";
 import { DesktopNewSlotDialog } from "./DesktopNewSlotDialog";
+import { assertDialogEscapeScopedToOwnWindow } from "./popupEscapeTestHelper";
 
 describe("DesktopNewSlotDialog", () => {
   it("renders title, description, input, tone styles, and action buttons", () => {
@@ -79,24 +79,9 @@ describe("DesktopNewSlotDialog", () => {
   });
 
   it("listens for Escape on the dialog's own Window rather than globalThis.window", () => {
-    const onDismiss = vi.fn();
-    const popupWin = new HappyWindow();
-    const container = popupWin.document.createElement("div");
-    popupWin.document.body.appendChild(container);
-    const { unmount } = render(
-      <DesktopNewSlotDialog onDismiss={onDismiss} onCreate={vi.fn().mockResolvedValue(null)} />,
-      { container: container as unknown as HTMLElement },
-    );
-    try {
-      fireEvent.keyDown(globalThis.window, { key: "Escape" });
-      expect(onDismiss).not.toHaveBeenCalled();
-
-      fireEvent.keyDown(popupWin as unknown as Window, { key: "Escape" });
-      expect(onDismiss).toHaveBeenCalledTimes(1);
-    } finally {
-      unmount();
-      void popupWin.close();
-    }
+    assertDialogEscapeScopedToOwnWindow((onDismiss) => (
+      <DesktopNewSlotDialog onDismiss={onDismiss} onCreate={vi.fn().mockResolvedValue(null)} />
+    ));
   });
 
   it("clears prior inline error on retry, ignores duplicate Enter while in flight, and blocks Escape while creating", async () => {

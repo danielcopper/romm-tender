@@ -1,8 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { Window as HappyWindow } from "happy-dom";
 import { DesktopCopySlotDialog } from "./DesktopCopySlotDialog";
+import { assertDialogEscapeScopedToOwnWindow } from "./popupEscapeTestHelper";
 import type { SaveSlotSummary } from "../../../types";
 
 describe("DesktopCopySlotDialog", () => {
@@ -103,28 +103,13 @@ describe("DesktopCopySlotDialog", () => {
   });
 
   it("listens for Escape on the dialog's own Window rather than globalThis.window", () => {
-    const onDismiss = vi.fn();
-    const popupWin = new HappyWindow();
-    const container = popupWin.document.createElement("div");
-    popupWin.document.body.appendChild(container);
-    const { unmount } = render(
+    assertDialogEscapeScopedToOwnWindow((onDismiss) => (
       <DesktopCopySlotDialog
         sourceSlot="default"
         availableSlots={availableSlots}
         onDismiss={onDismiss}
         onCopy={vi.fn()}
-      />,
-      { container: container as unknown as HTMLElement },
-    );
-    try {
-      fireEvent.keyDown(globalThis.window, { key: "Escape" });
-      expect(onDismiss).not.toHaveBeenCalled();
-
-      fireEvent.keyDown(popupWin as unknown as Window, { key: "Escape" });
-      expect(onDismiss).toHaveBeenCalledTimes(1);
-    } finally {
-      unmount();
-      void popupWin.close();
-    }
+      />
+    ));
   });
 });

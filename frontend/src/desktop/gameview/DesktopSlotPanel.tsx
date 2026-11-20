@@ -20,7 +20,7 @@ import {
 import { executeSlotDelete } from "../../utils/saveSlotFlow";
 import { LEGACY_SLOT_NOTE, multiFileSaveHeading, multiFileSaveNote } from "../../utils/saveSlotWording";
 import { NO_SAVE_ON_DEVICE } from "../../utils/saveSyncStatement";
-import { useSlotPanelState } from "../../utils/useSlotPanelState";
+import { useSlotPanelState, type SlotPanelState } from "../../utils/useSlotPanelState";
 import { DesktopCopyToSlotButton, DesktopVersionHistory } from "./DesktopVersionHistory";
 import { SvgThrobber } from "./SvgThrobber";
 import type { AskDialog } from "./dialogs/askDialog";
@@ -58,20 +58,20 @@ interface DesktopSlotPanelProps {
   onCopySave: (saveId: number, sourceSlot: string) => void;
 }
 
-const INFO_LABEL_STYLE: CSSProperties = {
-  color: SUBTLE_LABEL_COLOR,
-  width: "90px",
-  flexShrink: 0,
+const INFO_ROW_GRID_STYLE: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "90px minmax(0, 1fr)",
+  gap: "12px",
 };
 
-const DesktopInfoRow: FC<{ label: string; value: ReactNode; valueColor?: string }> = ({
+const DesktopInfoRow: FC<{ label: string; color?: string; children: ReactNode }> = ({
   label,
-  value,
-  valueColor = BODY_TEXT_COLOR,
+  color = BODY_TEXT_COLOR,
+  children,
 }) => (
-  <div style={{ display: "grid", gridTemplateColumns: `${INFO_LABEL_STYLE.width} minmax(0, 1fr)`, gap: "12px" }}>
-    <span style={{ color: INFO_LABEL_STYLE.color }}>{label}</span>
-    <div style={{ color: valueColor, minWidth: 0 }}>{value}</div>
+  <div style={INFO_ROW_GRID_STYLE}>
+    <span style={{ color: SUBTLE_LABEL_COLOR }}>{label}</span>
+    <div style={{ color, minWidth: 0 }}>{children}</div>
   </div>
 );
 
@@ -178,36 +178,31 @@ export function renderDesktopSaveFileRow(
       ) : null}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px" }}>
-        <DesktopInfoRow label="Last synced:" value={renderLastSyncedNode(lastSyncedValue)} />
-        {checkedHint ? <DesktopInfoRow label="Checked:" value={checkedHint} valueColor={MUTED_COLOR} /> : null}
+        <DesktopInfoRow label="Last synced:">{renderLastSyncedNode(lastSyncedValue)}</DesktopInfoRow>
+        {checkedHint ? (
+          <DesktopInfoRow label="Checked:" color={MUTED_COLOR}>
+            {checkedHint}
+          </DesktopInfoRow>
+        ) : null}
         {file.server_updated_at ? (
-          <DesktopInfoRow label="Last updated:" value={formatTimestamp(file.server_updated_at)} />
+          <DesktopInfoRow label="Last updated:">{formatTimestamp(file.server_updated_at)}</DesktopInfoRow>
         ) : null}
         {file.server_save_id != null ? (
-          <DesktopInfoRow
-            label="Server save:"
-            value={
-              <div>
-                <div>{formatServerSaveSummary(file)}</div>
-                {file.server_file_name ? (
-                  <div style={{ color: MUTED_COLOR, fontFamily: "monospace", fontSize: "11px" }}>
-                    {file.server_file_name}
-                  </div>
-                ) : null}
-              </div>
-            }
-          />
+          <DesktopInfoRow label="Server save:">
+            <div>
+              <div>{formatServerSaveSummary(file)}</div>
+              {file.server_file_name ? (
+                <div style={{ color: MUTED_COLOR, fontFamily: "monospace", fontSize: "11px" }}>
+                  {file.server_file_name}
+                </div>
+              ) : null}
+            </div>
+          </DesktopInfoRow>
         ) : null}
         {file.local_path ? (
-          <DesktopInfoRow
-            label="Local path:"
-            value={
-              <span style={{ fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all" }}>
-                {file.local_path}
-              </span>
-            }
-            valueColor={MUTED_COLOR}
-          />
+          <DesktopInfoRow label="Local path:" color={MUTED_COLOR}>
+            <span style={{ fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all" }}>{file.local_path}</span>
+          </DesktopInfoRow>
         ) : null}
       </div>
 
@@ -264,7 +259,7 @@ const SlotPanelHeader: FC<{
   </button>
 );
 
-const ActiveSlotBody: FC<{
+interface ActiveSlotBodyProps {
   romId: number;
   slotName: string;
   saveStatus: SaveStatus | null;
@@ -278,7 +273,9 @@ const ActiveSlotBody: FC<{
   onConfirmSlot: (slotName: string) => void;
   onVersionRestored: () => void;
   onCopySave: (saveId: number, sourceSlot: string) => void;
-}> = ({
+}
+
+const ActiveSlotBody: FC<ActiveSlotBodyProps> = ({
   romId,
   slotName,
   saveStatus,
@@ -481,94 +478,75 @@ function resolveSlotFileCount(
   return slotCount > 0 ? slotCount : (saveStatus?.files.length ?? 0);
 }
 
-const InactiveSlotActions: FC<{
-  switching: boolean;
-  deleting: boolean;
+function hasActiveSlotSaves(saveStatus: SaveStatus | null, slotCount: number): boolean {
+  return (saveStatus?.files.length ?? 0) > 0 || slotCount > 0;
+}
+
+interface InactiveSlotSectionProps {
+  slotName: string;
+  isLegacy: boolean;
   isOffline: boolean;
-  switchError: string | null;
-  onActivate: () => Promise<void>;
+  panel: SlotPanelState;
   onDelete: () => Promise<void>;
-}> = ({ switching, deleting, isOffline, switchError, onActivate, onDelete }) => {
-  const activateDisabled = switching || deleting || isOffline;
-  const deleteDisabled = deleting || switching;
+  onCopySave: (saveId: number, sourceSlot: string) => void;
+}
+
+const InactiveSlotSection: FC<InactiveSlotSectionProps> = ({
+  slotName,
+  isLegacy,
+  isOffline,
+  panel,
+  onDelete,
+  onCopySave,
+}) => {
+  const activateDisabled = panel.switching || panel.deleting || isOffline;
+  const deleteDisabled = panel.deleting || panel.switching;
   return (
     <div>
-      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-        <button
-          type="button"
-          style={actionButtonStyle(activateDisabled)}
-          disabled={activateDisabled}
-          onClick={() => detach(onActivate())}
-        >
-          {switching ? <SvgThrobber style={{ width: "12px", height: "12px" }} /> : null}
-          <span>{switching ? "Switching..." : "Activate Slot"}</span>
-        </button>
-        <button
-          type="button"
-          style={actionButtonStyle(deleteDisabled, true)}
-          disabled={deleteDisabled}
-          onClick={() => detach(onDelete())}
-        >
-          {deleting ? <SvgThrobber style={{ width: "12px", height: "12px" }} /> : null}
-          <span>{deleting ? "Deleting..." : "Delete Slot"}</span>
-        </button>
-      </div>
-      {switchError ? (
-        <div style={{ color: CONFLICT_RED, fontSize: "11px", marginTop: "6px" }}>{switchError}</div>
+      <InactiveSlotFilesList
+        slotName={slotName}
+        slotFiles={panel.slotFiles}
+        loadingSlot={panel.loadingSlot}
+        isOffline={isOffline}
+        onCopySave={onCopySave}
+      />
+      {!isLegacy ? (
+        <div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button
+              type="button"
+              style={actionButtonStyle(activateDisabled)}
+              disabled={activateDisabled}
+              onClick={() => detach(panel.handleActivate())}
+            >
+              {panel.switching ? <SvgThrobber style={{ width: "12px", height: "12px" }} /> : null}
+              <span>{panel.switching ? "Switching..." : "Activate Slot"}</span>
+            </button>
+            <button
+              type="button"
+              style={actionButtonStyle(deleteDisabled, true)}
+              disabled={deleteDisabled}
+              onClick={() => detach(onDelete())}
+            >
+              {panel.deleting ? <SvgThrobber style={{ width: "12px", height: "12px" }} /> : null}
+              <span>{panel.deleting ? "Deleting..." : "Delete Slot"}</span>
+            </button>
+          </div>
+          {panel.switchError ? (
+            <div style={{ color: CONFLICT_RED, fontSize: "11px", marginTop: "6px" }}>{panel.switchError}</div>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
 };
 
-const SlotExpandedBody: FC<{
+const SlotExpandedFrame: FC<{
   expanded: boolean;
   isActive: boolean;
-  isLegacy: boolean;
-  romId: number;
-  slotName: string;
-  saveStatus: SaveStatus | null;
-  conflicts: SyncConflict[];
-  isOffline: boolean;
-  saveSyncEnabled: boolean;
-  slotConfirmed: boolean | null;
-  confirmingSlot: boolean;
-  activeHasSaves: boolean;
-  slotFiles: SlotSaveFile[] | null;
-  loadingSlot: boolean;
-  switching: boolean;
-  deleting: boolean;
-  switchError: string | null;
-  ask: AskDialog;
-  onConfirmSlot: (slotName: string) => void;
-  onVersionRestored: () => void;
-  onCopySave: (saveId: number, sourceSlot: string) => void;
-  onActivate: () => Promise<void>;
-  onDelete: () => Promise<void>;
-}> = ({
-  expanded,
-  isActive,
-  isLegacy,
-  romId,
-  slotName,
-  saveStatus,
-  conflicts,
-  isOffline,
-  saveSyncEnabled,
-  slotConfirmed,
-  confirmingSlot,
-  activeHasSaves,
-  slotFiles,
-  loadingSlot,
-  switching,
-  deleting,
-  switchError,
-  ask,
-  onConfirmSlot,
-  onVersionRestored,
-  onCopySave,
-  onActivate,
-  onDelete,
-}) => {
+  activeProps: ActiveSlotBodyProps;
+  inactiveProps: InactiveSlotSectionProps;
+}> = ({ expanded, isActive, activeProps, inactiveProps }) => {
   if (!expanded) return null;
   return (
     <div
@@ -578,43 +556,7 @@ const SlotExpandedBody: FC<{
         fontSize: "13px",
       }}
     >
-      {isActive ? (
-        <ActiveSlotBody
-          romId={romId}
-          slotName={slotName}
-          saveStatus={saveStatus}
-          conflicts={conflicts}
-          isOffline={isOffline}
-          saveSyncEnabled={saveSyncEnabled}
-          slotConfirmed={slotConfirmed}
-          confirmingSlot={confirmingSlot}
-          activeHasSaves={activeHasSaves}
-          ask={ask}
-          onConfirmSlot={onConfirmSlot}
-          onVersionRestored={onVersionRestored}
-          onCopySave={onCopySave}
-        />
-      ) : (
-        <div>
-          <InactiveSlotFilesList
-            slotName={slotName}
-            slotFiles={slotFiles}
-            loadingSlot={loadingSlot}
-            isOffline={isOffline}
-            onCopySave={onCopySave}
-          />
-          {!isLegacy ? (
-            <InactiveSlotActions
-              switching={switching}
-              deleting={deleting}
-              isOffline={isOffline}
-              switchError={switchError}
-              onActivate={onActivate}
-              onDelete={onDelete}
-            />
-          ) : null}
-        </div>
-      )}
+      {isActive ? <ActiveSlotBody {...activeProps} /> : <InactiveSlotSection {...inactiveProps} />}
     </div>
   );
 };
@@ -639,18 +581,7 @@ export const DesktopSlotPanel: FC<DesktopSlotPanelProps> = ({
 }) => {
   const slotName = slot.slot;
   const isLegacy = slotName === "";
-  const {
-    expanded,
-    slotFiles,
-    loadingSlot,
-    switching,
-    switchError,
-    deleting,
-    isMounted,
-    handleToggle,
-    handleActivate,
-    handleDelete,
-  } = useSlotPanelState({
+  const panel = useSlotPanelState({
     romId,
     slotName,
     isActive,
@@ -661,9 +592,9 @@ export const DesktopSlotPanel: FC<DesktopSlotPanelProps> = ({
   });
 
   const startDeleteFlow = () =>
-    handleDelete(async (info) => {
+    panel.handleDelete(async (info) => {
       const confirmed = await desktopDeleteSlotDialog(ask)(info);
-      if (!confirmed || !isMounted()) return;
+      if (!confirmed || !panel.isMounted()) return;
       if (await executeSlotDelete(romId, slotName)) {
         onSlotDeleted();
       }
@@ -671,8 +602,8 @@ export const DesktopSlotPanel: FC<DesktopSlotPanelProps> = ({
 
   const conflicts: SyncConflict[] = isActive ? (saveStatus?.conflicts ?? []) : [];
   const { syncSummaryText, syncSummaryColor } = computeSyncSummary(isActive, saveStatus, conflicts, noSaveLine);
-  const fileCount = resolveSlotFileCount(isActive, slot.count, saveStatus, slotFiles);
-  const activeHasSaves = (saveStatus?.files.length ?? 0) > 0 || slot.count > 0;
+  const fileCount = resolveSlotFileCount(isActive, slot.count, saveStatus, panel.slotFiles);
+  const activeHasSaves = hasActiveSlotSaves(saveStatus, slot.count);
 
   return (
     <div
@@ -688,11 +619,11 @@ export const DesktopSlotPanel: FC<DesktopSlotPanelProps> = ({
         slotName={slotName}
         slotSource={slot.source}
         isActive={isActive}
-        expanded={expanded}
+        expanded={panel.expanded}
         syncSummaryText={syncSummaryText}
         syncSummaryColor={syncSummaryColor}
         fileCount={fileCount}
-        onToggle={handleToggle}
+        onToggle={panel.handleToggle}
       />
 
       {isLegacy ? (
@@ -708,30 +639,32 @@ export const DesktopSlotPanel: FC<DesktopSlotPanelProps> = ({
         </div>
       ) : null}
 
-      <SlotExpandedBody
-        expanded={expanded}
+      <SlotExpandedFrame
+        expanded={panel.expanded}
         isActive={isActive}
-        isLegacy={isLegacy}
-        romId={romId}
-        slotName={slotName}
-        saveStatus={saveStatus}
-        conflicts={conflicts}
-        isOffline={isOffline}
-        saveSyncEnabled={saveSyncEnabled}
-        slotConfirmed={slotConfirmed}
-        confirmingSlot={confirmingSlot}
-        activeHasSaves={activeHasSaves}
-        slotFiles={slotFiles}
-        loadingSlot={loadingSlot}
-        switching={switching}
-        deleting={deleting}
-        switchError={switchError}
-        ask={ask}
-        onConfirmSlot={onConfirmSlot}
-        onVersionRestored={onVersionRestored}
-        onCopySave={onCopySave}
-        onActivate={handleActivate}
-        onDelete={startDeleteFlow}
+        activeProps={{
+          romId,
+          slotName,
+          saveStatus,
+          conflicts,
+          isOffline,
+          saveSyncEnabled,
+          slotConfirmed,
+          confirmingSlot,
+          activeHasSaves,
+          ask,
+          onConfirmSlot,
+          onVersionRestored,
+          onCopySave,
+        }}
+        inactiveProps={{
+          slotName,
+          isLegacy,
+          isOffline,
+          panel,
+          onDelete: startDeleteFlow,
+          onCopySave,
+        }}
       />
     </div>
   );
