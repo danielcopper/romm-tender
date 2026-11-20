@@ -418,6 +418,37 @@ describe("executeVersionSwitch", () => {
     expect(setSwitching).toHaveBeenCalledWith(false);
   });
 
+  it("says RomM no longer has the game where the sync before the switch is refused for it", async () => {
+    vi.mocked(backend.switchVersion).mockResolvedValueOnce({
+      success: false,
+      reason: "unsynced_saves",
+      message: "Unsynced saves",
+      stranding: "unsynced",
+      unsynced_rom_id: 1,
+      unsynced_version_name: "Game (USA)",
+      server_reachable: true,
+    });
+    askUnsyncedSaves.mockResolvedValueOnce("sync_and_switch");
+    const gone = "RomM no longer has this game — its saves stay on this device";
+    vi.mocked(backend.syncRomSaves).mockResolvedValueOnce({
+      success: false,
+      reason: "gone_from_romm",
+      message: gone,
+      synced: 0,
+    });
+
+    await executeVersionSwitch({
+      appId: 100,
+      target: mockTarget,
+      leaseOwner,
+      askUnsyncedSaves,
+      setSwitching,
+    });
+    expect(toast.showToast).toHaveBeenCalledWith(gone);
+    expect(backend.switchVersion).toHaveBeenCalledTimes(1);
+    expect(setSwitching).toHaveBeenCalledWith(false);
+  });
+
   it("handles soft-block sync_and_switch when conflicts exist", async () => {
     vi.mocked(backend.switchVersion).mockResolvedValueOnce({
       success: false,
