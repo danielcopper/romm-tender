@@ -122,8 +122,11 @@ restart_steam() {
   if [ -n "$TARGET" ]; then
     if ! output=$(bash "$PLACE_WINDOW" --resolve "$TARGET"); then
       if [ "$explicit" = 0 ]; then
+        # TENDER_DEV_TARGET: set by dev_target.sh on a target, where the task to
+        # run is the build host's, with --target.
+        local on="${TENDER_DEV_TARGET:+ --target $TENDER_DEV_TARGET}"
         echo "  The remembered display is not connected. Choose one with" \
-          "\`mise run dev:bpm <display>\` or \`mise run dev:desktop <display>\`." >&2
+          "\`mise run dev:bpm <display>$on\` or \`mise run dev:desktop <display>$on\`." >&2
       fi
       return 1
     fi
