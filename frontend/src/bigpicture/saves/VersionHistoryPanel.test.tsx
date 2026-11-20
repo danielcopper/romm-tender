@@ -679,4 +679,30 @@ describe("VersionHistoryPanel — self-refresh on romm_data_changed", () => {
     // Cleanup ran: the post-unmount event reached no listener, so no refetch.
     expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledTimes(1);
   });
+
+  it("clears loading when invalidated offline so reconnecting refetches instead of staying stuck on Loading...", async () => {
+    let resolveFirst!: (v: Awaited<ReturnType<typeof backend.savesListFileVersions>>) => void;
+    vi.mocked(backend.savesListFileVersions)
+      .mockImplementationOnce(
+        () =>
+          new Promise((res) => {
+            resolveFirst = res;
+          }),
+      )
+      .mockResolvedValueOnce({ status: "ok", versions: [makeVersion({ id: 2 })] });
+
+    const { getByText, container, rerender } = render(<VersionHistoryPanel {...defaultProps({ isOffline: false })} />);
+    fireEvent.click(getByText("Previous Versions"));
+    expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledTimes(1);
+
+    rerender(<VersionHistoryPanel {...defaultProps({ isOffline: true })} />);
+    dispatchDataChanged(1);
+    await act(async () => {
+      resolveFirst({ status: "ok", versions: [makeVersion({ id: 1 })] });
+    });
+
+    rerender(<VersionHistoryPanel {...defaultProps({ isOffline: false })} />);
+    await waitFor(() => expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(container.textContent).toContain("Previous Versions (1)"));
+  });
 });

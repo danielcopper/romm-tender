@@ -43,8 +43,8 @@ export function useExpandedPanel(defaultExpanded: boolean) {
 
 /**
  * Subscribe to `romm_data_changed` events matching `save_sync` for `romId`.
- * Uses a ref for `onSaveSync` so callers get fresh closure values without
- * tearing down and re-registering the window listener on every render.
+ * Pass a memoized `onSaveSync` callback so the window listener is only
+ * re-registered when `enabled`, `romId`, or `onSaveSync` changes.
  */
 export function useRomSaveSyncListener(romId: number, enabled: boolean, onSaveSync: () => void): void {
   useEffect(() => {

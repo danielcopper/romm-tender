@@ -5,6 +5,7 @@ import { SaveManagementCard } from "./SaveManagementCard";
 import * as backend from "../../api/backend";
 import {
   getRommConnectionState,
+  getServerRetryProgress,
   reportServerReachable,
   setRommConnectionState,
   setServerRetryProgress,
@@ -952,9 +953,11 @@ describe("SaveManagementCard", () => {
           }),
       );
 
+      setServerRetryProgress({ attempt: 1, maxAttempts: 3 });
       render(<SaveManagementCard appId={100} detail={baseDetail} />);
 
       expect(await screen.findByText("Connecting to RomM…")).toBeInTheDocument();
+      expect(getServerRetryProgress()).toBeNull();
 
       act(() => {
         setServerRetryProgress({ attempt: 2, maxAttempts: 3 });
@@ -966,6 +969,7 @@ describe("SaveManagementCard", () => {
       });
 
       expect(screen.queryByTestId("desktop-saves-connecting")).not.toBeInTheDocument();
+      expect(getServerRetryProgress()).toBeNull();
       expect(screen.getByText("default")).toBeInTheDocument();
     });
 
@@ -2852,6 +2856,149 @@ describe("SaveManagementCard", () => {
       await flushMacrotask();
       expect(getRommConnectionState()).toBe("connected");
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("does not delete local saves when Delete Local Saves confirmation is cancelled", async () => {
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      await waitFor(() => expect(screen.getByText("default")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByRole("button", { name: "Delete Local Saves" }));
+      expect(await screen.findByRole("dialog", { name: "Delete Local Saves" })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Delete Local Saves" })).not.toBeInTheDocument());
+      expect(backend.deleteLocalSaves).not.toHaveBeenCalled();
+    });
+
+    it("optimistically clears the unconfirmed banner on confirm and updates active slot + banner on switch while refresh is pending", async () => {
+      vi.mocked(gameDetailStore.refreshSaveStatus).mockResolvedValue(null);
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: false,
+        active_slot: "default",
+        setup_needed: false,
+      });
+
+      const first = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      expect(await screen.findByTestId("unconfirmed-slot-banner")).toBeInTheDocument();
+
+      const confirmRefreshResolvers: Array<(v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void> = [];
+      vi.mocked(backend.getSaveSlots).mockImplementation(
+        () =>
+          new Promise((res) => {
+            confirmRefreshResolvers.push(res);
+          }),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Confirm 'default'" }));
+      await waitFor(() => expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument());
+      await act(async () => {
+        for (const res of confirmRefreshResolvers) res({ success: true, slots: mockSlots, active_slot: "default" });
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      first.unmount();
+
+      vi.mocked(backend.getSaveSlots).mockResolvedValue({
+        success: true,
+        slots: mockSlots,
+        active_slot: "default",
+      });
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      expect(await screen.findByTestId("unconfirmed-slot-banner")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /speedrun/ }));
+      const activateBtn = await screen.findByRole("button", { name: "Activate Slot" });
+
+      vi.mocked(backend.switchSlot).mockResolvedValueOnce({ success: true, save_status: mockSaveStatus });
+      const switchRefreshResolvers: Array<(v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void> = [];
+      vi.mocked(backend.getSaveSlots).mockImplementation(
+        () =>
+          new Promise((res) => {
+            switchRefreshResolvers.push(res);
+          }),
+      );
+      fireEvent.click(activateBtn);
+
+      await waitFor(() => expect(toast.showToast).toHaveBeenCalledWith("Switched to and confirmed slot 'speedrun'"));
+      expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument();
+      expect(within(screen.getByRole("button", { name: /speedrun/ })).getByText("ACTIVE")).toBeInTheDocument();
+
+      await act(async () => {
+        for (const res of switchRefreshResolvers) res({ success: true, slots: mockSlots, active_slot: "speedrun" });
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    });
+
+    it("ignores an out-of-order stale inactive-slot fetch resolving after a newer save_sync fetch", async () => {
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      await waitFor(() => expect(screen.getByText("speedrun")).toBeInTheDocument());
+
+      let resolveSeq1!: (v: Awaited<ReturnType<typeof backend.getSlotSaves>>) => void;
+      let resolveSeq2!: (v: Awaited<ReturnType<typeof backend.getSlotSaves>>) => void;
+      vi.mocked(backend.getSlotSaves)
+        .mockImplementationOnce(
+          () =>
+            new Promise((res) => {
+              resolveSeq1 = res;
+            }),
+        )
+        .mockImplementationOnce(
+          () =>
+            new Promise((res) => {
+              resolveSeq2 = res;
+            }),
+        );
+
+      fireEvent.click(screen.getByRole("button", { name: /speedrun/ }));
+      await waitFor(() => expect(backend.getSlotSaves).toHaveBeenCalledTimes(1));
+
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+      });
+      await waitFor(() => expect(backend.getSlotSaves).toHaveBeenCalledTimes(2));
+
+      await act(async () => {
+        resolveSeq2({
+          success: true,
+          slot: "speedrun",
+          saves: [
+            {
+              id: 2,
+              filename: "fresh.srm",
+              emulator: "mgba",
+              size: 2048,
+              updated_at: "2026-06-15T12:00:00Z",
+            },
+          ],
+        });
+      });
+      expect(await screen.findByText("fresh.srm")).toBeInTheDocument();
+
+      await act(async () => {
+        resolveSeq1({
+          success: true,
+          slot: "speedrun",
+          saves: [
+            {
+              id: 1,
+              filename: "stale.srm",
+              emulator: "mgba",
+              size: 1024,
+              updated_at: "2026-06-14T12:00:00Z",
+            },
+          ],
+        });
+      });
+      await flushMacrotask();
+      expect(screen.getByText("fresh.srm")).toBeInTheDocument();
+      expect(screen.queryByText("stale.srm")).not.toBeInTheDocument();
+    });
+
+    it("omits empty sync summary span on active slot header when saveStatus is null", async () => {
+      render(<SaveManagementCard appId={100} detail={{ ...baseDetail, saveStatus: null }} />);
+      const activeBadge = await screen.findByText("ACTIVE");
+      const headerButton = activeBadge.closest("button");
+      expect(headerButton).not.toBeNull();
+      const countSpan = within(headerButton!).getByText("1 save");
+      expect(countSpan.parentElement?.children).toHaveLength(1);
     });
   });
 });
