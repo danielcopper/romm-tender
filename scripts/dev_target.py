@@ -490,18 +490,22 @@ def cut_short(target: Target, why: str, *, leaves: Leaves) -> str:
     once the new version is in place, which nothing here can tell.
     """
     name = target.name
-    if leaves == "nothing":
-        return f"tender-dev: {why}."
-    if leaves == "install":
-        return (
-            f"tender-dev: {why}; the install on {name} may have stopped part-way, and an update cut short there can"
-            f" leave the installed service stopped. Run the install again;"
-            f" `mise run dev:status --target {name}` says whether the service runs."
-        )
-    return (
-        f"tender-dev: {why}; what the task was doing on {name} may have stopped part-way —"
-        f" `mise run dev:status --target {name}` says what holds the lock; check Steam there."
-    )
+    match leaves:
+        case "nothing":
+            return f"tender-dev: {why}."
+        case "install":
+            return (
+                f"tender-dev: {why}; the install on {name} may have stopped part-way, and an update cut short there"
+                f" can leave the installed service stopped. Run the install again;"
+                f" `mise run dev:status --target {name}` says whether the service runs."
+            )
+        case "dev":
+            return (
+                f"tender-dev: {why}; what the task was doing on {name} may have stopped part-way —"
+                f" `mise run dev:status --target {name}` says what holds the lock; check Steam there."
+            )
+        case unknown:
+            assert_never(unknown)
 
 
 def on_target(
