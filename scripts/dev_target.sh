@@ -25,6 +25,12 @@
 #   dev_target.sh stop-dev <name>
 #       stop the dev backend's unit alone, never the installed service: what a
 #       Ctrl-C on the build host sends while a task follows the backend
+#   dev_target.sh install <name> <tarball> <sha256> [--yes]
+#       refuse while the dev backend runs; otherwise write the tarball sent on
+#       stdin as <tarball> in a temporary directory under the root, its
+#       checksum beside it, run the copy's install.sh --from on it (--yes only
+#       when given) on the installed service's interpreter, remove both, and
+#       end with install.sh's status
 #
 # <name> is the target's name on the build host, for the messages. Everything
 # here needs nothing beyond /usr/bin.
@@ -77,7 +83,8 @@ systemctl_said() {
 
 # Sets PYTHON to the interpreter the installed service runs on, so the dev
 # backend runs on the same one: the path= field of its ExecStart, which install.sh
-# wrote from TENDER_PYTHON or its default. Why TENDER_PYTHON is not read here:
+# wrote from TENDER_PYTHON or its default. SERVICE_PYTHON holds the same, and is
+# empty where no service is installed. Why TENDER_PYTHON is not read here:
 # docs/contributing/frontend-dev-loop.md, "The dev tasks on a target".
 need_python() {
     exec_start=$(systemctl --user show -p ExecStart --value "$SERVICE_UNIT" 2>&1) || manager_unreachable "$exec_start"
@@ -85,10 +92,12 @@ need_python() {
         *"path="*)
             PYTHON="${exec_start#*path=}"
             PYTHON="${PYTHON%% ;*}"
+            SERVICE_PYTHON="$PYTHON"
             source="the installed service's interpreter"
             ;;
         *)
             PYTHON="$DEFAULT_PYTHON"
+            SERVICE_PYTHON=""
             source="the interpreter without an installed service"
             ;;
     esac
@@ -217,9 +226,17 @@ EOF
     esac
 }
 
+# The dev backend by its unit, and by $1 where it is a pid (0 or empty: none).
+dev_backend_text() {
+    case "${1:-0}" in
+        0) printf 'the dev backend (%s.service)' "$DEV_UNIT" ;;
+        *) printf 'the dev backend (%s.service, pid %s)' "$DEV_UNIT" "$1" ;;
+    esac
+}
+
 holder_text() {
     case "$holder" in
-        dev) printf 'the dev backend (%s.service%s)' "$DEV_UNIT" "${pid:+, pid $pid}" ;;
+        dev) dev_backend_text "$pid" ;;
         service) printf 'the installed service (%s.service%s)' "$SERVICE_UNIT" "${pid:+, pid $pid}" ;;
         *) printf '%s' "${described:-a process this machine does not name}" ;;
     esac
@@ -504,6 +521,63 @@ stop_dev() {
     printf 'tender-dev: stopped the dev backend on %s (%s.service). Steam was left as it is.\n' "$name" "$DEV_UNIT"
 }
 
+# Which installer, the refusal beside the dev backend, and TENDER_PYTHON:
+# docs/contributing/frontend-dev-loop.md, "Installing the release on a target".
+# The checksum goes where install.sh --from looks for one (verify_local: the
+# tarball's name with .sha256, in sha256sum's own format).
+install_release() {
+    [ $# -ge 2 ] && [ $# -le 3 ] || usage
+    tarball="$1"
+    checksum="$2"
+    case "$tarball" in
+        romm-tender-*.tar.gz) ;;
+        *) usage ;;
+    esac
+    case "$checksum" in
+        '' | *[!0-9a-f]*) usage ;;
+    esac
+    [ "${#checksum}" -eq 64 ] || usage
+    assume_yes=""
+    case "${3:-}" in
+        '') ;;
+        --yes) assume_yes="--yes" ;;
+        *) usage ;;
+    esac
+    installer="$root/incoming/install.sh"
+    if [ ! -f "$installer" ]; then
+        say "the copy on $name holds no install.sh ($installer); nothing was installed."
+        exit 1
+    fi
+    need_python
+    lock_holder
+    if [ "$holder" = dev ] || [ "$dev_running" = yes ]; then
+        say "$(dev_backend_text "$dev_pid") runs on $name, and the installed service could not start beside it."
+        printf '%s\n' "Stop it with \`mise run dev:stop --target $name\`, then run the install again." \
+            "Nothing was installed." >&2
+        exit 1
+    fi
+    work=$(mktemp -d "$root/.install.XXXXXX")
+    trap 'rm -rf "$work"' EXIT
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    cat > "$work/$tarball"
+    if [ ! -s "$work/$tarball" ]; then
+        say "no tarball arrived on $name; nothing was installed."
+        exit 1
+    fi
+    printf '%s  %s\n' "$checksum" "$tarball" > "$work/$tarball.sha256"
+    if [ -n "$SERVICE_PYTHON" ]; then
+        TENDER_PYTHON="$SERVICE_PYTHON"
+        export TENDER_PYTHON
+    else
+        unset TENDER_PYTHON
+    fi
+    install_status=0
+    bash "$installer" --from "$work/$tarball" ${assume_yes:+"$assume_yes"} || install_status=$?
+    exit "$install_status"
+}
+
 status() {
     need_python
     lock_holder
@@ -532,7 +606,7 @@ status() {
 }
 
 usage() {
-    say "usage: dev_target.sh start|frontend|reset|ui-scale|ui-scale-stop|stop|stop-dev|status <name> [word ...]"
+    say "usage: dev_target.sh start|frontend|reset|ui-scale|ui-scale-stop|stop|stop-dev|status|install <name> [word ...]"
     exit 2
 }
 
@@ -562,5 +636,6 @@ case "$verb" in
     stop) stop ;;
     stop-dev) stop_dev ;;
     status) status ;;
+    install) install_release "$@" ;;
     *) usage ;;
 esac

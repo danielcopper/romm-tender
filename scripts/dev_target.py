@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Run a dev task on a target: build here, copy the tree there, and do the rest there.
 
-    python scripts/dev_target.py --target <name> [--surface] [--follow] [--stop] -- <task> [argument]
+    python scripts/dev_target.py --target <name> [--surface] [--follow] [--stop] [--yes] -- <task> [argument]
 
-The dev tasks call this when given ``--target``; <task> is the task's name
-(``dev``, ``dev:bpm``, ... ``dev:status``) and [argument] its display or mode.
+The dev tasks and ``install`` call this when given ``--target``; <task> is the
+task's name (``dev``, ``dev:bpm``, ... ``dev:status``, ``install``) and
+[argument] its display or mode.
 The target is one ``mise run setup:remote-target`` prepared, and every ``ssh``
 and ``rsync`` here reads the dev loop's own SSH config and nothing else.
 
@@ -15,6 +16,7 @@ docs/contributing/frontend-dev-loop.md, "The dev tasks on a target".
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import re
 import shlex
@@ -26,10 +28,13 @@ from typing import Literal, assert_never, get_args
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import check_release_tarball as release
 import setup_remote_target as setup
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 PACKAGE_SCRIPT = REPO / "scripts" / "package.sh"
+# Where `mise run package` puts the release tarball.
+BUILD = REPO / "build"
 INCOMING = f"{setup.TARGET_ROOT}/incoming/"
 DEV_TARGET = "scripts/dev_target.sh"
 
@@ -58,12 +63,16 @@ RemoteTask = Literal[
     "dev:ui-scale",
     "dev:stop",
     "dev:status",
+    "install",
 ]
 """The tasks that copy the tree and run :data:`DEV_TARGET`."""
 Task = Literal[RemoteTask, "dev:log"]
 TASKS: tuple[Task, ...] = get_args(Task)
 
 Follows = Literal["backend", "ui-scale", "log"]
+Leaves = Literal["nothing", "dev", "install"]
+"""What a task cut short may leave part-way on the target: nothing (it only reads), what a dev task was doing, or
+an install."""
 
 
 @dataclass(frozen=True)
@@ -75,8 +84,9 @@ class TaskSpec:
     takes_argument: bool = False
     builds: bool = False
     follows: Follows | None = None
-    reads_only: bool = False
-    """Changes nothing on the target: cut short, it left nothing part-way."""
+    leaves: Leaves = "dev"
+    """``install`` is the install itself, which also sends :func:`newest_tarball` on stdin, its name and
+    :func:`checksum` among the words, and ``--yes`` where given."""
 
 
 SPECS: dict[RemoteTask, TaskSpec] = {
@@ -91,7 +101,8 @@ SPECS: dict[RemoteTask, TaskSpec] = {
     # without one.
     "dev:ui-scale": TaskSpec("ui-scale", takes_argument=True, follows="ui-scale"),
     "dev:stop": TaskSpec("stop"),
-    "dev:status": TaskSpec("status", reads_only=True),
+    "dev:status": TaskSpec("status", leaves="nothing"),
+    "install": TaskSpec("install", leaves="install"),
 }
 
 UI_SCALE_STOP = TaskSpec("ui-scale-stop")
@@ -131,6 +142,37 @@ def shipped() -> list[str]:
 def copied_tree() -> list[str]:
     """The top-level paths copied to a target: what a release ships, and the scripts that run there."""
     return [*shipped(), "scripts"]
+
+
+def newest_tarball(target: Target) -> pathlib.Path:
+    """The release tarball under :data:`BUILD` written last, named as :mod:`check_release_tarball` holds it."""
+    tarballs = sorted(
+        (path for path in BUILD.glob("*") if release.ARCHIVE_NAME_RE.match(path.name) and path.is_file()),
+        key=lambda path: (path.stat().st_mtime, path.name),
+    )
+    if not tarballs:
+        raise TargetError(
+            f"tender-dev: {BUILD} holds no release tarball ({release.TOP_LEVEL}-<version>.tar.gz) to install on"
+            f" {target.name}; nothing was done there.\n  Build one first: mise run package"
+        )
+    return tarballs[-1]
+
+
+def checksum(tarball: pathlib.Path, target: Target) -> str:
+    """The SHA-256 the sidecar beside *tarball* records for it.
+
+    The pair passes the release gate's own check first
+    (:func:`check_release_tarball.sidecar_findings`), so a sidecar that is
+    missing, malformed or stale is refused before the target is reached, and
+    the digest it records is the tarball's.
+    """
+    findings = release.sidecar_findings(tarball)
+    if findings:
+        raise TargetError(
+            f"tender-dev: {tarball} cannot be verified: {'; '.join(findings)}. Nothing was done on {target.name}.\n"
+            "  Build it again: mise run package"
+        )
+    return release.digest_of(tarball)
 
 
 def find_target(name: str) -> Target:
@@ -323,8 +365,8 @@ def _a_changed_file(line: str) -> bool:
     return bool(line) and not line.startswith(_NOT_A_FILE) and not line.endswith("/")
 
 
-def run_streaming(command: list[str], *, from_first_line: bool = False) -> Outcome:
-    """*command* run with its output passed on as it comes, and its stderr kept besides.
+def run_streaming(command: list[str], *, from_first_line: bool = False, stdin: pathlib.Path | None = None) -> Outcome:
+    """*command* run with its output passed on as it comes, and its stderr kept besides; *stdin* is read into it.
 
     The following starts at the line :data:`FOLLOWING`, which is taken out of
     stdout — or, *from_first_line* (``dev:log --follow``), at the first line
@@ -332,15 +374,16 @@ def run_streaming(command: list[str], *, from_first_line: bool = False) -> Outco
     On Ctrl-C the terminal has sent ``ssh`` the same signal; letting go of its
     output ends whatever on the far side still writes to it.
     """
-    process = subprocess.Popen(
-        command,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        errors="replace",
-        bufsize=1,
-    )
+    with open(stdin if stdin is not None else os.devnull, "rb") as source:
+        process = subprocess.Popen(
+            command,
+            stdin=source,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="replace",
+            bufsize=1,
+        )
     assert process.stdout is not None
     assert process.stderr is not None
     errors: list[str] = []
@@ -440,18 +483,39 @@ def stop_after_ctrl_c(follows: Literal["backend", "ui-scale"], target: Target) -
     return 1
 
 
-def cut_short(target: Target, why: str, *, reads_only: bool) -> str:
-    """For a call that ended before it followed anything: what it was doing there may have stopped part-way."""
+def cut_short(target: Target, why: str, *, leaves: Leaves) -> str:
+    """For a call that ended before it followed anything: what it was doing there may have stopped part-way.
+
+    An install's message names no ``--rollback``: install.sh names it only
+    once the new version is in place, which nothing here can tell.
+    """
     name = target.name
-    if reads_only:
-        return f"tender-dev: {why}."
-    return (
-        f"tender-dev: {why}; what the task was doing on {name} may have stopped part-way —"
-        f" `mise run dev:status --target {name}` says what holds the lock; check Steam there."
-    )
+    match leaves:
+        case "nothing":
+            return f"tender-dev: {why}."
+        case "install":
+            return (
+                f"tender-dev: {why}; the install on {name} may have stopped part-way, and an update cut short there"
+                f" can leave the installed service stopped. Run the install again;"
+                f" `mise run dev:status --target {name}` says whether the service runs."
+            )
+        case "dev":
+            return (
+                f"tender-dev: {why}; what the task was doing on {name} may have stopped part-way —"
+                f" `mise run dev:status --target {name}` says what holds the lock; check Steam there."
+            )
+        case unknown:
+            assert_never(unknown)
 
 
-def on_target(target: Target, words: list[str], *, follows: Follows | None, reads_only: bool) -> int:
+def on_target(
+    target: Target,
+    words: list[str],
+    *,
+    follows: Follows | None,
+    leaves: Leaves,
+    stdin: pathlib.Path | None = None,
+) -> int:
     """*words* run on the target with their output passed on; *follows* names what a following there is of.
 
     What ssh said is read as a failure before the login only while the far
@@ -460,10 +524,10 @@ def on_target(target: Target, words: list[str], *, follows: Follows | None, read
     same.
     """
     from_first_line = follows == "log"
-    outcome = run_streaming([*ssh(target), "--", target.name, *words], from_first_line=from_first_line)
+    outcome = run_streaming([*ssh(target), "--", target.name, *words], from_first_line=from_first_line, stdin=stdin)
     following = outcome.following or (outcome.interrupted and from_first_line)
     if outcome.interrupted and not following:
-        print(cut_short(target, "interrupted here", reads_only=reads_only), file=sys.stderr)
+        print(cut_short(target, "interrupted here", leaves=leaves), file=sys.stderr)
         return INTERRUPTED
     if outcome.interrupted and (follows == "backend" or follows == "ui-scale"):
         return stop_after_ctrl_c(follows, target)
@@ -478,7 +542,7 @@ def on_target(target: Target, words: list[str], *, follows: Follows | None, read
         explained = connection_failure(outcome.stderr, target) if lost and not outcome.answered else None
         explained = explained or dispatcher_refusal(outcome.stderr, target)
         if explained is None and lost:
-            explained = cut_short(target, f"the connection to {target.name} ended", reads_only=reads_only)
+            explained = cut_short(target, f"the connection to {target.name} ended", leaves=leaves)
         if explained is not None:
             print(explained, file=sys.stderr)
     return outcome.returncode
@@ -496,7 +560,7 @@ def run(arguments: argparse.Namespace) -> int:
     if task == "dev:log":
         follow: bool = arguments.follow
         return on_target(
-            target, ["follow" if follow else "read", "log"], follows="log" if follow else None, reads_only=True
+            target, ["follow" if follow else "read", "log"], follows="log" if follow else None, leaves="nothing"
         )
     stop: bool = arguments.stop
     argument: str | None = arguments.argument or None
@@ -506,10 +570,16 @@ def run(arguments: argparse.Namespace) -> int:
         )
     spec = UI_SCALE_STOP if task == "dev:ui-scale" and stop else SPECS[task]
     words = remote_words(spec, target.name, argument)
+    tarball = newest_tarball(target) if spec.leaves == "install" else None
+    if tarball is not None:
+        assume_yes: bool = arguments.yes
+        words += [check_word(tarball.name), checksum(tarball, target), *(["--yes"] if assume_yes else [])]
     if spec.builds:
         build(target, surface=arguments.surface)
     copy(target, whole=spec.builds)
-    return on_target(target, words, follows=spec.follows, reads_only=spec.reads_only)
+    if tarball is not None:
+        print(f"tender-dev: installing {tarball} on {target.name} …", file=sys.stderr, flush=True)
+    return on_target(target, words, follows=spec.follows, leaves=spec.leaves, stdin=tarball)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -518,6 +588,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--surface", action="store_true", help="build the desktop surface into the panel")
     parser.add_argument("--follow", action="store_true", help="dev:log: follow the log rather than show it once")
     parser.add_argument("--stop", action="store_true", help="dev:ui-scale: stop the one running on the target")
+    parser.add_argument("--yes", action="store_true", help="install: pass --yes to install.sh on the target")
     parser.add_argument("task", choices=TASKS)
     parser.add_argument("argument", nargs="?", help="the task's display or mode")
     try:
