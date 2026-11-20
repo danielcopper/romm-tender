@@ -4,13 +4,12 @@
  */
 
 import { useEffect, useRef, useState, type FC } from "react";
-import { CANCEL_LABEL } from "../../../utils/launchPromptWording";
 import { DANGER_TEXT_RED } from "../styles";
 import {
-  DIALOG_FOOTER_STYLE,
   DIALOG_MUTED_STYLE,
   DIALOG_TEXT_STYLE,
   DesktopDialog,
+  DesktopDialogFooter,
   dialogButtonStyle,
   dialogInputStyle,
 } from "./DesktopDialog";
@@ -82,10 +81,7 @@ export const DesktopNewSlotDialog: FC<DesktopNewSlotDialogProps> = ({ onDismiss,
         </div>
       ) : null}
 
-      <div style={DIALOG_FOOTER_STYLE}>
-        <button type="button" style={dialogButtonStyle("quiet", creating)} disabled={creating} onClick={onDismiss}>
-          {CANCEL_LABEL}
-        </button>
+      <DesktopDialogFooter onDismiss={onDismiss} dismissDisabled={creating}>
         <button
           type="button"
           style={dialogButtonStyle("primary", submitDisabled)}
@@ -94,7 +90,7 @@ export const DesktopNewSlotDialog: FC<DesktopNewSlotDialogProps> = ({ onDismiss,
         >
           {creating ? "Creating…" : "Create Slot"}
         </button>
-      </div>
+      </DesktopDialogFooter>
     </DesktopDialog>
   );
 };

@@ -5,14 +5,13 @@
 
 import { useState, type FC } from "react";
 import type { SaveSlotSummary } from "../../../types";
-import { CANCEL_LABEL } from "../../../utils/launchPromptWording";
 import { displaySlot, eligibleCopyTargetSlots } from "../../../utils/saveHelpers";
 import { COPY_TO_SLOT_DESCRIPTION, COPY_TO_SLOT_EMPTY_TARGETS } from "../../../utils/saveSlotWording";
 import {
-  DIALOG_FOOTER_STYLE,
   DIALOG_MUTED_STYLE,
   DIALOG_TEXT_STYLE,
   DesktopDialog,
+  DesktopDialogFooter,
   dialogButtonStyle,
   dialogInputStyle,
 } from "./DesktopDialog";
@@ -95,11 +94,7 @@ export const DesktopCopySlotDialog: FC<DesktopCopySlotDialogProps> = ({
         </div>
       </div>
 
-      <div style={{ ...DIALOG_FOOTER_STYLE, marginTop: "16px" }}>
-        <button type="button" style={dialogButtonStyle("quiet")} onClick={onDismiss}>
-          {CANCEL_LABEL}
-        </button>
-      </div>
+      <DesktopDialogFooter marginTop="16px" onDismiss={onDismiss} />
     </DesktopDialog>
   );
 };

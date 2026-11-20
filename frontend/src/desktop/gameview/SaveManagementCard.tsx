@@ -152,14 +152,13 @@ async function readTrackingConfigured(
   isCurrent: () => boolean,
   onResult: (configured: boolean) => void,
 ): Promise<void> {
-  let configured = true;
   try {
     const tracking = await isSaveTrackingConfigured(romId);
-    configured = tracking.configured;
+    if (isCurrent()) onResult(tracking.configured);
   } catch (e) {
     logWarn(`DesktopSaveManagementCard: failed to check tracking: ${e}`);
+    if (isCurrent()) onResult(true);
   }
-  if (isCurrent()) onResult(configured);
 }
 
 async function readSurfaceAnswer<T>(
@@ -563,6 +562,113 @@ const CardHeader: FC<{
   );
 };
 
+const NotDownloadedBanner: FC<{
+  notDownloaded: NonNullable<ReturnType<typeof notDownloadedStatement>>;
+  notDownloadedHint: string | null;
+}> = ({ notDownloaded, notDownloadedHint }) => (
+  <div data-testid="desktop-saves-not-downloaded" style={{ marginBottom: "12px" }}>
+    <div style={{ fontSize: "12px", color: MUTED_COLOR }}>{notDownloaded.line}</div>
+    {notDownloaded.refusal !== null ? (
+      <div style={{ fontSize: "12px", color: ATTENTION_AMBER, marginTop: "4px" }}>{notDownloaded.refusal}</div>
+    ) : null}
+    {notDownloadedHint !== null ? (
+      <div style={{ fontSize: "12px", color: MUTED_COLOR, marginTop: "4px" }}>{notDownloadedHint}</div>
+    ) : null}
+  </div>
+);
+
+const SaveSlotsSection: FC<{
+  romId: number;
+  isOffline: boolean;
+  slotConfirmed: boolean | null;
+  activeSlot: string | null;
+  activeSlotKnown: boolean;
+  confirmingSlot: boolean;
+  slotState: SlotState;
+  retryProgress: ServerRetryProgress | null;
+  displaySlots: SaveSlotSummary[];
+  saveStatus: SaveStatus | null;
+  noSaveText: string;
+  saveSyncEnabled: boolean;
+  ask: AskDialog;
+  onConfirmSlot: (slotName: string) => void;
+  onSlotActivated: (slotName: string, newStatus: SaveStatus) => Promise<void>;
+  onSlotListChanged: () => void;
+  onCopySave: (saveId: number, sourceSlot: string) => void;
+}> = ({
+  romId,
+  isOffline,
+  slotConfirmed,
+  activeSlot,
+  activeSlotKnown,
+  confirmingSlot,
+  slotState,
+  retryProgress,
+  displaySlots,
+  saveStatus,
+  noSaveText,
+  saveSyncEnabled,
+  ask,
+  onConfirmSlot,
+  onSlotActivated,
+  onSlotListChanged,
+  onCopySave,
+}) => {
+  if (slotState.slotsLoading && slotState.availableSlots.length === 0) {
+    return (
+      <div
+        data-testid="desktop-saves-connecting"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "12px 0",
+          fontSize: "13px",
+          color: MUTED_COLOR,
+        }}
+      >
+        <SvgThrobber style={{ width: "14px", height: "14px" }} />
+        <span>{connectingToRommText("Connecting to RomM", retryProgress)}</span>
+      </div>
+    );
+  }
+  const showUnslotted = !activeSlotKnown || activeSlot === null;
+  return (
+    <>
+      {showUnslotted ? <UnslottedFilesSection saveStatus={saveStatus} noSaveText={noSaveText} /> : null}
+      {!activeSlotKnown && slotState.lastKnownSlots ? <LastKnownSection lastKnown={slotState.lastKnownSlots} /> : null}
+      {displaySlots.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {displaySlots.map((slot) => {
+            const isSlotActive = activeSlot !== null && activeSlotKnown && slot.slot === activeSlot;
+            return (
+              <DesktopSlotPanel
+                key={`panel-${slot.slot}-${isSlotActive ? "active" : "inactive"}`}
+                romId={romId}
+                slot={slot}
+                isActive={isSlotActive}
+                saveStatus={isSlotActive ? (saveStatus ?? null) : null}
+                noSaveLine={noSaveText}
+                isOffline={isOffline}
+                defaultExpanded={isSlotActive}
+                slotConfirmed={slotConfirmed}
+                saveSyncEnabled={saveSyncEnabled}
+                confirmingSlot={confirmingSlot}
+                ask={ask}
+                onConfirmSlot={onConfirmSlot}
+                onSlotActivated={onSlotActivated}
+                onSlotDeleted={onSlotListChanged}
+                onVersionRestored={onSlotListChanged}
+                onCopySave={onCopySave}
+              />
+            );
+          })}
+        </div>
+      ) : null}
+    </>
+  );
+};
+
 const SaveSyncOnSection: FC<{
   romId: number;
   isOffline: boolean;
@@ -608,8 +714,6 @@ const SaveSyncOnSection: FC<{
   onSlotListChanged,
   onCopySave,
 }) => {
-  const showConnecting = slotState.slotsLoading && slotState.availableSlots.length === 0;
-  const showUnslotted = !activeSlotKnown || activeSlot === null;
   const confirmDisabled = isOffline || confirmingSlot;
 
   return (
@@ -679,70 +783,28 @@ const SaveSyncOnSection: FC<{
       ) : null}
 
       {notDownloaded ? (
-        <div data-testid="desktop-saves-not-downloaded" style={{ marginBottom: "12px" }}>
-          <div style={{ fontSize: "12px", color: MUTED_COLOR }}>{notDownloaded.line}</div>
-          {notDownloaded.refusal !== null ? (
-            <div style={{ fontSize: "12px", color: ATTENTION_AMBER, marginTop: "4px" }}>{notDownloaded.refusal}</div>
-          ) : null}
-          {notDownloadedHint !== null ? (
-            <div style={{ fontSize: "12px", color: MUTED_COLOR, marginTop: "4px" }}>{notDownloadedHint}</div>
-          ) : null}
-        </div>
+        <NotDownloadedBanner notDownloaded={notDownloaded} notDownloadedHint={notDownloadedHint} />
       ) : null}
 
-      {showConnecting ? (
-        <div
-          data-testid="desktop-saves-connecting"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            padding: "12px 0",
-            fontSize: "13px",
-            color: MUTED_COLOR,
-          }}
-        >
-          <SvgThrobber style={{ width: "14px", height: "14px" }} />
-          <span>{connectingToRommText("Connecting to RomM", retryProgress)}</span>
-        </div>
-      ) : (
-        <>
-          {showUnslotted ? <UnslottedFilesSection saveStatus={saveStatus} noSaveText={noSaveText} /> : null}
-
-          {!activeSlotKnown && slotState.lastKnownSlots ? (
-            <LastKnownSection lastKnown={slotState.lastKnownSlots} />
-          ) : null}
-
-          {displaySlots.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {displaySlots.map((slot) => {
-                const isSlotActive = activeSlot !== null && activeSlotKnown && slot.slot === activeSlot;
-                return (
-                  <DesktopSlotPanel
-                    key={`panel-${slot.slot}-${isSlotActive ? "active" : "inactive"}`}
-                    romId={romId}
-                    slot={slot}
-                    isActive={isSlotActive}
-                    saveStatus={isSlotActive ? (saveStatus ?? null) : null}
-                    noSaveLine={noSaveText}
-                    isOffline={isOffline}
-                    defaultExpanded={isSlotActive}
-                    slotConfirmed={slotConfirmed}
-                    saveSyncEnabled={saveSyncEnabled}
-                    confirmingSlot={confirmingSlot}
-                    ask={ask}
-                    onConfirmSlot={onConfirmSlot}
-                    onSlotActivated={onSlotActivated}
-                    onSlotDeleted={onSlotListChanged}
-                    onVersionRestored={onSlotListChanged}
-                    onCopySave={onCopySave}
-                  />
-                );
-              })}
-            </div>
-          ) : null}
-        </>
-      )}
+      <SaveSlotsSection
+        romId={romId}
+        isOffline={isOffline}
+        slotConfirmed={slotConfirmed}
+        activeSlot={activeSlot}
+        activeSlotKnown={activeSlotKnown}
+        confirmingSlot={confirmingSlot}
+        slotState={slotState}
+        retryProgress={retryProgress}
+        displaySlots={displaySlots}
+        saveStatus={saveStatus}
+        noSaveText={noSaveText}
+        saveSyncEnabled={saveSyncEnabled}
+        ask={ask}
+        onConfirmSlot={onConfirmSlot}
+        onSlotActivated={onSlotActivated}
+        onSlotListChanged={onSlotListChanged}
+        onCopySave={onCopySave}
+      />
     </>
   );
 };
@@ -891,6 +953,19 @@ const SaveManagementCardContent: FC<{
     await Promise.all([refreshSaveStatus(appId).catch(() => undefined), refreshSlots()]);
   };
 
+  const applyActivatedSlot = async (slotName: string, verb: string) => {
+    const confirmedNow = await autoConfirmIfNeeded(slotName);
+    showToast(confirmedNow ? `${verb} and confirmed slot '${slotName}'` : `Switched to slot '${slotName}'`);
+    if (mountedRef.current) {
+      setSlotState((prev) => ({
+        ...prev,
+        activeSlot: slotName,
+        activeSlotKnown: true,
+        lastKnownSlots: null,
+      }));
+    }
+  };
+
   const autoConfirmIfNeeded = async (slotName: string): Promise<boolean> => {
     if (!detail.saveSyncEnabled || slotConfirmed !== false) return false;
     try {
@@ -908,19 +983,6 @@ const SaveManagementCardContent: FC<{
     return false;
   };
 
-  const applyActivatedSlot = async (slotName: string, verb: string) => {
-    const confirmedNow = await autoConfirmIfNeeded(slotName);
-    showToast(confirmedNow ? `${verb} and confirmed slot '${slotName}'` : `Switched to slot '${slotName}'`);
-    if (mountedRef.current) {
-      setSlotState((prev) => ({
-        ...prev,
-        activeSlot: slotName,
-        activeSlotKnown: true,
-        lastKnownSlots: null,
-      }));
-    }
-  };
-
   const handleSyncNow = async () => {
     if (isSyncing || isOffline || deletingLocalSaves) return;
     setIsSyncing(true);
@@ -933,9 +995,9 @@ const SaveManagementCardContent: FC<{
   };
 
   const handleDeleteLocalSaves = async () => {
-    const isMounted = () => mountedRef.current;
     if (deletingLocalSaves || isSyncing) return;
     const confirmed = await desktopDeleteLocalSavesDialog(dialogHost.ask)();
+    const isMounted = () => mountedRef.current;
     if (!confirmed || !isMounted()) return;
     setDeletingLocalSaves(true);
     try {

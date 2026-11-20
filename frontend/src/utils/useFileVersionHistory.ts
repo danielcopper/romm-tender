@@ -9,15 +9,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SaveVersionEntry, SyncConflict } from "../types";
 import { detach } from "./detach";
-import { isSaveSyncForRom } from "./saveHelpers";
+import { useExpandedPanel, useMountedRef, useRomSaveSyncListener } from "./savePanelHooks";
 import { executeVersionRestore, loadFileVersions } from "./saveSlotFlow";
 
-interface UseFileVersionHistoryOptions {
+export interface FileVersionHistoryTarget {
   romId: number;
   slot: string;
   filename: string;
   isOffline: boolean;
-  showConflict: (conflict: SyncConflict) => Promise<unknown>;
   onRestored: () => void;
 }
 
@@ -32,37 +31,20 @@ export interface FileVersionHistoryState {
   handleRestore: (version: SaveVersionEntry) => Promise<void>;
 }
 
-export function useFileVersionHistory({
-  romId,
-  slot,
-  filename,
-  isOffline,
-  showConflict,
-  onRestored,
-}: UseFileVersionHistoryOptions): FileVersionHistoryState {
-  const [expanded, setExpanded] = useState(false);
+export function useFileVersionHistory(
+  { romId, slot, filename, isOffline, onRestored }: FileVersionHistoryTarget,
+  showConflict: (conflict: SyncConflict) => Promise<unknown>,
+): FileVersionHistoryState {
   // Synchronous ref avoids re-loading when a successful restore collapses the
   // subsection and announces `save_sync` in the same turn, before React re-renders.
-  const expandedRef = useRef(false);
-  const setOpen = (open: boolean) => {
-    expandedRef.current = open;
-    setExpanded(open);
-  };
-
+  const { expanded, expandedRef, setOpen, toggle } = useExpandedPanel(false);
   const [versions, setVersions] = useState<SaveVersionEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [restoringVersionId, setRestoringVersionId] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const mountedRef = useRef(true);
+  const mountedRef = useMountedRef();
   const readSeqRef = useRef(0);
   const prevOfflineRef = useRef(isOffline);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   const fetchVersions = useCallback(async () => {
     const seq = ++readSeqRef.current;
@@ -77,14 +59,14 @@ export function useFileVersionHistory({
       setLoadError(outcome.error);
     }
     setLoading(false);
-  }, [romId, slot, filename]);
+  }, [romId, slot, filename, mountedRef]);
 
   const handleToggle = () => {
-    const willExpand = !expanded;
-    setOpen(willExpand);
-    if (willExpand && !isOffline && versions === null && loadError === null) {
-      detach(fetchVersions());
-    }
+    toggle(() => {
+      if (!isOffline && versions === null && loadError === null) {
+        detach(fetchVersions());
+      }
+    });
   };
 
   // Auto-fetch if the user expanded this subsection while offline (so nothing
@@ -97,24 +79,19 @@ export function useFileVersionHistory({
     }
   }, [isOffline, expanded, versions, loadError, loading, fetchVersions]);
 
-  // Self-refresh when a save-change event (`romm_data_changed` DOM CustomEvent)
-  // fires for this ROM: invalidate cache immediately, and reload when expanded
-  // and online.
-  useEffect(() => {
-    const onDataChanged = ({ detail }: WindowEventMap["romm_data_changed"]) => {
-      if (!isSaveSyncForRom(detail, romId)) return;
-      readSeqRef.current += 1;
-      setVersions(null);
-      setLoadError(null);
-      if (expandedRef.current && !isOffline) {
-        detach(fetchVersions());
-      } else {
-        setLoading(false);
-      }
-    };
-    globalThis.addEventListener("romm_data_changed", onDataChanged);
-    return () => globalThis.removeEventListener("romm_data_changed", onDataChanged);
-  }, [romId, isOffline, fetchVersions]);
+  // Self-refresh when a save-change event fires for this ROM: invalidate cache
+  // immediately, and reload when expanded and online.
+  const onRomSaveSync = useCallback(() => {
+    readSeqRef.current += 1;
+    setVersions(null);
+    setLoadError(null);
+    if (expandedRef.current && !isOffline) {
+      detach(fetchVersions());
+    } else {
+      setLoading(false);
+    }
+  }, [isOffline, fetchVersions, expandedRef]);
+  useRomSaveSyncListener(romId, true, onRomSaveSync);
 
   const handleRestore = async (version: SaveVersionEntry) => {
     setRestoringVersionId(version.id);

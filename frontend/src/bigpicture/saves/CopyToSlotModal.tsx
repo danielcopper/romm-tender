@@ -7,11 +7,20 @@
  * belong to the parent (`useCopyToSlot`).
  */
 
-import { useState, FC, ChangeEvent, KeyboardEvent } from "react";
+import { useState, FC, ChangeEvent, KeyboardEvent, type CSSProperties } from "react";
 import { ModalRoot, DialogButton, TextField } from "@decky/ui";
 import type { SaveSlotSummary } from "../../types";
 import { displaySlot, eligibleCopyTargetSlots } from "../../utils/saveHelpers";
 import { COPY_TO_SLOT_DESCRIPTION, COPY_TO_SLOT_EMPTY_TARGETS } from "../../utils/saveSlotWording";
+
+const MODAL_CONTAINER_STYLE: CSSProperties = { padding: "16px", minWidth: "320px" };
+const MODAL_TITLE_STYLE: CSSProperties = { fontSize: "16px", fontWeight: "bold", marginBottom: "4px", color: "#fff" };
+const MODAL_DESC_STYLE: CSSProperties = {
+  fontSize: "13px",
+  color: "rgba(255,255,255,0.6)",
+  marginBottom: "16px",
+  lineHeight: "1.4",
+};
 
 export const CopyToSlotModal: FC<{
   availableSlots: SaveSlotSummary[];
@@ -54,13 +63,9 @@ export const CopyToSlotModal: FC<{
 
   return (
     <ModalRoot {...(closeModal !== undefined ? { closeModal } : {})}>
-      <div style={{ padding: "16px", minWidth: "320px" }}>
-        <div style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "4px", color: "#fff" }}>
-          Copy save to slot
-        </div>
-        <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.6)", marginBottom: "16px", lineHeight: "1.4" }}>
-          {COPY_TO_SLOT_DESCRIPTION}
-        </div>
+      <div style={MODAL_CONTAINER_STYLE}>
+        <div style={MODAL_TITLE_STYLE}>Copy save to slot</div>
+        <div style={MODAL_DESC_STYLE}>{COPY_TO_SLOT_DESCRIPTION}</div>
         {/* Existing-slot targets. */}
         <div style={{ display: "flex", flexDirection: "column" as const, gap: "8px" }}>{existingRows}</div>
         {/* New-slot creator. */}

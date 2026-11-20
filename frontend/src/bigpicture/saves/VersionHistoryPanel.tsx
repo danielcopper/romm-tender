@@ -11,38 +11,21 @@ import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
 import { formatAttributionSegment, pickLastSyncer } from "../../utils/saveHelpers";
-import { useFileVersionHistory } from "../../utils/useFileVersionHistory";
+import { VERSIONS_OFFLINE_TEXT } from "../../utils/saveSlotWording";
+import { useFileVersionHistory, type FileVersionHistoryTarget } from "../../utils/useFileVersionHistory";
 import { renderCopyToSlotButton, type CopyToSlotHandler } from "./CopyToSlotButton";
 import { detach } from "../../utils/detach";
 import { ThrobberLabel } from "../../shared/Throbber";
 
-interface VersionHistoryPanelProps {
-  romId: number;
-  slot: string;
-  filename: string;
-  isOffline: boolean;
-  onRestored: () => void;
+interface VersionHistoryPanelProps extends FileVersionHistoryTarget {
   /** Opens the copy-to-slot picker for a version row's save id (source = this slot). */
   onCopy?: CopyToSlotHandler;
 }
 
-export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
-  romId,
-  slot,
-  filename,
-  isOffline,
-  onRestored,
-  onCopy,
-}) => {
+export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = (props) => {
+  const { slot, filename, isOffline, onCopy } = props;
   const { expanded, versions, loading, restoringVersionId, loadError, handleToggle, fetchVersions, handleRestore } =
-    useFileVersionHistory({
-      romId,
-      slot,
-      filename,
-      isOffline,
-      showConflict: showSyncConflictModal,
-      onRestored,
-    });
+    useFileVersionHistory(props, showSyncConflictModal);
 
   const versionCount = versions?.length ?? 0;
 
@@ -131,9 +114,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
   const renderBody = (): ReactElement | ReactElement[] => {
     if (isOffline) {
       return (
-        <div style={{ fontSize: "11px", color: "#8f98a0", fontStyle: "italic" as const }}>
-          Offline — versions unavailable
-        </div>
+        <div style={{ fontSize: "11px", color: "#8f98a0", fontStyle: "italic" as const }}>{VERSIONS_OFFLINE_TEXT}</div>
       );
     }
     if (loading) {

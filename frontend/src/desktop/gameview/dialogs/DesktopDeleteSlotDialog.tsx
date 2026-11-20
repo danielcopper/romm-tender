@@ -5,10 +5,9 @@
 
 import type { FC } from "react";
 import type { SlotDeleteInfo } from "../../../types";
-import { CANCEL_LABEL } from "../../../utils/launchPromptWording";
 import { formatSlotDeleteLines } from "../../../utils/saveSlotWording";
 import { DANGER_TEXT_RED } from "../styles";
-import { DIALOG_FOOTER_STYLE, DIALOG_TEXT_STYLE, DesktopDialog, dialogButtonStyle } from "./DesktopDialog";
+import { DIALOG_TEXT_STYLE, DesktopDialog, DesktopDialogFooter, dialogButtonStyle } from "./DesktopDialog";
 
 interface DesktopDeleteSlotDialogProps {
   deleteInfo: SlotDeleteInfo;
@@ -27,13 +26,10 @@ export const DesktopDeleteSlotDialog: FC<DesktopDeleteSlotDialogProps> = ({ dele
       This cannot be undone.
     </div>
 
-    <div style={DIALOG_FOOTER_STYLE}>
-      <button type="button" style={dialogButtonStyle("quiet")} onClick={onDismiss}>
-        {CANCEL_LABEL}
-      </button>
+    <DesktopDialogFooter onDismiss={onDismiss}>
       <button type="button" style={dialogButtonStyle("danger")} onClick={() => void onConfirm()}>
         Delete
       </button>
-    </div>
+    </DesktopDialogFooter>
   </DesktopDialog>
 );

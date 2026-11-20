@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getSlotSaves, logWarn } from "../api/backend";
 import type { SaveStatus, SlotDeleteInfo, SlotSaveFile } from "../types";
 import { detach } from "./detach";
-import { isSaveSyncForRom } from "./saveHelpers";
+import { useExpandedPanel, useMountedRef, useRomSaveSyncListener } from "./savePanelHooks";
 import { executeSlotSwitch, loadSlotDeleteInfo } from "./saveSlotFlow";
 import { showToast } from "./toast";
 
@@ -45,31 +45,23 @@ export function useSlotPanelState({
   logPrefix,
   onSlotActivated,
 }: UseSlotPanelStateOptions): SlotPanelState {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-  const expandedRef = useRef(defaultExpanded);
-  const setOpen = (open: boolean) => {
-    expandedRef.current = open;
-    setExpanded(open);
-  };
-
+  const { expanded, expandedRef, toggle } = useExpandedPanel(defaultExpanded);
   const [slotFiles, setSlotFiles] = useState<SlotSaveFile[] | null>(null);
   const [loadingSlot, setLoadingSlot] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const switchErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mountedRef = useRef(true);
+  const mountedRef = useMountedRef();
   const slotSavesSeqRef = useRef(0);
 
   useEffect(() => {
-    mountedRef.current = true;
     return () => {
-      mountedRef.current = false;
       if (switchErrorTimerRef.current) clearTimeout(switchErrorTimerRef.current);
     };
   }, []);
 
-  const isMounted = useCallback(() => mountedRef.current, []);
+  const isMounted = useCallback(() => mountedRef.current, [mountedRef]);
 
   const loadInactiveSlotSaves = useCallback(async () => {
     const seq = ++slotSavesSeqRef.current;
@@ -92,30 +84,25 @@ export function useSlotPanelState({
     } finally {
       if (mountedRef.current && seq === slotSavesSeqRef.current) setLoadingSlot(false);
     }
-  }, [logPrefix, romId, slotName]);
+  }, [logPrefix, mountedRef, romId, slotName]);
 
-  useEffect(() => {
-    if (!refreshOnSaveSync || isActive) return;
-    const onDataChanged = ({ detail }: WindowEventMap["romm_data_changed"]) => {
-      if (!isSaveSyncForRom(detail, romId)) return;
-      slotSavesSeqRef.current += 1;
-      setSlotFiles(null);
-      if (expandedRef.current) {
-        detach(loadInactiveSlotSaves());
-      } else {
-        setLoadingSlot(false);
-      }
-    };
-    globalThis.addEventListener("romm_data_changed", onDataChanged);
-    return () => globalThis.removeEventListener("romm_data_changed", onDataChanged);
-  }, [refreshOnSaveSync, isActive, romId, loadInactiveSlotSaves]);
+  const onRomSaveSync = useCallback(() => {
+    slotSavesSeqRef.current += 1;
+    setSlotFiles(null);
+    if (expandedRef.current) {
+      detach(loadInactiveSlotSaves());
+    } else {
+      setLoadingSlot(false);
+    }
+  }, [loadInactiveSlotSaves, expandedRef]);
+  useRomSaveSyncListener(romId, refreshOnSaveSync && !isActive, onRomSaveSync);
 
   const handleToggle = () => {
-    const willExpand = !expanded;
-    setOpen(willExpand);
-    if (willExpand && !isActive && slotFiles === null) {
-      detach(loadInactiveSlotSaves());
-    }
+    toggle(() => {
+      if (!isActive && slotFiles === null) {
+        detach(loadInactiveSlotSaves());
+      }
+    });
   };
 
   const handleActivate = async () => {

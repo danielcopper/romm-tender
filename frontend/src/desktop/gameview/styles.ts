@@ -129,7 +129,7 @@ export function confirmActionButtonStyle(disabled: boolean, textColor = ACCENT_B
   };
 }
 
-export const PILL_BADGE_BASE: CSSProperties = {
+const PILL_BADGE_BASE: CSSProperties = {
   fontSize: "10px",
   padding: "1px 6px",
   borderRadius: "2px",

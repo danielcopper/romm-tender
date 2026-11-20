@@ -9,19 +9,25 @@ import type { CSSProperties, FC } from "react";
 import { detach } from "../../utils/detach";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
 import { MUTED_COLOR, formatAttributionSegment, pickLastSyncer } from "../../utils/saveHelpers";
-import { useFileVersionHistory } from "../../utils/useFileVersionHistory";
+import { VERSIONS_OFFLINE_TEXT } from "../../utils/saveSlotWording";
+import { useFileVersionHistory, type FileVersionHistoryTarget } from "../../utils/useFileVersionHistory";
 import { SvgThrobber } from "./SvgThrobber";
 import type { AskDialog } from "./dialogs/askDialog";
 import { desktopSlotConflictDialog } from "./dialogs/desktopDialogs";
 import { BODY_TEXT_COLOR, DANGER_TEXT_RED, SUBTLE_LABEL_COLOR, SYNCED_GREEN, smallActionButtonStyle } from "./styles";
 
-interface DesktopVersionHistoryProps {
-  romId: number;
-  slot: string;
-  filename: string;
-  isOffline: boolean;
+export const DesktopCopyToSlotButton: FC<{
+  style: CSSProperties;
+  disabled: boolean;
+  onClick: () => void;
+}> = ({ style, disabled, onClick }) => (
+  <button type="button" style={style} disabled={disabled} onClick={onClick}>
+    Copy to slot...
+  </button>
+);
+
+interface DesktopVersionHistoryProps extends FileVersionHistoryTarget {
   ask: AskDialog;
-  onRestored: () => void;
   onCopySave: (saveId: number, sourceSlot: string) => void;
 }
 
@@ -44,30 +50,14 @@ function renderAttributionWithCheckmark(attr: string | null) {
   );
 }
 
-export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
-  romId,
-  slot,
-  filename,
-  isOffline,
-  ask,
-  onRestored,
-  onCopySave,
-}) => {
+export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = (props) => {
+  const { slot, isOffline, ask, onCopySave } = props;
   const { expanded, versions, loading, restoringVersionId, loadError, handleToggle, fetchVersions, handleRestore } =
-    useFileVersionHistory({
-      romId,
-      slot,
-      filename,
-      isOffline,
-      showConflict: desktopSlotConflictDialog(ask),
-      onRestored,
-    });
+    useFileVersionHistory(props, desktopSlotConflictDialog(ask));
 
   const renderBody = () => {
     if (isOffline) {
-      return (
-        <div style={{ color: MUTED_COLOR, fontStyle: "italic", fontSize: "11px" }}>Offline — versions unavailable</div>
-      );
+      return <div style={{ color: MUTED_COLOR, fontStyle: "italic", fontSize: "11px" }}>{VERSIONS_OFFLINE_TEXT}</div>;
     }
     if (loading && versions === null) {
       return (
@@ -160,14 +150,11 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
                     {isThisRestoring ? <SvgThrobber style={{ width: "10px", height: "10px" }} /> : null}
                     <span>{isThisRestoring ? "Restoring..." : "Restore"}</span>
                   </button>
-                  <button
-                    type="button"
+                  <DesktopCopyToSlotButton
                     style={actionStyle}
                     disabled={actionDisabled}
                     onClick={() => onCopySave(v.id, slot)}
-                  >
-                    Copy to slot...
-                  </button>
+                  />
                 </div>
               </div>
             );

@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef, type CSSProperties, type FC, type ReactNode } from "react";
+import { CANCEL_LABEL } from "../../../utils/launchPromptWording";
 import { BACKDROP_BUTTON_STYLE, BUTTON_STYLE, MODAL_CONTAINER_STYLE } from "../styles";
 
 interface DesktopDialogProps {
@@ -56,7 +57,35 @@ export const DIALOG_VALUE_STYLE: CSSProperties = { fontSize: "13px", color: "#ff
 
 export const DIALOG_ACTIONS_STYLE: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 
-export const DIALOG_FOOTER_STYLE: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: "8px" };
+const DIALOG_FOOTER_STYLE: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: "8px" };
+
+interface DesktopDialogFooterProps {
+  onDismiss: () => void;
+  cancelLabel?: string;
+  dismissDisabled?: boolean;
+  marginTop?: string;
+  children?: ReactNode;
+}
+
+export const DesktopDialogFooter: FC<DesktopDialogFooterProps> = ({
+  onDismiss,
+  cancelLabel = CANCEL_LABEL,
+  dismissDisabled = false,
+  marginTop,
+  children,
+}) => (
+  <div style={marginTop ? { ...DIALOG_FOOTER_STYLE, marginTop } : DIALOG_FOOTER_STYLE}>
+    <button
+      type="button"
+      style={dialogButtonStyle("quiet", dismissDisabled)}
+      disabled={dismissDisabled}
+      onClick={onDismiss}
+    >
+      {cancelLabel}
+    </button>
+    {children}
+  </div>
+);
 
 export function dialogInputStyle(overrides?: CSSProperties): CSSProperties {
   return {

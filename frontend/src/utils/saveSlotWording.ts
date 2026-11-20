@@ -20,6 +20,8 @@ import type {
   WireReason,
 } from "../types";
 
+export const VERSIONS_OFFLINE_TEXT = "Offline — versions unavailable";
+
 /** The toast for a restore refused as unsupported — the backend's own explanation where it gave one. */
 export function unsupportedRestoreMessage(result: Extract<RollbackStatus, { status: "unsupported" }>): string {
   if (result.reason === "savefiles_in_content_dir") {
