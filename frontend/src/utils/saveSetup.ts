@@ -1,11 +1,9 @@
 /**
  * Pure decision logic and branch handlers for "what should the caller do with
- * a SaveSetupInfo response?". Callers consume the same outcome: the
- * wizard (`SlotSetupWizard`), the launch gates
- * (`ensureTrackingConfiguredBigPicture` and `ensureTrackingConfiguredDesktop`
- * in `launchGateOps.ts`) and the launch watcher's cold start
- * (`launchInterceptor.ts`). Anything that lives here can be unit-tested
- * without rendering the component or stubbing React.
+ * a SaveSetupInfo response?". Callers consume the same outcome: the setup wizard,
+ * the game-page launch gates (`launchGateOps.ts`), and the launch watcher's
+ * cold start (`launchInterceptor.ts`). Anything that lives here can be
+ * unit-tested without rendering a component or stubbing React.
  *
  * The "server_unreachable", "not_found", "romm_refused" and
  * "device_not_registered" branches exist because `recommended_action` carries
@@ -64,7 +62,7 @@ export function resolveSaveSetupOutcome(info: SaveSetupInfo): SaveSetupOutcome {
   // backend routes to the wizard (`recommended_action` is `auto_confirm_default`
   // only when local saves exist) and the launch path settles itself. The
   // divergence is deliberate: pressing Play means "play", so an empty slate
-  // takes the default slot instead of a dialog, while opening the SAVES tab
+  // takes the default slot instead of a dialog, while opening the save surface
   // means "configure", so `applyWizardInitialSetupResult` below offers the same
   // slate as a choice. Nothing is at stake on either route — both sides are
   // empty and the slot stays changeable — so consistency here would only buy a
@@ -152,7 +150,7 @@ export interface LaunchGateSetupDeps {
   ) => Promise<{ success?: boolean; message?: string } | undefined>;
   /** Shows a toast — wrapped as a callback so the helper is dispatch-agnostic. */
   toast: (body: string) => void;
-  /** Switches to the Saves tab/card — wrapped as a callback so the helper is
+  /** Switches to the game page's save surface — wrapped as a callback so the helper is
    *  dispatch-agnostic (component dispatches a `CustomEvent`; tests pass a spy). */
   dispatchSavesTab: () => void;
 }
@@ -255,7 +253,7 @@ function heldWizardMessage(result: SaveSetupInfo): string | null {
   }
 }
 
-/** Apply the initial `getSaveSetupInfo` result inside `SlotSetupWizard`'s
+/** Apply the initial `getSaveSetupInfo` result for a save setup wizard's
  *  fetch effect. Routes server_unreachable to a held-wizard error banner,
  *  auto_confirm_default through a backend confirm, and everything else into
  *  the per-slot picker by calling `setInfo`. */

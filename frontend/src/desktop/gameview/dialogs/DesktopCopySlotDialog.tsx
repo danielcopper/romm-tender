@@ -3,11 +3,19 @@
  * Shown from SaveManagementCard when the user chooses "Copy to slot...".
  */
 
-import { useState, type CSSProperties, type FC } from "react";
+import { useState, type FC } from "react";
 import type { SaveSlotSummary } from "../../../types";
 import { CANCEL_LABEL } from "../../../utils/launchPromptWording";
 import { displaySlot, eligibleCopyTargetSlots } from "../../../utils/saveHelpers";
-import { DIALOG_MUTED_STYLE, DIALOG_TEXT_STYLE, DesktopDialog, dialogButtonStyle } from "./DesktopDialog";
+import { COPY_TO_SLOT_DESCRIPTION, COPY_TO_SLOT_EMPTY_TARGETS } from "../../../utils/saveSlotWording";
+import {
+  DIALOG_FOOTER_STYLE,
+  DIALOG_MUTED_STYLE,
+  DIALOG_TEXT_STYLE,
+  DesktopDialog,
+  dialogButtonStyle,
+  dialogInputStyle,
+} from "./DesktopDialog";
 
 interface DesktopCopySlotDialogProps {
   sourceSlot: string;
@@ -16,16 +24,11 @@ interface DesktopCopySlotDialogProps {
   onCopy: (targetSlot: string) => Promise<void> | void;
 }
 
-const INPUT_STYLE: CSSProperties = {
+const INPUT_STYLE = dialogInputStyle({
   flex: 1,
   padding: "6px 10px",
   fontSize: "12px",
-  backgroundColor: "rgba(0, 0, 0, 0.4)",
-  border: "1px solid rgba(255, 255, 255, 0.2)",
-  borderRadius: "3px",
-  color: "#ffffff",
-  outline: "none",
-};
+});
 
 export const DesktopCopySlotDialog: FC<DesktopCopySlotDialogProps> = ({
   sourceSlot,
@@ -46,9 +49,7 @@ export const DesktopCopySlotDialog: FC<DesktopCopySlotDialogProps> = ({
 
   return (
     <DesktopDialog titleId="tender-desktop-copy-slot-title" title="Copy save to slot" onDismiss={onDismiss}>
-      <div style={DIALOG_TEXT_STYLE}>
-        Copies this save into the chosen slot, which becomes the active slot. The original save is kept.
-      </div>
+      <div style={DIALOG_TEXT_STYLE}>{COPY_TO_SLOT_DESCRIPTION}</div>
 
       {targetSlots.length > 0 ? (
         <div style={{ marginBottom: "16px" }}>
@@ -67,7 +68,7 @@ export const DesktopCopySlotDialog: FC<DesktopCopySlotDialogProps> = ({
           </div>
         </div>
       ) : (
-        <div style={{ ...DIALOG_MUTED_STYLE, marginBottom: "14px" }}>No other slots yet — create one below.</div>
+        <div style={{ ...DIALOG_MUTED_STYLE, marginBottom: "14px" }}>{COPY_TO_SLOT_EMPTY_TARGETS}</div>
       )}
 
       <div style={{ borderTop: "1px solid rgba(255, 255, 255, 0.08)", paddingTop: "12px" }}>
@@ -94,7 +95,7 @@ export const DesktopCopySlotDialog: FC<DesktopCopySlotDialogProps> = ({
         </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px" }}>
+      <div style={{ ...DIALOG_FOOTER_STYLE, marginTop: "16px" }}>
         <button type="button" style={dialogButtonStyle("quiet")} onClick={onDismiss}>
           {CANCEL_LABEL}
         </button>

@@ -1,6 +1,7 @@
 /**
  * Renderer for the slot listing the device kept from the last time RomM
- * answered — what the SAVES tab shows while no live slot answer has landed.
+ * answered — what Big Picture's SAVES tab shows while no live slot answer has
+ * landed (the Desktop Saves card has its own `LastKnownSection`).
  *
  * Read-only by construction: no DialogButton, no expand, no activate. Every
  * count and timestamp in it is as old as the snapshot, so the block leads with

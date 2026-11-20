@@ -2,12 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   attributionLabel,
   buildLastSyncedValue,
+  changesSaveAnswers,
   computeSyncSummary,
   displaySlot,
   eligibleCopyTargetSlots,
   filterSaveSlotsForDisplay,
   formatAttributionSegment,
   formatSaveTimeAgo,
+  isSaveSyncForRom,
   pickLastSyncer,
   sortSaveSlots,
   statusLabel,
@@ -553,5 +555,23 @@ describe("eligibleCopyTargetSlots", () => {
   it("excludes source and legacy '', deduplicates, and sorts alphabetically", () => {
     const slots = [mk("zeta"), mk("backup"), mk(""), mk("alpha"), mk("zeta")];
     expect(eligibleCopyTargetSlots(slots, "backup")).toEqual(["alpha", "zeta"]);
+  });
+});
+
+describe("isSaveSyncForRom & changesSaveAnswers", () => {
+  it("matches save_sync events with matching or omitted rom_id and ignores other ROMs", () => {
+    expect(isSaveSyncForRom({ type: "save_sync", rom_id: 42 }, 42)).toBe(true);
+    expect(isSaveSyncForRom({ type: "save_sync" }, 42)).toBe(true);
+    expect(isSaveSyncForRom({ type: "save_sync", rom_id: 99 }, 42)).toBe(false);
+    expect(isSaveSyncForRom({ type: "core_changed", platform_fs_slug: "gba" }, 42)).toBe(false);
+  });
+
+  it("treats core_changed, emulator_sources, and matching save_sync as save-answer updates", () => {
+    expect(changesSaveAnswers({ type: "core_changed", platform_fs_slug: "gba" }, 42)).toBe(true);
+    expect(changesSaveAnswers({ type: "emulator_sources" }, 42)).toBe(true);
+    expect(changesSaveAnswers({ type: "save_sync", rom_id: 42 }, 42)).toBe(true);
+    expect(changesSaveAnswers({ type: "save_sync" }, 42)).toBe(true);
+    expect(changesSaveAnswers({ type: "save_sync", rom_id: 99 }, 42)).toBe(false);
+    expect(changesSaveAnswers({ type: "metadata", rom_id: 42 }, 42)).toBe(false);
   });
 });

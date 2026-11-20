@@ -4,14 +4,14 @@
  * fallback to the standard sync-conflict modal).
  */
 
-import { useState, useEffect, useRef, FC, type ReactElement } from "react";
+import { FC, type ReactElement } from "react";
 import { DialogButton } from "@decky/ui";
 import type { SaveVersionEntry } from "../../types";
 import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
 import { formatAttributionSegment, pickLastSyncer } from "../../utils/saveHelpers";
-import { executeVersionRestore, loadFileVersions } from "../../utils/saveSlotFlow";
+import { useFileVersionHistory } from "../../utils/useFileVersionHistory";
 import { renderCopyToSlotButton, type CopyToSlotHandler } from "./CopyToSlotButton";
 import { detach } from "../../utils/detach";
 import { ThrobberLabel } from "../../shared/Throbber";
@@ -34,81 +34,22 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
   onRestored,
   onCopy,
 }) => {
-  const [expanded, setExpanded] = useState(false);
-  // The open state as of this moment, for the change listener below: a restore
-  // closes the panel and announces the change in the same turn, before React
-  // re-renders, so the listener's own `expanded` would still read it as open
-  // and reload the list the restore just dropped.
-  const expandedRef = useRef(false);
-  const setOpen = (open: boolean) => {
-    expandedRef.current = open;
-    setExpanded(open);
-  };
-  const [versions, setVersions] = useState<SaveVersionEntry[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [restoring, setRestoring] = useState<number | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const loadVersions = async () => {
-    setLoading(true);
-    setLoadError(null);
-    const outcome = await loadFileVersions(romId, slot, filename);
-    if (outcome.ok) {
-      setVersions(outcome.versions);
-    } else {
-      setVersions(null);
-      setLoadError(outcome.error);
-    }
-    setLoading(false);
-  };
-
-  const handleToggle = async () => {
-    const willExpand = !expanded;
-    setOpen(willExpand);
-    if (willExpand && versions === null && loadError === null && !isOffline) {
-      await loadVersions();
-    }
-  };
-
-  // Self-refresh when this ROM's saves change. A copy into this slot, a restore
-  // on this tab, or a sync adds or removes a version, but the list is cached on
-  // first expand — without this it stays stale in-session until the game page is
-  // re-entered. The signal is a DOM CustomEvent (`globalThis.dispatchEvent`),
-  // NOT a backend emit, so we listen on `globalThis`. Invalidate on any
-  // change for this ROM; reload immediately when the panel is open, otherwise the
-  // next expand lazy-loads the fresh list.
-  useEffect(() => {
-    const onDataChanged = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.rom_id !== romId) return;
-      setVersions(null);
-      setLoadError(null);
-      if (expandedRef.current && !isOffline) detach(loadVersions());
-    };
-    globalThis.addEventListener("romm_data_changed", onDataChanged);
-    return () => globalThis.removeEventListener("romm_data_changed", onDataChanged);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadVersions is stable per (romId, slot, filename); romId/isOffline are the real deps
-  }, [romId, isOffline]);
-
-  const handleRestore = async (version: SaveVersionEntry) => {
-    setRestoring(version.id);
-    try {
-      if (await executeVersionRestore(romId, slot, version, showSyncConflictModal)) {
-        setVersions(null);
-        setOpen(false);
-        onRestored();
-      }
-    } finally {
-      setRestoring(null);
-    }
-  };
+  const { expanded, versions, loading, restoringVersionId, loadError, handleToggle, fetchVersions, handleRestore } =
+    useFileVersionHistory({
+      romId,
+      slot,
+      filename,
+      isOffline,
+      showConflict: showSyncConflictModal,
+      onRestored,
+    });
 
   const versionCount = versions?.length ?? 0;
 
   const renderVersionRow = (v: SaveVersionEntry): ReactElement => {
     const lastSyncer = pickLastSyncer(v.device_syncs);
     const deviceName = lastSyncer?.device_name ?? null;
-    const isThisRestoring = restoring === v.id;
+    const isThisRestoring = restoringVersionId === v.id;
 
     // Line 1: #id · emulator · size
     const headerParts: string[] = [`#${v.id}`];
@@ -173,7 +114,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
             }}
             noFocusRing={false}
             onFocus={scrollFocusedToCenter}
-            disabled={isThisRestoring || restoring !== null || isOffline}
+            disabled={isThisRestoring || restoringVersionId !== null || isOffline}
             onClick={() => {
               detach(handleRestore(v));
             }}
@@ -214,7 +155,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
             noFocusRing={false}
             onFocus={scrollFocusedToCenter}
             onClick={() => {
-              detach(loadVersions());
+              detach(fetchVersions());
             }}
           >
             Retry
@@ -251,9 +192,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
         }}
         noFocusRing={false}
         onFocus={scrollFocusedToCenter}
-        onClick={() => {
-          detach(handleToggle());
-        }}
+        onClick={handleToggle}
       >
         <span>{expanded ? "▾" : "▸"}</span>
         <span>{expanded && versions !== null ? `Previous Versions (${versionCount})` : "Previous Versions"}</span>

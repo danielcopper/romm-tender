@@ -219,11 +219,11 @@ function shapePreLaunchAnswer(settled: PreLaunchSyncSettled, options: PreLaunchS
 }
 
 /**
- * The tracking-setup step for a start pressed on a game-detail page (Big Picture
- * or Desktop). Nothing is set up where the backend answers that none is needed
- * (`setup_needed`). What the backend's setup answer does to the start is
- * `applyLaunchGateSetupOutcome`'s. A read that throws proceeds; a read or slot
- * confirm that gets no answer in time is let through for the gate.
+ * The tracking-setup step for a start pressed on a game-detail page. Nothing is
+ * set up where the backend answers that none is needed (`setup_needed`). What
+ * the backend's setup answer does to the start is `applyLaunchGateSetupOutcome`'s.
+ * A read that throws proceeds; a read or slot confirm that gets no answer in time
+ * is let through for the gate.
  *
  * The fallbacks guard only the network reads. The branching on their answer sits
  * outside them so that a throw from a side effect (the toast, the tab switch, the
@@ -289,8 +289,8 @@ export async function ensureTrackingConfiguredSilently(romId: number, tag: strin
   // swallowed toast: the auto_confirm branch fires `confirmSlotChoice`; every
   // other (abort) branch is irrelevant here because this step never aborts a
   // start on tracking — an unconfigured slot the user can't resolve at the start
-  // must still let the game start (the game page's Saves tab or Saves card can
-  // configure it later).
+  // must still let the game start (the page's save surface can configure it
+  // later).
   await applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {
     rid: romId,
     confirmSlotChoice: (...args) => withTimeout(confirmSlotChoice(...args), LOCAL_CALL_LIMIT_MS),

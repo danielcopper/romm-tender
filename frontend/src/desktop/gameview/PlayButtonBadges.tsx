@@ -11,8 +11,9 @@ import { detach } from "../../utils/detach";
 import { formatBytes } from "../../utils/formatters";
 import type { GameDetailState } from "../../utils/gameDetailStore";
 import { useGamePlaytime } from "../../utils/playtimeReconcile";
+import { changesSaveAnswers } from "../../utils/saveHelpers";
 import { saveSyncBadge, type SaveSyncBadgeTone } from "../../utils/saveSyncBadge";
-import { DOT_STYLE, PLAY_BAR_ROW_HEIGHT } from "./styles";
+import { ATTENTION_AMBER, DOT_STYLE, PLAY_BAR_ROW_HEIGHT, SYNCED_GREEN } from "./styles";
 
 interface PlayButtonBadgesProps {
   appId: number;
@@ -75,8 +76,8 @@ const VALUE_STYLE: CSSProperties = {
 
 const TONE_COLOR: Record<SaveSyncBadgeTone, string> = {
   off: "#8f98a0",
-  ok: "#5ba32b",
-  attention: "#d4a72c",
+  ok: SYNCED_GREEN,
+  attention: ATTENTION_AMBER,
   unavailable: BIOS_MISSING_RED,
 };
 
@@ -111,13 +112,6 @@ const Badge: FC<{
 const Dot: FC<{ color: string }> = ({ color }) => (
   <span className="tender-desktop-badge-dot" style={{ ...DOT_STYLE, backgroundColor: color }} />
 );
-
-type DataChange = WindowEventMap["romm_data_changed"]["detail"];
-
-function changesSaveAnswers(change: DataChange, romId: number): boolean {
-  if (change.type === "save_sync") return change.rom_id === undefined || change.rom_id === romId;
-  return change.type === "core_changed" || change.type === "emulator_sources";
-}
 
 /**
  * One read about the ROM shown: asked while it is wanted and again on a change

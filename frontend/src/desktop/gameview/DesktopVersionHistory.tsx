@@ -5,16 +5,15 @@
  * on version rows.
  */
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type FC } from "react";
-import type { SaveVersionEntry } from "../../types";
+import type { CSSProperties, FC } from "react";
 import { detach } from "../../utils/detach";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
 import { MUTED_COLOR, formatAttributionSegment, pickLastSyncer } from "../../utils/saveHelpers";
-import { executeVersionRestore, loadFileVersions } from "../../utils/saveSlotFlow";
+import { useFileVersionHistory } from "../../utils/useFileVersionHistory";
 import { SvgThrobber } from "./SvgThrobber";
 import type { AskDialog } from "./dialogs/askDialog";
 import { desktopSlotConflictDialog } from "./dialogs/desktopDialogs";
-import { BUTTON_STYLE } from "./styles";
+import { BODY_TEXT_COLOR, DANGER_TEXT_RED, SUBTLE_LABEL_COLOR, SYNCED_GREEN, smallActionButtonStyle } from "./styles";
 
 interface DesktopVersionHistoryProps {
   romId: number;
@@ -33,24 +32,6 @@ const TABLE_GRID_STYLE: CSSProperties = {
   alignItems: "center",
 };
 
-const SMALL_BUTTON_STYLE: CSSProperties = {
-  ...BUTTON_STYLE,
-  padding: "2px 8px",
-  fontSize: "11px",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "4px",
-  whiteSpace: "nowrap",
-};
-
-function smallButtonStyle(disabled: boolean): CSSProperties {
-  return {
-    ...SMALL_BUTTON_STYLE,
-    opacity: disabled ? 0.5 : 1,
-    cursor: disabled ? "not-allowed" : "pointer",
-  };
-}
-
 function renderAttributionWithCheckmark(attr: string | null) {
   if (attr === null) return null;
   if (!attr.endsWith("✓")) return ` · ${attr}`;
@@ -58,7 +39,7 @@ function renderAttributionWithCheckmark(attr: string | null) {
   return (
     <>
       {prefix}
-      <span style={{ color: "#5ba32b" }}>✓</span>
+      <span style={{ color: SYNCED_GREEN }}>✓</span>
     </>
   );
 }
@@ -72,79 +53,15 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
   onRestored,
   onCopySave,
 }) => {
-  const [expanded, setExpanded] = useState(false);
-  // Synchronous ref avoids re-loading when a successful restore collapses the
-  // subsection and announces `save_sync` in the same turn.
-  const expandedRef = useRef(false);
-  const setOpen = (open: boolean) => {
-    expandedRef.current = open;
-    setExpanded(open);
-  };
-
-  const [versions, setVersions] = useState<SaveVersionEntry[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [restoringVersionId, setRestoringVersionId] = useState<number | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const mountedRef = useRef(true);
-  const readSeqRef = useRef(0);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  const fetchVersions = useCallback(async () => {
-    const seq = ++readSeqRef.current;
-    setLoading(true);
-    setLoadError(null);
-    const outcome = await loadFileVersions(romId, slot, filename);
-    if (!mountedRef.current || seq !== readSeqRef.current) return;
-    if (outcome.ok) {
-      setVersions(outcome.versions);
-    } else {
-      setVersions(null);
-      setLoadError(outcome.error);
-    }
-    setLoading(false);
-  }, [romId, slot, filename]);
-
-  const handleToggle = () => {
-    const willExpand = !expanded;
-    setOpen(willExpand);
-    if (willExpand && versions === null && loadError === null && !isOffline) {
-      detach(fetchVersions());
-    }
-  };
-
-  useEffect(() => {
-    const onDataChanged = ({ detail }: WindowEventMap["romm_data_changed"]) => {
-      if (detail.type !== "save_sync") return;
-      if (detail.rom_id !== undefined && detail.rom_id !== romId) return;
-      setVersions(null);
-      setLoadError(null);
-      if (expandedRef.current && !isOffline) {
-        detach(fetchVersions());
-      }
-    };
-    globalThis.addEventListener("romm_data_changed", onDataChanged);
-    return () => globalThis.removeEventListener("romm_data_changed", onDataChanged);
-  }, [romId, isOffline, fetchVersions]);
-
-  const handleRestore = async (version: SaveVersionEntry) => {
-    setRestoringVersionId(version.id);
-    try {
-      if (await executeVersionRestore(romId, slot, version, desktopSlotConflictDialog(ask))) {
-        if (!mountedRef.current) return;
-        setVersions(null);
-        setOpen(false);
-        onRestored();
-      }
-    } finally {
-      if (mountedRef.current) setRestoringVersionId(null);
-    }
-  };
+  const { expanded, versions, loading, restoringVersionId, loadError, handleToggle, fetchVersions, handleRestore } =
+    useFileVersionHistory({
+      romId,
+      slot,
+      filename,
+      isOffline,
+      showConflict: desktopSlotConflictDialog(ask),
+      onRestored,
+    });
 
   const renderBody = () => {
     if (isOffline) {
@@ -163,8 +80,8 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
     if (loadError !== null) {
       return (
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "11px", color: "#ff6b6b" }}>{loadError}</span>
-          <button type="button" style={SMALL_BUTTON_STYLE} onClick={() => detach(fetchVersions())}>
+          <span style={{ fontSize: "11px", color: DANGER_TEXT_RED }}>{loadError}</span>
+          <button type="button" style={smallActionButtonStyle()} onClick={() => detach(fetchVersions())}>
             Retry
           </button>
         </div>
@@ -183,7 +100,7 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
               ...TABLE_GRID_STYLE,
               fontSize: "10px",
               fontWeight: 600,
-              color: "#6e7f91",
+              color: SUBTLE_LABEL_COLOR,
               textTransform: "uppercase",
               letterSpacing: "0.05em",
               paddingBottom: "6px",
@@ -201,7 +118,7 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
             const isThisRestoring = restoringVersionId === v.id;
             const actionDisabled = restoringVersionId !== null;
             const versionHeading = v.emulator ? `#${v.id} · ${v.emulator}` : `#${v.id}`;
-            const actionStyle = smallButtonStyle(actionDisabled);
+            const actionStyle = smallActionButtonStyle(actionDisabled);
 
             return (
               <div
@@ -214,7 +131,7 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
                 }}
               >
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ color: "#dfe3e6", fontWeight: 500 }}>{versionHeading}</div>
+                  <div style={{ color: BODY_TEXT_COLOR, fontWeight: 500 }}>{versionHeading}</div>
                   <div
                     style={{
                       color: MUTED_COLOR,
@@ -240,7 +157,7 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
                     disabled={actionDisabled}
                     onClick={() => detach(handleRestore(v))}
                   >
-                    {isThisRestoring && <SvgThrobber style={{ width: "10px", height: "10px" }} />}
+                    {isThisRestoring ? <SvgThrobber style={{ width: "10px", height: "10px" }} /> : null}
                     <span>{isThisRestoring ? "Restoring..." : "Restore"}</span>
                   </button>
                   <button
@@ -268,7 +185,7 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
         style={{
           background: "transparent",
           border: "none",
-          color: "#dfe3e6",
+          color: BODY_TEXT_COLOR,
           cursor: "pointer",
           fontWeight: 600,
           fontSize: "12px",
@@ -283,7 +200,7 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
         <span>{expanded && versions !== null ? `Previous Versions (${versions.length})` : "Previous Versions"}</span>
       </button>
 
-      {expanded && (
+      {expanded ? (
         <div
           style={{
             marginTop: "8px",
@@ -294,7 +211,7 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
         >
           {renderBody()}
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

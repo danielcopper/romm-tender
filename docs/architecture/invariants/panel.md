@@ -109,25 +109,24 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   or restart that answer names. In the desktop dev build the desktop client's Play button
   (`frontend/src/desktop/gameview/PlayButton.tsx`) renders nothing, and the Emulation card
   (`frontend/src/desktop/gameview/EmulationSettings.tsx`) and Saves card
-  (`frontend/src/desktop/gameview/SaveManagementCard.tsx`) render nothing and issue no backend reads, since none of
-  them has Resume and every press they offer needs the backend, pinned by the stranded-panel `describe` blocks of
+  (`frontend/src/desktop/gameview/SaveManagementCard.tsx`) render nothing and issue no backend reads, since none of them
+  has Resume and every press they offer needs the backend, pinned by the stranded-panel `describe` blocks of
   `frontend/src/desktop/gameview/PlayButton.test.tsx`, `frontend/src/desktop/gameview/EmulationSettings.test.tsx` and
-  `frontend/src/desktop/gameview/SaveManagementCard.test.tsx`.
-  **Why**: a stranded panel is never admitted again — it holds the token of a backend process that is gone — so every
-  press that reaches the backend could only fail. Before #2275 each such press failed in a way of its own: some with the
-  answer, some with a bare failure, some with a wrong reason, some with nothing at all, leaving a switch at a value that
-  was never saved; Play on a page opened before the restart started the game without its pre-launch save sync. A gate at
-  the shells covers a press added inside them later without a change of its own, where a message per press would be a
-  rule every new failure path has to remember. **What fails green**: a new surface outside the shells — another element
-  injected into Steam's game page, another hook on Steam's launch — offers presses that can only fail, and nothing
-  notices: `api/host` is stubbed suite-wide, so a test of that surface sees a stranded panel only if it arranges one
-  (`frontend/src/test-utils/stranded-panel.ts`). That half is prompt-only: such a surface gates itself on
-  `useStrandedAnswer()` in a component or `strandedAnswer()` in a handler. **The exceptions are deliberate**: a Tender
-  dialog or menu already open when the panel is stranded stays open and its buttons fail as before (#2275 D6), since
-  closing every one would need one opener in place of `showModal` and `showContextMenu` everywhere one is opened, and
-  Stop Game in a menu opened before the strand says at once that it cannot stop the game; a Play press on a game already
-  running passes the interceptor, whose running-game guard comes before the cancel. Detail:
-  `docs/architecture/loading-the-panel.md` → What the stranded panel is told
+  `frontend/src/desktop/gameview/SaveManagementCard.test.tsx`. **Why**: a stranded panel is never admitted again — it
+  holds the token of a backend process that is gone — so every press that reaches the backend could only fail. Before
+  #2275 each such press failed in a way of its own: some with the answer, some with a bare failure, some with a wrong
+  reason, some with nothing at all, leaving a switch at a value that was never saved; Play on a page opened before the
+  restart started the game without its pre-launch save sync. A gate at the shells covers a press added inside them later
+  without a change of its own, where a message per press would be a rule every new failure path has to remember. **What
+  fails green**: a new surface outside the shells — another element injected into Steam's game page, another hook on
+  Steam's launch — offers presses that can only fail, and nothing notices: `api/host` is stubbed suite-wide, so a test
+  of that surface sees a stranded panel only if it arranges one (`frontend/src/test-utils/stranded-panel.ts`). That half
+  is prompt-only: such a surface gates itself on `useStrandedAnswer()` in a component or `strandedAnswer()` in a
+  handler. **The exceptions are deliberate**: a Tender dialog or menu already open when the panel is stranded stays open
+  and its buttons fail as before (#2275 D6), since closing every one would need one opener in place of `showModal` and
+  `showContextMenu` everywhere one is opened, and Stop Game in a menu opened before the strand says at once that it
+  cannot stop the game; a Play press on a game already running passes the interceptor, whose running-game guard comes
+  before the cancel. Detail: `docs/architecture/loading-the-panel.md` → What the stranded panel is told
 - **Every write into per-rom detail state that crosses an `await` is bound to a rom identity** — test + prompt-only
 
   The store (`frontend/src/utils/gameDetailStore.ts`) via `writerForRom`, or the answer's own `rom_id` in
@@ -139,16 +138,18 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   in the desktop dev build) and `SaveManagementCard` (`frontend/src/desktop/gameview/SaveManagementCard.tsx`, in the
   desktop dev build — keyed by `detail.romId` on `SaveManagementCardContent` so a version switch tears down its subtree
   alongside `isCancelled()` and `mountedRef` guards across `SaveManagementCard.tsx`, `DesktopSlotPanel`
-  (`frontend/src/desktop/gameview/DesktopSlotPanel.tsx`) and `DesktopVersionHistory`
-  (`frontend/src/desktop/gameview/DesktopVersionHistory.tsx`)) the same way. Two answers for the SAME rom are ordered by
-  a sequence taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`, `EmulationSettings`'s `readSeqRef`,
-  `useSaveSurfaceAnswers`'s `latestSeq` in `SaveManagementCard.tsx`, `DesktopSlotPanel`'s `slotSavesSeqRef`, and
-  `DesktopVersionHistory`'s `readSeqRef`). Ordered but unbound: the two identity writes (the store's `loadDetail`, the
-  panel's `loadData`) and the panel's lazy SAVES-tab slot load (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter,
-  `slots` ticket); neither bound nor ordered: the store's `cached.bios_status` fold (and `SaveManagementCard`'s
-  `refreshSlots` / `useStrandedCheck` rely on subtree `key`, effect cancellation, and `mountedRef` rather than sequence
-  counters). The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on the BIOS tab both read through, is
-  bound and ordered (`bios` ticket). The play button is NOT covered
+  (`frontend/src/desktop/gameview/DesktopSlotPanel.tsx` / `frontend/src/utils/useSlotPanelState.ts`) and
+  `DesktopVersionHistory` (`frontend/src/desktop/gameview/DesktopVersionHistory.tsx` /
+  `frontend/src/utils/useFileVersionHistory.ts`)) the same way. Two answers for the SAME rom are ordered by a sequence
+  taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`, `EmulationSettings`'s `readSeqRef`,
+  `useSaveSurfaceAnswers`'s `latestSeq` and `useDesktopSlotState`'s `slotLoadSeqRef` in `SaveManagementCard.tsx`,
+  `useSlotPanelState`'s `slotSavesSeqRef`, and `useFileVersionHistory`'s `readSeqRef`). Ordered but unbound: the two
+  identity writes (the store's `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab slot load
+  (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the store's
+  `cached.bios_status` fold (and `useStrandedCheck` in `SaveManagementCard.tsx` relies on subtree `key`, effect
+  cancellation, and `mountedRef` rather than a sequence counter). The panel's `rereadBiosAnswer`, which
+  `handleBiosChange` and a press on the BIOS tab both read through, is bound and ordered (`bios` ticket). The play
+  button is NOT covered
 
   The panel component itself holds none of these writes. `RomBinding` is built by `bindRom` for a read a run of the
   `[appId]` effect issued and by `bindRomInState` for the active tab's panes, whose writer is built during render; the
@@ -161,12 +162,12 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   runs in the same synchronous run as its guard. The event lane's `rereadBiosAnswer` re-reads `get_bios_status` for the
   rom it shows, whose emulator is resolved per ROM — a per-game pin over the platform's pick — and takes the `bios`
   ticket the panel's other BIOS re-reads take (#1718). The play button's exclusion is #1714. The panel's fourteen bound
-  sites each carry a version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`), and `useRomMetadata`'s
-  and `EmulationSettings`'s bindings are pinned by `frontend/src/utils/useRomMetadata.test.ts` and
-  `frontend/src/desktop/gameview/EmulationSettings.test.tsx`; `SaveManagementCard`'s key/cancellation binding, the store
-  side and every new write site are prompt-only, because a checker scoped to the store's own function bodies would be
-  green on the case this rule was written for. The reasons behind the two writer mechanisms live at `writerForRom` and
-  `RomBinding` — do not restate them here
+  sites each carry a version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`), and `useRomMetadata`'s,
+  `EmulationSettings`'s, and `SaveManagementCard`'s bindings are pinned by `frontend/src/utils/useRomMetadata.test.ts`,
+  `frontend/src/desktop/gameview/EmulationSettings.test.tsx`, and
+  `frontend/src/desktop/gameview/SaveManagementCard.test.tsx`; the store side and every new write site are prompt-only,
+  because a checker scoped to the store's own function bodies would be green on the case this rule was written for. The
+  reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not restate them here
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` declaring a stop of its own, including a table row with no action of its own** — check + prompt-only
 

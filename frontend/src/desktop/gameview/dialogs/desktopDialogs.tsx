@@ -1,9 +1,10 @@
 /**
  * The desktop dialogs in the shapes their callers ask for: the adoption flow's
  * {@link AdoptionDialogs}, a launch's {@link LaunchPrompts}, the Play button's
- * Resolve Conflict walk and Stop confirm, the Emulation card's BIOS confirm, and
- * a version switch's {@link UnsyncedSavesPrompt}. Every one of them settles with
- * its cancel exit when dismissed.
+ * Resolve Conflict walk and Stop confirm, the Emulation card's BIOS confirm, the
+ * Saves card's conflict, delete-local-saves, copy-slot, and delete-slot dialogs,
+ * and a version switch's {@link UnsyncedSavesPrompt}. Every one of them settles
+ * with its cancel exit when dismissed.
  */
 
 import type {

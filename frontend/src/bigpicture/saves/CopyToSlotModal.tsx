@@ -11,6 +11,7 @@ import { useState, FC, ChangeEvent, KeyboardEvent } from "react";
 import { ModalRoot, DialogButton, TextField } from "@decky/ui";
 import type { SaveSlotSummary } from "../../types";
 import { displaySlot, eligibleCopyTargetSlots } from "../../utils/saveHelpers";
+import { COPY_TO_SLOT_DESCRIPTION, COPY_TO_SLOT_EMPTY_TARGETS } from "../../utils/saveSlotWording";
 
 export const CopyToSlotModal: FC<{
   availableSlots: SaveSlotSummary[];
@@ -47,7 +48,7 @@ export const CopyToSlotModal: FC<{
             key="no-existing"
             style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", fontStyle: "italic" as const }}
           >
-            No other slots yet — create one below.
+            {COPY_TO_SLOT_EMPTY_TARGETS}
           </div>,
         ];
 
@@ -58,7 +59,7 @@ export const CopyToSlotModal: FC<{
           Copy save to slot
         </div>
         <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.6)", marginBottom: "16px", lineHeight: "1.4" }}>
-          Copies this save into the chosen slot, which becomes the active slot. The original save is kept.
+          {COPY_TO_SLOT_DESCRIPTION}
         </div>
         {/* Existing-slot targets. */}
         <div style={{ display: "flex", flexDirection: "column" as const, gap: "8px" }}>{existingRows}</div>

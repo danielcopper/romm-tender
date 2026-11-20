@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   COPY_SAVE_ERROR_TOAST,
+  COPY_TO_SLOT_DESCRIPTION,
+  COPY_TO_SLOT_EMPTY_TARGETS,
   CREATE_SLOT_ERROR_MESSAGE,
   DELETE_LOCAL_SAVES_DESCRIPTION,
   DELETE_LOCAL_SAVES_ERROR_TOAST,
@@ -528,10 +530,14 @@ describe("a slot switch whose backup folder can't take backups", () => {
 });
 
 describe("shared save-card wording and version-history load errors", () => {
-  it("keeps the manual archive, last-known, multi-file, and delete-local-saves wording", () => {
+  it("keeps the manual archive, last-known, multi-file, copy-dialog, and delete-local-saves wording", () => {
     expect(LEGACY_SLOT_NOTE).toBe(
       "Saves uploaded to RomM without a slot. RomM keeps them as a manual archive and never syncs them between devices.",
     );
+    expect(COPY_TO_SLOT_DESCRIPTION).toBe(
+      "Copies this save into the chosen slot, which becomes the active slot. The original save is kept.",
+    );
+    expect(COPY_TO_SLOT_EMPTY_TARGETS).toBe("No other slots yet — create one below.");
     expect(LAST_KNOWN_SLOTS_STALE_NOTE).toBe(
       "Slots as RomM last reported them — counts and times are from that answer, not from now.",
     );

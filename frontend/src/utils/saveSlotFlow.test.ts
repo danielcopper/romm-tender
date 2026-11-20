@@ -435,7 +435,7 @@ describe("executeSlotSwitch on a switch that stopped partway", () => {
     { purpose: "activate" as const, outcome: "switched" },
     { purpose: "create" as const, outcome: "created" },
   ])(
-    "words a switch_stopped answer with the saves set aside and reloads the SAVES tab ($purpose)",
+    "words a switch_stopped answer with the saves set aside and reloads the save surface ($purpose)",
     async ({ purpose, outcome }) => {
       vi.mocked(backend.switchSlot).mockResolvedValueOnce({
         success: false,
@@ -459,7 +459,7 @@ describe("executeSlotSwitch on a switch that stopped partway", () => {
   );
 
   it.each(["activate", "create"] as const)(
-    "words a switch_incomplete answer as a switch and reloads the SAVES tab ($0)",
+    "words a switch_incomplete answer as a switch and reloads the save surface ($0)",
     async (purpose) => {
       vi.mocked(backend.switchSlot).mockResolvedValueOnce({
         success: false,
@@ -520,22 +520,27 @@ describe("loadFileVersions", () => {
     await expect(loadFileVersions(7, "default", "save.srm")).resolves.toEqual({ ok: true, versions: [] });
   });
 
-  it("logs and maps non-ok responses and thrown calls", async () => {
+  it("logs via logWarn and maps non-ok responses and thrown calls", async () => {
     vi.mocked(backend.savesListFileVersions).mockResolvedValueOnce({ status: "not_found", message: "404" });
     await expect(loadFileVersions(7, "default", "save.srm")).resolves.toEqual({
       ok: false,
       error: "RomM couldn't find this game's save data.",
     });
-    expect(backend.debugLog).toHaveBeenCalledWith("saveSlotFlow: server has no such entry for save.srm: 404");
+    expect(backend.logWarn).toHaveBeenCalledWith(
+      "saveSlotFlow: server has no such entry for rom 7 slot 'default' file save.srm: 404",
+    );
 
-    vi.mocked(backend.debugLog).mockClear();
+    vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.savesListFileVersions).mockResolvedValueOnce({ status: "romm_refused", message: "429" });
     await expect(loadFileVersions(7, "default", "save.srm")).resolves.toEqual({
       ok: false,
       error: "Couldn't load the versions: 429",
     });
-    expect(backend.debugLog).not.toHaveBeenCalled();
+    expect(backend.logWarn).toHaveBeenCalledWith(
+      "saveSlotFlow: RomM refused version list for rom 7 slot 'default' file save.srm: 429",
+    );
 
+    vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.savesListFileVersions).mockResolvedValueOnce({
       status: "device_not_registered",
       message: "unreg",
@@ -544,22 +549,28 @@ describe("loadFileVersions", () => {
       ok: false,
       error: "This device could not be registered with RomM. Tap retry.",
     });
-    expect(backend.debugLog).toHaveBeenCalledWith("saveSlotFlow: device not registered for save.srm: unreg");
+    expect(backend.logWarn).toHaveBeenCalledWith(
+      "saveSlotFlow: device not registered for rom 7 slot 'default' file save.srm: unreg",
+    );
 
+    vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.savesListFileVersions).mockResolvedValueOnce({ status: "server_unreachable", message: "down" });
     await expect(loadFileVersions(7, "default", "save.srm")).resolves.toEqual({
       ok: false,
       error: "Couldn't reach RomM. Tap retry.",
     });
-    expect(backend.debugLog).toHaveBeenCalledWith("saveSlotFlow: server unreachable for save.srm: down");
+    expect(backend.logWarn).toHaveBeenCalledWith(
+      "saveSlotFlow: server unreachable for rom 7 slot 'default' file save.srm: down",
+    );
 
+    vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.savesListFileVersions).mockRejectedValueOnce(new Error("socket closed"));
     await expect(loadFileVersions(7, "default", "save.srm")).resolves.toEqual({
       ok: false,
       error: "Couldn't reach RomM. Tap retry.",
     });
     expect(backend.logWarn).toHaveBeenCalledWith(
-      "saveSlotFlow: failed to load versions for save.srm: Error: socket closed",
+      "saveSlotFlow: failed to load versions for rom 7 slot 'default' file save.srm: Error: socket closed",
     );
   });
 });

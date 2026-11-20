@@ -19,7 +19,7 @@ export function displaySlot(slot: string | null | undefined): string {
 }
 
 /**
- * A save-sync time as the Saves tab and its toasts show it — a save's, a
+ * A save-sync time as shown in save status displays and toasts — a save's, a
  * version's, or the last sync's: "just now", "5m ago", "2h ago", then a date
  * ("5 Oct"); "" for no time or a bad one. Elsewhere, `formatTimeAgo`
  * (`formatters.ts`).
@@ -65,13 +65,12 @@ export function attributionLabel(uploadedByUs: boolean | null | undefined): stri
 /**
  * Format the per-save attribution+checkmark segment for the sync-time line.
  *
- * Combines device name, attribution label, and an optional trailing checkmark
+ * Formats the sync time, device attribution, and optional trailing checkmark
  * into one ready-to-render string, or null when nothing meaningful can be shown.
- * Reused between `renderSaveFileRow` and `renderVersionRow`. The checkmark marks
- * an actually-synced file, so `renderSaveFileRow` passes `showCheck=false` for a
- * file with pending upload/download work — a failed post-exit sync must not
- * render a ✓ (#1334). Version rows keep the default (`showCheck=true`): the ✓
- * there is the per-version attribution marker, not a live sync verdict.
+ * When `showCheck=false`, pending upload/download work suppresses the ✓ so a
+ * failed post-exit sync does not render a false checkmark (#1334). Version rows
+ * keep the default (`showCheck=true`): the ✓ there is the per-version
+ * attribution marker, not a live sync verdict.
  */
 export function formatAttributionSegment(
   uploadedByUs: boolean | null | undefined,
@@ -236,4 +235,18 @@ export function eligibleCopyTargetSlots(availableSlots: readonly SaveSlotSummary
   return Array.from(
     new Set(availableSlots.map((s) => s.slot).filter((name) => name !== "" && name !== sourceSlot)),
   ).sort((a, b) => a.localeCompare(b));
+}
+
+/** Whether a `romm_data_changed` event is a `save_sync` update affecting `romId`. */
+export function isSaveSyncForRom(change: WindowEventMap["romm_data_changed"]["detail"], romId: number): boolean {
+  return change.type === "save_sync" && (change.rom_id === undefined || change.rom_id === romId);
+}
+
+/**
+ * Whether a `romm_data_changed` event can change a ROM's save-sync availability
+ * or local-saves answer (`core_changed`, `emulator_sources`, or matching `save_sync`).
+ */
+export function changesSaveAnswers(change: WindowEventMap["romm_data_changed"]["detail"], romId: number): boolean {
+  if (change.type === "core_changed" || change.type === "emulator_sources") return true;
+  return isSaveSyncForRom(change, romId);
 }

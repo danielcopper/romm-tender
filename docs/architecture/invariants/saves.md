@@ -17,7 +17,8 @@ and binds, and the other areas: [the register's index](index.md).
   the other device's newer save without a conflict; one that keeps the file open writes the session into the copy moved
   aside ([A game that is running](../save-file-sync-architecture.md#a-game-that-is-running)). The exempt paths run
   before the start or after it: a conflict the launch check resolves is passed `before_start` from the launch prompts'
-  `resolveConflicts` — `gamepadLaunchPrompts`', and in the desktop dev build `desktopLaunchPrompts`' — never inferred.
+  `resolveConflicts` — `gamepadLaunchPrompts`', and in the desktop dev build `desktopLaunchPrompts`' — never inferred;
+  outside a start, `desktopResolveConflicts` and `desktopSlotConflictDialog` pass `beforeStart=false`.
   `tests/services/saves/test_running_game.py` pins the sweep's skip and its sentence, each refused press and the same
   press with the game not running, the platform delete, the follow on the status read, the local-save check and the
   platform count, the two exempt syncs, the conflict resolved before a start, and the stop of a sweep's and a Sync

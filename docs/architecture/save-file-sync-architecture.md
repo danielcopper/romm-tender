@@ -310,11 +310,11 @@ whitespace / `None` slot **name** is a different thing entirely: it is rejected 
 On the SAVES tab every slot is a collapsible panel, and the active slot's panel starts open. When the active slot
 changes — **Activate Slot**, or a copy that makes its target active — the new active slot's panel opens and the old
 one's closes, reading its files again when it is reopened. Every other panel keeps its state. In the desktop dev build
-the Saves card (`frontend/src/desktop/gameview/SaveManagementCard.tsx`, with `DesktopSlotPanel.tsx` and
-`DesktopVersionHistory.tsx`) draws the same collapsible slot panels. Activate Slot and New Slot both switch through
-`executeSlotSwitch` in `frontend/src/utils/saveSlotFlow.ts`, which answers the new save status or the sentence the tab
-shows. On either partial answer, `switch_incomplete` or `switch_stopped`, it also announces the ROM's save sync, so the
-surface reads back the slot and the files the backend saved, and shows the sentence as a toast rather than inline.
+the Saves card (`frontend/src/desktop/gameview/SaveManagementCard.tsx`, with
+`frontend/src/desktop/gameview/DesktopSlotPanel.tsx` and `frontend/src/desktop/gameview/DesktopVersionHistory.tsx`,
+backed by `frontend/src/utils/useSlotPanelState.ts` and `frontend/src/utils/useFileVersionHistory.ts`) draws the same
+collapsible slot panels, and both Activate Slot and New Slot switch through `executeSlotSwitch` in
+`frontend/src/utils/saveSlotFlow.ts` (see its docstring for partial-switch announcements and error handling).
 
 #### Inside `.romm-backup` — naming and retention
 
@@ -1034,24 +1034,26 @@ nothing — no path could be formed, or the emulator's answer could not be estab
 of whether the saves would sync; and `emulator_label`, the label of the entry the game starts with as the emulator menu
 shows it, `None` where the game has no entry. The game's emulator is resolved once per read: the label comes from that
 resolution, and so does the answer wherever a path can be asked about (`RomInfoService.save_answer_and_start_label`). It
-is what the SAVES tab says of a game's saves ([#2149](https://github.com/danielcopper/romm-tender/issues/2149)), and the
-setup's question while the panel holds RomM as unreachable. One edge asks RomM: the would-be path needs the platform's
-system, and for a platform whose ids are not kept RomM's platform list is read once (`PlatformSystems.platform_system`).
+is what the SAVES tab (and, in the desktop dev build, the Saves card) says of a game's saves
+([#2149](https://github.com/danielcopper/romm-tender/issues/2149)), and the setup's question while the panel holds RomM
+as unreachable. One edge asks RomM: the would-be path needs the platform's system, and for a platform whose ids are not
+kept RomM's platform list is read once (`PlatformSystems.platform_system`).
 
 ### Where the check happens
 
-- **Game detail page (SAVES tab):** the panel reads `get_save_sync_availability` when the page opens, bound to the ROM
-  it was read for and ordered by its own read sequence (`refreshSaveSyncAnswer`, `bigpicture/panelState.ts`), and again
-  after a version switch, an emulator change, save sync switched on, a download, an uninstall, and each time the SAVES
-  tab is opened; an answer already shown stays until the new one lands. While no answer is held the tab marks nothing
-  and shows the slots or the setup as for a game that syncs. A downloaded game it refuses gets a warning mark beside the
-  tab's title (`renderTabAddon`), and the tab shows the sentence the sync refuses with under the title "Save Sync", and
-  no slot buttons, whether or not its slot is confirmed (`SaveSyncRefusal`); its set-up mark and its slots on RomM stay
-  untouched. For `savefiles_in_content_dir` RetroArch's setting stands under the sentence. Any other game shows the
-  wizard when `slot_confirmed=false`, else the save list. A game not downloaded reads a line above them: whose saves
-  will sync once it is, that they will not and why, or — where `established` is false — that whether they will sync
-  could not be established. An active slot holding no save, read from this device and from RomM, reads "No save yet —
-  _label_'s saves for this game sync with RomM once it writes one." where the answer says the downloaded game syncs
+- **Game detail page (SAVES tab and desktop Saves card):** the panel reads `get_save_sync_availability` when the page
+  opens, bound to the ROM it was read for and ordered by its own read sequence (`refreshSaveSyncAnswer`,
+  `bigpicture/panelState.ts`, and `useSaveSurfaceAnswers` in `frontend/src/desktop/gameview/SaveManagementCard.tsx`),
+  and again after a version switch, an emulator change, save sync switched on, a download, an uninstall, and each time
+  the SAVES tab is opened; an answer already shown stays until the new one lands. While no answer is held the tab marks
+  nothing and shows the slots or the setup as for a game that syncs. A downloaded game it refuses gets a warning mark
+  beside the tab's title (`renderTabAddon`), and the tab shows the sentence the sync refuses with under the title "Save
+  Sync", and no slot buttons, whether or not its slot is confirmed (`SaveSyncRefusal`); its set-up mark and its slots on
+  RomM stay untouched. For `savefiles_in_content_dir` RetroArch's setting stands under the sentence. Any other game
+  shows the wizard when `slot_confirmed=false`, else the save list. A game not downloaded reads a line above them: whose
+  saves will sync once it is, that they will not and why, or — where `established` is false — that whether they will
+  sync could not be established. An active slot holding no save, read from this device and from RomM, reads "No save yet
+  — _label_'s saves for this game sync with RomM once it writes one." where the answer says the downloaded game syncs
   ("…this game's saves sync with RomM once its emulator writes one." without a label), and "No save yet." where it does
   not say so; where RomM could not be asked it reads "No save on this device.", and with no status read it reads no
   line. The wizard still takes its own setup info: a refusal there asked RomM nothing, so it does not feed the shared
@@ -1117,10 +1119,10 @@ no error); the whole-library sweep, which reads every installed ROM's answer whe
 passes such a ROM over inside its run and, where every ROM it read saves beside its content, refuses with the same skip,
 or otherwise counts the ROMs it held back in its message ([Manual sync all](#manual-sync-all)). The secondary write
 endpoints (rollback, slot switch, conflict resolve, the slot choice with or without a migration, copy to slot) refuse
-with the same reason. The game's SAVES tab says so like every other refusal, marked beside its title, and names
-RetroArch's setting under the sentence, only as the usual cause
-([#2149](https://github.com/danielcopper/romm-tender/issues/2149) D2); nothing above the play row says it.
-`get_save_status` carries the additive `savefiles_in_content_dir` flag, which only `saveSyncBadge`
+with the same reason. The game's SAVES tab (and, in the desktop dev build, the Saves card) says so like every other
+refusal — marked beside the SAVES tab title on Big Picture — and names RetroArch's setting under the sentence, only as
+the usual cause ([#2149](https://github.com/danielcopper/romm-tender/issues/2149) D2); nothing above the play row says
+it. `get_save_status` carries the additive `savefiles_in_content_dir` flag, which only `saveSyncBadge`
 (`frontend/src/utils/saveSyncBadge.ts`, desktop dev build) reads.
 
 **Why this is easy to confuse**: "Write Saves to **Content Directory**" controls the **destination** (next to the ROM vs
@@ -1167,10 +1169,10 @@ verdict over them:
 Two kinds of caller read different fields, because "nothing recorded" answers their questions in opposite ways. Play
 while RomM is unreachable ([Pre-launch sync](#pre-launch-sync), step 8) asks whether a later sync could overwrite a
 local change, and reads `drifted` alone: a save with no recorded sync has nothing to overwrite, and an unknown counts as
-no change, since a false warning there is worse than none. The version switch, the removed-game cleanup and the Saves
-tab's reminder ask whether a save exists anywhere but here, and read `stranding` alone; each words `unchecked` as Tender
-not having been able to check rather than as saves never uploaded. On the Saves tab a check call that rejects, or gets
-no answer within `LOCAL_CALL_LIMIT_MS`, counts as `unchecked` too.
+no change, since a false warning there is worse than none. The version switch, the removed-game cleanup and the game
+page's save-surface reminder ask whether a save exists anywhere but here, and read `stranding` alone; each words
+`unchecked` as Tender not having been able to check rather than as saves never uploaded. On the SAVES tab and desktop
+Saves card a check call that rejects, or gets no answer within `LOCAL_CALL_LIMIT_MS`, counts as `unchecked` too.
 
 The check follows a moved save directory first ([below](#following-a-moved-save-directory)), and so holds the ROM's
 `rom_lock` and waits for any other holder of it.
@@ -1201,10 +1203,10 @@ live reading the caller already took, before the caller looks at any local file:
   `count_platform_saves` and `get_save_status` (for an installed ROM) — so a delete after a sort flip takes the old
   folder's files too, and nothing is carried back in by the next path that follows;
 - by [the local-save check](#the-local-save-check), `check_local_drift` (for an installed ROM), so the version switch,
-  the removed-game cleanup and the Saves tab's reminder do not find the new directory empty while the saves still lie in
-  the old one;
-- by [the SAVES tab's read with save sync off](#this-devices-save-files-save-sync-off), `get_local_save_files` (for an
-  installed ROM whose saves a sync would carry), which the panel asks only while save sync is off — so there it follows
+  the removed-game cleanup and the save-surface reminder do not find the new directory empty while the saves still lie
+  in the old one;
+- by [the read with save sync off](#this-devices-save-files-save-sync-off), `get_local_save_files` (for an installed ROM
+  whose saves a sync would carry), which the save surfaces ask only while save sync is off — so there it follows
   nothing, by the rule below.
 
 The follow belongs to the sync, so it does nothing while save sync is off; a sorting change made meanwhile is followed
@@ -1289,8 +1291,8 @@ guard that exits when the home has not changed since the last call.
 
 ## Slot Deletion
 
-Users can delete save slots from the game detail SAVES tab. Deletion removes the slot from local state and bulk-deletes
-all server saves in the slot.
+Users can delete save slots from the game detail SAVES tab (and, in the desktop dev build, the Saves card). Deletion
+removes the slot from local state and bulk-deletes all server saves in the slot.
 
 ### How it works
 
@@ -1385,10 +1387,12 @@ any surface that shows a conflict:
   returns `conflict_blocked`.
 - `useCopyToSlot` (the Saves tab's "Copy to slot…", through `executeCopySaveToSlot`), through `showSyncConflictModal`
   for the first conflict — when a copy returns `conflict_blocked`.
-- In the desktop dev build, `SaveManagementCard` (`DesktopVersionHistory.tsx` and `SaveManagementCard.tsx`) reaches the
-  same conflict dialog through `desktopSlotConflictDialog` (`DesktopSaveConflictDialog`,
-  `frontend/src/desktop/gameview/dialogs/DesktopSaveConflictDialog.tsx`) for both flows, while `PlayButton`
-  (`desktopResolveConflicts`) and `launchPromptHost` use `DesktopSaveConflictDialog` for launch-gate conflicts.
+- In the desktop dev build, `SaveManagementCard` (`frontend/src/desktop/gameview/SaveManagementCard.tsx`) and
+  `DesktopVersionHistory` (`frontend/src/desktop/gameview/DesktopVersionHistory.tsx`, backed by
+  `frontend/src/utils/useFileVersionHistory.ts`) reach the same conflict dialog through `desktopSlotConflictDialog`
+  (`DesktopSaveConflictDialog`, `frontend/src/desktop/gameview/dialogs/DesktopSaveConflictDialog.tsx`) for both flows,
+  while `PlayButton` (`desktopResolveConflicts`) and `launchPromptHost` use `DesktopSaveConflictDialog` for launch-gate
+  conflicts.
 
 After post-exit sync, `sessionManager` only fires a toast — the conflict re-surfaces in the modal at the next
 pre-launch.
@@ -1474,7 +1478,7 @@ uploads, all under the lock. The lock is held as well by `SaveCopyService.copy_s
 ROM its save inventory names, taken in ascending id order), deleting a ROM's or a platform's local saves and counting a
 platform's (`SaveService._delete_saves_for_roms`, `SaveService.count_platform_saves`), the passes that record each
 installed ROM's save directory (`SyncEngine._record_each_installed_rom`), and the local-save check
-(`StatusService.check_local_drift`) and the SAVES tab's read with save sync off (`LocalSaveFiles.get_local_save_files`)
+(`StatusService.check_local_drift`) and the save-surface read with save sync off (`LocalSaveFiles.get_local_save_files`)
 — the count, the record passes, the check and that read hold it for the directory follow, not for a write of the save
 state; following a moved save directory (`SyncEngine.follow_save_directory`) runs inside the lock of whichever holder
 calls it. Different rom_ids have independent locks, so cross-game concurrency (e.g. Sync All Saves running concurrently
@@ -1514,8 +1518,9 @@ content is opaque bytes — so writing to anything else would leave the save inv
 
 The shared helper is `_local_save_target(server_save, rom_name)` in `backend/services/saves/_helpers.py` (wrapping
 `domain.save_path.compute_local_save_target`). It requires a non-None `rom_name`; there is no fallback to server-derived
-names. If a ROM is not installed (`RomInfoService.get_rom_save_info` returns `None`) the saves tab shows no entry for it
-and sync is a no-op for that ROM — by design, rather than guessing a path that may or may not match what RetroArch uses.
+names. If a ROM is not installed (`RomInfoService.get_rom_save_info` returns `None`) the save surface shows no entry for
+it and sync is a no-op for that ROM — by design, rather than guessing a path that may or may not match what RetroArch
+uses.
 
 This matches the convention used by the official RomM clients [Argosy](https://github.com/rommapp/argosy-launcher) and
 [Grout](https://github.com/rommapp/grout).
@@ -1529,8 +1534,8 @@ load the versions: …" rather than blaming the connection.
 
 ## Version Switch Flow (rollback)
 
-Users can switch the active save to a chosen older version via the Previous Versions dropdown in the SAVES tab. The flow
-is more involved than a simple download because it must:
+Users can switch the active save to a chosen older version via the Previous Versions dropdown in the SAVES tab (and, in
+the desktop dev build, the Saves card). The flow is more involved than a simple download because it must:
 
 1. Capture any local changes server-side first (otherwise the destructive overwrite would lose them).
 2. Make the chosen save authoritative cross-device — other devices that already have the latest save tracked must end up
@@ -2275,7 +2280,8 @@ query failed or was never sent, with `server_query_failed` beside it.
 
 ### This device's save files (save sync off)
 
-While save sync is off the SAVES tab lists what this device holds of a game's saves instead of its slots
+While save sync is off the game's save surface — Big Picture's SAVES tab and, in the desktop dev build, the Saves card —
+lists what this device holds of a game's saves instead of its slots
 ([#2527](https://github.com/danielcopper/romm-tender/issues/2527) D1). `get_local_save_files` (`LocalSaveFiles`,
 `services/saves/local_saves.py`) answers it without RomM: no device registration, no save listing, no save state
 written. It takes one live reading of the save answer (`RomInfoService.save_answer`, for a game that is not installed
@@ -2285,10 +2291,9 @@ it. A game whose saves no sync would carry answers that refusal and no files; a 
 files; any other game calls the directory follow first
 ([Following a Moved Save Directory](#following-a-moved-save-directory)), which does nothing while save sync is off, and
 lists the files a sync would look for (`find_save_files`) in the directory the answer names, with the folder each lies
-in, its size and its modification time — so saves a sorting change left in the recorded directory are not listed. The
-panel asks it each time the SAVES tab opens with save sync off, when save sync is switched off under the open tab, for
-the version a switch shows while the tab is open, and after a download or an uninstall of the game under the open tab;
-it never asks it while save sync is on.
+in, its size and its modification time — so saves a sorting change left in the recorded directory are not listed. Both
+surfaces ask it at open with save sync off, when save sync is switched off under the open view, for a version switch
+while open, and after a download or an uninstall of the game; they never ask it while save sync is on.
 
 ### Offline queue drain
 
@@ -2617,7 +2622,7 @@ for the physical column names and constraints.
 | `saves.<id>.active_slot`                            | string                  | Which RomM slot this game syncs to (e.g. `"default"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `saves.<id>.slot_confirmed`                         | boolean                 | Whether user has explicitly chosen their slot (see "Slot Setup Wizard")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `saves.<id>.last_synced_core`                       | string / null           | RetroArch core used at last sync (for core change detection, e.g. `"mgba_libretro"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `saves.<id>.own_upload_ids`                         | array of integer        | Save ids this device originally POSTed. Drives the `uploaded_by_us` indicator on the SAVES tab.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `saves.<id>.own_upload_ids`                         | array of integer        | Save ids this device originally POSTed. Drives the `uploaded_by_us` indicator on the SAVES tab and desktop Saves card.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `saves.<id>.slots`                                  | object                  | Merged slot listing (read-model cache): per slot, its `source` / `count` / latest `updated_at`. A `get_save_slots` that could not reach the server hands this back in its own `last_known` field (`slots` / `active_slot`), but only once `slot_confirmed` is set — the QAM and desktop `SaveManagementCard` render it as read-only state at the last contact. It carries no timestamp: nothing records when the listing was last refreshed, and `last_sync_check_at` moves independently of it (#1755).                                                 |
 | `saves.<id>.last_sync_check_at`                     | ISO-8601 string / null  | Timestamp of the most recent `MatrixExecutor.sync_rom_saves` run for this rom (regardless of whether files transferred).                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `saves.<id>.files`                                  | object                  | Per-file sync state, keyed by filename (e.g. `"game.srm"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -2642,7 +2647,7 @@ The save-sync feature toggles (`save_sync_enabled`, `sync_before_launch`, `sync_
 `save_sync_enabled` is the master feature toggle. When it is off, `pre_launch_sync` returns before it syncs anything, so
 the launch gate has no conflict to map. `get_save_status` returns an empty `conflicts` array as well, so no reader of
 that array — the Play button, the game page (`panelEvents.ts`, `gameDetailStore.ts`) and the `save_status_updated` push
-that `index.tsx` forwards — shows a conflict the user cannot resolve: while sync is disabled the SAVES tab lists this
+that `index.tsx` forwards — shows a conflict the user cannot resolve: while sync is disabled the save surface lists this
 device's save files and resolves no conflict. A stale server-side conflict (e.g. another device moved the save)
 therefore can't render a game unplayable. `sync_before_launch` / `sync_after_exit` gate the automatic pre-launch /
 post-exit syncs; `default_slot` is the slot new games adopt (`"autosave"`, matching the official RomM clients Argosy and

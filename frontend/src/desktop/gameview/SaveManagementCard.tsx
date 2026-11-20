@@ -30,7 +30,6 @@ import {
 } from "react";
 import {
   confirmSlotChoice,
-  debugLog,
   getLocalSaveFiles,
   getSaveSlots,
   getSaveSyncAvailability,
@@ -59,7 +58,14 @@ import { formatBytes, formatTimestamp } from "../../utils/formatters";
 import { refreshSaveStatus, type GameDetailState } from "../../utils/gameDetailStore";
 import { executeManualSaveSync } from "../../utils/manualSaveSync";
 import { usePruneLeaseOwner } from "../../utils/pruneLease";
-import { MUTED_COLOR, displaySlot, filterSaveSlotsForDisplay, sortSaveSlots } from "../../utils/saveHelpers";
+import {
+  MUTED_COLOR,
+  changesSaveAnswers,
+  displaySlot,
+  filterSaveSlotsForDisplay,
+  isSaveSyncForRom,
+  sortSaveSlots,
+} from "../../utils/saveHelpers";
 import {
   executeCopySaveToSlot,
   executeDeleteLocalSaves,
@@ -92,12 +98,22 @@ import {
   desktopSlotConflictDialog,
 } from "./dialogs/desktopDialogs";
 import { useDialogHost } from "./dialogs/useDialogHost";
-import { BUTTON_STYLE, CARD_STYLE } from "./styles";
+import {
+  ACCENT_BLUE,
+  ACTIVE_PILL_BADGE_STYLE,
+  ATTENTION_AMBER,
+  BODY_TEXT_COLOR,
+  CARD_STYLE,
+  CONFLICT_RED,
+  MUTED_PILL_BADGE_STYLE,
+  STRANDED_ORANGE,
+  actionButtonStyle,
+  confirmActionButtonStyle,
+} from "./styles";
 
 interface SaveManagementCardProps {
   appId: number;
   detail: GameDetailState;
-  ask?: AskDialog | undefined;
 }
 
 type SlotState = LoadSlotsFields;
@@ -110,43 +126,12 @@ const INITIAL_SLOT_STATE: SlotState = {
   slotsLoading: false,
 };
 
-const HEADER_BUTTON_STYLE: CSSProperties = {
-  ...BUTTON_STYLE,
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "6px",
-};
-
 const REFUSAL_BOX_STYLE: CSSProperties = {
   padding: "10px 12px",
   borderRadius: "4px",
   backgroundColor: "rgba(212, 167, 44, 0.1)",
   border: "1px solid rgba(212, 167, 44, 0.35)",
 };
-
-const PILL_BADGE_BASE: CSSProperties = {
-  fontSize: "10px",
-  padding: "1px 6px",
-  borderRadius: "2px",
-  letterSpacing: "0.04em",
-  textTransform: "uppercase",
-};
-
-const MUTED_PILL_BADGE_STYLE: CSSProperties = {
-  ...PILL_BADGE_BASE,
-  fontWeight: 600,
-  backgroundColor: "rgba(255, 255, 255, 0.08)",
-  color: MUTED_COLOR,
-};
-
-function headerButtonStyle(disabled: boolean, danger = false): CSSProperties {
-  return {
-    ...HEADER_BUTTON_STYLE,
-    ...(danger ? { borderColor: "rgba(217, 65, 38, 0.4)", color: "#ff6b6b" } : {}),
-    opacity: disabled ? 0.5 : 1,
-    cursor: disabled ? "not-allowed" : "pointer",
-  };
-}
 
 function cardSubtitle(saveSyncEnabled: boolean, syncRefused: boolean, slotCount: number): string {
   if (!saveSyncEnabled) return "save sync off";
@@ -212,6 +197,9 @@ function useSaveSurfaceAnswers(
   const [rawLocalSavesAnswer, setRawLocalSavesAnswer] = useState<LocalSaveFiles | null>(null);
   const [rawSaveSyncAnswer, setRawSaveSyncAnswer] = useState<SaveSyncAvailability | null>(null);
 
+  if (!saveSyncEnabled && rawSaveSyncAnswer !== null) setRawSaveSyncAnswer(null);
+  if (saveSyncEnabled && rawLocalSavesAnswer !== null) setRawLocalSavesAnswer(null);
+
   useEffect(() => {
     let cancelled = false;
     let latestSeq = 0;
@@ -232,11 +220,7 @@ function useSaveSurfaceAnswers(
     };
     detach(read());
     const onDataChanged = ({ detail: ev }: WindowEventMap["romm_data_changed"]) => {
-      if (
-        (ev.type === "save_sync" && (ev.rom_id === undefined || ev.rom_id === romId)) ||
-        ev.type === "core_changed" ||
-        ev.type === "emulator_sources"
-      ) {
+      if (changesSaveAnswers(ev, romId)) {
         detach(read());
       }
     };
@@ -255,6 +239,8 @@ function useSaveSurfaceAnswers(
 
 function useStrandedCheck(appId: number, romId: number, active: boolean): StrandedVersion | null {
   const [rawStrandedVersion, setRawStrandedVersion] = useState<StrandedVersion | null>(null);
+
+  if (!active && rawStrandedVersion !== null) setRawStrandedVersion(null);
 
   useEffect(() => {
     if (!active) return;
@@ -297,7 +283,9 @@ async function loadDesktopSlots(
     if (isCancelled()) return;
     run.settled = true;
     reportSlotResultReachability(result);
-    applyLoadSlotsResult<SlotState>(result, setSlotState, slotsLoadedRef, (msg) => detach(debugLog(msg)));
+    applyLoadSlotsResult<SlotState>(result, setSlotState, slotsLoadedRef, (msg) =>
+      logWarn(`DesktopSaveManagementCard: ${msg}`),
+    );
   } catch (e) {
     logWarn(`DesktopSaveManagementCard: failed to load save slots: ${e}`);
     if (!isCancelled()) {
@@ -322,8 +310,11 @@ async function loadOfflineSnapshot(
     if (res.success) {
       reportServerReachable(true);
       slotsLoadedRef.current = true;
-      applyLoadSlotsResult<SlotState>(res, setSlotState, slotsLoadedRef, (m) => detach(debugLog(m)));
+      applyLoadSlotsResult<SlotState>(res, setSlotState, slotsLoadedRef, (m) =>
+        logWarn(`DesktopSaveManagementCard: ${m}`),
+      );
     } else {
+      logWarn(`DesktopSaveManagementCard: offline slot snapshot for romId=${romId} failed: ${res.message}`);
       applyRefreshSlotResult<SlotState>(res, setSlotState);
     }
   } catch (e) {
@@ -339,8 +330,8 @@ const RefusalBox: FC<{
   const hint = refusalHint(reason);
   return (
     <div data-testid={testId} style={REFUSAL_BOX_STYLE}>
-      <div style={{ fontSize: "12px", color: "#d4a72c" }}>{message ?? ""}</div>
-      {hint && <div style={{ fontSize: "12px", color: "#dfe3e6", marginTop: "6px" }}>{hint}</div>}
+      <div style={{ fontSize: "12px", color: ATTENTION_AMBER }}>{message ?? ""}</div>
+      {hint ? <div style={{ fontSize: "12px", color: BODY_TEXT_COLOR, marginTop: "6px" }}>{hint}</div> : null}
     </div>
   );
 };
@@ -435,19 +426,10 @@ const LastKnownSection: FC<{ lastKnown: LastKnownSlots }> = ({ lastKnown }) => {
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "14px", fontWeight: 600, color: "#dfe3e6" }}>{displaySlot(slot.slot)}</span>
-                  {isActive && (
-                    <span
-                      style={{
-                        ...PILL_BADGE_BASE,
-                        fontWeight: 700,
-                        backgroundColor: "#5ba32b",
-                        color: "#ffffff",
-                      }}
-                    >
-                      ACTIVE
-                    </span>
-                  )}
+                  <span style={{ fontSize: "14px", fontWeight: 600, color: BODY_TEXT_COLOR }}>
+                    {displaySlot(slot.slot)}
+                  </span>
+                  {isActive ? <span style={ACTIVE_PILL_BADGE_STYLE}>ACTIVE</span> : null}
                   <span style={MUTED_PILL_BADGE_STYLE}>{slot.source === "local" ? "LOCAL" : "SERVER"}</span>
                   <span style={{ ...MUTED_PILL_BADGE_STYLE, backgroundColor: "rgba(255, 255, 255, 0.06)" }}>
                     LAST KNOWN
@@ -457,11 +439,11 @@ const LastKnownSection: FC<{ lastKnown: LastKnownSlots }> = ({ lastKnown }) => {
                   {`${slot.count} save${slot.count === 1 ? "" : "s"}`}
                 </span>
               </div>
-              {slot.latest_updated_at && (
+              {slot.latest_updated_at ? (
                 <div style={{ fontSize: "11px", color: MUTED_COLOR, marginTop: "4px" }}>
                   {`Newest save: ${formatTimestamp(slot.latest_updated_at)}`}
                 </div>
-              )}
+              ) : null}
             </div>
           );
         })}
@@ -489,9 +471,9 @@ const UnslottedFilesSection: FC<{
   const line = emptySlotLine(saveStatus ?? null, noSaveText);
   return (
     <div data-testid="desktop-unslotted-files">
-      {line !== null && (
+      {line !== null ? (
         <div style={{ fontSize: "13px", color: MUTED_COLOR, fontStyle: "italic", marginBottom: "12px" }}>{line}</div>
-      )}
+      ) : null}
     </div>
   );
 };
@@ -549,33 +531,33 @@ const CardHeader: FC<{
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-        {!hidesHeaderSlotControls && (
-          <button type="button" style={headerButtonStyle(syncDisabled)} disabled={syncDisabled} onClick={onSyncNow}>
-            {isSyncing && <SvgThrobber style={{ width: "12px", height: "12px" }} />}
+        {!hidesHeaderSlotControls ? (
+          <button type="button" style={actionButtonStyle(syncDisabled)} disabled={syncDisabled} onClick={onSyncNow}>
+            {isSyncing ? <SvgThrobber style={{ width: "12px", height: "12px" }} /> : null}
             <span>{isSyncing ? "Syncing…" : "Sync now"}</span>
           </button>
-        )}
-        {showDeleteLocalSaves && (
+        ) : null}
+        {showDeleteLocalSaves ? (
           <button
             type="button"
-            style={headerButtonStyle(deleteDisabled, true)}
+            style={actionButtonStyle(deleteDisabled, true)}
             disabled={deleteDisabled}
             onClick={onDeleteLocalSaves}
           >
-            {deletingLocalSaves && <SvgThrobber style={{ width: "12px", height: "12px" }} />}
+            {deletingLocalSaves ? <SvgThrobber style={{ width: "12px", height: "12px" }} /> : null}
             <span>{deletingLocalSaves ? "Deleting…" : "Delete Local Saves"}</span>
           </button>
-        )}
-        {!hidesHeaderSlotControls && (
+        ) : null}
+        {!hidesHeaderSlotControls ? (
           <button
             type="button"
-            style={headerButtonStyle(newSlotDisabled)}
+            style={actionButtonStyle(newSlotDisabled)}
             disabled={newSlotDisabled}
             onClick={onOpenNewSlot}
           >
             + New Slot
           </button>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -632,7 +614,7 @@ const SaveSyncOnSection: FC<{
 
   return (
     <>
-      {isOffline && (
+      {isOffline ? (
         <div
           style={{
             padding: "8px 12px",
@@ -641,14 +623,14 @@ const SaveSyncOnSection: FC<{
             border: "1px solid rgba(217, 65, 38, 0.4)",
             marginBottom: "12px",
             fontSize: "12px",
-            color: "#d94126",
+            color: CONFLICT_RED,
           }}
         >
           RomM is offline — slot switching is disabled until the server is reachable. This prevents save sync conflicts.
         </div>
-      )}
+      ) : null}
 
-      {strandedVersion && (
+      {strandedVersion ? (
         <div
           style={{
             padding: "8px 12px",
@@ -657,14 +639,14 @@ const SaveSyncOnSection: FC<{
             border: "1px solid rgba(255, 136, 0, 0.3)",
             marginBottom: "12px",
             fontSize: "12px",
-            color: "#ff8800",
+            color: STRANDED_ORANGE,
           }}
         >
           {strandedVersionNotice(strandedVersion)}
         </div>
-      )}
+      ) : null}
 
-      {slotConfirmed === false && activeSlot !== null && hasSaves && (
+      {slotConfirmed === false && activeSlot !== null && hasSaves ? (
         <div
           data-testid="unconfirmed-slot-banner"
           style={{
@@ -674,7 +656,7 @@ const SaveSyncOnSection: FC<{
             border: "1px solid rgba(26, 159, 255, 0.4)",
             marginBottom: "12px",
             fontSize: "12px",
-            color: "#1a9fff",
+            color: ACCENT_BLUE,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -687,34 +669,26 @@ const SaveSyncOnSection: FC<{
           </div>
           <button
             type="button"
-            style={{
-              ...BUTTON_STYLE,
-              backgroundColor: "rgba(26, 159, 255, 0.2)",
-              borderColor: "rgba(26, 159, 255, 0.5)",
-              color: "#ffffff",
-              whiteSpace: "nowrap",
-              opacity: confirmDisabled ? 0.5 : 1,
-              cursor: confirmDisabled ? "not-allowed" : "pointer",
-            }}
+            style={confirmActionButtonStyle(confirmDisabled, "#ffffff")}
             disabled={confirmDisabled}
             onClick={() => onConfirmSlot(activeSlot)}
           >
             {confirmingSlot ? "Confirming..." : `Confirm '${displaySlot(activeSlot)}'`}
           </button>
         </div>
-      )}
+      ) : null}
 
-      {notDownloaded && (
+      {notDownloaded ? (
         <div data-testid="desktop-saves-not-downloaded" style={{ marginBottom: "12px" }}>
           <div style={{ fontSize: "12px", color: MUTED_COLOR }}>{notDownloaded.line}</div>
-          {notDownloaded.refusal !== null && (
-            <div style={{ fontSize: "12px", color: "#d4a72c", marginTop: "4px" }}>{notDownloaded.refusal}</div>
-          )}
-          {notDownloadedHint !== null && (
+          {notDownloaded.refusal !== null ? (
+            <div style={{ fontSize: "12px", color: ATTENTION_AMBER, marginTop: "4px" }}>{notDownloaded.refusal}</div>
+          ) : null}
+          {notDownloadedHint !== null ? (
             <div style={{ fontSize: "12px", color: MUTED_COLOR, marginTop: "4px" }}>{notDownloadedHint}</div>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
 
       {showConnecting ? (
         <div
@@ -733,11 +707,13 @@ const SaveSyncOnSection: FC<{
         </div>
       ) : (
         <>
-          {showUnslotted && <UnslottedFilesSection saveStatus={saveStatus} noSaveText={noSaveText} />}
+          {showUnslotted ? <UnslottedFilesSection saveStatus={saveStatus} noSaveText={noSaveText} /> : null}
 
-          {!activeSlotKnown && slotState.lastKnownSlots && <LastKnownSection lastKnown={slotState.lastKnownSlots} />}
+          {!activeSlotKnown && slotState.lastKnownSlots ? (
+            <LastKnownSection lastKnown={slotState.lastKnownSlots} />
+          ) : null}
 
-          {displaySlots.length > 0 && (
+          {displaySlots.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {displaySlots.map((slot) => {
                 const isSlotActive = activeSlot !== null && activeSlotKnown && slot.slot === activeSlot;
@@ -764,12 +740,22 @@ const SaveSyncOnSection: FC<{
                 );
               })}
             </div>
-          )}
+          ) : null}
         </>
       )}
     </>
   );
 };
+
+function hasSlotStateData(s: SlotState): boolean {
+  return (
+    s.activeSlot !== null ||
+    s.activeSlotKnown ||
+    s.availableSlots.length > 0 ||
+    s.lastKnownSlots !== null ||
+    s.slotsLoading
+  );
+}
 
 function useDesktopSlotState(
   appId: number,
@@ -781,36 +767,48 @@ function useDesktopSlotState(
 ) {
   const [slotState, setSlotState] = useState<SlotState>(INITIAL_SLOT_STATE);
   const slotsLoadedRef = useRef(false);
+  const slotLoadSeqRef = useRef(0);
   const [rawSlotConfirmed, setRawSlotConfirmed] = useState<boolean | null>(null);
+
+  if (!saveSyncEnabled || syncRefused) {
+    if (hasSlotStateData(slotState)) setSlotState(INITIAL_SLOT_STATE);
+    if (rawSlotConfirmed !== null) setRawSlotConfirmed(null);
+  }
 
   const refreshSlots = useCallback(async () => {
     if (!saveSyncEnabled) return;
+    const seq = ++slotLoadSeqRef.current;
+    const isLatest = () => mountedRef.current && slotLoadSeqRef.current === seq;
     try {
       const slotResult = await getSaveSlots(romId);
-      if (!mountedRef.current) return;
+      if (!isLatest()) return;
       reportSlotResultReachability(slotResult);
+      if (!slotResult.success) {
+        logWarn(`DesktopSaveManagementCard: failed to refresh save slots for romId=${romId}: ${slotResult.message}`);
+      }
       applyRefreshSlotResult<SlotState>(slotResult, setSlotState);
     } catch (e) {
       logWarn(`DesktopSaveManagementCard: failed to refresh save slots: ${e}`);
     }
-    await readTrackingConfigured(romId, () => mountedRef.current, setRawSlotConfirmed);
+    await readTrackingConfigured(romId, isLatest, setRawSlotConfirmed);
   }, [romId, saveSyncEnabled, mountedRef]);
 
-  // Initial slot load + known-offline fast path + reconnect reload.
+  // Initial slot load + known-offline snapshot path + reconnect reload.
   useEffect(() => {
     if (!saveSyncEnabled || syncRefused) {
+      slotLoadSeqRef.current += 1;
       slotsLoadedRef.current = false;
       return;
     }
     if (slotsLoadedRef.current) return;
 
     let cancelled = false;
-    const isCancelled = () => cancelled;
-    const isCurrent = () => !cancelled;
+    const seq = ++slotLoadSeqRef.current;
+    const isCancelled = () => cancelled || slotLoadSeqRef.current !== seq;
+    const isCurrent = () => !cancelled && slotLoadSeqRef.current === seq;
 
     if (isOffline) {
-      // Known-offline fast path: read cached `last_known` snapshot without the retry spinner,
-      // keeping `slotsLoadedRef.current = false` so reconnect reloads live slots automatically.
+      // Leave `slotsLoadedRef.current` false offline so reconnect triggers a live load.
       detach(readTrackingConfigured(romId, isCurrent, setRawSlotConfirmed));
       detach(loadOfflineSnapshot(romId, isCancelled, slotsLoadedRef, setSlotState));
       return () => {
@@ -836,9 +834,8 @@ function useDesktopSlotState(
   useEffect(() => {
     if (!saveSyncEnabled || syncRefused) return;
     const onDataChanged = ({ detail: ev }: WindowEventMap["romm_data_changed"]) => {
-      if (ev.type !== "save_sync") return;
-      if (ev.rom_id !== undefined && ev.rom_id !== romId) return;
-      detach(Promise.all([refreshSaveStatus(appId), refreshSlots()]));
+      if (!isSaveSyncForRom(ev, romId)) return;
+      detach(Promise.all([refreshSaveStatus(appId).catch(() => undefined), refreshSlots()]));
     };
     globalThis.addEventListener("romm_data_changed", onDataChanged);
     return () => globalThis.removeEventListener("romm_data_changed", onDataChanged);
@@ -851,10 +848,8 @@ const SaveManagementCardContent: FC<{
   appId: number;
   romId: number;
   detail: GameDetailState;
-  ask?: AskDialog | undefined;
-}> = ({ appId, romId, detail, ask }) => {
+}> = ({ appId, romId, detail }) => {
   const dialogHost = useDialogHost();
-  const effectiveAsk = ask ?? dialogHost.ask;
   const cardRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
 
@@ -893,7 +888,7 @@ const SaveManagementCardContent: FC<{
   useTabSwitchScroll(cardRef);
 
   const refreshStatusAndSlots = async () => {
-    await Promise.all([refreshSaveStatus(appId), refreshSlots()]);
+    await Promise.all([refreshSaveStatus(appId).catch(() => undefined), refreshSlots()]);
   };
 
   const autoConfirmIfNeeded = async (slotName: string): Promise<boolean> => {
@@ -904,6 +899,9 @@ const SaveManagementCardContent: FC<{
         if (mountedRef.current) setRawSlotConfirmed(true);
         return true;
       }
+      logWarn(
+        `DesktopSaveManagementCard: auto-confirm confirmSlotChoice for romId=${romId} slot='${slotName}' refused (${confirmResult.reason}): ${confirmResult.message}`,
+      );
     } catch (e) {
       logWarn(`DesktopSaveManagementCard: auto-confirm for '${slotName}' failed: ${e}`);
     }
@@ -937,7 +935,7 @@ const SaveManagementCardContent: FC<{
   const handleDeleteLocalSaves = async () => {
     const isMounted = () => mountedRef.current;
     if (deletingLocalSaves || isSyncing) return;
-    const confirmed = await desktopDeleteLocalSavesDialog(effectiveAsk)();
+    const confirmed = await desktopDeleteLocalSavesDialog(dialogHost.ask)();
     if (!confirmed || !isMounted()) return;
     setDeletingLocalSaves(true);
     try {
@@ -950,27 +948,34 @@ const SaveManagementCardContent: FC<{
   const handleConfirmSlot = async (slotName: string) => {
     if (!slotName || confirmingSlot) return;
     setConfirmingSlot(true);
+    let confirmed = false;
     try {
       const result = await confirmSlotChoice(romId, slotName, false, null, false);
       if (result.success) {
         if (mountedRef.current) setRawSlotConfirmed(true);
         showToast(`Confirmed save slot '${slotName}'`);
         announceSaveSync(romId);
-        await refreshStatusAndSlots();
+        confirmed = true;
       } else {
+        logWarn(
+          `DesktopSaveManagementCard: confirmSlotChoice for romId=${romId} slot='${slotName}' refused (${result.reason}): ${result.message}`,
+        );
         showToast(result.message || "Failed to confirm save slot");
       }
     } catch (e) {
       logWarn(`DesktopSaveManagementCard: failed to confirm slot: ${e}`);
       showToast("An error occurred while confirming the slot");
     } finally {
+      if (confirmed) {
+        await refreshStatusAndSlots();
+      }
       if (mountedRef.current) setConfirmingSlot(false);
     }
   };
 
   const handleOpenNewSlot = () => {
     detach(
-      effectiveAsk<boolean>(false, (resolve) => (
+      dialogHost.ask<boolean>(false, (resolve) => (
         <DesktopNewSlotDialog
           onDismiss={() => resolve(false)}
           onCreate={async (name) => {
@@ -1015,9 +1020,9 @@ const SaveManagementCardContent: FC<{
   const handleCopySave = (saveId: number, sourceSlot: string) => {
     detach(
       (async () => {
-        const target = await desktopCopySlotDialog(effectiveAsk)(sourceSlot, slotState.availableSlots);
+        const target = await desktopCopySlotDialog(dialogHost.ask)(sourceSlot, slotState.availableSlots);
         if (!target || !mountedRef.current) return;
-        await executeCopySaveToSlot(romId, saveId, target, desktopSlotConflictDialog(effectiveAsk));
+        await executeCopySaveToSlot(romId, saveId, target, desktopSlotConflictDialog(dialogHost.ask));
       })(),
     );
   };
@@ -1049,15 +1054,15 @@ const SaveManagementCardContent: FC<{
         onOpenNewSlot={handleOpenNewSlot}
       />
 
-      {!detail.saveSyncEnabled && (
+      {!detail.saveSyncEnabled ? (
         <SyncOffSection syncOffRefused={syncOffRefused} localSavesAnswer={localSavesAnswer} />
-      )}
+      ) : null}
 
-      {detail.saveSyncEnabled && syncRefused && saveSyncAnswer && (
+      {detail.saveSyncEnabled && syncRefused && saveSyncAnswer ? (
         <RefusalBox testId="desktop-saves-refusal" message={saveSyncAnswer.message} reason={saveSyncAnswer.reason} />
-      )}
+      ) : null}
 
-      {detail.saveSyncEnabled && !syncRefused && (
+      {detail.saveSyncEnabled && !syncRefused ? (
         <SaveSyncOnSection
           romId={romId}
           isOffline={isOffline}
@@ -1075,25 +1080,25 @@ const SaveManagementCardContent: FC<{
           saveStatus={saveStatus}
           noSaveText={noSaveText}
           saveSyncEnabled={detail.saveSyncEnabled}
-          ask={effectiveAsk}
+          ask={dialogHost.ask}
           onConfirmSlot={(slotName) => detach(handleConfirmSlot(slotName))}
           onSlotActivated={handleSlotActivated}
           onSlotListChanged={handleSlotListChanged}
           onCopySave={handleCopySave}
         />
-      )}
+      ) : null}
 
-      {ask ? null : dialogHost.element}
+      {dialogHost.element}
     </div>
   );
 };
 
-export const SaveManagementCard: FC<SaveManagementCardProps> = ({ appId, detail, ask }) => {
+export const SaveManagementCard: FC<SaveManagementCardProps> = ({ appId, detail }) => {
   const leaseOwner = `desktop-saves-card:${appId}`;
   usePruneLeaseOwner(leaseOwner);
   const isStranded = useStrandedAnswer() !== null;
 
   if (detail.romId === null || isStranded) return null;
 
-  return <SaveManagementCardContent key={detail.romId} appId={appId} romId={detail.romId} detail={detail} ask={ask} />;
+  return <SaveManagementCardContent key={detail.romId} appId={appId} romId={detail.romId} detail={detail} />;
 };

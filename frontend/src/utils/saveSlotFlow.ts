@@ -1,7 +1,9 @@
 /**
- * The save-slot surfaces' round trips: the stranded-version check, switching
- * into a slot, and deleting one. Each surface keeps its own state, timers and
- * dialogs; the sentences are `saveSlotWording.ts`'s.
+ * Pure async operations for save-slot and version management: probing inactive
+ * versions for stranded local saves, switching or deleting slots, listing or
+ * restoring file versions, copying a version into a slot, and deleting local saves.
+ * Each surface keeps its own state, timers and dialogs; the sentences are
+ * `saveSlotWording.ts`'s.
  */
 
 import {
@@ -87,7 +89,7 @@ export type SlotSwitchPurpose = "activate" | "create";
 
 /**
  * `reason` is the failure answer's, and `null` when the call threw. `partial`
- * marks a switch that stopped partway after changing what the SAVES tab shows.
+ * marks a switch that stopped partway after changing what the save surface shows.
  */
 type SlotSwitchOutcome =
   { ok: true; saveStatus: SaveStatus } | { ok: false; reason: WireReason | null; message: string; partial?: true };
@@ -95,7 +97,7 @@ type SlotSwitchOutcome =
 /**
  * Switch `romId` into `slot`, telling the connection store what the answer
  * showed about RomM's reachability. A switch that stopped partway also
- * announces the ROM's save sync, so the SAVES tab reads back the slot and the
+ * announces the ROM's save sync, so the save surface reads back the slot and the
  * files the backend saved. Never throws: a throw is logged and comes back as
  * `{ ok: false, reason: null }`.
  */
@@ -184,21 +186,27 @@ export async function loadFileVersions(
   try {
     const result = await savesListFileVersions(romId, slot, filename);
     if (result.status === "ok" || result.status === "multi_file_unsupported") {
-      // multi_file_unsupported carries an empty list — a multi-file slot's
-      // siblings are components, not prior versions. The panel is hidden for
-      // multi-file slots anyway; this is the defensive backstop.
+      // Multi-file games don't list per-file history; return an empty list.
       return { ok: true, versions: result.versions };
     }
     if (result.status === "not_found") {
-      detach(debugLog(`saveSlotFlow: server has no such entry for ${filename}: ${result.message}`));
+      logWarn(
+        `saveSlotFlow: server has no such entry for rom ${romId} slot '${slot}' file ${filename}: ${result.message}`,
+      );
     } else if (result.status === "device_not_registered") {
-      detach(debugLog(`saveSlotFlow: device not registered for ${filename}: ${result.message}`));
-    } else if (result.status !== "romm_refused") {
-      detach(debugLog(`saveSlotFlow: server unreachable for ${filename}: ${result.message}`));
+      logWarn(
+        `saveSlotFlow: device not registered for rom ${romId} slot '${slot}' file ${filename}: ${result.message}`,
+      );
+    } else if (result.status === "romm_refused") {
+      logWarn(
+        `saveSlotFlow: RomM refused version list for rom ${romId} slot '${slot}' file ${filename}: ${result.message}`,
+      );
+    } else {
+      logWarn(`saveSlotFlow: server unreachable for rom ${romId} slot '${slot}' file ${filename}: ${result.message}`);
     }
     return { ok: false, error: versionHistoryLoadError(result) };
   } catch (e) {
-    logWarn(`saveSlotFlow: failed to load versions for ${filename}: ${e}`);
+    logWarn(`saveSlotFlow: failed to load versions for rom ${romId} slot '${slot}' file ${filename}: ${e}`);
     return { ok: false, error: versionHistoryLoadError(null) };
   }
 }

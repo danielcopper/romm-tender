@@ -4,10 +4,10 @@
  * flows; the parent SavesTab handles slot creation and the offline banner.
  */
 
-import { useState, useRef, useEffect, FC, type ReactElement } from "react";
+import { FC, type ReactElement } from "react";
 import { ConfirmModal, DialogButton, showModal } from "@decky/ui";
-import { getSlotSaves, debugLog, logError } from "../../api/backend";
-import type { SaveStatus, SyncConflict, SaveSlotSummary, SlotSaveFile } from "../../types";
+import { logError } from "../../api/backend";
+import type { SaveStatus, SyncConflict, SaveSlotSummary } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { MUTED_COLOR, computeSyncSummary, displaySlot } from "../../utils/saveHelpers";
 import { NO_SAVE_ON_DEVICE } from "../../utils/saveSyncStatement";
@@ -17,13 +17,12 @@ import {
   multiFileSaveHeading,
   multiFileSaveNote,
 } from "../../utils/saveSlotWording";
-import { executeSlotDelete, executeSlotSwitch, loadSlotDeleteInfo } from "../../utils/saveSlotFlow";
+import { executeSlotDelete } from "../../utils/saveSlotFlow";
+import { useSlotPanelState } from "../../utils/useSlotPanelState";
 import { renderSaveFileRow } from "./SaveFileRow";
 import { InactiveSlotBody } from "./InactiveSlotBody";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { renderCopyToSlotButton, type CopyToSlotHandler } from "./CopyToSlotButton";
-import { detach } from "../../utils/detach";
-import { showToast } from "../../utils/toast";
 
 /**
  * Multi-file note (#908 interim guard) — replaces the Previous-Versions /
@@ -158,71 +157,28 @@ export const SlotPanel: FC<SlotPanelProps> = ({
   onSlotDeleted,
   onCopy,
 }) => {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-  const [slotFiles, setSlotFiles] = useState<SlotSaveFile[] | null>(null);
-  const [loadingSlot, setLoadingSlot] = useState(false);
-  const [switching, setSwitching] = useState(false);
-  const [switchError, setSwitchError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const switchErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (switchErrorTimerRef.current) clearTimeout(switchErrorTimerRef.current);
-    };
-  }, []);
-
   const slotName = slot.slot;
+  const {
+    expanded,
+    slotFiles,
+    loadingSlot,
+    switching,
+    switchError,
+    deleting,
+    handleToggle,
+    handleActivate,
+    handleDelete,
+  } = useSlotPanelState({
+    romId,
+    slotName,
+    isActive,
+    defaultExpanded,
+    logPrefix: "SavesTab",
+    onSlotActivated: (newStatus) => onSlotSwitched(slotName, newStatus),
+  });
 
-  const handleToggle = async () => {
-    const willExpand = !expanded;
-    setExpanded(willExpand);
-
-    // Lazy-load slot saves for inactive slots on first expand
-    if (willExpand && !isActive && slotFiles === null) {
-      setLoadingSlot(true);
-      try {
-        const result = await getSlotSaves(romId, slotName);
-        setSlotFiles(result.success ? result.saves : []);
-      } catch (e) {
-        detach(debugLog(`SavesTab: failed to load slot saves for ${slotName}: ${e}`));
-        setSlotFiles([]);
-      } finally {
-        setLoadingSlot(false);
-      }
-    }
-  };
-
-  const handleActivate = async () => {
-    setSwitching(true);
-    setSwitchError(null);
-    try {
-      const outcome = await executeSlotSwitch(romId, slotName, "activate");
-      if (outcome.ok) {
-        onSlotSwitched(slotName, outcome.saveStatus);
-        return;
-      }
-      if (outcome.partial) {
-        // A partial answer reloads the SAVES tab. On switch_incomplete this slot
-        // becomes active and its panel remounts, taking an inline error with it;
-        // on switch_stopped it is toasted all the same, as on the SAVES tab.
-        showToast(outcome.message);
-        return;
-      }
-      setSwitchError(outcome.message);
-      if (switchErrorTimerRef.current) clearTimeout(switchErrorTimerRef.current);
-      switchErrorTimerRef.current = setTimeout(() => setSwitchError(null), 5000);
-    } finally {
-      setSwitching(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      const info = await loadSlotDeleteInfo(romId, slotName);
-      if (!info) return;
-
+  const startDeleteFlow = () =>
+    handleDelete((info) => {
       showModal(
         <ConfirmModal
           strTitle="Delete Slot"
@@ -236,10 +192,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
           }}
         />,
       );
-    } finally {
-      setDeleting(false);
-    }
-  };
+    });
 
   const { syncSummaryText, syncSummaryColor } = computeSyncSummary(isActive, saveStatus, conflicts, noSaveLine);
 
@@ -293,9 +246,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
       }}
       noFocusRing={false}
       onFocus={scrollFocusedToCenter}
-      onClick={() => {
-        detach(handleToggle());
-      }}
+      onClick={handleToggle}
     >
       {/* Left: slot name + badges */}
       <div className="romm-slot-header-left">
@@ -354,7 +305,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
           handleActivate().catch((e) => logError(`SavesTab: slot '${slotName}' threw after its switch: ${e}`));
         }}
         handleDelete={() => {
-          handleDelete().catch((e) => logError(`SavesTab: slot '${slotName}' threw before its delete: ${e}`));
+          startDeleteFlow().catch((e) => logError(`SavesTab: slot '${slotName}' threw before its delete: ${e}`));
         }}
         // Copy source = this (inactive/legacy) slot; the picker excludes it as a target.
         copy={{ onCopy, sourceSlot: slotName, isOffline }}

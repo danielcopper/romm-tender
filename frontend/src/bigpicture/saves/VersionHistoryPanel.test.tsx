@@ -349,15 +349,27 @@ describe("VersionHistoryPanel", () => {
       );
     });
 
+    async function expandAndClickRestore(
+      mockResult: RollbackStatus | Error,
+      props: Partial<React.ComponentProps<typeof VersionHistoryPanel>> = {},
+    ) {
+      if (mockResult instanceof Error) {
+        vi.mocked(backend.savesRollbackToVersion).mockRejectedValue(mockResult);
+      } else {
+        vi.mocked(backend.savesRollbackToVersion).mockResolvedValue(mockResult);
+      }
+      const utils = await expand(props);
+      fireEvent.click(utils.getByText("Restore"));
+      await flushAsync();
+      await flushAsync();
+      return utils;
+    }
+
     it("status 'preflight_failed' toasts the first error detail", async () => {
-      vi.mocked(backend.savesRollbackToVersion).mockResolvedValue({
+      await expandAndClickRestore({
         status: "preflight_failed",
         errors: ["upload failed: timeout"],
       });
-      const { getByText } = await expand();
-      fireEvent.click(getByText("Restore"));
-      await flushAsync();
-      await flushAsync();
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
         expect.objectContaining({ body: "Sync failed before restore: upload failed: timeout" }),
       );
@@ -529,11 +541,7 @@ describe("VersionHistoryPanel", () => {
     it("says a restore that threw could not be confirmed, with the error's message as the subtext", async () => {
       const warnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
       try {
-        vi.mocked(backend.savesRollbackToVersion).mockRejectedValue(new Error("boom"));
-        const { getByText } = await expand();
-        fireEvent.click(getByText("Restore"));
-        await flushAsync();
-        await flushAsync();
+        const { getByText } = await expandAndClickRestore(new Error("boom"));
         expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
           expect.objectContaining({ body: "Couldn't confirm the restore.", subtext: "boom" }),
         );

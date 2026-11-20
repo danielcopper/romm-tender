@@ -64,6 +64,15 @@ export const BACKDROP_BUTTON_STYLE: CSSProperties = {
   cursor: "default",
 };
 
+export const ACCENT_BLUE = "#1a9fff";
+export const SYNCED_GREEN = "#5ba32b";
+export const ATTENTION_AMBER = "#d4a72c";
+export const CONFLICT_RED = "#d94126";
+export const DANGER_TEXT_RED = "#ff6b6b";
+export const STRANDED_ORANGE = "#ff8800";
+export const SUBTLE_LABEL_COLOR = "#6e7f91";
+export const BODY_TEXT_COLOR = "#dfe3e6";
+
 export const BUTTON_STYLE: CSSProperties = {
   padding: "5px 12px",
   fontSize: "12px",
@@ -76,6 +85,70 @@ export const BUTTON_STYLE: CSSProperties = {
   transition: "all 0.15s ease",
   outline: "none",
   userSelect: "none",
+};
+
+const ACTION_BUTTON_BASE_STYLE: CSSProperties = {
+  ...BUTTON_STYLE,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+};
+
+export function actionButtonStyle(disabled: boolean, danger = false): CSSProperties {
+  return {
+    ...ACTION_BUTTON_BASE_STYLE,
+    ...(danger ? { borderColor: "rgba(217, 65, 38, 0.4)", color: DANGER_TEXT_RED } : {}),
+    opacity: disabled ? 0.5 : 1,
+    cursor: disabled ? "not-allowed" : "pointer",
+  };
+}
+
+export function smallActionButtonStyle(disabled = false): CSSProperties {
+  return {
+    ...BUTTON_STYLE,
+    padding: "2px 8px",
+    fontSize: "11px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "4px",
+    whiteSpace: "nowrap",
+    opacity: disabled ? 0.5 : 1,
+    cursor: disabled ? "not-allowed" : "pointer",
+  };
+}
+
+export function confirmActionButtonStyle(disabled: boolean, textColor = ACCENT_BLUE): CSSProperties {
+  return {
+    ...BUTTON_STYLE,
+    backgroundColor: "rgba(26, 159, 255, 0.2)",
+    borderColor: "rgba(26, 159, 255, 0.5)",
+    color: textColor,
+    whiteSpace: "nowrap",
+    opacity: disabled ? 0.5 : 1,
+    cursor: disabled ? "not-allowed" : "pointer",
+  };
+}
+
+export const PILL_BADGE_BASE: CSSProperties = {
+  fontSize: "10px",
+  padding: "1px 6px",
+  borderRadius: "2px",
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+};
+
+export const ACTIVE_PILL_BADGE_STYLE: CSSProperties = {
+  ...PILL_BADGE_BASE,
+  fontWeight: 700,
+  backgroundColor: SYNCED_GREEN,
+  color: "#ffffff",
+};
+
+export const MUTED_PILL_BADGE_STYLE: CSSProperties = {
+  ...PILL_BADGE_BASE,
+  fontWeight: 600,
+  backgroundColor: "rgba(255, 255, 255, 0.08)",
+  color: "#8f98a0",
 };
 
 /** Height of the badges' row and of the wrapper Steam's Play button stands in (client 1792618285). */

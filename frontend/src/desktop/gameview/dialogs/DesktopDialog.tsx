@@ -56,6 +56,19 @@ export const DIALOG_VALUE_STYLE: CSSProperties = { fontSize: "13px", color: "#ff
 
 export const DIALOG_ACTIONS_STYLE: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 
+export const DIALOG_FOOTER_STYLE: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: "8px" };
+
+export function dialogInputStyle(overrides?: CSSProperties): CSSProperties {
+  return {
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    border: "1px solid rgba(255, 255, 255, 0.2)",
+    borderRadius: "3px",
+    color: "#ffffff",
+    outline: "none",
+    ...overrides,
+  };
+}
+
 const DIALOG_BUTTON_BASE: CSSProperties = {
   ...BUTTON_STYLE,
   padding: "8px 14px",

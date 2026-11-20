@@ -3,36 +3,32 @@
  * Shown from SaveManagementCard when the user clicks "+ New Slot".
  */
 
-import { useEffect, useRef, useState, type CSSProperties, type FC } from "react";
+import { useEffect, useRef, useState, type FC } from "react";
 import { CANCEL_LABEL } from "../../../utils/launchPromptWording";
-import { DIALOG_MUTED_STYLE, DIALOG_TEXT_STYLE, DesktopDialog, dialogButtonStyle } from "./DesktopDialog";
+import { DANGER_TEXT_RED } from "../styles";
+import {
+  DIALOG_FOOTER_STYLE,
+  DIALOG_MUTED_STYLE,
+  DIALOG_TEXT_STYLE,
+  DesktopDialog,
+  dialogButtonStyle,
+  dialogInputStyle,
+} from "./DesktopDialog";
 
 interface DesktopNewSlotDialogProps {
   onDismiss: () => void;
   onCreate: (slotName: string) => Promise<string | null>;
-  error?: string | null;
 }
 
-const INPUT_STYLE: CSSProperties = {
+const INPUT_STYLE = dialogInputStyle({
   width: "100%",
   boxSizing: "border-box",
   padding: "8px 10px",
   fontSize: "13px",
-  backgroundColor: "rgba(0, 0, 0, 0.4)",
-  border: "1px solid rgba(255, 255, 255, 0.2)",
-  borderRadius: "3px",
-  color: "#ffffff",
-  outline: "none",
   marginBottom: "12px",
-};
+});
 
-const FOOTER_STYLE: CSSProperties = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: "8px",
-};
-
-export const DesktopNewSlotDialog: FC<DesktopNewSlotDialogProps> = ({ onDismiss, onCreate, error }) => {
+export const DesktopNewSlotDialog: FC<DesktopNewSlotDialogProps> = ({ onDismiss, onCreate }) => {
   const [slotName, setSlotName] = useState("");
   const [internalError, setInternalError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -44,7 +40,6 @@ export const DesktopNewSlotDialog: FC<DesktopNewSlotDialogProps> = ({ onDismiss,
 
   const trimmed = slotName.trim();
   const submitDisabled = creating || trimmed === "";
-  const displayError = error ?? internalError;
 
   const handleSubmit = async () => {
     if (submitDisabled) return;
@@ -81,13 +76,13 @@ export const DesktopNewSlotDialog: FC<DesktopNewSlotDialogProps> = ({ onDismiss,
         style={INPUT_STYLE}
       />
 
-      {displayError && (
-        <div role="alert" style={{ ...DIALOG_MUTED_STYLE, color: "#ff6b6b", marginBottom: "12px" }}>
-          {displayError}
+      {internalError ? (
+        <div role="alert" style={{ ...DIALOG_MUTED_STYLE, color: DANGER_TEXT_RED, marginBottom: "12px" }}>
+          {internalError}
         </div>
-      )}
+      ) : null}
 
-      <div style={FOOTER_STYLE}>
+      <div style={DIALOG_FOOTER_STYLE}>
         <button type="button" style={dialogButtonStyle("quiet", creating)} disabled={creating} onClick={onDismiss}>
           {CANCEL_LABEL}
         </button>

@@ -302,6 +302,11 @@ export function formatSlotDeleteDescription(info: SlotDeleteInfo): string {
 export const LEGACY_SLOT_NOTE =
   "Saves uploaded to RomM without a slot. RomM keeps them as a manual archive and never syncs them between devices.";
 
+export const COPY_TO_SLOT_DESCRIPTION =
+  "Copies this save into the chosen slot, which becomes the active slot. The original save is kept.";
+
+export const COPY_TO_SLOT_EMPTY_TARGETS = "No other slots yet — create one below.";
+
 /**
  * The line that says what the last-known slot list is. It carries no date on
  * purpose: nothing on the device records when the slot listing was last
@@ -322,14 +327,13 @@ export function multiFileSaveNote(count: number): string {
 
 /**
  * Error line shown when loading a file's previous versions fails (`null` when
- * the call threw). Distinguishes answered server errors from unreachable RomM
- * (#1570).
+ * the call threw). Distinguishes answered server errors from unreachable RomM.
  */
 export function versionHistoryLoadError(
   result: Exclude<ListFileVersionsResult, { status: "ok" | "multi_file_unsupported" }> | null,
 ): string {
   if (result?.status === "not_found") {
-    // The server answered — blaming the connection here would be a lie (#1570).
+    // The server answered — blaming the connection here would be a lie.
     return "RomM couldn't find this game's save data.";
   }
   if (result?.status === "romm_refused") {

@@ -30,28 +30,32 @@ whose confirmation copy (`frontend/src/utils/biosConfirmWording.ts`) opens in th
 later reads (version switches, newly recorded `platformFolder`, core picks, action re-reads, and matching external
 `romm_data_changed` events), tags its held answer by `romId` and orders reads for the same ROM by sequence, and draws
 nothing before the ROM identity is known or on a stranded panel ([invariant register](invariants/panel.md)). The right
-column holds Saves (`frontend/src/desktop/gameview/SaveManagementCard.tsx`, with `DesktopSlotPanel.tsx` and
-`DesktopVersionHistory.tsx`), which draws what Big Picture's **SAVES** tab (`frontend/src/bigpicture/SavesTab.tsx`,
+column holds Saves (`frontend/src/desktop/gameview/SaveManagementCard.tsx`, with
+`frontend/src/desktop/gameview/DesktopSlotPanel.tsx` and `frontend/src/desktop/gameview/DesktopVersionHistory.tsx`,
+backed by the shared hooks `frontend/src/utils/useSlotPanelState.ts` and `frontend/src/utils/useFileVersionHistory.ts`),
+which draws what Big Picture's **SAVES** tab (`frontend/src/bigpicture/SavesTab.tsx`,
 `frontend/src/bigpicture/RomMGameInfoPanel.tsx`) and the play section's manual sync and Delete Local Saves
 (`frontend/src/bigpicture/RomMPlaySection.tsx`) offer: the header's Sync now (`executeManualSaveSync`,
 `frontend/src/utils/manualSaveSync.ts`), Delete Local Saves (`executeDeleteLocalSaves`,
 `frontend/src/utils/saveSlotFlow.ts`, behind `desktopDeleteLocalSavesDialog`) and + New Slot
-(`DesktopNewSlotDialog.tsx`, `executeSlotSwitch`), the collapsible slot panels (`sortSaveSlots`,
-`filterSaveSlotsForDisplay`, `frontend/src/utils/saveHelpers.ts`), their tracked-file rows, Copy to slot...
-(`DesktopCopySlotDialog.tsx`, `executeCopySaveToSlot`), Previous Versions (`loadFileVersions`, `executeVersionRestore`,
-with conflict prompts on `desktopSlotConflictDialog`), inactive-slot Activate Slot and Delete
-(`DesktopDeleteSlotDialog.tsx`, `loadSlotDeleteInfo`, `executeSlotDelete`), the inline slot-tracking confirmation banner
-and active-slot prompt (`confirmSlotChoice`, plus auto-confirm when creating or activating a slot while unconfirmed),
-the stranded-version notice (`findStrandedVersion`), the connecting retry indicator (`connectingToRommText`,
-`frontend/src/utils/saveSlotWording.ts`) with its known-offline fast path and reconnect reload, the unslotted local
-files and read-only last-known slots (`frontend/src/utils/slotState.ts`), the downloaded-game refusal and not-downloaded
-statements (`getSaveSyncAvailability`, `frontend/src/utils/saveSyncStatement.ts`), and the save-sync-off local file list
-(`getLocalSaveFiles`). Saves holds a prune lease (`usePruneLeaseOwner`, `frontend/src/utils/pruneLease.ts`), keys its
-content by `romId`, orders surface (`latestSeq`), inactive-slot (`slotSavesSeqRef`), and version-history (`readSeqRef`)
-reads by sequence while cancelling stale effects on unmount or input changes, and draws nothing before the ROM identity
-is known or on a stranded panel ([invariant register](invariants/panel.md)). While `GameView` is drawn it holds two
-things `RomMPlaySection` holds on Big Picture's game page: the connection heartbeat, and the automatic artwork, whose
-apply in flight it cancels on leaving.
+(`frontend/src/desktop/gameview/dialogs/DesktopNewSlotDialog.tsx`, `executeSlotSwitch`), the collapsible slot panels
+(`sortSaveSlots`, `filterSaveSlotsForDisplay`, `frontend/src/utils/saveHelpers.ts`), their tracked-file rows, Copy to
+slot... (`frontend/src/desktop/gameview/dialogs/DesktopCopySlotDialog.tsx`, `executeCopySaveToSlot`), Previous Versions
+(`loadFileVersions`, `executeVersionRestore`, with conflict prompts on `desktopSlotConflictDialog` in
+`frontend/src/desktop/gameview/dialogs/desktopDialogs.tsx`), inactive-slot Activate Slot and Delete
+(`frontend/src/desktop/gameview/dialogs/DesktopDeleteSlotDialog.tsx`, `loadSlotDeleteInfo`, `executeSlotDelete`), the
+inline slot-tracking confirmation banner and active-slot prompt (`confirmSlotChoice`, plus auto-confirm when creating or
+activating a slot while unconfirmed), the stranded-version notice (`findStrandedVersion`), the connecting retry
+indicator (`connectingToRommText`, `frontend/src/utils/saveSlotWording.ts`) with its known-offline fast path and
+reconnect reload, the unslotted local files and read-only last-known slots (`frontend/src/utils/slotState.ts`), the
+downloaded-game refusal and not-downloaded statements (`getSaveSyncAvailability`,
+`frontend/src/utils/saveSyncStatement.ts`), and the save-sync-off local file list (`getLocalSaveFiles`). Saves holds a
+prune lease (`usePruneLeaseOwner`, `frontend/src/utils/pruneLease.ts`), keys its content by `romId`, orders surface
+(`latestSeq`), slot-list (`slotLoadSeqRef`), inactive-slot (`slotSavesSeqRef`), and version-history (`readSeqRef`) reads
+by sequence while cancelling stale effects on unmount or input changes, and draws nothing before the ROM identity is
+known or on a stranded panel ([invariant register](invariants/panel.md)). While `GameView` is drawn it holds two things
+`RomMPlaySection` holds on Big Picture's game page: the connection heartbeat, and the automatic artwork, whose apply in
+flight it cancels on leaving.
 
 While a RetroDECK migration is pending it draws the migration card
 (`frontend/src/desktop/gameview/MigrationBlockedCard.tsx`) in place of the columns, as the game page's section does on
