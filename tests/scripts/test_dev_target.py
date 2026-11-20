@@ -1541,14 +1541,15 @@ class TestTheTargetsHalf:
         assert commands(loop.world, "systemd-run") == []
 
     @pytest.mark.parametrize(
-        ("reads_only", "says"),
+        ("leaves", "says"),
         [
-            (True, "tender-dev: interrupted here."),
-            (False, "tender-dev: interrupted here; what the task was doing on deck may have stopped part-way"),
+            ("nothing", "tender-dev: interrupted here."),
+            ("dev", "tender-dev: interrupted here; what the task was doing on deck may have stopped part-way"),
+            ("install", "tender-dev: interrupted here; the install on deck may have stopped part-way"),
         ],
     )
     def test_a_task_cut_short_names_steam_only_where_it_changes_the_target(
-        self, monkeypatch: pytest.MonkeyPatch, reads_only: bool, says: str
+        self, monkeypatch: pytest.MonkeyPatch, leaves: str, says: str
     ) -> None:
         spec = importlib.util.spec_from_file_location("dev_target_module", _SCRIPTS / "dev_target.py")
         assert spec is not None
@@ -1559,11 +1560,12 @@ class TestTheTargetsHalf:
         destination = setup_remote_target.Destination("deck", "deck", _ADDRESS, "22", None, None)
         target = module.Target("deck", Path("/nowhere/ssh_config"), destination)
 
-        said = module.cut_short(target, "interrupted here", reads_only=reads_only)
+        said = module.cut_short(target, "interrupted here", leaves=leaves)
 
         assert said.startswith(says)
-        assert ("check Steam" in said) is not reads_only
-        assert {name for name, spec in module.SPECS.items() if spec.reads_only} == {"dev:status"}
+        assert ("check Steam" in said) is (leaves == "dev")
+        assert {name for name, spec in module.SPECS.items() if spec.leaves == "nothing"} == {"dev:status"}
+        assert {name for name, spec in module.SPECS.items() if spec.leaves == "install"} == {"install"}
 
     def test_every_task_but_dev_log_has_its_spec(self, monkeypatch: pytest.MonkeyPatch) -> None:
         spec = importlib.util.spec_from_file_location("dev_target_module", _SCRIPTS / "dev_target.py")
@@ -1616,11 +1618,11 @@ class TestTheTargetsHalf:
         assert f'readonly SERVICE_UNIT="{unit.group(1)}"' in script
 
 
-def _tarball(loop: Loop, name: str, *, written: float) -> Path:
+def _tarball(loop: Loop, name: str, *, written: float, content: bytes | None = None) -> Path:
     """A release tarball under the checkout's build/, as `mise run package` leaves one, written at *written*."""
     tarball = loop.repo / "build" / name
     tarball.parent.mkdir(exist_ok=True)
-    tarball.write_bytes(f"the bytes of {name}\n".encode())
+    tarball.write_bytes(f"the bytes of {name}\n".encode() if content is None else content)
     digest = hashlib.sha256(tarball.read_bytes()).hexdigest()
     tarball.with_name(name + ".sha256").write_text(f"{digest}  {name}\n", encoding="utf-8")
     os.utime(tarball, (written, written))
@@ -1706,7 +1708,19 @@ class TestInstallingTheRelease:
         assert result.returncode == 0, result.stderr
         sidecar = tarball.with_name(tarball.name + ".sha256")
         assert (record / "checksum").read_text(encoding="utf-8") == sidecar.read_text(encoding="utf-8")
-        assert 'if [ -f "$file.sha256" ]; then' in (_REPO / "install.sh").read_text(encoding="utf-8")
+
+    def test_a_checksum_in_binary_form_is_taken(self, loop: Loop, tmp_path: Path) -> None:
+        """``<hex> *<name>``, which sha256sum -b writes and the release gate accepts."""
+        record = tmp_path / "installed"
+        _installer_stand_in(loop, record)
+        tarball = _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+        digest = hashlib.sha256(tarball.read_bytes()).hexdigest()
+        tarball.with_name(tarball.name + ".sha256").write_text(f"{digest} *{tarball.name}\n", encoding="utf-8")
+
+        result = loop.run("install")
+
+        assert result.returncode == 0, result.stderr
+        assert (record / "checksum").read_text(encoding="utf-8") == f"{digest}  {tarball.name}\n"
 
     def test_install_sh_verifies_the_tarball_with_the_checksum_sent(self, loop: Loop) -> None:
         """#2847 D4."""
@@ -1722,22 +1736,16 @@ class TestInstallingTheRelease:
         assert not (loop.target_home / ".local/lib/romm-tender").exists()
         assert _left_under_the_root(loop) == []
 
-    def test_a_tarball_its_checksum_does_not_match_is_refused_by_install_sh(self, loop: Loop) -> None:
-        _real_installer_up_to_the_unpack(loop)
-        tarball = _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
-        tarball.with_name(tarball.name + ".sha256").write_text(f"{'0' * 64}  {tarball.name}\n", encoding="utf-8")
-
-        result = loop.run("install", "--yes")
-
-        assert result.returncode == 1
-        assert "romm-tender-1.0.0.tar.gz does not match" in result.stderr
-        assert "could not be unpacked" not in result.stderr
-        assert not (loop.target_home / ".local/lib/romm-tender").exists()
-
     @pytest.mark.parametrize(
-        "sidecar", [None, "0000  romm-tender-1.0.0.tar.gz\n", f"{'a' * 64}  romm-tender-0.9.0.tar.gz\n"],
-        ids=["missing", "not-a-checksum", "another-tarballs"],
-    )  # fmt: skip
+        "sidecar",
+        [
+            None,
+            "0000  romm-tender-1.0.0.tar.gz\n",
+            f"{'a' * 64}  romm-tender-0.9.0.tar.gz\n",
+            f"{'0' * 64}  romm-tender-1.0.0.tar.gz\n",
+        ],
+        ids=["missing", "not-a-checksum", "another-tarballs", "stale-digest"],
+    )
     def test_without_its_checksum_beside_the_tarball_it_refuses_before_connecting(
         self, loop: Loop, sidecar: str | None
     ) -> None:
@@ -1844,23 +1852,41 @@ class TestInstallingTheRelease:
         assert not (loop.target_home / ".local/lib/romm-tender").exists()
         assert _left_under_the_root(loop) == []
 
-    @pytest.mark.parametrize("dev_unit", ["holding the lock", "holding no lock"])
+    @pytest.mark.parametrize(
+        "dev_unit",
+        [
+            "holding the lock",
+            "holding no lock",
+            "beside the installed service holding it",
+            "beside a lock that cannot be read",
+        ],
+    )
     def test_beside_the_dev_backend_it_refuses_and_names_dev_stop(
         self, loop: Loop, tmp_path: Path, dev_unit: str
     ) -> None:
-        """#2844 D2: a task whose backend the lock would refuse names dev:stop --target."""
+        """#2847 D2: the dev backend holding the lock, or its unit running whoever holds it."""
         record = tmp_path / "installed"
         _installer_stand_in(loop, record)
         _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
         if dev_unit == "holding the lock":
-            loop.hold_lock("romm-tender-dev")
+            backend = loop.hold_lock("romm-tender-dev")
         else:
-            loop.run_unit("romm-tender-dev")
+            backend = loop.run_unit("romm-tender-dev")
+        if dev_unit == "beside the installed service holding it":
+            loop.hold_lock("romm-tender")
+        if dev_unit == "beside a lock that cannot be read":
+            lock = loop.target_home / ".local/share/romm-tender/backend.lock"
+            lock.parent.mkdir(parents=True)
+            lock.touch()
+            lock.chmod(0)
 
         result = loop.run("install")
 
         assert result.returncode == 1
-        assert "the dev backend runs on deck (romm-tender-dev.service" in result.stderr
+        assert (
+            f"the dev backend (romm-tender-dev.service, pid {backend}) runs on deck, and the installed service could"
+            " not start beside it" in result.stderr
+        )
         assert "mise run dev:stop --target deck" in result.stderr
         assert "Nothing was installed." in result.stderr
         assert not record.joinpath("argv").exists()
@@ -1877,6 +1903,69 @@ class TestInstallingTheRelease:
 
         assert result.returncode == 0, result.stderr
         assert (record / "argv").exists()
+
+    def test_a_connection_lost_during_the_install_says_it_may_have_stopped_part_way(
+        self, loop: Loop, tmp_path: Path
+    ) -> None:
+        _installer_stand_in(loop, tmp_path / "installed")
+        _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time())
+        loop.world.drop_after_line = "install.sh: installed it"
+        loop.world.drop_only_for = "dev_target.sh install"
+
+        result = loop.run("install")
+
+        assert result.returncode == 255
+        assert "the connection to deck ended; the install on deck may have stopped part-way" in result.stderr
+        assert "Run the install again;" in result.stderr
+        assert "check Steam" not in result.stderr
+        assert "no answer from deck" not in result.stderr
+
+    @pytest.mark.parametrize(
+        "words",
+        [
+            ["romm-tender.zip", "a" * 64],
+            ["romm-tender-1.0.0.tar.gz", "a" * 63],
+            ["romm-tender-1.0.0.tar.gz", "g" * 64],
+            ["romm-tender-1.0.0.tar.gz", "A" * 64],
+            ["romm-tender-1.0.0.tar.gz", "a" * 64, "--no"],
+            ["romm-tender-1.0.0.tar.gz"],
+            ["romm-tender-1.0.0.tar.gz", "a" * 64, "--yes", "more"],
+        ],
+        ids=["not-a-tarball", "short", "not-hex", "uppercase", "not-yes", "too-few", "too-many"],
+    )
+    def test_words_it_does_not_take_are_refused_before_anything_is_written(
+        self, loop: Loop, tmp_path: Path, words: list[str]
+    ) -> None:
+        record = tmp_path / "installed"
+        _installer_stand_in(loop, record)
+        assert loop.run("dev:status").returncode == 0
+        script = loop.root / "incoming/scripts/dev_target.sh"
+
+        result = subprocess.run(
+            ["sh", str(script), "install", "deck", *words],
+            env={**loop.env(), "HOME": str(loop.target_home)},
+            input=b"the bytes of a tarball\n",
+            capture_output=True,
+            check=False,
+            timeout=_TIMEOUT,
+        )
+
+        assert result.returncode == 2
+        assert b"usage: dev_target.sh" in result.stderr
+        assert not record.joinpath("argv").exists()
+        assert _left_under_the_root(loop) == []
+
+    def test_a_tarball_that_arrives_empty_is_not_installed(self, loop: Loop, tmp_path: Path) -> None:
+        record = tmp_path / "installed"
+        _installer_stand_in(loop, record)
+        _tarball(loop, "romm-tender-1.0.0.tar.gz", written=time.time(), content=b"")
+
+        result = loop.run("install")
+
+        assert result.returncode == 1
+        assert "no tarball arrived on deck; nothing was installed." in result.stderr
+        assert not record.joinpath("argv").exists()
+        assert _left_under_the_root(loop) == []
 
 
 class TestTheTasks:

@@ -654,10 +654,12 @@ mise run install --target <name> --yes    # ...passing --yes to install.sh, for 
 ```
 
 It sends the newest `build/romm-tender-*.tar.gz` — the one written last, whatever its version — and the checksum
-`scripts/package.sh` wrote beside it, `<tarball>.sha256`. With no tarball there, or none with its checksum beside it, it
-refuses before it connects and names `mise run package`. It copies the tree to `incoming/` as the tasks that build
-nothing do, and leaves `current/` alone; then `scripts/dev_target.sh` from that copy receives the tarball on the same
-connection, writes it and its checksum to a directory of its own under `~/.local/lib/romm-tender-dev/`, runs the copy's
+`scripts/package.sh` wrote beside it, `<tarball>.sha256`. With no tarball there it refuses before it connects and names
+`mise run package`; so it does when the newest tarball's `.sha256` is missing, is not one `sha256sum` line naming that
+tarball, or records another digest — it checks the pair as `scripts/check_release_tarball.py` checks a release, and
+never falls back to an older tarball. It copies the tree to `incoming/` as the tasks that build nothing do, and leaves
+`current/` alone; then `scripts/dev_target.sh` from that copy receives the tarball on the stdin of the call that runs
+it, writes it and its checksum to a directory of its own under `~/.local/lib/romm-tender-dev/`, runs the copy's
 `install.sh` with `--from` on it, and removes both again. `install.sh` verifies the tarball against the checksum beside
 it, as it verifies a download, and refuses one that does not match. The task shows what `install.sh` says and ends with
 its status. The installer is the copy's, not the one inside the tarball: this checkout's, as `curl … | bash` hands a
@@ -668,14 +670,16 @@ the dev backend's is, so an update keeps the unit on the interpreter it was inst
 installed, `install.sh` picks its own default.
 
 **`--yes` reaches `install.sh` only when given.** The login has no terminal, so the question a first install asks —
-whether you come from the Decky plugin — cannot be answered there: without `--yes`, a first install ends with
-`install.sh`'s own refusal, `there is no terminal to ask on`, and installs nothing. Read the migration notes it names,
-then run it again with `--yes`. An update asks nothing and needs no `--yes`.
+whether you come from the Decky plugin, asked until the date `ACK_UNTIL` in `install.sh` names — cannot be answered
+there: without `--yes`, such a first install ends with `install.sh`'s own refusal, `there is no terminal to ask on`, and
+installs nothing. Read the migration notes it names, then run it again with `--yes`. An update asks nothing and needs no
+`--yes`, and neither does any install once that date has passed.
 
-**Beside the dev backend the install refuses**, before `install.sh` runs, and names `mise run dev:stop --target <name>`:
-the installed service could not take the lock while the dev backend holds it, and `install.sh`'s own refusal there
-points at a terminal the target does not have. Over the installed service the install is an update, which `install.sh`
-handles itself; any other holder of the lock `install.sh` names.
+**Beside the dev backend the install refuses** — the dev backend holding the lock, or its `romm-tender-dev` unit running
+whoever holds it — before `install.sh` runs, and names `mise run dev:stop --target <name>`: the installed service could
+not take the lock beside the dev backend, and `install.sh`'s own refusal there points at a terminal the target does not
+have. Over the installed service the install is an update, which `install.sh` handles itself; any other holder of the
+lock `install.sh` names.
 
 A target that cannot be used ends the install as it ends a dev task, [above](#when-a-target-cannot-be-used): no such
 target before the tarball is looked for, the other three at the copy. A Ctrl-C during the install, or a connection lost

@@ -226,9 +226,17 @@ EOF
     esac
 }
 
+# The dev backend by its unit, and by $1 where it is a pid (0 or empty: none).
+dev_backend_text() {
+    case "${1:-0}" in
+        0) printf 'the dev backend (%s.service)' "$DEV_UNIT" ;;
+        *) printf 'the dev backend (%s.service, pid %s)' "$DEV_UNIT" "$1" ;;
+    esac
+}
+
 holder_text() {
     case "$holder" in
-        dev) printf 'the dev backend (%s.service%s)' "$DEV_UNIT" "${pid:+, pid $pid}" ;;
+        dev) dev_backend_text "$pid" ;;
         service) printf 'the installed service (%s.service%s)' "$SERVICE_UNIT" "${pid:+, pid $pid}" ;;
         *) printf '%s' "${described:-a process this machine does not name}" ;;
     esac
@@ -513,14 +521,10 @@ stop_dev() {
     printf 'tender-dev: stopped the dev backend on %s (%s.service). Steam was left as it is.\n' "$name" "$DEV_UNIT"
 }
 
-# The installer is the copy's rather than the one inside the tarball: this
-# checkout's, as `curl | bash` hands a user main's installer for whichever
-# release it installs. Beside the dev backend the service could not take the
-# lock, and install.sh's own refusal there names a Ctrl-C in a terminal this
-# target has none of; every other holder is install.sh's to judge. The
-# checksum goes where install.sh --from looks for one (verify_local: the
-# tarball's name with .sha256, in sha256sum's own format), and TENDER_PYTHON
-# keeps an update on the interpreter the unit was written with.
+# Which installer, the refusal beside the dev backend, and TENDER_PYTHON:
+# docs/contributing/frontend-dev-loop.md, "Installing the release on a target".
+# The checksum goes where install.sh --from looks for one (verify_local: the
+# tarball's name with .sha256, in sha256sum's own format).
 install_release() {
     [ $# -ge 2 ] && [ $# -le 3 ] || usage
     tarball="$1"
@@ -546,8 +550,8 @@ install_release() {
     fi
     need_python
     lock_holder
-    if [ "$holder" = dev ] || { [ "$holder" = none ] && [ "$dev_running" = yes ]; }; then
-        say "the dev backend runs on $name ($DEV_UNIT.service${pid:+, pid $pid}), and the installed service could not start beside it."
+    if [ "$holder" = dev ] || [ "$dev_running" = yes ]; then
+        say "$(dev_backend_text "$dev_pid") runs on $name, and the installed service could not start beside it."
         printf '%s\n' "Stop it with \`mise run dev:stop --target $name\`, then run the install again." \
             "Nothing was installed." >&2
         exit 1
