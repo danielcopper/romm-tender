@@ -39,23 +39,26 @@ import {
   smallActionButtonStyle,
 } from "./styles";
 
-interface DesktopSlotPanelProps {
+interface DesktopSlotSharedProps {
   romId: number;
-  slot: SaveSlotSummary;
-  isActive: boolean;
   saveStatus: SaveStatus | null;
-  noSaveLine: string;
   isOffline: boolean;
-  defaultExpanded: boolean;
-  slotConfirmed: boolean | null;
   saveSyncEnabled: boolean;
+  slotConfirmed: boolean | null;
   confirmingSlot: boolean;
   ask: AskDialog;
   onConfirmSlot: (slotName: string) => void;
-  onSlotActivated: (slotName: string, newStatus: SaveStatus) => Promise<void>;
-  onSlotDeleted: () => void;
   onVersionRestored: () => void;
   onCopySave: (saveId: number, sourceSlot: string) => void;
+}
+
+interface DesktopSlotPanelProps extends DesktopSlotSharedProps {
+  slot: SaveSlotSummary;
+  isActive: boolean;
+  noSaveLine: string;
+  defaultExpanded: boolean;
+  onSlotActivated: (slotName: string, newStatus: SaveStatus) => Promise<void>;
+  onSlotDeleted: () => void;
 }
 
 const INFO_ROW_GRID_STYLE: CSSProperties = {
@@ -259,20 +262,10 @@ const SlotPanelHeader: FC<{
   </button>
 );
 
-interface ActiveSlotBodyProps {
-  romId: number;
+interface ActiveSlotBodyProps extends DesktopSlotSharedProps {
   slotName: string;
-  saveStatus: SaveStatus | null;
   conflicts: SyncConflict[];
-  isOffline: boolean;
-  saveSyncEnabled: boolean;
-  slotConfirmed: boolean | null;
-  confirmingSlot: boolean;
   activeHasSaves: boolean;
-  ask: AskDialog;
-  onConfirmSlot: (slotName: string) => void;
-  onVersionRestored: () => void;
-  onCopySave: (saveId: number, sourceSlot: string) => void;
 }
 
 const ActiveSlotBody: FC<ActiveSlotBodyProps> = ({
