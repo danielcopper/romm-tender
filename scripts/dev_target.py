@@ -272,25 +272,55 @@ def copy(target: Target, *, whole: bool) -> None:
         )
     rules = ["--exclude=__pycache__", *(f"--include=/{entry}" for entry in tree), "--exclude=/*"]
     remote_shell = " ".join(shlex.quote(word) for word in ssh(target))
-    command = ["rsync", "-a", "--delete", "--delete-excluded", "-e", remote_shell, *rules]
-    print(f"tender-dev: copying to {target.name} …", file=sys.stderr, flush=True)
+    # -v names each item as it is sent, and adds no more than a 'v' to the
+    # server's line, which the dispatcher lets through (rsync's server_options).
+    command = ["rsync", "-a", "-v", "--delete", "--delete-excluded", "-e", remote_shell, *rules]
     try:
-        result = subprocess.run(
+        process = subprocess.Popen(
             [*command, f"{REPO}/", f"{target.name}:{INCOMING}"],
             stdin=subprocess.DEVNULL,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            check=False,
+            errors="replace",
         )
     except FileNotFoundError as error:
         raise TargetError("tender-dev: a --target task needs rsync, and this machine has none on its PATH.") from error
-    if result.returncode == 0:
+    assert process.stdout is not None
+    assert process.stderr is not None
+    errors: list[str] = []
+    stderr = process.stderr
+    relay = threading.Thread(target=lambda: errors.extend(stderr), daemon=True)
+    relay.start()
+    changed = 0
+    for line in process.stdout:
+        if not _a_changed_file(line.rstrip("\n")):
+            continue
+        if not changed:
+            print(f"tender-dev: copying to {target.name} …", file=sys.stderr, flush=True)
+        changed += 1
+    returncode = process.wait()
+    relay.join()
+    if returncode == 0:
+        if changed:
+            files = "file" if changed == 1 else "files"
+            print(f"tender-dev: copied {changed} changed {files} to {target.name}.", file=sys.stderr)
         return
-    said = "\n".join(f"    {line}" for line in result.stderr.rstrip().splitlines())
-    failure = connection_failure(result.stderr, target) or dispatcher_refusal(result.stderr, target)
+    stderr_text = "".join(errors)
+    said = "\n".join(f"    {line}" for line in stderr_text.rstrip().splitlines())
+    failure = connection_failure(stderr_text, target) or dispatcher_refusal(stderr_text, target)
     if failure is None:
-        failure = f"tender-dev: the copy to {target.name} failed (rsync ended with {result.returncode})."
+        failure = f"tender-dev: the copy to {target.name} failed (rsync ended with {returncode})."
     raise TargetError(f"{failure}\n  rsync said:\n{said}")
+
+
+# What rsync -v prints for a push around the items it names, and how it names
+# a directory: none of them is a file sent or deleted.
+_NOT_A_FILE = ("sending incremental file list", "sent ", "total size is ", "created directory ")
+
+
+def _a_changed_file(line: str) -> bool:
+    return bool(line) and not line.startswith(_NOT_A_FILE) and not line.endswith("/")
 
 
 def run_streaming(command: list[str], *, from_first_line: bool = False) -> Outcome:

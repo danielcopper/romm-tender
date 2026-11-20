@@ -813,6 +813,38 @@ class TestTheConnection:
         assert result.returncode == 0, result.stderr
         assert "tender-dev: copying to deck" in result.stderr
 
+    def test_a_copy_with_nothing_to_send_says_nothing(self, loop: Loop) -> None:
+        loop.run("dev:status")
+
+        result = loop.run("dev:status")
+
+        assert result.returncode == 0, result.stderr
+        assert "copying to" not in result.stderr
+        assert "copied" not in result.stderr
+
+    def test_a_copy_that_sends_changes_says_so_and_counts_them(self, loop: Loop) -> None:
+        loop.run("dev:status")
+        (loop.repo / "scripts/a-new-script.sh").write_text("true\n", encoding="utf-8")
+
+        result = loop.run("dev:status")
+
+        assert result.returncode == 0, result.stderr
+        copying = result.stderr.index("tender-dev: copying to deck …")
+        assert result.stderr.index("tender-dev: copied 1 changed file to deck.") > copying
+        assert (loop.root / "incoming/scripts/a-new-script.sh").exists()
+
+    def test_a_file_dropped_here_counts_as_a_change_there(self, loop: Loop) -> None:
+        (loop.repo / "scripts/one.sh").write_text("true\n", encoding="utf-8")
+        (loop.repo / "scripts/two.sh").write_text("true\n", encoding="utf-8")
+        loop.run("dev:status")
+        (loop.repo / "scripts/one.sh").unlink()
+        (loop.repo / "scripts/two.sh").write_text("false\n", encoding="utf-8")
+
+        result = loop.run("dev:status")
+
+        assert "tender-dev: copied 2 changed files to deck." in result.stderr
+        assert not (loop.root / "incoming/scripts/one.sh").exists()
+
     def test_dev_log_follow_to_a_target_that_does_not_answer_gives_the_no_answer_hint(self, loop: Loop) -> None:
         loop.world.targets[_ADDRESS].serving = False
 

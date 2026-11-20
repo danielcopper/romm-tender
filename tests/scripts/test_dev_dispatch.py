@@ -71,8 +71,9 @@ def _dev_target(home: Path) -> Path:
     [
         f"rsync --server -logDtpre.iLsfxCIvu --delete --partial --numeric-ids . {_INCOMING}",
         f"rsync --server -rlptgoDcz --delete-after --force --safe-links . {_INCOMING}",
+        f"rsync --server -vlogDtpre.iLsfxCIvu --delete-excluded . {_INCOMING}",
     ],
-    ids=["delete-partial-numeric-ids", "no-capabilities-delete-after-force-safe-links"],
+    ids=["delete-partial-numeric-ids", "no-capabilities-delete-after-force-safe-links", "the-dev-tasks-copy"],
 )
 def test_the_long_options_a_copy_may_carry_reach_rsync(home: Path, tmp_path: Path, request_text: str) -> None:
     result = _run(home, tmp_path, request_text)

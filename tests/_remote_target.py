@@ -43,7 +43,9 @@ for the parts the setup depends on:
 rsync 3.2.7 sends (``server_options`` in its ``options.c``) for the options
 the dev tasks use, and refuses any other option; the ``rsync --server`` that
 command reaches records what it was started with and makes the copy, so a
-copy lands only where the dispatcher let the request through.
+copy lands only where the dispatcher let the request through. With ``-v`` the
+client prints what ``-v`` prints for a push: "sending incremental file list",
+each item sent or deleted, then the totals.
 
 On the target, ``systemd-run --unit`` starts a stand-in process as the unit's
 main process — for ``backend/main.py`` one that takes the backend's lock and
@@ -665,13 +667,16 @@ def _rsync(argv: list[str]) -> int:
             handle.write(json.dumps(argv) + "\n")
     if TRANSFER_VARIABLE in os.environ:
         transfer = json.loads(os.environ[TRANSFER_VARIABLE])
-        _mirror(Path(transfer["source"]), Path(argv[-1]), transfer["rules"], delete_excluded=transfer["excluded"])
+        items = _mirror(
+            Path(transfer["source"]), Path(argv[-1]), transfer["rules"], delete_excluded=transfer["excluded"]
+        )
+        Path(transfer["report"]).write_text("".join(f"{item}\n" for item in items), encoding="utf-8")
     return 0
 
 
 def _rsync_client(argv: list[str]) -> int:
     """``rsync [options] <source>/ <host>:<path>``: the server command through ``-e``, the copy by the server."""
-    archive = delete = delete_excluded = False
+    archive = delete = delete_excluded = verbose = False
     rules: list[list[str]] = []
     remote_shell: str | None = None
     paths: list[str] = []
@@ -679,6 +684,8 @@ def _rsync_client(argv: list[str]) -> int:
     for word in words:
         if word == "-a":
             archive = True
+        elif word == "-v":
+            verbose = True
         elif word == "--delete":
             delete = True
         elif word == "--delete-excluded":
@@ -697,14 +704,24 @@ def _rsync_client(argv: list[str]) -> int:
         print(f"the rsync stand-in cannot run: {argv}", file=sys.stderr)
         return 1
     host, _, path = paths[1].partition(":")
-    server = ["rsync", "--server", RSYNC_ARCHIVE]
+    # server_options puts a 'v' per -v ahead of the archive letters; -v's own
+    # stdout format (%n%L) adds no --log-format there.
+    server = ["rsync", "--server", f"-{'v' if verbose else ''}{RSYNC_ARCHIVE[1:]}"]
     if delete_excluded:
         server.append("--delete-excluded")
     elif delete:
         server.append("--delete")
-    transfer = {"source": paths[0], "rules": rules, "excluded": delete_excluded}
+    report = Path(f"{_world().log}.rsync-{os.getpid()}")
+    transfer = {"source": paths[0], "rules": rules, "excluded": delete_excluded, "report": str(report)}
     env = {**os.environ, TRANSFER_VARIABLE: json.dumps(transfer)}
+    if verbose:
+        print("sending incremental file list", flush=True)
     ended = subprocess.run([*shlex.split(remote_shell), host, *server, ".", path], env=env, check=False).returncode
+    if verbose and ended == 0:
+        items = report.read_text(encoding="utf-8").splitlines() if report.exists() else []
+        print("\n".join([*items, "", "sent 1,024 bytes  received 64 bytes  2,176.00 bytes/sec"]))
+        print("total size is 4,096  speedup is 3.76", flush=True)
+    report.unlink(missing_ok=True)
     if ended != 0:
         print(
             "rsync: connection unexpectedly closed (0 bytes received so far) [sender]\n"
@@ -731,8 +748,10 @@ def _included(relative: str, is_dir: bool, rules: list[list[str]]) -> bool:
     return True
 
 
-def _mirror(source: Path, destination: Path, rules: list[list[str]], *, delete_excluded: bool) -> None:
+def _mirror(source: Path, destination: Path, rules: list[list[str]], *, delete_excluded: bool) -> list[str]:
+    """Mirror *source* into *destination*; the items rsync -v names: those sent, and those deleted."""
     sent: set[str] = set()
+    items: list[str] = []
     destination.mkdir(parents=True, exist_ok=True)
     for directory, folders, files in os.walk(source):
         base = Path(directory).relative_to(source)
@@ -746,11 +765,15 @@ def _mirror(source: Path, destination: Path, rules: list[list[str]], *, delete_e
             target = destination / relative
             if linked:
                 folders.remove(folder)
-                _replace(target)
-                target.symlink_to(os.readlink(Path(directory) / folder))
+                link = os.readlink(Path(directory) / folder)
+                if not (target.is_symlink() and os.readlink(target) == link):
+                    _replace(target)
+                    target.symlink_to(link)
+                    items.append(f"{relative} -> {link}")
             elif not target.is_dir() or target.is_symlink():
                 _replace(target)
                 target.mkdir()
+                items.append(f"{relative}/")
         for name in files:
             relative = (base / name).as_posix()
             if not _included(relative, False, rules):
@@ -760,6 +783,7 @@ def _mirror(source: Path, destination: Path, rules: list[list[str]], *, delete_e
                 continue
             _replace(destination / relative)
             shutil.copy2(Path(directory) / name, destination / relative, follow_symlinks=False)
+            items.append(relative)
     for directory, folders, files in os.walk(destination, topdown=False):
         base = Path(directory).relative_to(destination)
         for name in [*folders, *files]:
@@ -767,7 +791,9 @@ def _mirror(source: Path, destination: Path, rules: list[list[str]], *, delete_e
             path = destination / relative
             protected = not delete_excluded and not _included(relative, path.is_dir(), rules)
             if relative not in sent and not protected:
+                items.append(f"deleting {relative}{'/' if path.is_dir() and not path.is_symlink() else ''}")
                 _replace(path)
+    return items
 
 
 def _unchanged(source: Path, copy: Path) -> bool:

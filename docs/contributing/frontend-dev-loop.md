@@ -614,10 +614,11 @@ whose dispatcher is older than the checkout — one that refuses `dev:log --foll
 running `setup:remote-target` again.
 
 **A lost connection ends the call within a minute.** Every call gives up on a target it cannot reach within 10 seconds,
-and on one that stops answering for 45 — a Deck gone to sleep, a network gone. Before the copy the task says
-`copying to <name> …`, so a wait there is not a silent one. A connection lost while a task follows ends the following
-with `the connection to <name> ended while following`; what the task started there may still run, and `dev:status` says
-whether it does.
+and on one that stops answering for 45 — a Deck gone to sleep, a network gone. A copy that sends anything says
+`copying to <name> …` as its first changed file goes, so a long first copy is not a silent one, and
+`copied <n> changed files to <name>.` at its end; a copy with nothing to send says nothing. A connection lost while a
+task follows ends the following with `the connection to <name> ended while following`; what the task started there may
+still run, and `dev:status` says whether it does.
 
 #### When a target cannot be used
 
