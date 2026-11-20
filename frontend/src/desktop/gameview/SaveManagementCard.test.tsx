@@ -2677,6 +2677,7 @@ describe("SaveManagementCard", () => {
         });
 
         let resolveSlowSlot!: (v: Awaited<ReturnType<typeof backend.getSlotSaves>>) => void;
+        let resolveFreshSlot!: (v: Awaited<ReturnType<typeof backend.getSlotSaves>>) => void;
         let rejectSlowSlot!: (err: Error) => void;
         vi.mocked(backend.getSlotSaves)
           .mockImplementationOnce(
@@ -2685,13 +2686,12 @@ describe("SaveManagementCard", () => {
                 resolveSlowSlot = resolve;
               }),
           )
-          .mockResolvedValueOnce({
-            success: true,
-            slot: "speedrun",
-            saves: [
-              { id: 91, filename: "fresh-1.srm", size: 128, emulator: "mgba", updated_at: "2026-06-15T12:00:00Z" },
-            ],
-          })
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                resolveFreshSlot = resolve;
+              }),
+          )
           .mockImplementationOnce(
             () =>
               new Promise((_, reject) => {
@@ -2714,9 +2714,9 @@ describe("SaveManagementCard", () => {
         act(() => {
           globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
         });
-        await flushMacrotask();
-        expect(within(speedrunPanel).getByText("fresh-1.srm")).toBeInTheDocument();
+        expect(within(speedrunPanel).getByText("Loading saves…")).toBeInTheDocument();
 
+        // Stale seq=1 resolves while seq=2 is still pending -> Loading saves… stays visible and stale.srm is ignored
         await act(async () => {
           resolveSlowSlot({
             success: true,
@@ -2725,8 +2725,21 @@ describe("SaveManagementCard", () => {
           });
         });
         await flushMacrotask();
-        expect(within(speedrunPanel).getByText("fresh-1.srm")).toBeInTheDocument();
+        expect(within(speedrunPanel).getByText("Loading saves…")).toBeInTheDocument();
         expect(within(speedrunPanel).queryByText("stale.srm")).not.toBeInTheDocument();
+
+        await act(async () => {
+          resolveFreshSlot({
+            success: true,
+            slot: "speedrun",
+            saves: [
+              { id: 91, filename: "fresh-1.srm", size: 128, emulator: "mgba", updated_at: "2026-06-15T12:00:00Z" },
+            ],
+          });
+        });
+        await flushMacrotask();
+        expect(within(speedrunPanel).getByText("fresh-1.srm")).toBeInTheDocument();
+        expect(within(speedrunPanel).queryByText("Loading saves…")).not.toBeInTheDocument();
 
         act(() => {
           globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
@@ -2764,6 +2777,7 @@ describe("SaveManagementCard", () => {
       });
       vi.mocked(backend.savesListFileVersions)
         .mockResolvedValueOnce({ status: "romm_refused", message: "denied" })
+        .mockResolvedValueOnce({ status: "romm_refused", message: "denied" })
         .mockImplementationOnce(() => new Promise(() => undefined));
 
       render(<SaveManagementCard appId={100} detail={baseDetail} />);
@@ -2779,13 +2793,24 @@ describe("SaveManagementCard", () => {
       fireEvent.click(screen.getByRole("button", { name: "Retry" }));
       expect(screen.queryByText(/denied/)).not.toBeInTheDocument();
       expect(screen.getByText("Loading versions…")).toBeInTheDocument();
-      expect(backend.savesListFileVersions).toHaveBeenCalledTimes(2);
+      await flushMacrotask();
+      expect(screen.getByText(/denied/)).toBeInTheDocument();
+
+      // Collapsing after an error, receiving save_sync, then re-expanding clears loadError and refetches
+      fireEvent.click(versionToggle);
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+      });
+      fireEvent.click(versionToggle);
+      expect(screen.queryByText(/denied/)).not.toBeInTheDocument();
+      expect(screen.getByText("Loading versions…")).toBeInTheDocument();
+      expect(backend.savesListFileVersions).toHaveBeenCalledTimes(3);
 
       await act(async () => {
         fireEvent.click(versionToggle);
         await new Promise((r) => setTimeout(r, 0));
       });
-      expect(backend.savesListFileVersions).toHaveBeenCalledTimes(2);
+      expect(backend.savesListFileVersions).toHaveBeenCalledTimes(3);
 
       const confirmResolvers: Array<() => void> = [];
       vi.mocked(gameDetailStore.refreshSaveStatus).mockImplementation(

@@ -1046,7 +1046,6 @@ const SaveManagementCardContent: FC<{
               }
               return outcome.message;
             }
-            reportServerReachable(true);
             await applyActivatedSlot(trimmed, "Created");
             resolve(true);
             announceSaveSync(romId);

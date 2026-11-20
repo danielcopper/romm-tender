@@ -51,7 +51,7 @@ function renderAttributionWithCheckmark(attr: string | null) {
 }
 
 export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = (props) => {
-  const { slot, isOffline, ask, onCopySave } = props;
+  const { slot, ask, onCopySave, isOffline } = props;
   const { expanded, versions, loading, restoringVersionId, loadError, handleToggle, fetchVersions, handleRestore } =
     useFileVersionHistory(props, desktopSlotConflictDialog(ask));
 

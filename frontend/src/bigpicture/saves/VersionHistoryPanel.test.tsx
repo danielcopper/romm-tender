@@ -56,6 +56,27 @@ const flushAsync = () =>
     await new Promise((r) => setTimeout(r, 0));
   });
 
+async function renderWithPendingRestore(versions: SaveVersionEntry[] = [makeVersion()]) {
+  vi.mocked(backend.savesListFileVersions).mockResolvedValue({ status: "ok", versions });
+  let resolver: ((v: RollbackStatus) => void) | null = null;
+  vi.mocked(backend.savesRollbackToVersion).mockImplementation(
+    () =>
+      new Promise((res) => {
+        resolver = res;
+      }),
+  );
+  const utils = render(<VersionHistoryPanel {...defaultProps()} />);
+  fireEvent.click(utils.getByText("Previous Versions"));
+  await flushAsync();
+  return {
+    ...utils,
+    resolveRestore: (v: RollbackStatus) => {
+      if (!resolver) throw new Error("restore has not started");
+      resolver(v);
+    },
+  };
+}
+
 describe("VersionHistoryPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -302,8 +323,11 @@ describe("VersionHistoryPanel", () => {
         expect.objectContaining({ title: "Tender", body: expect.stringContaining("Save restored") }),
       );
       expect(onRestored).toHaveBeenCalledTimes(1);
-      // Collapsed again — chevron is ▸
+      // Collapsed again — chevron is ▸, and re-expanding refetches cleared versions
       await waitFor(() => expect(container.textContent).toContain("▸"));
+      fireEvent.click(getByText("Previous Versions"));
+      await flushAsync();
+      expect(backend.savesListFileVersions).toHaveBeenCalledTimes(2);
     });
 
     it("status 'conflict_blocked' opens the sync conflict modal and lets the modal own the feedback (no panel toast)", async () => {
@@ -555,20 +579,10 @@ describe("VersionHistoryPanel", () => {
   });
 
   it("Restore button is disabled while a restore is in flight", async () => {
-    vi.mocked(backend.savesListFileVersions).mockResolvedValue({
-      status: "ok",
-      versions: [makeVersion({ id: 11, file_name: "save-v1.srm" }), makeVersion({ id: 12, file_name: "save-v2.srm" })],
-    });
-    let resolveRestore: (v: RollbackStatus) => void = () => undefined;
-    vi.mocked(backend.savesRollbackToVersion).mockImplementation(
-      () =>
-        new Promise((res) => {
-          resolveRestore = res;
-        }),
-    );
-    const { getByText, getAllByRole } = render(<VersionHistoryPanel {...defaultProps()} />);
-    fireEvent.click(getByText("Previous Versions"));
-    await flushAsync();
+    const { getAllByRole, resolveRestore } = await renderWithPendingRestore([
+      makeVersion({ id: 11, file_name: "save-v1.srm" }),
+      makeVersion({ id: 12, file_name: "save-v2.srm" }),
+    ]);
     fireEvent.click(getAllByRole("button", { name: "Restore" })[0]!);
     await flushAsync();
     for (const btn of getAllByRole("button", { name: /^Restor/ })) {
@@ -581,17 +595,7 @@ describe("VersionHistoryPanel", () => {
 
 describe("VersionHistoryPanel — the throbber on Restore", () => {
   it("stands beside Restoring... while the restore is in flight, and leaves with it", async () => {
-    vi.mocked(backend.savesListFileVersions).mockResolvedValue({ status: "ok", versions: [makeVersion()] });
-    let resolveRestore: (v: RollbackStatus) => void = () => undefined;
-    vi.mocked(backend.savesRollbackToVersion).mockImplementation(
-      () =>
-        new Promise((res) => {
-          resolveRestore = res;
-        }),
-    );
-    const { getByText, container } = render(<VersionHistoryPanel {...defaultProps()} />);
-    fireEvent.click(getByText("Previous Versions"));
-    await flushAsync();
+    const { getByText, container, resolveRestore } = await renderWithPendingRestore();
     expect(throbberIn(getByText("Restore"))).toBeNull();
     fireEvent.click(getByText("Restore"));
     await flushAsync();
