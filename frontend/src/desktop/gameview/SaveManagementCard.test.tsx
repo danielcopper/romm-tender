@@ -3352,7 +3352,8 @@ describe("SaveManagementCard", () => {
         fireEvent.click(await screen.findByRole("button", { name: "Activate Slot" }));
         await waitFor(() => expect(backend.getSaveSlots).toHaveBeenCalledTimes(3));
 
-        // Key changes from panel-default-active -> panel-default-inactive, so default remounts collapsed; one click expands it
+        // Key changes from panel-default-active -> panel-default-inactive, so
+        // default remounts collapsed; one click expands it.
         vi.mocked(backend.getSlotSaves).mockClear();
         fireEvent.click(screen.getByRole("button", { name: /default/ }));
         await waitFor(() => expect(backend.getSlotSaves).toHaveBeenCalledExactlyOnceWith(42, "default"));

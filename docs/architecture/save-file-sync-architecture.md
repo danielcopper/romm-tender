@@ -1053,18 +1053,19 @@ kept RomM's platform list is read once (`PlatformSystems.platform_system`).
   (`SaveSyncRefusal`, `frontend/src/bigpicture/saves/SaveSyncRefusal.tsx`) or the inline refusal notice on desktop
   (`RefusalBox` in `frontend/src/desktop/gameview/SaveManagementCard.tsx`, subtitle `save sync unavailable`), whether or
   not its slot is confirmed; its set-up mark and its slots on RomM stay untouched. For `savefiles_in_content_dir`
-  RetroArch's setting stands under the sentence. Any other game shows `SlotSetupWizard` on Big Picture or the
-  unconfirmed-slot banner and inline active-slot confirmation prompt on the desktop Saves card when
-  `slot_confirmed=false`, else the save list. A game not downloaded reads a line above them: whose saves will sync once
-  it is, that they will not and why, or — where `established` is false — that whether they will sync could not be
-  established. An active slot holding no save, read from this device and from RomM, reads "No save yet — _label_'s saves
-  for this game sync with RomM once it writes one." where the answer says the downloaded game syncs ("…this game's saves
-  sync with RomM once its emulator writes one." without a label), and "No save yet." where it does not say so; where
-  RomM could not be asked it reads "No save on this device.", and with no status read it reads no line. The wizard still
-  takes its own setup info: a refusal there asked RomM nothing, so it does not feed the shared connection state either.
-  Where the panel already holds RomM as unreachable, the wizard skips the setup info, whose retry ladder would only wait
-  the outage out, and asks `get_save_sync_availability` instead: a downloaded game that cannot sync shows its reason the
-  same way, and any other keeps the unreachable notice and its Retry.
+  RetroArch's setting stands under the sentence. Any other game shows `SlotSetupWizard`
+  (`frontend/src/bigpicture/SlotSetupWizard.tsx`) on Big Picture or the unconfirmed-slot banner and inline active-slot
+  confirmation prompt on the desktop Saves card when `slot_confirmed=false`, else the save list. A game not downloaded
+  reads a line above them: whose saves will sync once it is, that they will not and why, or — where `established` is
+  false — that whether they will sync could not be established. An active slot holding no save, read from this device
+  and from RomM, reads "No save yet — _label_'s saves for this game sync with RomM once it writes one." where the answer
+  says the downloaded game syncs ("…this game's saves sync with RomM once its emulator writes one." without a label),
+  and "No save yet." where it does not say so; where RomM could not be asked it reads "No save on this device.", and
+  with no status read it reads no line. The wizard still takes its own setup info: a refusal there asked RomM nothing,
+  so it does not feed the shared connection state either. Where the panel already holds RomM as unreachable, the wizard
+  skips the setup info, whose retry ladder would only wait the outage out, and asks `get_save_sync_availability`
+  instead: a downloaded game that cannot sync shows its reason the same way, and any other keeps the unreachable notice
+  and its Retry.
 - **Play button:** `frontend/src/bigpicture/CustomPlayButton.tsx` (`ensureTrackingConfiguredBigPicture`) and
   `frontend/src/desktop/gameview/usePlayLaunch.ts` (`ensureTrackingConfiguredDesktop`, both via
   `frontend/src/utils/launchGateOps.ts`) check before launch. If not configured and server has saves, Big Picture
