@@ -3186,5 +3186,80 @@ describe("SaveManagementCard", () => {
         warnSpy.mockRestore();
       }
     });
+
+    it("re-reads getLocalSaveFiles and getSaveSyncAvailability when detail.installed changes", async () => {
+      vi.mocked(backend.getLocalSaveFiles)
+        .mockResolvedValueOnce({
+          available: true,
+          installed: false,
+          files: [],
+        })
+        .mockResolvedValueOnce({
+          available: true,
+          installed: true,
+          files: [
+            {
+              filename: "installed.srm",
+              directory: "~/retrodeck/saves/gba",
+              size: 1024,
+              modified_at: "2026-06-15T12:00:00Z",
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          available: true,
+          installed: false,
+          files: [],
+        });
+
+      const { rerender } = render(
+        <SaveManagementCard appId={100} detail={{ ...baseDetail, installed: false, saveSyncEnabled: false }} />,
+      );
+      expect(await screen.findByText("Not downloaded — no save on this device.")).toBeInTheDocument();
+      expect(backend.getLocalSaveFiles).toHaveBeenCalledTimes(1);
+
+      rerender(<SaveManagementCard appId={100} detail={{ ...baseDetail, installed: true, saveSyncEnabled: false }} />);
+      expect(await screen.findByText("installed.srm")).toBeInTheDocument();
+      expect(backend.getLocalSaveFiles).toHaveBeenCalledTimes(2);
+
+      rerender(<SaveManagementCard appId={100} detail={{ ...baseDetail, installed: false, saveSyncEnabled: false }} />);
+      expect(await screen.findByText("Not downloaded — no save on this device.")).toBeInTheDocument();
+      expect(backend.getLocalSaveFiles).toHaveBeenCalledTimes(3);
+
+      vi.mocked(backend.getSaveSyncAvailability)
+        .mockResolvedValueOnce({
+          available: true,
+          installed: false,
+          established: true,
+          emulator_label: "mGBA",
+        })
+        .mockResolvedValueOnce({
+          available: false,
+          installed: true,
+          established: true,
+          emulator_label: "mGBA",
+          reason: "savefiles_in_content_dir",
+          message: "Saves cannot sync from content dir.",
+        })
+        .mockResolvedValueOnce({
+          available: true,
+          installed: false,
+          established: true,
+          emulator_label: "mGBA",
+        });
+
+      rerender(<SaveManagementCard appId={100} detail={{ ...baseDetail, installed: false, saveSyncEnabled: true }} />);
+      await waitFor(() => expect(backend.getSaveSyncAvailability).toHaveBeenCalledTimes(1));
+
+      rerender(<SaveManagementCard appId={100} detail={{ ...baseDetail, installed: true, saveSyncEnabled: true }} />);
+      expect(await screen.findByTestId("desktop-saves-refusal")).toHaveTextContent(
+        "Saves cannot sync from content dir.",
+      );
+      expect(backend.getSaveSyncAvailability).toHaveBeenCalledTimes(2);
+
+      rerender(<SaveManagementCard appId={100} detail={{ ...baseDetail, installed: false, saveSyncEnabled: true }} />);
+      await waitFor(() => expect(backend.getSaveSyncAvailability).toHaveBeenCalledTimes(3));
+      expect(screen.queryByTestId("desktop-saves-refusal")).not.toBeInTheDocument();
+    });
   });
 });

@@ -192,6 +192,7 @@ function useTabSwitchScroll(cardRef: RefObject<HTMLDivElement | null>): void {
 function useSaveSurfaceAnswers(
   romId: number,
   saveSyncEnabled: boolean,
+  installed: boolean,
 ): { localSavesAnswer: LocalSaveFiles | null; saveSyncAnswer: SaveSyncAvailability | null } {
   const [rawLocalSavesAnswer, setRawLocalSavesAnswer] = useState<LocalSaveFiles | null>(null);
   const [rawSaveSyncAnswer, setRawSaveSyncAnswer] = useState<SaveSyncAvailability | null>(null);
@@ -228,7 +229,7 @@ function useSaveSurfaceAnswers(
       cancelled = true;
       globalThis.removeEventListener("romm_data_changed", onDataChanged);
     };
-  }, [romId, saveSyncEnabled]);
+  }, [romId, saveSyncEnabled, installed]);
 
   return {
     localSavesAnswer: saveSyncEnabled ? null : rawLocalSavesAnswer,
@@ -924,7 +925,7 @@ const SaveManagementCardContent: FC<{
   const [isSyncing, setIsSyncing] = useState(false);
   const [deletingLocalSaves, setDeletingLocalSaves] = useState(false);
 
-  const { localSavesAnswer, saveSyncAnswer } = useSaveSurfaceAnswers(romId, detail.saveSyncEnabled);
+  const { localSavesAnswer, saveSyncAnswer } = useSaveSurfaceAnswers(romId, detail.saveSyncEnabled, detail.installed);
   const saveStatus = detail.saveStatus;
   const syncRefused = detail.saveSyncEnabled && refusesDownloadedGame(saveSyncAnswer);
   const strandedVersion = useStrandedCheck(appId, romId, detail.saveSyncEnabled && !syncRefused);
