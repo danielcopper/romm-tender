@@ -78,7 +78,7 @@ export function useSlotPanelState({
         setSlotFiles([]);
       }
     } catch (e) {
-      logWarn(`${logPrefix}: failed to load slot saves for ${slotName}: ${e}`);
+      logWarn(`${logPrefix}: failed to load slot saves for romId=${romId} slot='${slotName}': ${e}`);
       if (!mountedRef.current || seq !== slotSavesSeqRef.current) return;
       setSlotFiles([]);
     } finally {

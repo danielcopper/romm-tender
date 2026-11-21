@@ -314,7 +314,9 @@ async function loadOfflineSnapshot(
         logWarn(`DesktopSaveManagementCard: ${m}`),
       );
     } else {
-      logWarn(`DesktopSaveManagementCard: offline slot snapshot for romId=${romId} failed: ${res.message}`);
+      logWarn(
+        `DesktopSaveManagementCard: offline slot snapshot for romId=${romId} failed (${res.reason}): ${res.message}`,
+      );
       applyRefreshSlotResult<SlotState>(res, setSlotState);
     }
   } catch (e) {
@@ -836,16 +838,21 @@ function useDesktopSlotState(
     if (!saveSyncEnabled) return;
     const seq = ++slotLoadSeqRef.current;
     const isLatest = () => mountedRef.current && slotLoadSeqRef.current === seq;
+    let slotResult: Awaited<ReturnType<typeof getSaveSlots>> | null = null;
     try {
-      const slotResult = await getSaveSlots(romId);
-      if (!isLatest()) return;
-      reportSlotResultReachability(slotResult);
-      if (!slotResult.success) {
-        logWarn(`DesktopSaveManagementCard: failed to refresh save slots for romId=${romId}: ${slotResult.message}`);
-      }
-      applyRefreshSlotResult<SlotState>(slotResult, setSlotState);
+      slotResult = await getSaveSlots(romId);
     } catch (e) {
       logWarn(`DesktopSaveManagementCard: failed to refresh save slots for romId=${romId}: ${e}`);
+    }
+    if (!isLatest()) return;
+    if (slotResult !== null) {
+      reportSlotResultReachability(slotResult);
+      if (!slotResult.success) {
+        logWarn(
+          `DesktopSaveManagementCard: failed to refresh save slots for romId=${romId} (${slotResult.reason}): ${slotResult.message}`,
+        );
+      }
+      applyRefreshSlotResult<SlotState>(slotResult, setSlotState);
     }
     await readTrackingConfigured(romId, isLatest, setRawSlotConfirmed);
   }, [romId, saveSyncEnabled, mountedRef]);
@@ -1010,7 +1017,14 @@ const SaveManagementCardContent: FC<{
     if (!slotName || confirmingSlot) return;
     setConfirmingSlot(true);
     try {
-      const result = await confirmSlotChoice(romId, slotName, false, null, false);
+      let result: Awaited<ReturnType<typeof confirmSlotChoice>>;
+      try {
+        result = await confirmSlotChoice(romId, slotName, false, null, false);
+      } catch (e) {
+        logWarn(`DesktopSaveManagementCard: failed to confirm slot for romId=${romId}: ${e}`);
+        if (mountedRef.current) showToast("An error occurred while confirming the slot");
+        return;
+      }
       if (!mountedRef.current) return;
       if (result.success) {
         setRawSlotConfirmed(true);
@@ -1022,9 +1036,6 @@ const SaveManagementCardContent: FC<{
         );
         showToast(result.message || "Failed to confirm save slot");
       }
-    } catch (e) {
-      logWarn(`DesktopSaveManagementCard: failed to confirm slot for romId=${romId}: ${e}`);
-      showToast("An error occurred while confirming the slot");
     } finally {
       if (mountedRef.current) setConfirmingSlot(false);
     }
@@ -1041,8 +1052,10 @@ const SaveManagementCardContent: FC<{
             const outcome = await executeSlotSwitch(romId, trimmed, "create");
             if (!outcome.ok) {
               if (outcome.partial) {
-                showToast(outcome.message);
-                resolve(true);
+                if (mountedRef.current) {
+                  showToast(outcome.message);
+                  resolve(true);
+                }
                 return null;
               }
               return outcome.message;

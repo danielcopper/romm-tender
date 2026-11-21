@@ -663,7 +663,9 @@ describe("executeCopySaveToSlot", () => {
     vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.copySaveToSlot).mockRejectedValueOnce(new Error("net down"));
     await executeCopySaveToSlot(7, 10, "alt", showConflict);
-    expect(backend.logWarn).toHaveBeenCalledWith("saveSlotFlow: copy failed for save 10 into 'alt': Error: net down");
+    expect(backend.logWarn).toHaveBeenCalledWith(
+      "saveSlotFlow: copy failed for rom 7 save 10 into 'alt': Error: net down",
+    );
     expect(toast.showToast).toHaveBeenCalledWith("Couldn't copy the save. Check your connection and try again.");
 
     vi.mocked(backend.copySaveToSlot).mockResolvedValueOnce({ status: "conflict_blocked", conflicts: [CONFLICT] });
@@ -708,7 +710,9 @@ describe("executeVersionRestore", () => {
 
     vi.mocked(backend.savesRollbackToVersion).mockRejectedValueOnce(new Error("boom"));
     await expect(executeVersionRestore(7, "default", VERSION, showConflict)).resolves.toBe(false);
-    expect(backend.logWarn).toHaveBeenCalledWith("saveSlotFlow: restore error for save 11: Error: boom");
+    expect(backend.logWarn).toHaveBeenCalledWith(
+      "saveSlotFlow: restore error for rom 7 slot 'default' save 11: Error: boom",
+    );
     expect(toast.showToast).toHaveBeenCalledWith("Couldn't confirm the restore.", { subtext: "boom" });
 
     vi.mocked(backend.savesRollbackToVersion).mockResolvedValueOnce({

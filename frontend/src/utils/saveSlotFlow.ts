@@ -232,7 +232,7 @@ export async function executeCopySaveToSlot(
   try {
     result = await copySaveToSlot(romId, saveId, targetSlot);
   } catch (e) {
-    logWarn(`saveSlotFlow: copy failed for save ${saveId} into '${targetSlot}': ${e}`);
+    logWarn(`saveSlotFlow: copy failed for rom ${romId} save ${saveId} into '${targetSlot}': ${e}`);
     showToast(COPY_SAVE_ERROR_TOAST);
     return;
   }
@@ -264,7 +264,7 @@ export async function executeVersionRestore(
   try {
     result = await savesRollbackToVersion(romId, slot, version.id);
   } catch (e) {
-    logWarn(`saveSlotFlow: restore error for save ${version.id}: ${e}`);
+    logWarn(`saveSlotFlow: restore error for rom ${romId} slot '${slot}' save ${version.id}: ${e}`);
     showToast(RESTORE_CONFIRM_ERROR_TOAST, { subtext: e instanceof Error ? e.message : String(e) });
     return false;
   }

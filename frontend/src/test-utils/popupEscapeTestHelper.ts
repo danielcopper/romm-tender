@@ -27,6 +27,6 @@ export function assertDialogEscapeScopedToOwnWindow(renderElement: (onDismiss: (
     fireEvent.keyDown(popupWin as unknown as Window, { key: "Escape" });
     expect(onDismiss).toHaveBeenCalledTimes(1);
   } finally {
-    void popupWin.close();
+    popupWin.close();
   }
 }

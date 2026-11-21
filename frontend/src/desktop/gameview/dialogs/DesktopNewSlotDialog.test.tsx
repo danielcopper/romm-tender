@@ -69,13 +69,30 @@ describe("DesktopNewSlotDialog", () => {
     expect(onDismiss).toHaveBeenCalledTimes(2);
   });
 
-  it("renders inline error returned by onCreate", async () => {
+  it("renders inline error returned by onCreate and surfaces unexpected rejections", async () => {
     render(<DesktopNewSlotDialog onDismiss={vi.fn()} onCreate={vi.fn().mockResolvedValue("Slot already exists")} />);
 
     fireEvent.change(screen.getByPlaceholderText("Slot Name (e.g. speedrun, casual)"), { target: { value: "dup" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Slot" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Slot already exists");
+  });
+
+  it("renders inline error when onCreate rejects", async () => {
+    const onCreate = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("create boom"))
+      .mockRejectedValueOnce("plain create failure");
+    render(<DesktopNewSlotDialog onDismiss={vi.fn()} onCreate={onCreate} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Slot Name (e.g. speedrun, casual)"), { target: { value: "err" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Slot" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("create boom");
+    expect(screen.getByRole("button", { name: "Create Slot" })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create Slot" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("plain create failure");
   });
 
   it("listens for Escape on the dialog's own Window rather than globalThis.window", () => {

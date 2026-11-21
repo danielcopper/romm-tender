@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef, useState, type FC } from "react";
+import { detach } from "../../../utils/detach";
 import { DANGER_TEXT_RED } from "../styles";
 import {
   DIALOG_MUTED_STYLE,
@@ -47,6 +48,8 @@ export const DesktopNewSlotDialog: FC<DesktopNewSlotDialogProps> = ({ onDismiss,
     try {
       const err = await onCreate(trimmed);
       if (err) setInternalError(err);
+    } catch (e) {
+      setInternalError(e instanceof Error ? e.message : String(e));
     } finally {
       setCreating(false);
     }
@@ -70,7 +73,7 @@ export const DesktopNewSlotDialog: FC<DesktopNewSlotDialogProps> = ({ onDismiss,
         disabled={creating}
         onChange={(e) => setSlotName(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") void handleSubmit();
+          if (e.key === "Enter") detach(handleSubmit());
         }}
         style={INPUT_STYLE}
       />
@@ -86,7 +89,7 @@ export const DesktopNewSlotDialog: FC<DesktopNewSlotDialogProps> = ({ onDismiss,
           type="button"
           style={dialogButtonStyle("primary", submitDisabled)}
           disabled={submitDisabled}
-          onClick={() => void handleSubmit()}
+          onClick={() => detach(handleSubmit())}
         >
           {creating ? "Creating…" : "Create Slot"}
         </button>

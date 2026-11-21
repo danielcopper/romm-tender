@@ -12,7 +12,7 @@ import { DIALOG_TEXT_STYLE, DesktopDialog, DesktopDialogFooter, dialogButtonStyl
 interface DesktopDeleteSlotDialogProps {
   deleteInfo: SlotDeleteInfo;
   onDismiss: () => void;
-  onConfirm: () => Promise<void> | void;
+  onConfirm: () => void;
 }
 
 export const DesktopDeleteSlotDialog: FC<DesktopDeleteSlotDialogProps> = ({ deleteInfo, onDismiss, onConfirm }) => (
@@ -27,7 +27,7 @@ export const DesktopDeleteSlotDialog: FC<DesktopDeleteSlotDialogProps> = ({ dele
     </div>
 
     <DesktopDialogFooter onDismiss={onDismiss}>
-      <button type="button" style={dialogButtonStyle("danger")} onClick={() => void onConfirm()}>
+      <button type="button" style={dialogButtonStyle("danger")} onClick={onConfirm}>
         Delete
       </button>
     </DesktopDialogFooter>

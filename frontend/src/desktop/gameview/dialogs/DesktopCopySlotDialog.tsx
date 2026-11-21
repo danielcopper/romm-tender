@@ -20,7 +20,7 @@ interface DesktopCopySlotDialogProps {
   sourceSlot: string;
   availableSlots: SaveSlotSummary[];
   onDismiss: () => void;
-  onCopy: (targetSlot: string) => Promise<void> | void;
+  onCopy: (targetSlot: string) => void;
 }
 
 const INPUT_STYLE = dialogInputStyle({
@@ -42,7 +42,7 @@ export const DesktopCopySlotDialog: FC<DesktopCopySlotDialogProps> = ({
 
   const handleCreateAndCopy = () => {
     if (!createDisabled) {
-      void onCopy(trimmed);
+      onCopy(trimmed);
     }
   };
 
@@ -59,7 +59,7 @@ export const DesktopCopySlotDialog: FC<DesktopCopySlotDialogProps> = ({
                 key={`target-slot-${slotName}`}
                 type="button"
                 style={dialogButtonStyle("secondary")}
-                onClick={() => void onCopy(slotName)}
+                onClick={() => onCopy(slotName)}
               >
                 {displaySlot(slotName)}
               </button>

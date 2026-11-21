@@ -1441,7 +1441,7 @@ describe("SaveManagementCard", () => {
 
         await waitFor(() => {
           expect(warnSpy).toHaveBeenCalledWith(
-            "DesktopSlotPanel: failed to load slot saves for speedrun: Error: slot fetch down",
+            "DesktopSlotPanel: failed to load slot saves for romId=42 slot='speedrun': Error: slot fetch down",
           );
           expect(screen.getByText("No saves in this slot")).toBeInTheDocument();
         });
@@ -1759,6 +1759,8 @@ describe("SaveManagementCard", () => {
 
       fireEvent.click(deleteBtn);
       await waitFor(() => expect(backend.getSlotDeleteInfo).toHaveBeenCalledWith(42, "speedrun"));
+      await flushMacrotask();
+      expect(toast.showToast).toHaveBeenCalledWith("missing");
       expect(screen.queryByRole("dialog", { name: "Delete Slot" })).not.toBeInTheDocument();
 
       // Re-collapsing and re-expanding uses cache without refetch; mismatched events keep cache
@@ -2461,6 +2463,39 @@ describe("SaveManagementCard", () => {
         });
         await flushMacrotask();
         expect(getRommConnectionState()).toBe("connected");
+
+        // Unmount while refreshSlots rejects -> skips readTrackingConfigured afterward
+        let rejectAfterUnmount!: (err: unknown) => void;
+        vi.mocked(backend.getSaveSlots)
+          .mockResolvedValueOnce({
+            success: true,
+            slots: [{ slot: "default", source: "server", count: 1, latest_updated_at: null }],
+            active_slot: "default",
+          })
+          .mockImplementationOnce(
+            () =>
+              new Promise((_resolve, reject) => {
+                rejectAfterUnmount = reject;
+              }),
+          );
+        const viewReject = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        expect(await screen.findByTestId("desktop-slot-panel-default")).toBeInTheDocument();
+        await flushMacrotask();
+        vi.mocked(backend.isSaveTrackingConfigured).mockClear();
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+        });
+        await flushMacrotask();
+        viewReject.unmount();
+
+        await act(async () => {
+          rejectAfterUnmount(new Error("refresh boom after unmount"));
+        });
+        await flushMacrotask();
+        expect(backend.isSaveTrackingConfigured).not.toHaveBeenCalled();
+        expect(warnSpy).toHaveBeenCalledWith(
+          "DesktopSaveManagementCard: failed to refresh save slots for romId=42: Error: refresh boom after unmount",
+        );
       } finally {
         warnSpy.mockRestore();
       }
@@ -2568,7 +2603,7 @@ describe("SaveManagementCard", () => {
         const offlineView = render(<SaveManagementCard appId={100} detail={baseDetail} />);
         await waitFor(() => {
           expect(warnSpy).toHaveBeenCalledWith(
-            "DesktopSaveManagementCard: offline slot snapshot for romId=42 failed: offline snap err",
+            "DesktopSaveManagementCard: offline slot snapshot for romId=42 failed (server_unreachable): offline snap err",
           );
         });
         offlineView.unmount();
@@ -2608,7 +2643,7 @@ describe("SaveManagementCard", () => {
         });
         await waitFor(() => {
           expect(warnSpy).toHaveBeenCalledWith(
-            "DesktopSaveManagementCard: failed to refresh save slots for romId=42: refresh refused",
+            "DesktopSaveManagementCard: failed to refresh save slots for romId=42 (server_error): refresh refused",
           );
         });
 
@@ -3760,6 +3795,62 @@ describe("SaveManagementCard", () => {
         await flushMacrotask();
         expect(toast.showToast).not.toHaveBeenCalled();
         expect(events).toEqual([]);
+
+        // 4. handleConfirmSlot unmount while confirmSlotChoice rejects -> logs warning, skips toast
+        const warnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+        let rejectConfirm!: (err: unknown) => void;
+        vi.mocked(backend.confirmSlotChoice).mockImplementationOnce(
+          () =>
+            new Promise((_res, rej) => {
+              rejectConfirm = rej;
+            }),
+        );
+        const view4 = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        await flushMacrotask();
+        fireEvent.click(await screen.findByRole("button", { name: "Confirm Slot" }));
+        await flushMacrotask();
+        await waitFor(() => expect(backend.confirmSlotChoice).toHaveBeenCalledTimes(4));
+        view4.unmount();
+
+        await act(async () => {
+          rejectConfirm(new Error("confirm boom"));
+        });
+        await flushMacrotask();
+        expect(warnSpy).toHaveBeenCalledWith(
+          "DesktopSaveManagementCard: failed to confirm slot for romId=42: Error: confirm boom",
+        );
+        expect(toast.showToast).not.toHaveBeenCalled();
+        warnSpy.mockRestore();
+
+        // 5. handleOpenNewSlot unmount while switchSlot returns partial switch_stopped -> skips toast
+        let resolvePartialSwitch!: (v: Awaited<ReturnType<typeof backend.switchSlot>>) => void;
+        vi.mocked(backend.switchSlot).mockImplementationOnce(
+          () =>
+            new Promise((res) => {
+              resolvePartialSwitch = res;
+            }),
+        );
+        const view5 = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        await flushMacrotask();
+        await waitFor(() => expect(screen.getByTestId("unconfirmed-slot-banner")).toBeInTheDocument());
+        fireEvent.click(screen.getByRole("button", { name: "+ New Slot" }));
+        fireEvent.change(screen.getByPlaceholderText(/Slot Name/i), { target: { value: "partial_slot" } });
+        fireEvent.click(screen.getByRole("button", { name: "Create Slot" }));
+        await flushMacrotask();
+        await waitFor(() => expect(backend.switchSlot).toHaveBeenCalledWith(42, "partial_slot"));
+        view5.unmount();
+        vi.mocked(toast.showToast).mockClear();
+
+        await act(async () => {
+          resolvePartialSwitch({
+            success: false,
+            reason: "switch_stopped",
+            message: "partial",
+            set_aside: ["foo.srm"],
+          });
+        });
+        await flushMacrotask();
+        expect(toast.showToast).not.toHaveBeenCalled();
       } finally {
         globalThis.removeEventListener("romm_data_changed", onEvt);
       }

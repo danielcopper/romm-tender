@@ -588,12 +588,14 @@ Five properties are worth knowing before changing anything there:
   (`save_shape_unsupported` or `saves_root_missing`, with the finding and the source's kind beside it), get the message
   Main's notice shows for that finding — or, for an emulator's own settings file, which Main never shows, a sentence
   naming the emulator (`withFindingSentence` in `frontend/src/utils/emulatorSourceWording.ts`) — so every press that
-  refuses for it, the launch's own sync included, and the SAVES tab's answer that a game's saves cannot sync
-  (`sync_unavailable`, which carries the same fields), read the same as the notice whichever endpoint answered. The
-  backend's own sentence for a missing saves folder stands only in the toast after a game exits and in Sync All's line.
-  A download refused for a platform with no switched-on system gets the sentence the platform's pages show
-  (`withPlatformSystemSentence`). Every other answer comes back as it was sent. The suite stubs this module, so
-  `api/host.test.ts` is where the rewording is pinned.
+  refuses for it, the launch's own sync included, and the game-detail save surface's answer that a game's saves cannot
+  sync (`sync_unavailable`, which carries the same fields — Big Picture's SAVES tab in
+  `frontend/src/bigpicture/SavesTab.tsx` and, in the desktop dev build,
+  `frontend/src/desktop/gameview/SaveManagementCard.tsx` and `frontend/src/desktop/gameview/PlayButtonBadges.tsx`), read
+  the same as the notice whichever endpoint answered. The backend's own sentence for a missing saves folder stands only
+  in the toast after a game exits and in Sync All's line. A download refused for a platform with no switched-on system
+  gets the sentence the platform's pages show (`withPlatformSystemSentence`). Every other answer comes back as it was
+  sent. The suite stubs this module, so `api/host.test.ts` is where the rewording is pinned.
 
 **The fourth thing `host.ts` hands out opens no socket and is the one the panel reaches the screen through.**
 `definePanel` answers with the factory unchanged; `index.tsx` hands that factory to `frontend/src/qam/installEntry.tsx`,
