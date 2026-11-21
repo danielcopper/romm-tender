@@ -271,7 +271,6 @@ describe("executeSlotSwitch", () => {
           "not_found",
           "server_error",
           "auth_failed",
-          "switch_incomplete",
           "sync_disabled",
           "savefiles_in_content_dir",
         ] as const
@@ -283,13 +282,9 @@ describe("executeSlotSwitch", () => {
 
     await expect(executeSlotSwitch(7, "main", purpose)).resolves.toMatchObject({ ok: false, reason });
     expect(connectionState.reportServerReachable).not.toHaveBeenCalled();
-    if (reason === "switch_incomplete") {
-      expect(backend.logWarn).not.toHaveBeenCalled();
-    } else {
-      expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
-        `saveSlotFlow: switchSlot for rom 7 to 'main' (${purpose}) failed (${reason}): Not switched`,
-      );
-    }
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      `saveSlotFlow: switchSlot for rom 7 to 'main' (${purpose}) failed (${reason}): Not switched`,
+    );
   });
 
   it("words an activate's failure answer through switchSlotFailureMessage, the backend's explanation included", async () => {
@@ -474,6 +469,8 @@ describe("executeSlotSwitch on a switch that stopped partway", () => {
         events.stop();
       }
       expect(events.details).toEqual([{ type: "save_sync", rom_id: 7 }]);
+      expect(connectionState.reportServerReachable).not.toHaveBeenCalled();
+      expect(backend.logWarn).not.toHaveBeenCalled();
     },
   );
 
@@ -497,6 +494,8 @@ describe("executeSlotSwitch on a switch that stopped partway", () => {
         events.stop();
       }
       expect(events.details).toEqual([{ type: "save_sync", rom_id: 7 }]);
+      expect(connectionState.reportServerReachable).not.toHaveBeenCalled();
+      expect(backend.logWarn).not.toHaveBeenCalled();
     },
   );
 
@@ -594,21 +593,31 @@ describe("loadFileVersions", () => {
   });
 });
 
-describe("executeCopySaveToSlot", () => {
-  const CONFLICT: SyncConflict = {
-    type: "sync_conflict",
-    rom_id: 7,
-    filename: "save.srm",
-    server_save_id: 1,
-    server_updated_at: "2025-06-15T10:00:00Z",
-    server_size: 100,
-    local_path: "/local/save.srm",
-    local_hash: "abc",
-    local_mtime: "2025-06-15T10:00:00Z",
-    local_size: 100,
-    created_at: "2025-06-15T10:00:00Z",
-  };
+const CONFLICT: SyncConflict = {
+  type: "sync_conflict",
+  rom_id: 7,
+  filename: "save.srm",
+  server_save_id: 1,
+  server_updated_at: "2025-06-15T10:00:00Z",
+  server_size: 100,
+  local_path: "/local/save.srm",
+  local_hash: "abc",
+  local_mtime: "2025-06-15T10:00:00Z",
+  local_size: 100,
+  created_at: "2025-06-15T10:00:00Z",
+};
 
+async function expectConflictRejectionPropagates(
+  run: (showConflict: (c: SyncConflict) => Promise<unknown>) => Promise<unknown>,
+): Promise<void> {
+  vi.mocked(toast.showToast).mockClear();
+  const rejectingDialog = vi.fn().mockRejectedValueOnce(new Error("dialog boom"));
+  await expect(run(rejectingDialog)).rejects.toThrow("dialog boom");
+  await new Promise((r) => setTimeout(r, 0));
+  expect(toast.showToast).not.toHaveBeenCalled();
+}
+
+describe("executeCopySaveToSlot", () => {
   it("toasts and announces save sync on ok and upload_failed, but skips announce on already_present", async () => {
     const events: unknown[] = [];
     const onEvt = (e: Event) => events.push((e as CustomEvent).detail);
@@ -648,18 +657,14 @@ describe("executeCopySaveToSlot", () => {
     expect(showConflict).toHaveBeenCalledExactlyOnceWith(CONFLICT);
     expect(toast.showToast).not.toHaveBeenCalled();
 
+    vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.copySaveToSlot).mockRejectedValueOnce(new Error("net down"));
     await executeCopySaveToSlot(7, 10, "alt", showConflict);
     expect(backend.logWarn).toHaveBeenCalledWith("saveSlotFlow: copy failed for save 10 into 'alt': Error: net down");
     expect(toast.showToast).toHaveBeenCalledWith("Couldn't copy the save. Check your connection and try again.");
 
-    vi.mocked(toast.showToast).mockClear();
     vi.mocked(backend.copySaveToSlot).mockResolvedValueOnce({ status: "conflict_blocked", conflicts: [CONFLICT] });
-    await expect(
-      executeCopySaveToSlot(7, 10, "alt", vi.fn().mockRejectedValueOnce(new Error("dialog boom"))),
-    ).rejects.toThrow("dialog boom");
-    await new Promise((r) => setTimeout(r, 0));
-    expect(toast.showToast).not.toHaveBeenCalled();
+    await expectConflictRejectionPropagates((cb) => executeCopySaveToSlot(7, 10, "alt", cb));
   });
 });
 
@@ -703,30 +708,11 @@ describe("executeVersionRestore", () => {
     expect(backend.logWarn).toHaveBeenCalledWith("saveSlotFlow: restore error for save 11: Error: boom");
     expect(toast.showToast).toHaveBeenCalledWith("Couldn't confirm the restore.", { subtext: "boom" });
 
-    vi.mocked(toast.showToast).mockClear();
     vi.mocked(backend.savesRollbackToVersion).mockResolvedValueOnce({
       status: "conflict_blocked",
-      conflicts: [
-        {
-          type: "sync_conflict",
-          rom_id: 7,
-          filename: "save.srm",
-          server_save_id: 1,
-          server_updated_at: "2025-06-15T10:00:00Z",
-          server_size: 100,
-          local_path: "/local/save.srm",
-          local_hash: "abc",
-          local_mtime: "2025-06-15T10:00:00Z",
-          local_size: 100,
-          created_at: "2025-06-15T10:00:00Z",
-        },
-      ],
+      conflicts: [CONFLICT],
     });
-    await expect(
-      executeVersionRestore(7, "default", VERSION, vi.fn().mockRejectedValueOnce(new Error("dialog boom"))),
-    ).rejects.toThrow("dialog boom");
-    await new Promise((r) => setTimeout(r, 0));
-    expect(toast.showToast).not.toHaveBeenCalled();
+    await expectConflictRejectionPropagates((cb) => executeVersionRestore(7, "default", VERSION, cb));
   });
 });
 
