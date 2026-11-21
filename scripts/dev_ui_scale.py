@@ -128,6 +128,27 @@ _TIMEOUT_SEC = 8.0
 
 _STEAM_CONFIG_VDF = os.path.expanduser("~/.local/share/Steam/config/config.vdf")
 
+# Set by scripts/dev_target.sh on a target: the tasks a hint names are then the
+# build host's, with --target, and the run there is stopped by a Ctrl-C on the
+# build host or by --stop.
+_TARGET = os.environ.get("TENDER_DEV_TARGET", "")
+
+
+def _task(words: str) -> str:
+    """The ``mise run`` line for *words*, with ``--target`` where this runs on a target."""
+    return f"mise run {words}" + (f" --target {_TARGET}" if _TARGET else "")
+
+
+# The last line of every restore, saying whether all of it landed;
+# scripts/dev_target.sh waits for one of them after it stops the unit.
+RESTORE_DONE = "Restore done: the scale and the window are as they were before this run."
+RESTORE_INCOMPLETE = "Restore incomplete: see the lines above."
+
+
+def _stopper() -> str:
+    return f"Ctrl-C on the build host, or `{_task('dev:ui-scale --stop')}`," if _TARGET else "Ctrl-C"
+
+
 # Steam re-lays out the views asynchronously after the scale call: measured on-device, the
 # new dpr is live at ~0.25 s but the layout is still mid-flight (a transient 570x480), and
 # settles by ~0.5 s. Measure well past that or the printed numbers are a lie.
@@ -191,7 +212,7 @@ def _list_targets() -> list[dict[str, Any]]:
     except (URLError, OSError, ValueError) as e:
         raise DevUiScaleError(
             f"no CEF debugger on {_DEBUGGER_URL} ({e}). Is Big Picture running? "
-            "Open one with `mise run dev:bpm`. If Steam is up but the endpoint "
+            f"Open one with `{_task('dev:bpm')}`. If Steam is up but the endpoint "
             "is dead, ~/.steam/steam/.cef-enable-remote-debugging is missing (create it and "
             "restart Steam)."
         ) from e
@@ -668,10 +689,10 @@ def _emulate_deck_window(prior: BpmWindow | None) -> BpmWindow | None:
     return window
 
 
-def _restore_window(prior: BpmWindow | None) -> None:
-    """Put the window back exactly as it was — same geometry, same fullscreen state."""
+def _restore_window(prior: BpmWindow | None) -> bool:
+    """Put the window back exactly as it was — same geometry, same fullscreen state; whether it landed."""
     if prior is None:
-        return
+        return True
     window = _kwin_call("restore", {"frame": prior.frame.as_json(), "fullScreen": prior.fullscreen})
     if window is None:
         print(
@@ -679,13 +700,15 @@ def _restore_window(prior: BpmWindow | None) -> None:
             "It is still at the Deck's 1280x800 — resize or re-fullscreen it by hand.",
             file=sys.stderr,
         )
-        return
+        return False
     print(f"Restored: Big Picture window {window.describe()} (the state captured before this run).")
     if window.fullscreen != prior.fullscreen or (not prior.fullscreen and window.frame != prior.frame):
         print(
             f"WARNING: that is NOT the window state captured before this run ({prior.describe()}).",
             file=sys.stderr,
         )
+        return False
+    return True
 
 
 # ------------------------------------------------------------------------- steam
@@ -927,7 +950,7 @@ def _set_scale(factor: float | None) -> None:
     if ws_url is None:
         raise DevUiScaleError(
             f"no {_SHARED_JS_CONTEXT} debug target on {_DEBUGGER_URL}. Is Big Picture running? "
-            "Open one with `mise run dev:bpm`."
+            f"Open one with `{_task('dev:bpm')}`."
         )
     if factor is None:
         expression = "(() => { SteamClient.Window.SetGamepadUIAutoDisplayScale(true); return 'auto'; })()"
@@ -1154,6 +1177,11 @@ exactly as it was rather than silently flipped to auto, and the Big Picture wind
 back to the geometry and fullscreen state it had."""
 
 
+# The modes that act once and exit rather than hold; scripts/dev_target.sh runs
+# them in the foreground on a target rather than as a unit.
+ONE_SHOT_MODES = ("auto", "off")
+
+
 def _parse_mode(argv: list[str]) -> float | None:
     """Map the single positional arg to a factor, or ``None`` for restore-and-exit."""
     if not argv:
@@ -1162,7 +1190,7 @@ def _parse_mode(argv: list[str]) -> float | None:
     if arg in ("-h", "--help"):
         print(_USAGE)
         raise SystemExit(0)
-    if arg in ("auto", "off"):
+    if arg in ONE_SHOT_MODES:
         return None
     if arg == "deck":
         return _DECK_SCALE
@@ -1193,15 +1221,16 @@ def _restore(prior: SteamScaleState | None, prior_window: BpmWindow | None) -> N
     order: a stranded forced scale is the damaging outcome (Steam persists it), a window left
     at 1280x800 is cosmetic.
 
-    Signals are held off for the duration. The window half is the slow half — subprocesses
+    Signals are held off for the duration. The window part is the slow part — subprocesses
     plus a journal read — and an impatient second Ctrl-C used to truncate the restore right
     there, leaving the window resized. SIGKILL remains the only way to skip the restore, which
     is what the docs promise.
     """
     with _signals_held_off():
-        _restore_scale(prior)
-        _restore_window(prior_window)
-        _verify_restore(prior)
+        scale = _restore_scale(prior)
+        window = _restore_window(prior_window)
+        verified = _verify_restore(prior)
+        print(RESTORE_DONE if scale and window and verified else RESTORE_INCOMPLETE, flush=True)
 
 
 @contextmanager
@@ -1215,8 +1244,8 @@ def _signals_held_off() -> Iterator[None]:
             signal.signal(number, handler)
 
 
-def _restore_scale(prior: SteamScaleState | None) -> None:
-    """Put *prior* back — exactly.
+def _restore_scale(prior: SteamScaleState | None) -> bool:
+    """Put *prior* back — exactly; whether that was *prior*, known and put back.
 
     A user who deliberately set a manual UI Scale (an accessibility "Larger text" value,
     say) must get that scale back, not Steam's automatic one — flipping them to auto on
@@ -1231,36 +1260,43 @@ def _restore_scale(prior: SteamScaleState | None) -> None:
                 "If you had a manual UI Scale set, re-set it in Steam (Settings › Display › UI Scale).",
                 file=sys.stderr,
             )
-        elif prior.auto:
+            return False
+        if prior.auto:
             _set_scale(None)
             print("Restored: AUTOMATIC scaling (the state captured before this run).")
         else:
             _set_scale(prior.factor)
             print(f"Restored: MANUAL UI Scale {prior.factor} (the state captured before this run).")
+        return True
     except DevUiScaleError as e:
         target = "automatic scaling" if prior is None or prior.auto else f"manual UI Scale {prior.factor}"
         print(
             f"\nCOULD NOT RESTORE {target} ({e}).\n"
             "Steam is STILL on the forced scale, and Steam persists it — fix it with:\n"
-            "  mise run dev:ui-scale auto",
+            f"  {_task('dev:ui-scale auto')}",
             file=sys.stderr,
         )
+        return False
 
 
-def _verify_restore(prior: SteamScaleState | None) -> None:
-    """Check the restore actually landed, rather than just claiming it did.
+def _verify_restore(prior: SteamScaleState | None) -> bool:
+    """Check the restore actually landed, rather than just claiming it did; whether it did.
 
     Verified against the live settings store and the live ``devicePixelRatio`` — never
     against ``config.vdf``, whose ``AutoScaleFactor`` is not re-flushed in-session and so
-    cannot tell an auto restore from a forced scale.
+    cannot tell an auto restore from a forced scale. A reading that failed, or no prior
+    state to compare with, verifies nothing.
     """
     time.sleep(_SETTLE_SEC)
     dpr = _current_dpr()
     live = _read_live_scale_state()
-    now = "an unreadable state" if live is None else SteamScaleState(live[0], live[1], dpr, "live").describe()
-    print(f"Verified: Steam is on {now}, rendering at dpr {'unknown' if dpr is None else dpr}")
-    if prior is None:
-        return
+    if live is None:
+        print("Could not read Steam's scale back after the restore.")
+    else:
+        now = SteamScaleState(live[0], live[1], dpr, "live").describe()
+        print(f"Read back: Steam is on {now}, rendering at dpr {'unknown' if dpr is None else dpr}")
+    if prior is None or live is None or (prior.dpr is not None and dpr is None):
+        return False
 
     auto_drifted = live is not None and live[0] != prior.auto
     factor_drifted = live is not None and not prior.auto and live[1] != prior.factor
@@ -1271,6 +1307,8 @@ def _verify_restore(prior: SteamScaleState | None) -> None:
             "The restore did not land — check Steam › Settings › Display › UI Scale.",
             file=sys.stderr,
         )
+        return False
+    return True
 
 
 def main(argv: list[str]) -> int:
@@ -1309,14 +1347,14 @@ def main(argv: list[str]) -> int:
         print("\nMeasured (real, repainted — not a CDP emulation override):")
         verdict = _verify_emulation(factor, window)
         print(
-            f"\nHOLDING — Ctrl-C restores what you were on before this run\n"
+            f"\nHOLDING — {_stopper()} restores what you were on before this run\n"
             f"  scale:  {_describe(prior)}\n"
             f"  window: {prior_window.describe() if prior_window else 'unknown — will be left as-is'}\n"
             "The QuickAccess view is watched while this holds: Steam's scale reaches only the views\n"
             "that are rendered when it is pushed, so a QAM opened later is re-scaled here.\n"
             "WARNING: Steam persists this scale to config.vdf, filed under the display identity\n"
             "printed above. A hard kill (SIGKILL) skips the restore — recover with:\n"
-            "  mise run dev:ui-scale auto"
+            f"  {_task('dev:ui-scale auto')}"
         )
         _hold(factor, window, verified=verdict is not Verdict.PENDING)
     except KeyboardInterrupt:

@@ -26,9 +26,19 @@ A reading that cannot be made at all is reported as such and lets the task
 through: the backend refuses on its own either way, and the only thing lost is
 the early word.
 
+A target's ``scripts/dev_target.sh`` asks with ``--holder`` instead, which
+refuses nothing and answers in four lines — ``free``, ``held`` or
+``unknown``; the holder's pid, or an empty line; the lock's path; and the
+holder as :func:`describe_pid` names it, or an empty line where the kernel
+names no holder — so that the target can name which of its units holds it. ``--log-path`` prints
+where the backend writes ``backend.log``, from the same resolver, for the target
+to follow it.
+
 Usage:
     python scripts/dev_backend_lock.py                      # refuse if one holds it
     python scripts/dev_backend_lock.py --require-running    # refuse if none does
+    python scripts/dev_backend_lock.py --holder             # say who holds it
+    python scripts/dev_backend_lock.py --log-path           # say where the backend's log is
 """
 
 from __future__ import annotations
@@ -44,6 +54,7 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "backend"))
 
 from domain.app_directories import resolve_directories  # noqa: E402
+from host.logging_setup import LOG_FILENAME  # noqa: E402
 from host.single_instance import LOCK_FILENAME  # noqa: E402
 
 
@@ -51,6 +62,12 @@ def lock_path() -> str:
     """Where the running backend's lock would lie, for this environment."""
     directories = resolve_directories(os.environ, os.path.expanduser("~"), str(REPO))
     return os.path.join(directories.data_dir, LOCK_FILENAME)
+
+
+def log_path() -> str:
+    """Where the backend writes its log, for this environment."""
+    directories = resolve_directories(os.environ, os.path.expanduser("~"), str(REPO))
+    return os.path.join(directories.state_dir, LOG_FILENAME)
 
 
 def holder_pid(path: str) -> int | None:
@@ -116,8 +133,10 @@ def is_held(path: str) -> bool | None:
 def describe_holder(path: str) -> str:
     """Which process holds the lock, as far as this machine will say."""
     pid = holder_pid(path)
-    if pid is None:
-        return "not established"
+    return "not established" if pid is None else describe_pid(pid)
+
+
+def describe_pid(pid: int) -> str:
     name = holder_name(pid)
     return f"pid {pid} ({name})" if name is not None else f"pid {pid}"
 
@@ -145,17 +164,38 @@ def refuse_because_free(path: str) -> None:
     )
 
 
+def report_holder(path: str, held: bool | None) -> None:
+    state = "unknown" if held is None else "held" if held else "free"
+    pid = holder_pid(path) if held else None
+    print(state, "" if pid is None else pid, path, "" if pid is None else describe_pid(pid), sep="\n")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    question = parser.add_mutually_exclusive_group()
+    question.add_argument(
         "--require-running",
         action="store_true",
         help="refuse when NO backend holds the lock, rather than when one does",
     )
+    question.add_argument(
+        "--holder",
+        action="store_true",
+        help="refuse nothing: print free, held or unknown, the holder's pid (or an empty line), the lock's path"
+        " and the holder's description (or an empty line)",
+    )
+    question.add_argument("--log-path", action="store_true", help="print where the backend writes its log")
     arguments = parser.parse_args()
+
+    if arguments.log_path:
+        print(log_path())
+        return 0
 
     path = lock_path()
     held = is_held(path)
+    if arguments.holder:
+        report_holder(path, held)
+        return 0
     if held is None:
         print(f"tender: could not read the single-instance lock at {path} — carrying on anyway.", file=sys.stderr)
         return 0

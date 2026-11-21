@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from services.saves._refusals import GoneFromRomm
 from services.saves._sync_stop import SyncStopped
 
 if TYPE_CHECKING:
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
     from domain.save_answer import SaveAnswer
     from services.protocols import DebugLogger
     from services.saves._sync_stop import SyncStop
+    from services.saves.sync_engine._gone_from_romm import GoneRoms
     from services.saves.sync_engine._running_game import RomSyncStops, RunningGameGuard, RunningSkips
     from services.saves.sync_engine._shape_refusal import SweepTally
 
@@ -31,17 +33,22 @@ async def sweep_rom(
     sync: Callable[..., Awaitable[RomSyncResult]],
     running: RunningGameGuard,
     running_skips: RunningSkips,
+    gone: GoneRoms,
 ) -> RomSyncResult:
     """Run *sync* for *rom_id* under *lock*, handing it a stop a start of the game reaches.
 
     A sync its stop ended counts what moved before the stop, and the game is
-    named in *running_skips*.
+    named in *running_skips*. A sync that found RomM no longer has the game
+    counts nothing, and the game is named in *gone*.
     """
     with stops.track(rom_id) as stop:
         try:
             async with lock:
                 result = await sync(stop=stop)
         except SyncStopped:
+            result = 0, 0, [], []
+        except GoneFromRomm:
+            gone.record(await running.name_of(rom_id))
             result = 0, 0, [], []
     if stop.stopped_the_sync():
         running_skips.skip(rom_id, await running.name_of(rom_id))

@@ -147,17 +147,20 @@ class RommPlaytimeApi(Protocol):
         ...
 
 
-class RommRomReader(Protocol):
-    """RomM ROM-listing, ROM-download, and cover-download surface."""
+class RommRomLookup(Protocol):
+    """RomM's read of one ROM by its id."""
 
     def get_rom(self, rom_id: int) -> dict[str, Any]:
         """Fetch a single ROM by ID.
 
-        Returns RomM's detail answer from /api/roms/{rom_id}, which adds the
-        user's saves, states, screenshots, notes and collections to what
-        :meth:`get_rom_simple` answers.
+        Returns RomM's detail answer from /api/roms/{rom_id}: the ROM with the
+        user's saves, states, screenshots, notes and collections.
         """
         ...
+
+
+class RommRomReader(RommRomLookup, Protocol):
+    """RomM ROM-listing, ROM-download, and cover-download surface."""
 
     def get_rom_simple(self, rom_id: int) -> dict[str, Any]:
         """Fetch a single ROM by ID over the simple schema, with retries.
@@ -543,8 +546,8 @@ class RommLibraryApi(RommPlatformReader, RommRomReader, Protocol):
     """RomM surface for LibraryService — platforms, collections, ROM listing & downloads."""
 
 
-class RommSyncApi(RommSaveApi, RommVersion, RommDeviceApi, Protocol):
-    """RomM surface for save-sync — saves cluster + server identity + device registration."""
+class RommSyncApi(RommSaveApi, RommRomLookup, RommVersion, RommDeviceApi, Protocol):
+    """RomM surface for save-sync — saves cluster + server identity + device registration + the ROM lookup."""
 
 
 class RommApi(

@@ -58,6 +58,7 @@ export type WireReason =
   | "file_present"
   | "folder_unreachable"
   | "game_running"
+  | "gone_from_romm"
   | "headers_not_a_list"
   | "icon_write_failed"
   | "image_not_found"

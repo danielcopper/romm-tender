@@ -334,7 +334,8 @@ jobs:
       - name: Shellcheck the scripts that run outside this repository
         run: |
           shellcheck --version | grep -qx 'version: 0.11.0'
-          shellcheck install.sh scripts/package.sh scripts/dev_dispatch.sh scripts/dev_target_install.sh
+          shellcheck install.sh scripts/package.sh scripts/dev_dispatch.sh scripts/dev_target_install.sh \
+            scripts/dev_target.sh scripts/dev_steam.sh scripts/dev_place_window.sh
       # shellcheck has no rule for this one: `exit` inside `$(...)` ends the
       # subshell, so a shell function that answers with a value and aborts on a
       # bad input does neither, and the caller runs on with an empty answer.

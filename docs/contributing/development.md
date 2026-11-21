@@ -244,9 +244,11 @@ bash install.sh --from build/romm-tender-<V>.tar.gz
 ```
 
 That is the same path a release takes, with the download skipped — `install.sh --uninstall` takes it back out, and
-leaves the database, the settings and the launcher where they are. Neither the packager nor the installer is ever run
-against your own machine from a test: `tests/scripts/` runs under a throwaway HOME (the suite's autouse fixture), and
-the installer's tests also under a stub `PATH`.
+leaves the database, the settings and the launcher where they are. On a dev target, `mise run install --target <name>`
+installs the same tarball there:
+[Installing the release on a target](frontend-dev-loop.md#installing-the-release-on-a-target). Neither the packager nor
+the installer is ever run against your own machine from a test: `tests/scripts/` runs under a throwaway HOME (the
+suite's autouse fixture), and the installer's tests also under a stub `PATH`.
 
 Literally the same path: the release workflow's second job runs those same two steps on the tagged tree and attaches
 what comes out, so there is one producer for a local build and a published one. What it attaches is held to
@@ -661,6 +663,18 @@ for its users in a way they cannot wait for the next release from `main` to fix 
 tag: one commit that carries its decisions, the version and changelog set by hand, the tag and release cut by hand, the
 asset built by the release workflow started manually on that branch. The same fix lands on `main` first or alongside,
 and the branch is deleted once the release is out; the tag holds it.
+
+The latest release is the highest published version: `install.sh` and the in-app update check both read
+`/releases/latest`, so an emergency release marked latest over a higher version would point new installs at the older
+line (and stop them outright when that line carries no tarball, as the Decky-era 0.33 line does) and show users of the
+newer one no update. When a release with a higher version is already published, the emergency release is created with
+`gh release create <tag> --latest=false`, which keeps GitHub from marking it latest; otherwise it becomes the latest
+release as usual, so new installs and the update check reach the fix. When it was marked latest over a higher version
+anyway, `gh release edit <the highest tag> --latest` moves the mark back. Its notes link its assets by the tag's
+download URL, `releases/download/<tag>/<asset>`, never `releases/latest/download/`, which follows the mark and leads
+elsewhere — or nowhere, once the latest release no longer carries that asset. Once the release is out, `main`'s
+`CHANGELOG.md` gets its section, copied from the tag's, in a commit on `main`, so `main`'s changelog lists every
+release.
 
 Two files carry the version, each written by a different mechanism, and both are outputs of the release run that are
 never edited by hand on `main`: `version.txt` at the repository root is the `simple` strategy's own version file, and
