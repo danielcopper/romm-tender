@@ -286,11 +286,11 @@ export async function ensureTrackingConfiguredSilently(romId: number, tag: strin
   if (setupInfo === null) return;
 
   // Reuse the shared outcome handler with a no-op save-surface dispatch and a
-  // swallowed toast: the auto_confirm branch fires `confirmSlotChoice`; every
-  // other (abort) branch is irrelevant here because this step never aborts a
-  // start on tracking — an unconfigured slot the user can't resolve at the start
-  // must still let the game start (the page's save surface can configure it
-  // later).
+  // swallowed toast: only the auto_confirm side effect (`confirmSlotChoice`)
+  // matters here, because this step ignores the returned verdict and never
+  // aborts a start on tracking — an unconfigured slot the user can't resolve
+  // at the start still lets the game start (the page's save surface can
+  // configure it later).
   await applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {
     rid: romId,
     confirmSlotChoice: (...args) => withTimeout(confirmSlotChoice(...args), LOCAL_CALL_LIMIT_MS),

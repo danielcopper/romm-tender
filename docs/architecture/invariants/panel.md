@@ -146,10 +146,9 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   `useSlotPanelState`'s `slotSavesSeqRef`, and `useFileVersionHistory`'s `readSeqRef`). Ordered but unbound: the two
   identity writes (the store's `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab slot load
   (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the store's
-  `cached.bios_status` fold (and `useStrandedCheck` in `SaveManagementCard.tsx` relies on subtree `key`, effect
-  cancellation, and `mountedRef` rather than a sequence counter). The panel's `rereadBiosAnswer`, which
-  `handleBiosChange` and a press on the BIOS tab both read through, is bound and ordered (`bios` ticket). The play
-  button is NOT covered
+  `cached.bios_status` fold (and `useStrandedCheck` in `SaveManagementCard.tsx` relies on subtree `key` and effect
+  cancellation rather than a sequence counter). The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on
+  the BIOS tab both read through, is bound and ordered (`bios` ticket). The play button is NOT covered
 
   The panel component itself holds none of these writes. `RomBinding` is built by `bindRom` for a read a run of the
   `[appId]` effect issued and by `bindRomInState` for the active tab's panes, whose writer is built during render; the

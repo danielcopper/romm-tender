@@ -381,10 +381,9 @@ deleted after the lock is released.
   listable and expandable, but it has neither an "Activate Slot" nor a "Delete Slot" button. The panel is also visually
   **demoted**: muted styling, sorted last (`sortSaveSlots` in `frontend/src/utils/saveHelpers.ts`, below every named
   slot — just above "+ New Slot" on the SAVES tab, while the desktop Saves card places "+ New Slot" in the card header),
-  labelled **Manual archive** (`formatSlotDisplayName` in `frontend/src/utils/saveSlotWording.ts`) with a note reading
-  "Saves uploaded to RomM without a slot. RomM keeps them as a manual archive and never syncs them between devices."
-  Only the _entry_ is closed, not existing state — a ROM already in legacy mode keeps syncing until migration `005`
-  re-opens the wizard.
+  labelled **Manual archive** (`displaySlot` in `frontend/src/utils/saveHelpers.ts`) with a note reading "Saves uploaded
+  to RomM without a slot. RomM keeps them as a manual archive and never syncs them between devices." Only the _entry_ is
+  closed, not existing state — a ROM already in legacy mode keeps syncing until migration `005` re-opens the wizard.
 - **Migration `005`** (`005_unconfirm_legacy_slot_confirmations.sql`) un-confirms any ROM previously confirmed in legacy
   mode — `UPDATE rom_save_states SET slot_confirmed=0 WHERE active_slot IS NULL AND slot_confirmed=1` (the pre-rename
   table name migration `005` targets; migration `018` later renames it to `rom_save_sync_states`). No save data is
@@ -1416,7 +1415,7 @@ any surface that shows a conflict:
   (`frontend/src/desktop/gameview/dialogs/desktopDialogs.tsx`, `beforeStart=false`) for both copy and restore flows,
   while `usePlayLaunch` (`frontend/src/desktop/gameview/usePlayLaunch.ts`) and `launchPromptHost`
   (`frontend/src/desktop/launchPromptHost.tsx`) use `desktopLaunchPrompts`
-  (`frontend/src/desktop/gameview/dialogs/desktopLaunchPrompts.tsx`, `beforeStart=true`) for launch-gate conflicts and
+  (`frontend/src/desktop/gameview/dialogs/desktopDialogs.tsx`, `beforeStart=true`) for launch-gate conflicts and
   `usePlayLaunch` uses `desktopResolveConflicts` (`frontend/src/desktop/gameview/dialogs/desktopDialogs.tsx`,
   `beforeStart=false`) for Resolve Conflict outside a start.
 

@@ -1,7 +1,7 @@
 /**
- * Big Picture's SAVES tab for a game whose saves no sync carries: "Save Sync", the sentence its sync is refused with,
- * and no slot to choose (#2153 D2, D7) — whether or not a slot was set up for it before (#2149 D5) (the Desktop Saves
- * card renders its own `RefusalBox`). With save sync off, the line saying so stands above the sentence (#2527 D1).
+ * Big Picture's SAVES tab refusal view (`docs/architecture/save-file-sync-architecture.md`,
+ * "Where the check happens"): shows "Save Sync", the refusal sentence, and any hint
+ * (`RefusalBox` in `SaveManagementCard.tsx` renders the desktop counterpart).
  */
 
 import type { FC } from "react";
