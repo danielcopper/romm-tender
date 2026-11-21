@@ -209,6 +209,17 @@ describe("a start's own read of the emulator", () => {
     );
   });
 
+  it("points at no menu with one emulator and no default, which the game page opens only when more than one is listed", async () => {
+    vi.mocked(getPlatformCoreInfo).mockResolvedValue({
+      start: start({ state: "choose", reason: "no_find_rule", entry: "BlastEm" }),
+      emulators: [row("BlastEm", { reason: "no_find_rule" })],
+      active_core_label: null,
+    } as Awaited<ReturnType<typeof getPlatformCoreInfo>>);
+    expect(await emulatorRefusalForRom(7, "test")).toBe(
+      "No emulator is the default, because whether BlastEm is installed could not be established (ES-DE has no rule for finding it).",
+    );
+  });
+
   it("refuses nothing where the read fails", async () => {
     vi.mocked(getPlatformCoreInfo).mockRejectedValue(new Error("down"));
     expect(await emulatorRefusalForRom(7, "test")).toBeNull();
