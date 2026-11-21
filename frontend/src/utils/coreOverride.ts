@@ -44,7 +44,7 @@ export async function executeGameCoreChange({
   } catch (e) {
     // `setGameCore` / `clearGameCore` run under no prune lease, so leaving the
     // page cancels nothing: an error that lands after it is a real failure the
-    // page can no longer show. It is logged, not toasted.
+    // page can no longer show.
     if (!isPruneLeaseAdmissionCurrent(admission)) {
       logWarn(`${logTag}: failed after the page was left for romId=${romId} (${target}): ${e}`);
       return { status: "cancelled" };
