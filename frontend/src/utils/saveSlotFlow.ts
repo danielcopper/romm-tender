@@ -9,7 +9,6 @@
 import {
   checkLocalDrift,
   copySaveToSlot,
-  debugLog,
   deleteLocalSaves,
   deleteSlot,
   getSlotDeleteInfo,
@@ -22,7 +21,6 @@ import {
   type SaveStranding,
 } from "../api/backend";
 import { reportServerReachable } from "./connectionState";
-import { detach } from "./detach";
 import { noteSaveSyncDisplay } from "./gameDetailStore";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import { announceSaveSync } from "./saveSyncEvents";
@@ -125,9 +123,12 @@ export async function executeSlotSwitch(
       purpose === "create"
         ? createSlotFailureMessage(result.reason, result.message)
         : switchSlotFailureMessage(result.reason, result.message);
+    logWarn(
+      `saveSlotFlow: switchSlot for rom ${romId} to '${slot}' (${purpose}) failed (${result.reason}): ${result.message}`,
+    );
     return { ok: false, reason: result.reason, message };
   } catch (e) {
-    detach(debugLog(`saveSlotFlow: switchSlot to '${slot}' (${purpose}) threw: ${e}`));
+    logWarn(`saveSlotFlow: switchSlot for rom ${romId} to '${slot}' (${purpose}) threw: ${e}`);
     return {
       ok: false,
       reason: null,
@@ -144,12 +145,15 @@ export async function loadSlotDeleteInfo(romId: number, slot: string): Promise<S
   try {
     const info = await getSlotDeleteInfo(romId, slot);
     if (!info.success) {
+      logWarn(
+        `saveSlotFlow: getSlotDeleteInfo for rom ${romId} slot '${slot}' failed (${info.reason}): ${info.message}`,
+      );
       showToast(info.message);
       return null;
     }
     return info;
   } catch (e) {
-    detach(debugLog(`saveSlotFlow: getSlotDeleteInfo for '${slot}' threw: ${e}`));
+    logWarn(`saveSlotFlow: getSlotDeleteInfo for rom ${romId} slot '${slot}' threw: ${e}`);
     showToast(SLOT_DELETE_INFO_ERROR_MESSAGE);
     return null;
   }
@@ -163,10 +167,11 @@ export async function executeSlotDelete(romId: number, slot: string): Promise<bo
       showToast(slotDeletedMessage(slot));
       return true;
     }
+    logWarn(`saveSlotFlow: deleteSlot for rom ${romId} slot '${slot}' failed (${result.reason}): ${result.message}`);
     showToast(result.message);
     return false;
   } catch (e) {
-    detach(debugLog(`saveSlotFlow: deleteSlot for '${slot}' threw: ${e}`));
+    logWarn(`saveSlotFlow: deleteSlot for rom ${romId} slot '${slot}' threw: ${e}`);
     showToast(DELETE_SLOT_ERROR_MESSAGE);
     return false;
   }
@@ -214,7 +219,8 @@ export async function loadFileVersions(
 /**
  * Copy server save `saveId` into `targetSlot` and surface the outcome via
  * toast or `showConflict`. Dispatches `romm_data_changed` on `ok` and
- * `upload_failed` (`already_present` copied nothing). Never throws.
+ * `upload_failed` (`already_present` copied nothing). Catches and toasts copy
+ * RPC rejections.
  */
 export async function executeCopySaveToSlot(
   romId: number,
@@ -222,29 +228,31 @@ export async function executeCopySaveToSlot(
   targetSlot: string,
   showConflict: (conflict: SyncConflict) => Promise<unknown>,
 ): Promise<void> {
+  let result: Awaited<ReturnType<typeof copySaveToSlot>>;
   try {
-    const result = await copySaveToSlot(romId, saveId, targetSlot);
-    const feedback = copyToSlotFeedback(result, targetSlot);
-    if (feedback === null) return;
-    if (feedback.kind === "conflict") {
-      await showConflict(feedback.conflict);
-      return;
-    }
-    showToast(feedback.message);
-    // Only a copy refreshes the slot views: `already_present` copied nothing.
-    if (!isEndpointFailure(result) && (result.status === "ok" || result.status === "upload_failed")) {
-      announceSaveSync(romId);
-    }
+    result = await copySaveToSlot(romId, saveId, targetSlot);
   } catch (e) {
     logWarn(`saveSlotFlow: copy failed for save ${saveId} into '${targetSlot}': ${e}`);
     showToast(COPY_SAVE_ERROR_TOAST);
+    return;
+  }
+  const feedback = copyToSlotFeedback(result, targetSlot);
+  if (feedback === null) return;
+  if (feedback.kind === "conflict") {
+    await showConflict(feedback.conflict);
+    return;
+  }
+  showToast(feedback.message);
+  // Only a copy refreshes the slot views: `already_present` copied nothing.
+  if (!isEndpointFailure(result) && (result.status === "ok" || result.status === "upload_failed")) {
+    announceSaveSync(romId);
   }
 }
 
 /**
  * Roll back `slot` to `version` and surface the outcome via toast or
  * `showConflict`. Returns `true` when the local restore landed (`ok` or
- * `put_failed`). Never throws.
+ * `put_failed`). Catches and toasts rollback RPC rejections.
  */
 export async function executeVersionRestore(
   romId: number,
@@ -252,24 +260,25 @@ export async function executeVersionRestore(
   version: SaveVersionEntry,
   showConflict: (conflict: SyncConflict) => Promise<unknown>,
 ): Promise<boolean> {
+  let result: Awaited<ReturnType<typeof savesRollbackToVersion>>;
   try {
-    const result = await savesRollbackToVersion(romId, slot, version.id);
-    const feedback = rollbackFeedback(result, version.updated_at);
-    if (feedback === null) return false;
-    if (feedback.kind === "conflict") {
-      await showConflict(feedback.conflict);
-    } else {
-      showToast(feedback.message);
-    }
-    // `put_failed` refreshes too: the local download succeeded and only the
-    // server-side bump did not, so the switch is locally complete — it just
-    // won't reach other devices yet.
-    return !isEndpointFailure(result) && (result.status === "ok" || result.status === "put_failed");
+    result = await savesRollbackToVersion(romId, slot, version.id);
   } catch (e) {
     logWarn(`saveSlotFlow: restore error for save ${version.id}: ${e}`);
     showToast(RESTORE_CONFIRM_ERROR_TOAST, { subtext: e instanceof Error ? e.message : String(e) });
     return false;
   }
+  const feedback = rollbackFeedback(result, version.updated_at);
+  if (feedback === null) return false;
+  if (feedback.kind === "conflict") {
+    await showConflict(feedback.conflict);
+  } else {
+    showToast(feedback.message);
+  }
+  // `put_failed` refreshes too: the local download succeeded and only the
+  // server-side bump did not, so the switch is locally complete — it just
+  // won't reach other devices yet.
+  return !isEndpointFailure(result) && (result.status === "ok" || result.status === "put_failed");
 }
 
 /**

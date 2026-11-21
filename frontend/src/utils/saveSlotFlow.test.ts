@@ -278,10 +278,18 @@ describe("executeSlotSwitch", () => {
       ).map((reason) => ({ purpose, reason })),
     ),
   )("tells the connection store nothing for a $reason failure answer ($purpose)", async ({ purpose, reason }) => {
+    vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.switchSlot).mockResolvedValueOnce({ success: false, reason, message: "Not switched" });
 
     await expect(executeSlotSwitch(7, "main", purpose)).resolves.toMatchObject({ ok: false, reason });
     expect(connectionState.reportServerReachable).not.toHaveBeenCalled();
+    if (reason === "switch_incomplete") {
+      expect(backend.logWarn).not.toHaveBeenCalled();
+    } else {
+      expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+        `saveSlotFlow: switchSlot for rom 7 to 'main' (${purpose}) failed (${reason}): Not switched`,
+      );
+    }
   });
 
   it("words an activate's failure answer through switchSlotFailureMessage, the backend's explanation included", async () => {
@@ -322,25 +330,26 @@ describe("executeSlotSwitch", () => {
   });
 
   it("answers a throw with no reason and the purpose's error sentence, logged and with reachability untouched", async () => {
+    vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.switchSlot).mockRejectedValueOnce(new Error("socket closed"));
     await expect(executeSlotSwitch(7, "main", "activate")).resolves.toEqual({
       ok: false,
       reason: null,
       message: "An error occurred while switching slots",
     });
-    expect(backend.debugLog).toHaveBeenCalledExactlyOnceWith(
-      "saveSlotFlow: switchSlot to 'main' (activate) threw: Error: socket closed",
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "saveSlotFlow: switchSlot for rom 7 to 'main' (activate) threw: Error: socket closed",
     );
 
-    vi.mocked(backend.debugLog).mockClear();
+    vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.switchSlot).mockRejectedValueOnce(new Error("socket closed"));
     await expect(executeSlotSwitch(7, "new", "create")).resolves.toEqual({
       ok: false,
       reason: null,
       message: "An error occurred while creating the slot",
     });
-    expect(backend.debugLog).toHaveBeenCalledExactlyOnceWith(
-      "saveSlotFlow: switchSlot to 'new' (create) threw: Error: socket closed",
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "saveSlotFlow: switchSlot for rom 7 to 'new' (create) threw: Error: socket closed",
     );
     expect(connectionState.reportServerReachable).not.toHaveBeenCalled();
   });
@@ -367,6 +376,7 @@ describe("loadSlotDeleteInfo", () => {
   });
 
   it("toasts a failure answer's own message and answers null", async () => {
+    vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.getSlotDeleteInfo).mockResolvedValueOnce({
       success: false,
       reason: "not_found",
@@ -374,16 +384,20 @@ describe("loadSlotDeleteInfo", () => {
     });
 
     await expect(loadSlotDeleteInfo(7, "old")).resolves.toBeNull();
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "saveSlotFlow: getSlotDeleteInfo for rom 7 slot 'old' failed (not_found): No such slot",
+    );
     expect(toast.showToast).toHaveBeenCalledExactlyOnceWith("No such slot");
   });
 
   it("toasts that the info could not be loaded when the call throws, and logs it", async () => {
+    vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.getSlotDeleteInfo).mockRejectedValueOnce(new Error("socket closed"));
 
     await expect(loadSlotDeleteInfo(7, "old")).resolves.toBeNull();
     expect(toast.showToast).toHaveBeenCalledExactlyOnceWith("Failed to load slot info");
-    expect(backend.debugLog).toHaveBeenCalledExactlyOnceWith(
-      "saveSlotFlow: getSlotDeleteInfo for 'old' threw: Error: socket closed",
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "saveSlotFlow: getSlotDeleteInfo for rom 7 slot 'old' threw: Error: socket closed",
     );
   });
 });
@@ -398,6 +412,7 @@ describe("executeSlotDelete", () => {
   });
 
   it("toasts a failure answer's own message and answers false", async () => {
+    vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.deleteSlot).mockResolvedValueOnce({
       success: false,
       reason: "server_unreachable",
@@ -405,16 +420,20 @@ describe("executeSlotDelete", () => {
     });
 
     await expect(executeSlotDelete(7, "old")).resolves.toBe(false);
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "saveSlotFlow: deleteSlot for rom 7 slot 'old' failed (server_unreachable): RomM did not answer",
+    );
     expect(toast.showToast).toHaveBeenCalledExactlyOnceWith("RomM did not answer");
   });
 
   it("toasts the error sentence when the call throws, logs it, and answers false", async () => {
+    vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.deleteSlot).mockRejectedValueOnce(new Error("socket closed"));
 
     await expect(executeSlotDelete(7, "old")).resolves.toBe(false);
     expect(toast.showToast).toHaveBeenCalledExactlyOnceWith("An error occurred while deleting the slot");
-    expect(backend.debugLog).toHaveBeenCalledExactlyOnceWith(
-      "saveSlotFlow: deleteSlot for 'old' threw: Error: socket closed",
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "saveSlotFlow: deleteSlot for rom 7 slot 'old' threw: Error: socket closed",
     );
   });
 });
@@ -619,11 +638,13 @@ describe("executeCopySaveToSlot", () => {
     const showConflict = vi.fn().mockResolvedValue("resolved");
     vi.mocked(backend.copySaveToSlot).mockResolvedValueOnce({ status: "unrecognized" as never });
     await executeCopySaveToSlot(7, 10, "alt", showConflict);
+    await new Promise((r) => setTimeout(r, 0));
     expect(toast.showToast).not.toHaveBeenCalled();
     expect(showConflict).not.toHaveBeenCalled();
 
     vi.mocked(backend.copySaveToSlot).mockResolvedValueOnce({ status: "conflict_blocked", conflicts: [CONFLICT] });
     await executeCopySaveToSlot(7, 10, "alt", showConflict);
+    await new Promise((r) => setTimeout(r, 0));
     expect(showConflict).toHaveBeenCalledExactlyOnceWith(CONFLICT);
     expect(toast.showToast).not.toHaveBeenCalled();
 
@@ -631,6 +652,14 @@ describe("executeCopySaveToSlot", () => {
     await executeCopySaveToSlot(7, 10, "alt", showConflict);
     expect(backend.logWarn).toHaveBeenCalledWith("saveSlotFlow: copy failed for save 10 into 'alt': Error: net down");
     expect(toast.showToast).toHaveBeenCalledWith("Couldn't copy the save. Check your connection and try again.");
+
+    vi.mocked(toast.showToast).mockClear();
+    vi.mocked(backend.copySaveToSlot).mockResolvedValueOnce({ status: "conflict_blocked", conflicts: [CONFLICT] });
+    await expect(
+      executeCopySaveToSlot(7, 10, "alt", vi.fn().mockRejectedValueOnce(new Error("dialog boom"))),
+    ).rejects.toThrow("dialog boom");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(toast.showToast).not.toHaveBeenCalled();
   });
 });
 
@@ -666,12 +695,38 @@ describe("executeVersionRestore", () => {
     vi.mocked(toast.showToast).mockClear();
     vi.mocked(backend.savesRollbackToVersion).mockResolvedValueOnce({ status: "unrecognized" as never });
     await expect(executeVersionRestore(7, "default", VERSION, showConflict)).resolves.toBe(false);
+    await new Promise((r) => setTimeout(r, 0));
     expect(toast.showToast).not.toHaveBeenCalled();
 
     vi.mocked(backend.savesRollbackToVersion).mockRejectedValueOnce(new Error("boom"));
     await expect(executeVersionRestore(7, "default", VERSION, showConflict)).resolves.toBe(false);
     expect(backend.logWarn).toHaveBeenCalledWith("saveSlotFlow: restore error for save 11: Error: boom");
     expect(toast.showToast).toHaveBeenCalledWith("Couldn't confirm the restore.", { subtext: "boom" });
+
+    vi.mocked(toast.showToast).mockClear();
+    vi.mocked(backend.savesRollbackToVersion).mockResolvedValueOnce({
+      status: "conflict_blocked",
+      conflicts: [
+        {
+          type: "sync_conflict",
+          rom_id: 7,
+          filename: "save.srm",
+          server_save_id: 1,
+          server_updated_at: "2025-06-15T10:00:00Z",
+          server_size: 100,
+          local_path: "/local/save.srm",
+          local_hash: "abc",
+          local_mtime: "2025-06-15T10:00:00Z",
+          local_size: 100,
+          created_at: "2025-06-15T10:00:00Z",
+        },
+      ],
+    });
+    await expect(
+      executeVersionRestore(7, "default", VERSION, vi.fn().mockRejectedValueOnce(new Error("dialog boom"))),
+    ).rejects.toThrow("dialog boom");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(toast.showToast).not.toHaveBeenCalled();
   });
 });
 

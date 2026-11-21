@@ -624,6 +624,7 @@ describe("ensureTrackingConfiguredDesktop", () => {
       recommended_action: "show_wizard",
       server_slots: [{ slot: "default", saves: [], count: 1, latest_updated_at: "2026-01-01T00:00:00Z" }],
     });
+    await new Promise((r) => setTimeout(r, 0));
     expect(verdict).toBe("abort");
     expect(toastBodies()).toEqual(["Configure save sync in Saves first"]);
     expect((tabSwitch.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail).toEqual({ tab: "saves" });

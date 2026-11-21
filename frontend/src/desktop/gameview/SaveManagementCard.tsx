@@ -156,7 +156,7 @@ async function readTrackingConfigured(
     const tracking = await isSaveTrackingConfigured(romId);
     if (isCurrent()) onResult(tracking.configured);
   } catch (e) {
-    logWarn(`DesktopSaveManagementCard: failed to check tracking: ${e}`);
+    logWarn(`DesktopSaveManagementCard: failed to check tracking for romId=${romId}: ${e}`);
     if (isCurrent()) onResult(true);
   }
 }
@@ -287,7 +287,7 @@ async function loadDesktopSlots(
       logWarn(`DesktopSaveManagementCard: ${msg}`),
     );
   } catch (e) {
-    logWarn(`DesktopSaveManagementCard: failed to load save slots: ${e}`);
+    logWarn(`DesktopSaveManagementCard: failed to load save slots for romId=${romId}: ${e}`);
     if (!isCancelled()) {
       run.settled = true;
       slotsLoadedRef.current = false;
@@ -318,7 +318,7 @@ async function loadOfflineSnapshot(
       applyRefreshSlotResult<SlotState>(res, setSlotState);
     }
   } catch (e) {
-    logWarn(`DesktopSaveManagementCard: offline slot snapshot read failed: ${e}`);
+    logWarn(`DesktopSaveManagementCard: offline slot snapshot read for romId=${romId} failed: ${e}`);
   }
 }
 
@@ -845,7 +845,7 @@ function useDesktopSlotState(
       }
       applyRefreshSlotResult<SlotState>(slotResult, setSlotState);
     } catch (e) {
-      logWarn(`DesktopSaveManagementCard: failed to refresh save slots: ${e}`);
+      logWarn(`DesktopSaveManagementCard: failed to refresh save slots for romId=${romId}: ${e}`);
     }
     await readTrackingConfigured(romId, isLatest, setRawSlotConfirmed);
   }, [romId, saveSyncEnabled, mountedRef]);
@@ -898,7 +898,7 @@ function useDesktopSlotState(
     return () => globalThis.removeEventListener("romm_data_changed", onDataChanged);
   }, [appId, romId, saveSyncEnabled, syncRefused, refreshSlots]);
 
-  return { slotState, setSlotState, rawSlotConfirmed, setRawSlotConfirmed, refreshSlots };
+  return { slotState, setSlotState, rawSlotConfirmed, setRawSlotConfirmed };
 }
 
 function refreshDesktopSaveStatus(appId: number): Promise<void> {
@@ -938,7 +938,7 @@ const SaveManagementCardContent: FC<{
   const saveStatus = detail.saveStatus;
   const syncRefused = detail.saveSyncEnabled && refusesDownloadedGame(saveSyncAnswer);
   const strandedVersion = useStrandedCheck(appId, romId, detail.saveSyncEnabled && !syncRefused);
-  const { slotState, setSlotState, rawSlotConfirmed, setRawSlotConfirmed, refreshSlots } = useDesktopSlotState(
+  const { slotState, setSlotState, rawSlotConfirmed, setRawSlotConfirmed } = useDesktopSlotState(
     appId,
     romId,
     detail.saveSyncEnabled,
@@ -953,21 +953,17 @@ const SaveManagementCardContent: FC<{
 
   useTabSwitchScroll(cardRef);
 
-  const refreshStatusAndSlots = async () => {
-    await Promise.all([refreshDesktopSaveStatus(appId), refreshSlots()]);
-  };
-
-  const applyActivatedSlot = async (slotName: string, verb: string) => {
+  const applyActivatedSlot = async (slotName: string, verb: string): Promise<boolean> => {
     const confirmedNow = await autoConfirmIfNeeded(slotName);
+    if (!mountedRef.current) return false;
     showToast(confirmedNow ? `${verb} and confirmed slot '${slotName}'` : `Switched to slot '${slotName}'`);
-    if (mountedRef.current) {
-      setSlotState((prev) => ({
-        ...prev,
-        activeSlot: slotName,
-        activeSlotKnown: true,
-        lastKnownSlots: null,
-      }));
-    }
+    setSlotState((prev) => ({
+      ...prev,
+      activeSlot: slotName,
+      activeSlotKnown: true,
+      lastKnownSlots: null,
+    }));
+    return true;
   };
 
   const autoConfirmIfNeeded = async (slotName: string): Promise<boolean> => {
@@ -982,7 +978,7 @@ const SaveManagementCardContent: FC<{
         `DesktopSaveManagementCard: auto-confirm confirmSlotChoice for romId=${romId} slot='${slotName}' refused (${confirmResult.reason}): ${confirmResult.message}`,
       );
     } catch (e) {
-      logWarn(`DesktopSaveManagementCard: auto-confirm for '${slotName}' failed: ${e}`);
+      logWarn(`DesktopSaveManagementCard: auto-confirm for romId=${romId} slot='${slotName}' failed: ${e}`);
     }
     return false;
   };
@@ -992,7 +988,6 @@ const SaveManagementCardContent: FC<{
     setIsSyncing(true);
     try {
       await executeManualSaveSync(appId, romId);
-      await refreshSlots();
     } finally {
       if (mountedRef.current) setIsSyncing(false);
     }
@@ -1014,14 +1009,13 @@ const SaveManagementCardContent: FC<{
   const handleConfirmSlot = async (slotName: string) => {
     if (!slotName || confirmingSlot) return;
     setConfirmingSlot(true);
-    let confirmed = false;
     try {
       const result = await confirmSlotChoice(romId, slotName, false, null, false);
+      if (!mountedRef.current) return;
       if (result.success) {
-        if (mountedRef.current) setRawSlotConfirmed(true);
+        setRawSlotConfirmed(true);
         showToast(`Confirmed save slot '${slotName}'`);
         announceSaveSync(romId);
-        confirmed = true;
       } else {
         logWarn(
           `DesktopSaveManagementCard: confirmSlotChoice for romId=${romId} slot='${slotName}' refused (${result.reason}): ${result.message}`,
@@ -1029,12 +1023,9 @@ const SaveManagementCardContent: FC<{
         showToast(result.message || "Failed to confirm save slot");
       }
     } catch (e) {
-      logWarn(`DesktopSaveManagementCard: failed to confirm slot: ${e}`);
+      logWarn(`DesktopSaveManagementCard: failed to confirm slot for romId=${romId}: ${e}`);
       showToast("An error occurred while confirming the slot");
     } finally {
-      if (confirmed) {
-        await refreshStatusAndSlots();
-      }
       if (mountedRef.current) setConfirmingSlot(false);
     }
   };
@@ -1056,10 +1047,10 @@ const SaveManagementCardContent: FC<{
               }
               return outcome.message;
             }
-            await applyActivatedSlot(trimmed, "Created");
-            resolve(true);
-            announceSaveSync(romId);
-            await refreshStatusAndSlots();
+            if (await applyActivatedSlot(trimmed, "Created")) {
+              resolve(true);
+              announceSaveSync(romId);
+            }
             return null;
           }}
         />
@@ -1068,18 +1059,16 @@ const SaveManagementCardContent: FC<{
   };
 
   const handleSlotActivated = async (slotName: string, newStatus: SaveStatus) => {
-    await applyActivatedSlot(slotName, "Switched to");
+    if (!(await applyActivatedSlot(slotName, "Switched to"))) return;
     globalThis.dispatchEvent(
       new CustomEvent("romm_data_changed", {
         detail: { type: "save_sync", rom_id: romId, save_status: newStatus },
       }),
     );
-    await refreshStatusAndSlots();
   };
 
   const handleSlotListChanged = () => {
     announceSaveSync(romId);
-    detach(refreshStatusAndSlots());
   };
 
   const handleCopySave = (saveId: number, sourceSlot: string) => {

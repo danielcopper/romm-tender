@@ -1235,5 +1235,27 @@ describe("SlotPanel", () => {
       await flushAsync();
       expect(vi.mocked(backend.getSlotSaves)).toHaveBeenCalledWith(2, "default");
     });
+
+    it("does not invoke onSlotSwitched if unmounted before switchSlot resolves", async () => {
+      vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
+      let resolveSwitch!: (v: backend.SwitchSlotResult) => void;
+      vi.mocked(backend.switchSlot).mockImplementationOnce(
+        () =>
+          new Promise((res) => {
+            resolveSwitch = res;
+          }),
+      );
+      const onSlotSwitched = vi.fn();
+      const { container, getByText, unmount } = render(<SlotPanel {...defaultProps({ onSlotSwitched })} />);
+      fireEvent.click(container.querySelector("button")!);
+      await flushAsync();
+      fireEvent.click(getByText("Activate Slot"));
+
+      unmount();
+      resolveSwitch({ success: true, save_status: makeStatus() });
+      await flushAsync();
+
+      expect(onSlotSwitched).not.toHaveBeenCalled();
+    });
   });
 });

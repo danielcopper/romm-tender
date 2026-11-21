@@ -285,7 +285,7 @@ export async function ensureTrackingConfiguredSilently(romId: number, tag: strin
   });
   if (setupInfo === null) return;
 
-  // Reuse the shared outcome handler with a no-op saves-tab dispatch and a
+  // Reuse the shared outcome handler with a no-op save-surface dispatch and a
   // swallowed toast: the auto_confirm branch fires `confirmSlotChoice`; every
   // other (abort) branch is irrelevant here because this step never aborts a
   // start on tracking — an unconfigured slot the user can't resolve at the start

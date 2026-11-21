@@ -506,6 +506,7 @@ describe("usePlayLaunch", () => {
         await act(async () => {
           await result.current.handlePlayClick();
         });
+        await new Promise((r) => setTimeout(r, 0));
 
         expect(toast.showToast).toHaveBeenCalledWith("Configure save sync in Saves first");
         expect((tabSwitch.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail).toEqual({ tab: "saves" });

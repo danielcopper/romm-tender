@@ -37,7 +37,8 @@ which draws what Big Picture's **SAVES** tab (`frontend/src/bigpicture/SavesTab.
 `frontend/src/bigpicture/RomMGameInfoPanel.tsx`) and the play section's manual sync and Delete Local Saves
 (`frontend/src/bigpicture/RomMPlaySection.tsx`) offer: the header's Sync now (`executeManualSaveSync`,
 `frontend/src/utils/manualSaveSync.ts`), Delete Local Saves (`executeDeleteLocalSaves`,
-`frontend/src/utils/saveSlotFlow.ts`, behind `desktopDeleteLocalSavesDialog`) and + New Slot
+`frontend/src/utils/saveSlotFlow.ts`, behind `desktopDeleteLocalSavesDialog` in
+`frontend/src/desktop/gameview/dialogs/desktopDialogs.tsx`) and + New Slot
 (`frontend/src/desktop/gameview/dialogs/DesktopNewSlotDialog.tsx`, `executeSlotSwitch`), the collapsible slot panels
 (`sortSaveSlots`, `filterSaveSlotsForDisplay`, `frontend/src/utils/saveHelpers.ts`), their tracked-file rows, Copy to
 slot... (`frontend/src/desktop/gameview/dialogs/DesktopCopySlotDialog.tsx`, `executeCopySaveToSlot`), Previous Versions

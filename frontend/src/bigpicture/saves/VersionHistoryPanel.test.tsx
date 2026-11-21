@@ -721,4 +721,29 @@ describe("VersionHistoryPanel — self-refresh on romm_data_changed", () => {
       expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledWith(2, "default", "save.srm"),
     );
   });
+
+  it("does not invoke onRestored if unmounted before savesRollbackToVersion resolves", async () => {
+    vi.mocked(backend.savesListFileVersions).mockResolvedValue({
+      status: "ok",
+      versions: [makeVersion({ id: 11 })],
+    });
+    let resolveRestore!: (v: RollbackStatus) => void;
+    vi.mocked(backend.savesRollbackToVersion).mockImplementationOnce(
+      () =>
+        new Promise((res) => {
+          resolveRestore = res;
+        }),
+    );
+    const onRestored = vi.fn();
+    const { getByText, unmount } = render(<VersionHistoryPanel {...defaultProps({ onRestored })} />);
+    fireEvent.click(getByText("Previous Versions"));
+    await flushAsync();
+    fireEvent.click(getByText("Restore"));
+
+    unmount();
+    resolveRestore({ status: "ok" });
+    await flushAsync();
+
+    expect(onRestored).not.toHaveBeenCalled();
+  });
 });
