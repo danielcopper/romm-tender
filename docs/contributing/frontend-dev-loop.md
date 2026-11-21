@@ -393,8 +393,9 @@ failures at any log level, the rest only with Tender's log level at Info or Debu
 ## A remote target
 
 `setup:remote-target` prepares another machine than the one you write code on — a Steam Deck beside a build host, say —
-as a **target** with a name, for the dev tasks' `--target` ([below](#the-dev-tasks-on-a-target)). The target needs no
-checkout and no toolchain; it is prepared once, from the build host:
+as a **target** with a name, for the dev tasks' `--target` ([below](#the-dev-tasks-on-a-target)) and the install test
+([`install --target`](#installing-the-release-on-a-target)). The target needs no checkout and no toolchain; it is
+prepared once, from the build host:
 
 ```bash
 mise run setup:remote-target <name> <destination>           # log in, install, and record the target here
@@ -640,6 +641,51 @@ Steam there is to be checked by eye; `dev:status` and `dev:log` change nothing, 
 or lost the connection. A Ctrl-C during the build or the copy says only `interrupted`: nothing on the target but
 `incoming/` was touched by then. A connection lost after the task there has printed output or one of its `tender-dev:`
 messages, or one `ssh` reports in words only a lost login gives, is not read as a target that did not answer.
+
+### Installing the release on a target
+
+`install --target <name>` is the install test: the release tarball `mise run package` built here, installed on the
+target with `install.sh --from`, as a user installs a release there:
+
+```bash
+mise run package                          # build the release tarball into build/, here
+mise run install --target <name>          # install it on the target
+mise run install --target <name> --yes    # ...passing --yes to install.sh, for a first install
+```
+
+It sends the newest `build/romm-tender-*.tar.gz` — the one written last, whatever its version — and the checksum
+`scripts/package.sh` wrote beside it, `<tarball>.sha256`. With no tarball there it refuses before it connects and names
+`mise run package`; so it does when the newest tarball's `.sha256` is missing, is not one `sha256sum` line naming that
+tarball, or records another digest — it checks the checksum as `scripts/check_release_tarball.py` checks a release's,
+and never falls back to an older tarball. It copies the tree to `incoming/` as the tasks that build nothing do, and
+leaves `current/` alone; then `scripts/dev_target.sh` from that copy receives the tarball on the stdin of the call that
+runs it, writes it and its checksum to a directory of its own under `~/.local/lib/romm-tender-dev/`, runs the copy's
+`install.sh` with `--from` on it, and removes both again. `install.sh` verifies the tarball against the checksum beside
+it, as it verifies a download, and refuses one that does not match. The task shows what `install.sh` says and ends with
+its status. The installer is the copy's, not the one inside the tarball: this checkout's, as `curl … | bash` hands a
+user the installer from `main` whatever release it installs.
+
+`install.sh` runs there with `TENDER_PYTHON` set to the interpreter the installed service runs on, read from its unit as
+the dev backend's is, so an update keeps the unit on the interpreter it was installed with; where no service is
+installed, `install.sh` picks its own default.
+
+**`--yes` reaches `install.sh` only when given.** The login has no terminal, so the question a first install asks —
+whether you come from the Decky plugin, asked before the date `ACK_UNTIL` in `install.sh` names — cannot be answered
+there: without `--yes`, such a first install ends with `install.sh`'s own refusal, `there is no terminal to ask on`, and
+installs nothing. Read the migration notes it names, then run it again with `--yes`. An update asks nothing and needs no
+`--yes`, and neither does any install from that date on.
+
+**Beside the dev backend the install refuses** — the dev backend holding the lock, or its `romm-tender-dev` unit running
+whoever holds it — before `install.sh` runs, and names `mise run dev:stop --target <name>`: the installed service could
+not take the lock beside the dev backend, and `install.sh`'s own refusal there points at a terminal the target does not
+have. Over the installed service the install is an update, which `install.sh` handles itself; any other holder of the
+lock `install.sh` names.
+
+A target that cannot be used ends the install as it ends a dev task, [above](#when-a-target-cannot-be-used): no such
+target before the tarball is looked for, the other three at the copy. A Ctrl-C during the install, or a connection lost
+then, ends `install.sh` on the target at its next line of output, and what it says about where it stopped goes to the
+connection that is gone. So the task says the install may have stopped part-way — an update cut short can leave the
+installed service stopped — and to run it again; `dev:status` says whether the service runs.
 
 ## DevTools
 
