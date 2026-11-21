@@ -58,7 +58,9 @@ class FakeSourcePlatformSystems:
             return self.real.asked_source(source=source, reading=reading)
         return self.source
 
-    def unanswered_reason(self, *, source: str | None = None, reading: SourcesReading | None = None) -> str | None:
+    def asked_or_why(
+        self, *, source: str | None = None, reading: SourcesReading | None = None
+    ) -> tuple[ArrangedSource | None, str | None]:
         if self.real is not None:
-            return self.real.unanswered_reason(source=source, reading=reading)
-        return self.unanswered
+            return self.real.asked_or_why(source=source, reading=reading)
+        return self.source, None if self.source is not None else self.unanswered

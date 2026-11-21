@@ -26,10 +26,11 @@ a pytest ``tmp_path`` and wires the **real** services via the real
   ``time.sleep`` (1s, 3s …). Everything else on the real
   ``RommHttpAdapter`` (settings binding) stays real.
 * ``source_platform_systems`` → :class:`FakeSourcePlatformSystems`, so a
-  platform is its own system unless a test says otherwise: the seeded
-  RetroDECK's catalogue tags no system with the pairs a platform is asked
-  by. A test that wants the real resolver's answer over its tree sets the
-  fake's ``real`` to ``real_platform_systems``. The kept platforms and their
+  platform is its own system unless a test says otherwise. A test that wants
+  the real resolver's answer over its tree sets the fake's ``real`` to
+  ``real_platform_systems``; the real resolver answers only the systems a
+  test's seeded ``es_systems.xml`` holds, and with none seeded it answers
+  none. The kept platforms and their
   live read in ``PlatformSystemService`` stay real.
 * ``emit`` → an ``AsyncMock`` so tests assert emissions.
 

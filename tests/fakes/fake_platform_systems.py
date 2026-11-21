@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from domain.emulator_sources import ArrangedSource
-from domain.platform_system import FOUND, SEVERAL, PlatformKeys, PlatformSystem, SystemPair
+from domain.platform_system import FOUND, SEVERAL, UNASKED, PlatformKeys, PlatformSystem, SystemPair
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -35,9 +35,13 @@ def platform_answer(
     """A platform's answer as a test spells it: a state and the system it names — one key, one pair, or several pairs.
 
     One key stands for a system a source names by its key alone; several pairs
-    are the systems the answer named, asked with as they are.
+    are the systems the answer named, asked with as they are. An answer no
+    source was asked for, with no source, carries its ``unasked`` reason as
+    ``unanswered`` too, as the adapter's does, unless the test names another.
     """
     keys = PlatformKeys(keys) if isinstance(keys, str) else keys
+    if state == UNASKED and source is None and unanswered is None:
+        unanswered = unasked
     platform_name = name if name is not None else keys.kept_as
     if system is None:
         return PlatformSystem(state, keys, platform_name, source=source, unasked=unasked, unanswered=unanswered)

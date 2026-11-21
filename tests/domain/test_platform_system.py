@@ -487,7 +487,7 @@ class TestEveryPlatformRefusalHasItsState:
         assert None not in refusals
 
 
-# Every state a platform with no system to use can be in: all but one system found and no source asked.
+# Every state a platform with no system to use can be in: every state but FOUND and UNASKED.
 _NO_SYSTEM_STATES = tuple(state for state in get_args(PlatformState) if state not in (FOUND, UNASKED))
 
 

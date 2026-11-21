@@ -353,9 +353,10 @@ class PlatformSystem:
     have been — and ``None`` where there is none, and for a recorded system.
     ``unasked`` says why none was asked, in the vocabulary of
     :mod:`domain.emulator_sources` — or, where RomM's listing could not be read,
-    the reason that read failed with, and ``unasked_message`` its message;
-    ``unanswered`` is then why no source would have been asked, where none
-    would (no source detected, every one switched off), else ``None``.
+    the reason that read failed with, and ``unasked_message`` its message.
+    ``unanswered`` is why no source is, or would have been, asked — no source
+    detected, every one switched off, detection failed — on every answer that
+    names no source, else ``None``.
     """
 
     state: PlatformState

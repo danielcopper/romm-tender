@@ -96,7 +96,8 @@ class PlatformSystemService:
         refiling, so this read may move Tender's older entries; with *ask_romm*
         false nothing is read. A read that fails answers
         :data:`~domain.platform_system.UNASKED` with the reason every RomM read
-        is classified by, and keeps nothing. It is logged here, at the level the
+        is classified by, the source that would have been asked, and — where
+        there is none — why none would be (``unanswered``), and keeps nothing. It is logged here, at the level the
         entrypoint logs a RomM error at, because what it becomes reaches the
         entrypoint as a refusal, or as an answer that something is unavailable,
         and neither is logged.
@@ -109,7 +110,7 @@ class PlatformSystemService:
                 romm_error_log_level(exc),
                 f"[platforms] no ids kept for {keys.slug}, and RomM's listing failed: {type(exc).__name__}: {exc}",
             )
-            asked = self._source_platform_systems.asked_source(source=source, reading=reading)
+            asked, why_none = self._source_platform_systems.asked_or_why(source=source, reading=reading)
             return PlatformSystem(
                 UNASKED,
                 keys,
@@ -117,9 +118,7 @@ class PlatformSystemService:
                 source=asked,
                 unasked=reason,
                 unasked_message=message,
-                unanswered=None
-                if asked is not None
-                else self._source_platform_systems.unanswered_reason(source=source, reading=reading),
+                unanswered=why_none,
             )
         return self._source_platform_systems.platform_system(keys, platform_name=name, source=source, reading=reading)
 

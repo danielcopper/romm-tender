@@ -150,13 +150,16 @@ class AtlasPlatformSystemsAdapter:
         A named source is asked whatever its switch, because the switch is the
         folder's question (``adapters/retrodeck_folders.py``), not the
         platform's. Where no source can be asked the answer is
-        :data:`~domain.platform_system.UNASKED`, and ``unasked`` says why.
+        :data:`~domain.platform_system.UNASKED`, and ``unasked`` and
+        ``unanswered`` both say why.
         """
         reading = reading if reading is not None else self._sources.read()
-        unasked = self._unasked(reading, source)
         arranged = self._arranged(reading, source)
-        if unasked is not None or arranged is None:
-            return PlatformSystem(UNASKED, keys, platform_name, unasked=unasked or reading.no_answer_reason())
+        why = self._why_unasked(reading, source, arranged)
+        if why is not None or arranged is None:
+            # ``_why_unasked`` names a reason wherever no source is arranged; the fallback only narrows the type.
+            why = why or reading.no_answer_reason()
+            return PlatformSystem(UNASKED, keys, platform_name, unasked=why, unanswered=why)
         installation = next(i for i in reading.installations if i.kind == arranged.kind)
         pairs = platform_pairs(keys)
         try:
@@ -175,12 +178,20 @@ class AtlasPlatformSystemsAdapter:
         """The source :meth:`platform_system` would ask for *source*, or ``None`` where there is none."""
         return self._arranged(reading if reading is not None else self._sources.read(), source)
 
-    def unanswered_reason(self, *, source: str | None = None, reading: SourcesReading | None = None) -> str | None:
-        """Why no source would be asked for *source*; ``None`` where :meth:`asked_source` names one."""
+    def asked_or_why(
+        self, *, source: str | None = None, reading: SourcesReading | None = None
+    ) -> tuple[ArrangedSource | None, str | None]:
+        """:meth:`asked_source`, and — where it names none — why, as :meth:`platform_system` says it; one reading."""
         reading = reading if reading is not None else self._sources.read()
-        if self._arranged(reading, source) is not None:
+        arranged = self._arranged(reading, source)
+        return arranged, None if arranged is not None else self._why_unasked(reading, source, arranged)
+
+    def _why_unasked(self, reading: SourcesReading, source: str | None, arranged: ArrangedSource | None) -> str | None:
+        """Why no source is asked for *source*, in :mod:`domain.emulator_sources`' words; ``None`` where one is."""
+        unasked = self._unasked(reading, source)
+        if unasked is None and arranged is not None:
             return None
-        return reading.no_answer_reason() if source is None else NO_SOURCE_DETECTED
+        return unasked or reading.no_answer_reason()
 
     @staticmethod
     def _arranged(reading: SourcesReading, source: str | None) -> ArrangedSource | None:

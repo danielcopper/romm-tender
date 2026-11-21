@@ -325,19 +325,27 @@ class TestEachSourceIsAskedForItself:
         retrodeck, emudeck = self._two()
         adapter, _ = _adapter([retrodeck, emudeck], traces, settings={SWITCHED_OFF_SETTING: ["retrodeck", "emudeck"]})
 
-        assert (adapter.asked_source(), adapter.unanswered_reason()) == (None, "switched_off")
-        assert adapter.unanswered_reason(source="retrodeck") is None
+        assert adapter.asked_or_why() == (None, "switched_off")
+        assert adapter.asked_or_why(source="retrodeck")[1] is None
+
+    def test_a_platform_no_source_is_asked_for_carries_why_in_both_fields(self, traces):
+        retrodeck, emudeck = self._two()
+        adapter, _ = _adapter([retrodeck, emudeck], traces, settings={SWITCHED_OFF_SETTING: ["retrodeck", "emudeck"]})
+
+        platform = _ask(adapter, "genesis", "genesis")
+
+        assert (platform.state, platform.unasked, platform.unanswered) == (UNASKED, "switched_off", "switched_off")
 
     def test_with_no_source_detected_it_says_so(self, traces):
         adapter, _ = _adapter([], traces)
 
-        assert adapter.unanswered_reason() == "no_source"
+        assert adapter.asked_or_why() == (None, "no_source")
 
     def test_with_a_source_that_answers_nothing_is_unanswered(self, traces):
         retrodeck, emudeck = self._two()
         adapter, _ = _adapter([retrodeck, emudeck], traces)
 
-        assert adapter.unanswered_reason() is None
+        assert adapter.asked_or_why()[1] is None
 
     def test_a_named_source_is_asked_whatever_answers_and_whatever_its_switch(self, traces):
         retrodeck, emudeck = self._two()

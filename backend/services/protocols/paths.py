@@ -51,10 +51,13 @@ class SourcePlatformSystems(Protocol):
         """The source a question for *source* goes to, or ``None`` where there is none."""
         ...
 
-    def unanswered_reason(self, *, source: str | None = None, reading: SourcesReading | None = None) -> str | None:
-        """Why no source would be asked for *source*, in :mod:`domain.emulator_sources`' words; else ``None``.
+    def asked_or_why(
+        self, *, source: str | None = None, reading: SourcesReading | None = None
+    ) -> tuple[ArrangedSource | None, str | None]:
+        """The source a question for *source* goes to, and — where there is none — why, from one reading.
 
-        No source is detected, or — for the answering source — every detected one is switched off.
+        Why is in :mod:`domain.emulator_sources`' words: no source is detected,
+        every detected one is switched off, or detection failed.
         """
         ...
 

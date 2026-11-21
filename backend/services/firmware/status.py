@@ -685,8 +685,7 @@ def _store_only(platform: PlatformSystem, catalogue: FirmwareCatalogue, emulator
     if platform.state == UNASKED:
         if platform.source is None:
             # No source answers, whatever else failed: none is detected, or every one is switched off.
-            why = platform.unanswered or platform.unasked
-            return ALL_SOURCES_SWITCHED_OFF if why == ALL_SOURCES_SWITCHED_OFF else NO_SOURCE_DETECTED
+            return ALL_SOURCES_SWITCHED_OFF if platform.unanswered == ALL_SOURCES_SWITCHED_OFF else NO_SOURCE_DETECTED
         return platform.unasked or NO_SOURCE_DETECTED
     reason = platform.no_system_reason
     if reason is not None:
