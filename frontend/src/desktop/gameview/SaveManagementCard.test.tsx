@@ -2380,12 +2380,14 @@ describe("SaveManagementCard", () => {
           );
 
         const { unmount } = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        await flushMacrotask();
         expect(backend.getSaveSlots).toHaveBeenCalledTimes(1);
 
         // Fire save_sync while the initial load is still in flight -> starts seq #2
         act(() => {
           globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
         });
+        await flushMacrotask();
         expect(backend.getSaveSlots).toHaveBeenCalledTimes(2);
 
         await act(async () => {
@@ -2396,6 +2398,7 @@ describe("SaveManagementCard", () => {
           });
         });
         expect(await screen.findByTestId("desktop-slot-panel-fresh-slot")).toBeInTheDocument();
+        await flushMacrotask();
 
         // Stale seq #1 resolves afterward and must not overwrite seq #2
         await act(async () => {
@@ -2413,9 +2416,11 @@ describe("SaveManagementCard", () => {
         act(() => {
           globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
         });
+        await flushMacrotask();
         act(() => {
           globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
         });
+        await flushMacrotask();
         expect(backend.getSaveSlots).toHaveBeenCalledTimes(4);
 
         await act(async () => {
@@ -2426,6 +2431,7 @@ describe("SaveManagementCard", () => {
           });
         });
         expect(await screen.findByTestId("desktop-slot-panel-newest-slot")).toBeInTheDocument();
+        await flushMacrotask();
 
         await act(async () => {
           resolveStaleRefresh({
@@ -2442,6 +2448,7 @@ describe("SaveManagementCard", () => {
         act(() => {
           globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
         });
+        await flushMacrotask();
         expect(backend.getSaveSlots).toHaveBeenCalledTimes(5);
         unmount();
 
@@ -3503,12 +3510,15 @@ describe("SaveManagementCard", () => {
           .mockResolvedValueOnce({ configured: false, active_slot: "default", setup_needed: true });
 
         const trackingView = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        await flushMacrotask();
         await waitFor(() => expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(1));
 
         act(() => {
           globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
         });
+        await flushMacrotask();
         expect(await screen.findByTestId("unconfirmed-slot-banner")).toBeInTheDocument();
+        await flushMacrotask();
 
         await act(async () => {
           rejectStaleTracking(new Error("stale tracking boom"));
@@ -3536,12 +3546,15 @@ describe("SaveManagementCard", () => {
           });
 
         const availView = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        await flushMacrotask();
         await waitFor(() => expect(backend.getSaveSyncAvailability).toHaveBeenCalledTimes(1));
 
         act(() => {
           globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
         });
+        await flushMacrotask();
         expect(await screen.findByTestId("desktop-saves-refusal")).toBeInTheDocument();
+        await flushMacrotask();
 
         await act(async () => {
           rejectStaleAvail(new Error("stale avail boom"));
@@ -3559,6 +3572,7 @@ describe("SaveManagementCard", () => {
             }),
         );
         const strandedView = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        await flushMacrotask();
         await waitFor(() => expect(backend.getVersionList).toHaveBeenCalledTimes(1));
         strandedView.unmount();
 
@@ -3600,16 +3614,19 @@ describe("SaveManagementCard", () => {
           .mockImplementationOnce(() => new Promise(() => undefined));
 
         const first = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        await flushMacrotask();
         expect(await screen.findByTestId("desktop-saves-connecting")).toBeInTheDocument();
 
         act(() => {
           setRommConnectionState("offline", "drop");
         });
+        await flushMacrotask();
         await waitFor(() => expect(backend.getSaveSlots).toHaveBeenCalledTimes(2));
 
         act(() => {
           setRommConnectionState("connected", "reconnect");
         });
+        await flushMacrotask();
         expect(await screen.findByTestId("desktop-saves-connecting")).toBeInTheDocument();
         await waitFor(() => expect(backend.getSaveSlots).toHaveBeenCalledTimes(3));
 
@@ -3634,13 +3651,16 @@ describe("SaveManagementCard", () => {
             active_slot: "online-slot",
           });
         setRommConnectionState("offline", "test offline");
-        render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        const second = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        await flushMacrotask();
         await waitFor(() => expect(backend.getSaveSlots).toHaveBeenCalledTimes(4));
 
         act(() => {
           setRommConnectionState("connected", "reconnect");
         });
+        await flushMacrotask();
         expect(await screen.findByText("online-slot")).toBeInTheDocument();
+        await flushMacrotask();
 
         await act(async () => {
           resolveStaleOffline({
@@ -3652,6 +3672,7 @@ describe("SaveManagementCard", () => {
         await flushMacrotask();
         expect(screen.getByText("online-slot")).toBeInTheDocument();
         expect(screen.queryByText("stale-offline-slot")).not.toBeInTheDocument();
+        second.unmount();
       } finally {
         warnSpy.mockRestore();
       }
@@ -3678,7 +3699,9 @@ describe("SaveManagementCard", () => {
             }),
         );
         const view1 = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        await flushMacrotask();
         fireEvent.click(await screen.findByRole("button", { name: "Confirm Slot" }));
+        await flushMacrotask();
         await waitFor(() => expect(backend.confirmSlotChoice).toHaveBeenCalledTimes(1));
         view1.unmount();
 
@@ -3698,10 +3721,12 @@ describe("SaveManagementCard", () => {
             }),
         );
         const view2 = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        await flushMacrotask();
         await waitFor(() => expect(screen.getByTestId("unconfirmed-slot-banner")).toBeInTheDocument());
         fireEvent.click(screen.getByRole("button", { name: "+ New Slot" }));
         fireEvent.change(screen.getByPlaceholderText(/Slot Name/i), { target: { value: "fresh_slot" } });
         fireEvent.click(screen.getByRole("button", { name: "Create Slot" }));
+        await flushMacrotask();
         await waitFor(() => expect(backend.confirmSlotChoice).toHaveBeenCalledTimes(2));
         view2.unmount();
 
@@ -3721,8 +3746,11 @@ describe("SaveManagementCard", () => {
             }),
         );
         const view3 = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        await flushMacrotask();
         fireEvent.click(await screen.findByRole("button", { name: /speedrun/ }));
+        await flushMacrotask();
         fireEvent.click(await screen.findByRole("button", { name: "Activate Slot" }));
+        await flushMacrotask();
         await waitFor(() => expect(backend.confirmSlotChoice).toHaveBeenCalledTimes(3));
         view3.unmount();
 
