@@ -33,6 +33,9 @@ class FakeSourcePlatformSystems:
         self.answers: dict[str, tuple[PlatformState, SystemArgument | None]] = answers if answers is not None else {}
         self.asked: list[tuple[PlatformKeys, str | None]] = []
         self.real: SourcePlatformSystems | None = None
+        # The source a question would go to, and why none would where it is ``None``.
+        self.source: ArrangedSource | None = RETRODECK_SOURCE
+        self.unanswered: str | None = None
 
     def platform_system(
         self,
@@ -53,4 +56,9 @@ class FakeSourcePlatformSystems:
     ) -> ArrangedSource | None:
         if self.real is not None:
             return self.real.asked_source(source=source, reading=reading)
-        return RETRODECK_SOURCE
+        return self.source
+
+    def unanswered_reason(self, *, source: str | None = None, reading: SourcesReading | None = None) -> str | None:
+        if self.real is not None:
+            return self.real.unanswered_reason(source=source, reading=reading)
+        return self.unanswered

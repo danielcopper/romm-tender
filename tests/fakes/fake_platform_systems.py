@@ -30,6 +30,7 @@ def platform_answer(
     name: str | None = None,
     source: ArrangedSource | None = RETRODECK_SOURCE,
     unasked: str | None = None,
+    unanswered: str | None = None,
 ) -> PlatformSystem:
     """A platform's answer as a test spells it: a state and the system it names — one key, one pair, or several pairs.
 
@@ -39,13 +40,19 @@ def platform_answer(
     keys = PlatformKeys(keys) if isinstance(keys, str) else keys
     platform_name = name if name is not None else keys.kept_as
     if system is None:
-        return PlatformSystem(state, keys, platform_name, source=source, unasked=unasked)
+        return PlatformSystem(state, keys, platform_name, source=source, unasked=unasked, unanswered=unanswered)
     if isinstance(system, SystemPair):
-        return PlatformSystem(state, keys, platform_name, source=source, named=(system,), unasked=unasked)
+        return PlatformSystem(
+            state, keys, platform_name, source=source, named=(system,), unasked=unasked, unanswered=unanswered
+        )
     if isinstance(system, tuple):
         asked = system if state == SEVERAL else ()
-        return PlatformSystem(state, keys, platform_name, source=source, named=system, asked=asked, unasked=unasked)
-    return PlatformSystem(state, keys, platform_name, source=source, recorded=system, unasked=unasked)
+        return PlatformSystem(
+            state, keys, platform_name, source=source, named=system, asked=asked, unasked=unasked, unanswered=unanswered
+        )
+    return PlatformSystem(
+        state, keys, platform_name, source=source, recorded=system, unasked=unasked, unanswered=unanswered
+    )
 
 
 class FakePlatformSystems:

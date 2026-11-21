@@ -1297,17 +1297,20 @@ class TestOnlyTheStore:
         assert entry["store_only"] == "no_source"
 
     @pytest.mark.parametrize(
-        ("unasked", "source", "reason"),
+        ("unasked", "source", "unanswered", "reason"),
         [
-            (ALL_SOURCES_SWITCHED_OFF, None, "switched_off"),
-            ("server_unreachable", None, "no_source"),
-            ("catalogue_invalid", RETRODECK_SOURCE, "catalogue_invalid"),
-            ("server_unreachable", RETRODECK_SOURCE, "server_unreachable"),
+            (ALL_SOURCES_SWITCHED_OFF, None, None, "switched_off"),
+            ("server_unreachable", None, NO_SOURCE_DETECTED, "no_source"),
+            ("server_unreachable", None, ALL_SOURCES_SWITCHED_OFF, "switched_off"),
+            ("catalogue_invalid", RETRODECK_SOURCE, None, "catalogue_invalid"),
+            ("server_unreachable", RETRODECK_SOURCE, None, "server_unreachable"),
         ],
     )
-    async def test_a_platform_no_source_was_asked_for_says_why_it_was_not(self, machine, unasked, source, reason):
+    async def test_a_platform_no_source_was_asked_for_says_why_it_was_not(
+        self, machine, unasked, source, unanswered, reason
+    ):
         machine.platform_systems.answers["switch"] = platform_answer(
-            UNASKED, "switch", name="switch", source=source, unasked=unasked
+            UNASKED, "switch", name="switch", source=source, unasked=unasked, unanswered=unanswered
         )
 
         entry = (await machine.service.get_platform_firmware_status("switch", "switch"))["platform"]

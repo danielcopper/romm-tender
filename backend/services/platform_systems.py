@@ -109,13 +109,17 @@ class PlatformSystemService:
                 romm_error_log_level(exc),
                 f"[platforms] no ids kept for {keys.slug}, and RomM's listing failed: {type(exc).__name__}: {exc}",
             )
+            asked = self._source_platform_systems.asked_source(source=source, reading=reading)
             return PlatformSystem(
                 UNASKED,
                 keys,
                 keys.kept_as,
-                source=self._source_platform_systems.asked_source(source=source, reading=reading),
+                source=asked,
                 unasked=reason,
                 unasked_message=message,
+                unanswered=None
+                if asked is not None
+                else self._source_platform_systems.unanswered_reason(source=source, reading=reading),
             )
         return self._source_platform_systems.platform_system(keys, platform_name=name, source=source, reading=reading)
 

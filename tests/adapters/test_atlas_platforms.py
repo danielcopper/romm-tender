@@ -321,6 +321,24 @@ class TestEachSourceIsAskedForItself:
         assert emudeck.asked == [(("romm", "genesis"), ("folder", "genesis"))]
         assert retrodeck.asked == []
 
+    def test_with_every_source_switched_off_none_would_be_asked_and_it_says_why(self, traces):
+        retrodeck, emudeck = self._two()
+        adapter, _ = _adapter([retrodeck, emudeck], traces, settings={SWITCHED_OFF_SETTING: ["retrodeck", "emudeck"]})
+
+        assert (adapter.asked_source(), adapter.unanswered_reason()) == (None, "switched_off")
+        assert adapter.unanswered_reason(source="retrodeck") is None
+
+    def test_with_no_source_detected_it_says_so(self, traces):
+        adapter, _ = _adapter([], traces)
+
+        assert adapter.unanswered_reason() == "no_source"
+
+    def test_with_a_source_that_answers_nothing_is_unanswered(self, traces):
+        retrodeck, emudeck = self._two()
+        adapter, _ = _adapter([retrodeck, emudeck], traces)
+
+        assert adapter.unanswered_reason() is None
+
     def test_a_named_source_is_asked_whatever_answers_and_whatever_its_switch(self, traces):
         retrodeck, emudeck = self._two()
         adapter, _ = _adapter([retrodeck, emudeck], traces, settings={SWITCHED_OFF_SETTING: ["retrodeck"]})

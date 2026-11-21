@@ -12,6 +12,7 @@ from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_source_platform_systems import RETRODECK_SOURCE, FakeSourcePlatformSystems
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
+from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF
 from domain.platform_system import (
     FOUND,
     NO_SYSTEM,
@@ -183,6 +184,19 @@ class TestWhereNoneAreKept:
         assert platform.source == RETRODECK_SOURCE
         assert sources.asked == []
         assert uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY) is None
+
+    def test_a_failed_read_with_no_source_to_ask_says_why_none_would_be(self, service, romm, sources):
+        romm.list_platforms_side_effect = RommConnectionError("connection refused")
+        sources.source = None
+        sources.unanswered = ALL_SOURCES_SWITCHED_OFF
+
+        platform = service.platform_system(PlatformKeys("snes", "snes"))
+
+        assert (platform.unasked, platform.source, platform.unanswered) == (
+            "server_unreachable",
+            None,
+            ALL_SOURCES_SWITCHED_OFF,
+        )
 
     def test_a_refused_read_answers_its_own_reason(self, service, romm):
         romm.list_platforms_side_effect = RommAuthError("401")

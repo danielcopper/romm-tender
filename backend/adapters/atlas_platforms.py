@@ -175,6 +175,13 @@ class AtlasPlatformSystemsAdapter:
         """The source :meth:`platform_system` would ask for *source*, or ``None`` where there is none."""
         return self._arranged(reading if reading is not None else self._sources.read(), source)
 
+    def unanswered_reason(self, *, source: str | None = None, reading: SourcesReading | None = None) -> str | None:
+        """Why no source would be asked for *source*; ``None`` where :meth:`asked_source` names one."""
+        reading = reading if reading is not None else self._sources.read()
+        if self._arranged(reading, source) is not None:
+            return None
+        return reading.no_answer_reason() if source is None else NO_SOURCE_DETECTED
+
     @staticmethod
     def _arranged(reading: SourcesReading, source: str | None) -> ArrangedSource | None:
         if source is None:
