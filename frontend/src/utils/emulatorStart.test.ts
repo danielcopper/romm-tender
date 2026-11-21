@@ -105,7 +105,7 @@ describe("whether another entry can be pinned", () => {
     expect(canPickAnother([row("A"), row("B", { reason: "not_installed" })], "A")).toBe(false);
   });
 
-  it("is never so on a game's page with one emulator, where the page offers no menu", () => {
+  it("is never so in the emulator menu with one emulator, which the game page opens only when more than one is listed", () => {
     expect(pickPointerFor("menu", [row("A")], null)).toBe(false);
     expect(pickPointerFor("menu", [row("A"), row("B")], "A")).toBe(true);
   });
