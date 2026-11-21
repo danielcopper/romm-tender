@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 
+def joined_names(names: list[str]) -> str:
+    """*names* as a sentence lists them: ``"A"``, ``"A and B"``, ``"A, B and C"``. *names* must be non-empty."""
+    if len(names) == 1:
+        return names[0]
+    return f"{', '.join(names[:-1])} and {names[-1]}"
+
+
 def first_error_reason(errors: list[str]) -> str:
     """Return the classified reason of the first sync error, stripped of its source.
 

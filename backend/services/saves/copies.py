@@ -27,6 +27,7 @@ from domain.save_slot import save_in_slot
 from domain.save_status import compute_multi_file_slot
 from lib.errors import RommApiError, RommConflictError, RommNotFoundError, classify_error, with_system_text
 from services.saves._helpers import local_save_target, newest_server_saves_by_target
+from services.saves._refusals import GoneFromRomm
 from services.saves._save_state import read_save_state_or_new, write_save_state
 from services.saves._settings import resolve_default_slot
 
@@ -374,7 +375,9 @@ class SaveCopyService:
            ``server_unreachable``) is raised, before anything is synced.
         7. Pre-flight ``MatrixExecutor.sync_rom_saves`` on the current (confirmed) slot,
            unconditionally, to protect its dirty local before the copy overwrites
-           it — ``conflict_blocked`` / ``preflight_failed`` on a bad pre-flight.
+           it — ``conflict_blocked`` / ``preflight_failed`` on a bad pre-flight;
+           where it finds RomM no longer has the ROM, the save state is written
+           and ``gone_from_romm`` is raised.
         8. ``list_saves`` with no slot filter (the source may be in any slot);
            a transport failure is ``server_unreachable``, a definitive 404 (the
            server answered that it has no such ROM or device id) is ``not_found``
@@ -458,9 +461,13 @@ class SaveCopyService:
             # Matrix pre-flight on the CURRENT slot: get its tracked save in sync
             # first (or surface a conflict), so the download below never overwrites
             # a dirty local that lives nowhere else.
-            _uploaded, _downloaded, errors, conflicts = await self._loop.run_in_executor(
-                None, self._matrix.sync_rom_saves, rom_id, save_state, device_id, core_so, default_slot
-            )
+            try:
+                _uploaded, _downloaded, errors, conflicts = await self._loop.run_in_executor(
+                    None, self._matrix.sync_rom_saves, rom_id, save_state, device_id, core_so, default_slot
+                )
+            except GoneFromRomm:
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
+                raise
             if conflicts:
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "conflict_blocked", "conflicts": list(conflicts)}

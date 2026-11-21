@@ -25,7 +25,7 @@ from lib.errors import (
     SyncBusy,
     classify_error,
 )
-from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
+from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported, gone_from_romm
 from services.session_lifecycle import (
     SessionFinalizeMigration,
     SessionFinalizeResult,
@@ -845,6 +845,25 @@ class TestFinalizeSavesRootMissing:
 
         assert result.sync.failure_toast == message
         assert result.sync.success is False
+        assert result.sync.offline is False
+
+
+class TestFinalizeGoneFromRomm:
+    def test_a_game_romm_no_longer_has_toasts_the_sentence(self, event_loop, logger):
+        """The sync after a game of one RomM no longer has says so instead of a per-file error (#2837 D3)."""
+        post = FakePostExitSync(side_effect=gone_from_romm())
+        service = _make_service(
+            playtime_recorder=FakePlaytimeRecorder(),
+            post_exit_sync=post,
+            achievement_sync=FakeAchievementSync(),
+            migration_reader=FakeMigrationReader(),
+            logger=logger,
+        )
+
+        result = event_loop.run_until_complete(service.finalize(99))
+        event_loop.run_until_complete(_drain_background_tasks(service))
+
+        assert result.sync.failure_toast == "RomM no longer has this game — its saves stay on this device"
         assert result.sync.offline is False
 
 
