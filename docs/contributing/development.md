@@ -46,9 +46,10 @@ Python dependencies are installed from `requirements-dev.lock` and `docs/require
 compiled by uv from `requirements-dev.txt` and `docs/requirements.txt`. After changing a source or bumping a pin, run
 `mise run lock-update` to regenerate the locks.
 
-MkDocs and its extensions are pinned in `docs/requirements.lock`, the lock `.github/workflows/docs.yml` installs, so
-every checkout and worktree `mise run setup` prepared can preview the site with `mise run docs`. Setup installs both
-locks in one call, so a package the two pin at different versions stops it rather than leaving whichever came last.
+MkDocs and its extensions are pinned in `docs/requirements.lock`, the lock `.github/workflows/docs.yml` installs.
+`mise run setup` installs it beside `requirements-dev.lock`, so every checkout and worktree it prepared can preview the
+site with `mise run docs`. It installs both locks in one call, so a package the two pin at different versions stops it
+rather than leaving whichever came last.
 
 ### Automated dependency updates
 
