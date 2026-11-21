@@ -445,6 +445,27 @@ describe("executeSlotSwitch on a switch that stopped partway", () => {
     vi.clearAllMocks();
   });
 
+  async function expectPartialSwitchOutcome(
+    purpose: "activate" | "create",
+    reason: "switch_stopped" | "switch_incomplete",
+    message: string,
+  ): Promise<void> {
+    const events = listenForDataChanges();
+    try {
+      await expect(executeSlotSwitch(7, "main", purpose)).resolves.toEqual({
+        ok: false,
+        reason,
+        message,
+        partial: true,
+      });
+    } finally {
+      events.stop();
+    }
+    expect(events.details).toEqual([{ type: "save_sync", rom_id: 7 }]);
+    expect(connectionState.reportServerReachable).not.toHaveBeenCalled();
+    expect(backend.logWarn).not.toHaveBeenCalled();
+  }
+
   it.each([
     { purpose: "activate" as const, outcome: "switched" },
     { purpose: "create" as const, outcome: "created" },
@@ -457,20 +478,11 @@ describe("executeSlotSwitch on a switch that stopped partway", () => {
         message: "Could not move pokemon.rtc into .romm-backup.",
         set_aside: ["pokemon.srm"],
       });
-      const events = listenForDataChanges();
-      try {
-        await expect(executeSlotSwitch(7, "main", purpose)).resolves.toEqual({
-          ok: false,
-          reason: "switch_stopped",
-          message: `The slot wasn't ${outcome}: a save couldn't be moved to .romm-backup. Already moved there: pokemon.srm.`,
-          partial: true,
-        });
-      } finally {
-        events.stop();
-      }
-      expect(events.details).toEqual([{ type: "save_sync", rom_id: 7 }]);
-      expect(connectionState.reportServerReachable).not.toHaveBeenCalled();
-      expect(backend.logWarn).not.toHaveBeenCalled();
+      await expectPartialSwitchOutcome(
+        purpose,
+        "switch_stopped",
+        `The slot wasn't ${outcome}: a save couldn't be moved to .romm-backup. Already moved there: pokemon.srm.`,
+      );
     },
   );
 
@@ -482,20 +494,11 @@ describe("executeSlotSwitch on a switch that stopped partway", () => {
         reason: "switch_incomplete",
         message: "Switched to slot but 1 save(s) failed to download — retry",
       });
-      const events = listenForDataChanges();
-      try {
-        await expect(executeSlotSwitch(7, "main", purpose)).resolves.toEqual({
-          ok: false,
-          reason: "switch_incomplete",
-          message: "Switched slots, but not every save of the new slot downloaded. Sync Save Files to finish.",
-          partial: true,
-        });
-      } finally {
-        events.stop();
-      }
-      expect(events.details).toEqual([{ type: "save_sync", rom_id: 7 }]);
-      expect(connectionState.reportServerReachable).not.toHaveBeenCalled();
-      expect(backend.logWarn).not.toHaveBeenCalled();
+      await expectPartialSwitchOutcome(
+        purpose,
+        "switch_incomplete",
+        "Switched slots, but not every save of the new slot downloaded. Sync Save Files to finish.",
+      );
     },
   );
 
