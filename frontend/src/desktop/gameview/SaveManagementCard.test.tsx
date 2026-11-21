@@ -2340,51 +2340,123 @@ describe("SaveManagementCard", () => {
     });
 
     it("orders concurrent same-ROM getSaveSlots / refreshSlots responses by slotLoadSeqRef", async () => {
-      let resolveSlow!: (v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void;
-      let resolveFast!: (v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void;
-      vi.mocked(backend.getSaveSlots)
-        .mockImplementationOnce(
-          () =>
-            new Promise((resolve) => {
-              resolveSlow = resolve;
-            }),
-        )
-        .mockImplementationOnce(
-          () =>
-            new Promise((resolve) => {
-              resolveFast = resolve;
-            }),
-        );
+      const warnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+      try {
+        let resolveSlow!: (v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void;
+        let resolveFast!: (v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void;
+        let resolveStaleRefresh!: (v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void;
+        let resolveNewestRefresh!: (v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void;
+        let resolveAfterUnmount!: (v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void;
+        vi.mocked(backend.getSaveSlots)
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                resolveSlow = resolve;
+              }),
+          )
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                resolveFast = resolve;
+              }),
+          )
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                resolveStaleRefresh = resolve;
+              }),
+          )
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                resolveNewestRefresh = resolve;
+              }),
+          )
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                resolveAfterUnmount = resolve;
+              }),
+          );
 
-      render(<SaveManagementCard appId={100} detail={baseDetail} />);
-      expect(backend.getSaveSlots).toHaveBeenCalledTimes(1);
+        const { unmount } = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        expect(backend.getSaveSlots).toHaveBeenCalledTimes(1);
 
-      // Fire save_sync while the initial load is still in flight -> starts seq #2
-      act(() => {
-        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
-      });
-      expect(backend.getSaveSlots).toHaveBeenCalledTimes(2);
-
-      await act(async () => {
-        resolveFast({
-          success: true,
-          slots: [{ slot: "fresh-slot", source: "server", count: 1, latest_updated_at: null }],
-          active_slot: "fresh-slot",
+        // Fire save_sync while the initial load is still in flight -> starts seq #2
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
         });
-      });
-      expect(await screen.findByTestId("desktop-slot-panel-fresh-slot")).toBeInTheDocument();
+        expect(backend.getSaveSlots).toHaveBeenCalledTimes(2);
 
-      // Stale seq #1 resolves afterward and must not overwrite seq #2
-      await act(async () => {
-        resolveSlow({
-          success: true,
-          slots: [{ slot: "stale-slot", source: "server", count: 1, latest_updated_at: null }],
-          active_slot: "stale-slot",
+        await act(async () => {
+          resolveFast({
+            success: true,
+            slots: [{ slot: "fresh-slot", source: "server", count: 1, latest_updated_at: null }],
+            active_slot: "fresh-slot",
+          });
         });
-      });
-      await flushMacrotask();
-      expect(screen.getByTestId("desktop-slot-panel-fresh-slot")).toBeInTheDocument();
-      expect(screen.queryByTestId("desktop-slot-panel-stale-slot")).not.toBeInTheDocument();
+        expect(await screen.findByTestId("desktop-slot-panel-fresh-slot")).toBeInTheDocument();
+
+        // Stale seq #1 resolves afterward and must not overwrite seq #2
+        await act(async () => {
+          resolveSlow({
+            success: true,
+            slots: [{ slot: "stale-slot", source: "server", count: 1, latest_updated_at: null }],
+            active_slot: "stale-slot",
+          });
+        });
+        await flushMacrotask();
+        expect(screen.getByTestId("desktop-slot-panel-fresh-slot")).toBeInTheDocument();
+        expect(screen.queryByTestId("desktop-slot-panel-stale-slot")).not.toBeInTheDocument();
+
+        // Two concurrent refreshSlots calls: newer seq #4 resolves before stale seq #3
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+        });
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+        });
+        expect(backend.getSaveSlots).toHaveBeenCalledTimes(4);
+
+        await act(async () => {
+          resolveNewestRefresh({
+            success: true,
+            slots: [{ slot: "newest-slot", source: "server", count: 1, latest_updated_at: null }],
+            active_slot: "newest-slot",
+          });
+        });
+        expect(await screen.findByTestId("desktop-slot-panel-newest-slot")).toBeInTheDocument();
+
+        await act(async () => {
+          resolveStaleRefresh({
+            success: true,
+            slots: [{ slot: "stale-refresh-slot", source: "server", count: 1, latest_updated_at: null }],
+            active_slot: "stale-refresh-slot",
+          });
+        });
+        await flushMacrotask();
+        expect(screen.getByTestId("desktop-slot-panel-newest-slot")).toBeInTheDocument();
+        expect(screen.queryByTestId("desktop-slot-panel-stale-refresh-slot")).not.toBeInTheDocument();
+
+        // Unmount while latest refreshSlots is still in flight -> ignores late settlement even though seq matches
+        act(() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+        });
+        expect(backend.getSaveSlots).toHaveBeenCalledTimes(5);
+        unmount();
+
+        await act(async () => {
+          resolveAfterUnmount({
+            success: false,
+            reason: "server_unreachable",
+            message: "late offline",
+          });
+        });
+        await flushMacrotask();
+        expect(getRommConnectionState()).toBe("connected");
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
 
     it("rejects stale savesListFileVersions responses by readSeqRef after save_sync invalidation", async () => {
