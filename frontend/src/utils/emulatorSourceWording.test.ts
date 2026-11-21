@@ -471,7 +471,7 @@ describe("each case of a platform with no system to use says which it is (#2751 
 
     expect(withPlatformSystemSentence(refused).message).toBe(sentence);
   });
-  it("words a press refused for a catalogue that was refused as the emulator list does", () => {
+  it("words a press refused for a catalogue that was refused, naming the source", () => {
     const refused = {
       success: false,
       reason: "platform_system_unasked",
@@ -480,8 +480,23 @@ describe("each case of a platform with no system to use says which it is (#2751 
       unasked: "not_set_up",
     };
     expect(withPlatformSystemSentence(refused).message).toBe(
-      "RetroDECK has not been set up yet, so its emulators are not established.",
+      "RetroDECK has not been set up yet, so Tender cannot download its games.",
     );
+  });
+
+  it.each([
+    ["not_set_up", "RetroDECK has not been set up yet, so Tender cannot download its games."],
+    ["catalogue_invalid", "RetroDECK: ES-DE's systems file is broken, so Tender cannot download its games."],
+    ["sealed", "RetroDECK's emulator list cannot be read yet, so Tender cannot download its games."],
+  ])("words a download refused for a %s catalogue with the download's ending", (unasked, sentence) => {
+    const refused = {
+      success: false,
+      reason: "platform_system_unasked",
+      message: "fact",
+      source: "retrodeck",
+      unasked,
+    };
+    expect(withPlatformSystemSentence(refused).message).toBe(sentence);
   });
 
   it("gives every case a sentence of its own", () => {

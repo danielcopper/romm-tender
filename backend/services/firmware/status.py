@@ -42,7 +42,7 @@ from domain.bios_status import (
 )
 from domain.emulator_commands import options_to_payload, resolve_firmware_option
 from domain.emulator_pick import pick_for, source_kind
-from domain.emulator_sources import NO_SOURCE_DETECTED, unlisted_system
+from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, NO_SOURCE_DETECTED, unlisted_system
 from domain.firmware_groups import console_regions_of, judge_groups
 from domain.firmware_rows import leaves_its_folder, library_file
 from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
@@ -673,16 +673,19 @@ def _overview_payload(entry: BiosFileEntry) -> dict[str, Any]:
 def _store_only(platform: PlatformSystem, catalogue: FirmwareCatalogue, emulator: str | None) -> str | None:
     """Why a download here lands in the store and is linked nowhere, or ``None`` where it may be linked.
 
-    Where no source was asked, why: ``no_source`` where none is detected,
-    ``switched_off`` where every one is switched off, or the reason the one
-    that would answer was not asked (RomM's list of platforms could not be
-    read, its catalogue refused). Where the source that answered has no one
+    Where no source was asked, why: ``no_source`` where none is detected and
+    ``switched_off`` where every one is switched off, whatever else failed;
+    else the reason the one that would answer was not asked (RomM's list of
+    platforms could not be read, its catalogue refused). Where the source that answered has no one
     system for the platform, its :class:`~domain.platform_system.PlatformRefusal`
     — several among them, since a link lands in one system's place.
     ``unsupported`` where the resolver does not cover the launching emulator —
     it states it so, or a reading that happened holds no entry for it.
     """
     if platform.state == UNASKED:
+        if platform.source is None:
+            # No source answers, whatever else failed: none is detected, or every one is switched off.
+            return ALL_SOURCES_SWITCHED_OFF if platform.unasked == ALL_SOURCES_SWITCHED_OFF else NO_SOURCE_DETECTED
         return platform.unasked or NO_SOURCE_DETECTED
     reason = platform.no_system_reason
     if reason is not None:

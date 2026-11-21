@@ -18,6 +18,7 @@ from domain.emulator_sources import (
     ArrangedSource,
 )
 from domain.platform_system import (
+    CATALOGUE_REFUSALS_OF_THEIR_OWN,
     CONTRADICTED,
     FOUND,
     NO_SYSTEM,
@@ -475,3 +476,28 @@ class TestThePanelWordsEveryPlatformRefusal:
         start = source.index("export type PlatformSystemReason =")
         panel = set(re.findall(r'"(\w+)"', source[start : source.index(";", start)]))
         assert panel == {refusal.value for refusal in PlatformRefusal}
+
+
+class TestEveryPlatformRefusalHasItsState:
+    def test_each_refusal_is_one_state_s_and_none_is_left_out(self):
+        refusals = [_platform(state).no_system_reason for state in _NO_SYSTEM_STATES]
+
+        assert sorted(refusal.value for refusal in refusals if refusal is not None) == sorted(PlatformRefusal)
+        assert None not in refusals
+
+
+# Every state a platform with no system to use can be in.
+_NO_SYSTEM_STATES = (NO_SYSTEM, SWITCHED_OFF, NOT_HERE, UNMATCHED, CONTRADICTED, SEVERAL)
+
+
+class TestThePanelWordsEveryCatalogueRefusalOfItsOwn:
+    """The panel words a download refused for each catalogue refusal the domain refuses as itself, no more."""
+
+    _WORDING = Path(__file__).resolve().parents[2] / "frontend" / "src" / "utils" / "emulatorSourceWording.ts"
+
+    def test_the_two_lists_are_equal(self):
+        source = self._WORDING.read_text(encoding="utf-8")
+        start = source.index("const UNASKED_CATALOGUE_SENTENCES")
+        record = source[start : source.index("};", start)]
+        panel = set(re.findall(r"^\s+(\w+): \(kind\) =>", record, flags=re.MULTILINE))
+        assert panel == set(CATALOGUE_REFUSALS_OF_THEIR_OWN)

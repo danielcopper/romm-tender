@@ -191,7 +191,7 @@ class PlatformSystemService:
         """The platform *keys* names, from RomM's listing; the listing is kept by the refiling's keep step.
 
         The listing is handed to the refiling, which has it kept
-        (:meth:`keep_listing`); this adds only the placeholder for a slug the
+        (:meth:`keep_listing`); this adds only the placeholder for a platform the
         listing does not name. How the two are merged:
         ``docs/architecture/core-emulator-selection.md#a-platforms-system``.
         """

@@ -1300,6 +1300,7 @@ class TestOnlyTheStore:
         ("unasked", "source", "reason"),
         [
             (ALL_SOURCES_SWITCHED_OFF, None, "switched_off"),
+            ("server_unreachable", None, "no_source"),
             ("catalogue_invalid", RETRODECK_SOURCE, "catalogue_invalid"),
             ("server_unreachable", RETRODECK_SOURCE, "server_unreachable"),
         ],

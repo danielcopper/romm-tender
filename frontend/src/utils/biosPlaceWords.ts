@@ -169,8 +169,11 @@ export function storeOnlySentence(
     const fact = answer.platformSystem === null ? null : PLATFORM_SYSTEM_FACTS[storeOnly](answer.platformSystem);
     return fact === null ? null : `${fact}. ${KEPT} ${LINKED_ONCE[storeOnly]}.`;
   }
-  // Every source switched off is said with no source named; any other reason needs the one that would answer.
-  if (answer.source === null && storeOnly !== "switched_off") return null;
+  if (storeOnly === "switched_off") {
+    return `${emulatorDataReasonSentence(storeOnly, null)} ${KEPT} once a source is switched on.`;
+  }
+  // The backend names no source only for no_source and switched_off above; any other reason needs it.
+  if (answer.source === null) return null;
   const why = emulatorDataReasonSentence(storeOnly, answer.source, answer.platformSystem);
   return `${why} ${KEPT} once the platform's system is known.`;
 }

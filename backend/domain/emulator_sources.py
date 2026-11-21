@@ -165,11 +165,11 @@ CATALOGUE_READ = "read"
 def unlisted_system(options: Mapping[str, Any], *, installed: bool) -> dict[str, Any] | None:
     """The system an emulator list names because its source does not list it, as the pages read it; else ``None``.
 
-    ``name`` is the keys of that system, ``installed`` whether it is the one a
-    game's install record holds, which the sentence says.
+    ``system_keys`` are the keys that system was asked by, ``installed`` whether it is
+    the one a game's install record holds, which the sentence says.
     """
-    system = options.get("system")
-    return None if system is None else {"name": system, "installed": installed}
+    keys = options.get("system")
+    return None if keys is None else {"system_keys": list(keys), "installed": installed}
 
 
 def no_answering_source_reason(sources: Sequence[ArrangedSource]) -> str:

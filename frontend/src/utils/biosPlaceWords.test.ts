@@ -231,7 +231,7 @@ describe("storeOnlySentence", () => {
 
   it("says every source is switched off, with no source to name", () => {
     expect(storeOnlySentence("switched_off", null, "Master System", { source: null, platformSystem: null })).toBe(
-      "Every emulator source is switched off in Settings › Emulator sources. Downloads are kept in Tender's firmware store and linked once the platform's system is known.",
+      "Every emulator source is switched off in Settings › Emulator sources. Downloads are kept in Tender's firmware store and linked once a source is switched on.",
     );
   });
 

@@ -10,7 +10,8 @@
  * contents were not read, the start goes on without a file it opens, the
  * emulator does not read every disc a playlist lists, or the reading of the file
  * stopped short of something, its format included; or whether it starts could
- * not be established, which says so first, with its reason, names what could not
+ * not be established, which says so first, with its reason where the backend
+ * states one, names what could not
  * be — the reading stopping short among it — and never says it can start
  * (#2195 D2, D40, D41; #2698 D7, D8). Beside a start or a verdict not
  * established, after that first sentence, stand a name the frontend would not

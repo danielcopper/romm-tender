@@ -825,7 +825,7 @@ class TestASystemThatResolvedToNoOneSystem:
         answer = _adapter(installation, traces).get_emulator_options("nintendo64")
 
         # A system the source does not list is said as such, naming it — no failed read.
-        assert (answer["available"], answer["reason"], answer["system"]) == (False, "system_unknown", "nintendo64")
+        assert (answer["available"], answer["reason"], answer["system"]) == (False, "system_unknown", ["nintendo64"])
 
     def test_its_extensions_are_the_default_safe_empty_set(self, traces):
         installation = _Installation(placement=RomPlacement(extensions=(".z64",), resolution=_NOT_HELD))
@@ -1189,7 +1189,7 @@ class TestTheRealResolverOverARealTree:
             "options": [],
             "reason": "system_unknown",
             "source": _RETRODECK,
-            "system": "gba",
+            "system": ["gba"],
         }
         assert adapter.is_known_system("gba") is False
 

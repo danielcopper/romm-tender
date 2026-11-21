@@ -81,7 +81,7 @@ export type PlatformSystemReason =
 /** The system an emulator list is not given for because its source does not list it: its keys, and whether a
  *  game's install record holds it, which the sentence says. */
 export interface UnlistedSystem {
-  name: string;
+  system_keys: string[];
   installed: boolean;
 }
 

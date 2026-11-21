@@ -52,6 +52,8 @@ const coreInfo: CoreInfo = coreInfoFixture({
 // with no `required_count` it would be unreachable — a zero required count
 // always computes "ok".
 const biosStatus: BiosStatus = {
+  platform_system: null,
+  emulator_source: null,
   needs_bios: true,
   server_count: 1,
   local_count: 0,
@@ -100,6 +102,8 @@ describe("BiosTab", () => {
 
   it("draws the answer that no BIOS is needed like any other: a green sentence, the selector and the list", () => {
     const noneNeeded: BiosStatus = {
+      platform_system: null,
+      emulator_source: null,
       needs_bios: false,
       server_count: 0,
       local_count: 0,
@@ -151,7 +155,7 @@ describe("BiosTab", () => {
     // to the no-requirement sentence, whose counts would both be zero.
     const { container } = render(
       <BiosTabWithState
-        biosStatus={{ needs_bios: false, bios_status_unknown: true }}
+        biosStatus={{ platform_system: null, emulator_source: null, needs_bios: false, bios_status_unknown: true }}
         biosLevel="unknown"
         coreInfo={coreInfo}
       />,
@@ -164,7 +168,7 @@ describe("BiosTab", () => {
   it("gives no reason line where the answering source gives an emulator list", () => {
     const { container } = render(
       <BiosTabWithState
-        biosStatus={{ needs_bios: false, bios_status_unknown: true }}
+        biosStatus={{ platform_system: null, emulator_source: null, needs_bios: false, bios_status_unknown: true }}
         biosLevel="unknown"
         coreInfo={coreInfo}
       />,
@@ -175,7 +179,7 @@ describe("BiosTab", () => {
   it("says on a game page that the source has no system for the game's platform", () => {
     const { container } = render(
       <BiosTabWithState
-        biosStatus={{ needs_bios: false, bios_status_unknown: true }}
+        biosStatus={{ platform_system: null, emulator_source: null, needs_bios: false, bios_status_unknown: true }}
         biosLevel="unknown"
         coreInfo={{
           ...coreInfo,
@@ -201,7 +205,13 @@ describe("BiosTab", () => {
   it("says on a game page why a download stays in the store for a platform of several systems", () => {
     const { container } = render(
       <BiosTabWithState
-        biosStatus={{ needs_bios: false, bios_status_unknown: true, store_only: "platform_systems_several" }}
+        biosStatus={{
+          platform_system: null,
+          emulator_source: null,
+          needs_bios: false,
+          bios_status_unknown: true,
+          store_only: "platform_systems_several",
+        }}
         biosLevel="unknown"
         coreInfo={{
           ...coreInfo,
@@ -218,6 +228,25 @@ describe("BiosTab", () => {
     );
     expect(container.querySelector('[data-testid="bios-store-only"]')?.textContent).toBe(
       "RetroDECK has several systems for Master System (mark3, mastersystem). Downloads are kept in Tender's firmware store and linked into none of them.",
+    );
+  });
+
+  it("names the source the core read answered with where the BIOS answer names none", () => {
+    const { container } = render(
+      <BiosTabWithState
+        biosStatus={{
+          needs_bios: false,
+          bios_status_unknown: true,
+          store_only: "server_unreachable",
+          platform_system: null,
+          emulator_source: null,
+        }}
+        biosLevel="unknown"
+        coreInfo={{ ...coreInfo, emulator_source: { kind: "retrodeck", starts_games: true } }}
+      />,
+    );
+    expect(container.querySelector('[data-testid="bios-store-only"]')?.textContent).toBe(
+      "RomM cannot be reached, so Tender does not know this platform's system yet. Downloads are kept in Tender's firmware store and linked once the platform's system is known.",
     );
   });
 
@@ -250,7 +279,7 @@ describe("BiosTab", () => {
   it("puts the reason line between the BIOS heading and the state", () => {
     const { container } = render(
       <BiosTabWithState
-        biosStatus={{ needs_bios: false, bios_status_unknown: true }}
+        biosStatus={{ platform_system: null, emulator_source: null, needs_bios: false, bios_status_unknown: true }}
         biosLevel="unknown"
         coreInfo={{
           ...coreInfo,
@@ -276,6 +305,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 20,
           local_count: 5,
@@ -298,6 +329,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 0,
           local_count: 0,
@@ -341,6 +374,8 @@ describe("BiosTab", () => {
       const { container } = render(
         <BiosTabWithState
           biosStatus={{
+            platform_system: null,
+            emulator_source: null,
             needs_bios: true,
             server_count: 20,
             local_count: 0,
@@ -371,6 +406,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 20,
           local_count: 0,
@@ -391,6 +428,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 0,
           local_count: 0,
@@ -414,6 +453,8 @@ describe("BiosTab", () => {
       const { container } = render(
         <BiosTabWithState
           biosStatus={{
+            platform_system: null,
+            emulator_source: null,
             needs_bios: true,
             server_count: 20,
             local_count: 1,
@@ -444,6 +485,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 3,
           local_count: 1,
@@ -475,6 +518,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 20,
           local_count: 1,
@@ -501,6 +546,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 20,
           local_count: 1,
@@ -529,6 +576,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 1,
           local_count: 0,
@@ -575,6 +624,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 2,
           local_count: 0,
@@ -649,6 +700,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           locating: "by-name",
           required_count: 1,
@@ -682,6 +735,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 0,
           local_count: 0,
@@ -735,6 +790,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 1,
           local_count: 0,
@@ -782,6 +839,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 1,
           local_count: 1,
@@ -824,6 +883,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 1,
           local_count: 0,
@@ -866,6 +927,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 0,
           local_count: 0,
@@ -914,6 +977,8 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{
+          platform_system: null,
+          emulator_source: null,
           needs_bios: true,
           server_count: 0,
           local_count: 0,
@@ -967,6 +1032,8 @@ describe("BiosTab", () => {
     });
 
     const statusWith = (files: BiosFileStatus[]): BiosStatus => ({
+      platform_system: null,
+      emulator_source: null,
       needs_bios: true,
       server_count: 20,
       local_count: 1,
@@ -1153,6 +1220,8 @@ describe("BiosTab", () => {
       option("scph5502.bin", "pal", false),
     ];
     const forTheGame = (state: "met" | "unmet", covered: string[], missing: string[], game: string[]): BiosStatus => ({
+      platform_system: null,
+      emulator_source: null,
       needs_bios: true,
       server_count: 3,
       local_count: 1,
@@ -1391,6 +1460,8 @@ describe("BiosTab", () => {
     // LRPS2 set to open a file its folder does not hold lists the folder
     // instead: a neutral line, and the row reads exactly as its verdict says.
     const folder = (stale: MissingConfiguredImage | null): BiosStatus => ({
+      platform_system: null,
+      emulator_source: null,
       needs_bios: true,
       server_count: 0,
       local_count: 0,
@@ -1484,6 +1555,8 @@ describe("BiosTab", () => {
     });
 
     const saturn = (): BiosStatus => ({
+      platform_system: null,
+      emulator_source: null,
       needs_bios: true,
       server_count: 1,
       local_count: 0,
@@ -1992,6 +2065,8 @@ describe("BiosTab", () => {
     });
     /** A download, a replace and a delete in one table, and a row with nothing to press. */
     const psx = (over: Partial<BiosStatus> = {}): BiosStatus => ({
+      platform_system: null,
+      emulator_source: null,
       needs_bios: true,
       server_count: 3,
       local_count: 0,

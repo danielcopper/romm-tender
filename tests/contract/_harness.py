@@ -80,6 +80,7 @@ if TYPE_CHECKING:
 
     from lib.prune_conflicts import PruneConflicts
     from main import Endpoints
+    from services.protocols import SourcePlatformSystems
 
 
 @dataclass
@@ -146,8 +147,10 @@ class ContractHarness:
     downloads: FakeReleaseDownload
     units: FakeTransientUnits
     journal: FakeJournal
-    # What a platform's system answers; a test sets ``answers`` on it.
+    # What a platform's system answers; a test sets ``answers`` on it, or
+    # ``real`` to ``real_platform_systems`` for the real resolver's answer.
     platform_systems: FakeSourcePlatformSystems
+    real_platform_systems: SourcePlatformSystems
     # Where the drives a place for Tender's folder may lie on are mounted, and
     # which paths count as mounts: a folder cannot be mounted in a test, so a
     # test adds a drive's folder to ``mounts`` to connect it.
@@ -339,6 +342,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
         units=fake_units,
         journal=fake_journal,
         platform_systems=fake_platform_systems,
+        real_platform_systems=result.adapters.source_platform_systems,
         drives_root=drives_root,
         mounts=mounts,
     )

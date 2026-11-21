@@ -248,7 +248,7 @@ describe("extractCoreInfo", () => {
   });
 
   it("carries the system the source does not list through to the page", () => {
-    const system = { name: "gbretired", installed: true };
+    const system = { system_keys: ["gbretired"], installed: true };
     const result = extractCoreInfo({
       ...baseCoreInfo,
       emulator_data_reason: "system_unknown",

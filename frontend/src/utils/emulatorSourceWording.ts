@@ -277,18 +277,31 @@ export function withPlatformSystemSentence<T>(answer: T): T {
   return sentence === null ? answer : { ...answer, message: sentence };
 }
 
-// The catalogue refusals a platform can be refused for before any source is asked about it.
-const UNASKED_CATALOGUE_REASONS: ReadonlySet<string> = new Set(["catalogue_invalid", "not_set_up", "sealed"]);
+/** The catalogue refusals a platform's download is refused for before any source is asked about it. */
+export type UnaskedCatalogueReason = Extract<EmulatorDataReason, "catalogue_invalid" | "not_set_up" | "sealed">;
+
+// The sentence for each, naming the source by its kind: the catalogue's reason with the download's ending. A
+// `Record` so that a reason added to {@link UnaskedCatalogueReason} must be worded here.
+const UNASKED_CATALOGUE_SENTENCES: Record<UnaskedCatalogueReason, (kind: string) => string> = {
+  not_set_up: (kind) => `${sourceName(kind)} has not been set up yet, so Tender cannot download its games.`,
+  catalogue_invalid: (kind) =>
+    `${sourceName(kind)}: ES-DE's systems file is broken, so Tender cannot download its games.`,
+  sealed: (kind) => `${sourceName(kind)}'s emulator list cannot be read yet, so Tender cannot download its games.`,
+};
+
+/** Whether `reason` is one a platform's download is refused for when its source's catalogue was refused. */
+function isUnaskedCatalogueReason(reason: string): reason is UnaskedCatalogueReason {
+  return Object.prototype.hasOwnProperty.call(UNASKED_CATALOGUE_SENTENCES, reason);
+}
 
 /**
- * The sentence for a press refused because the catalogue of the source that would answer was refused, or `null`
- * for any other answer: the one the platform's emulator list says for that catalogue, so the two agree.
+ * The sentence for a press refused because the catalogue of the source that would answer was refused
+ * (`platform_system_unasked`), or `null` for any other answer.
  */
 function unaskedCatalogueSentence(answer: object): string | null {
   const { reason, source, unasked } = answer as Record<string, unknown>;
   if (reason !== "platform_system_unasked" || typeof source !== "string" || typeof unasked !== "string") return null;
-  if (!UNASKED_CATALOGUE_REASONS.has(unasked)) return null;
-  return emulatorDataReasonSentence(unasked as EmulatorDataReason, { kind: source, starts_games: true });
+  return isUnaskedCatalogueReason(unasked) ? UNASKED_CATALOGUE_SENTENCES[unasked](source) : null;
 }
 
 /** Main's notice, and the settings section's line, while no emulator source is detected. */
@@ -421,7 +434,8 @@ export function platformSystemOffSentence(kind: string, system: string): string 
 
 /** Why a game is linked into no frontend folder: several of the source's systems answer its platform (#2225 D8). */
 export function severalPlatformSystemsSentence(kind: string, platform: string, systems: readonly string[]): string {
-  return `${sourceName(kind)} has several systems for ${platform} (${systems.join(", ")}), and Tender links its games into none of them.`;
+  const fact = PLATFORM_SYSTEM_FACTS.platform_systems_several(answerOf(kind, platform, systems));
+  return `${fact}, and Tender links its games into none of them.`;
 }
 
 /** Why a platform's games cannot be downloaded: several of the source's systems answer it (#2225 D8). */
@@ -472,8 +486,8 @@ export function emulatorDataReasonSentence(
   }
   if (reason === "system_unknown" && system !== null) {
     return system.installed
-      ? `${sourceName(source.kind)} does not list the system ${system.name} this game was installed under, so its emulators are not established.`
-      : `${sourceName(source.kind)} does not list the system ${system.name}, so its emulators are not established.`;
+      ? `${sourceName(source.kind)} does not list the system ${system.system_keys.join(", ")} this game was installed under, so its emulators are not established.`
+      : `${sourceName(source.kind)} does not list the system ${system.system_keys.join(", ")}, so its emulators are not established.`;
   }
   const noSystem = platformSystemSentence(reason, platformSystem);
   if (noSystem !== null) return noSystem;

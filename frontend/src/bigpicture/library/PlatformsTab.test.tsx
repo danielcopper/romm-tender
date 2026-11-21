@@ -2040,7 +2040,15 @@ describe("Library › Platforms", () => {
       await flushAsync();
       const gamePage = render(
         <BiosTabWithState
-          biosStatus={{ needs_bios: true, locating: "by-name", required_count: 1, required_downloaded: 0, ...counts }}
+          biosStatus={{
+            platform_system: null,
+            emulator_source: null,
+            needs_bios: true,
+            locating: "by-name",
+            required_count: 1,
+            required_downloaded: 0,
+            ...counts,
+          }}
           biosLevel="missing"
           coreInfo={GBA_CORE_INFO}
         />,
@@ -2064,7 +2072,15 @@ describe("Library › Platforms", () => {
       await flushAsync();
       const gamePage = render(
         <BiosTabWithState
-          biosStatus={{ needs_bios: true, locating: "by-name", required_count: 1, required_downloaded: 0, ...counts }}
+          biosStatus={{
+            platform_system: null,
+            emulator_source: null,
+            needs_bios: true,
+            locating: "by-name",
+            required_count: 1,
+            required_downloaded: 0,
+            ...counts,
+          }}
           biosLevel="missing"
           coreInfo={GBA_CORE_INFO}
         />,

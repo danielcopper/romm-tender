@@ -313,7 +313,12 @@ function refreshMetadataInBackground(binding: RomBinding): Promise<void> {
  *  nothing Tender could say about any file; what the answer's own status carries
  *  besides — its emulator entries and delete counts — stands, as on the platform
  *  page. */
-const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_unknown: true };
+const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = {
+  needs_bios: false,
+  bios_status_unknown: true,
+  platform_system: null,
+  emulator_source: null,
+};
 
 /** The panel's two BIOS fields as a BIOS answer carries them — a cached game
  *  detail or the live `get_bios_status` read below, which ship the identical
@@ -336,7 +341,8 @@ export function biosFieldsFromCache(cached: BiosAnswer): Pick<PanelState, "biosS
   }
   if (!cached.bios_status) return null;
   return {
-    biosStatus: { needs_bios: true, ...cached.bios_status },
+    // An answer from before it carried what its store-only line is worded from has neither.
+    biosStatus: { needs_bios: true, platform_system: null, emulator_source: null, ...cached.bios_status },
     biosLevel: cached.bios_level ?? null,
   };
 }

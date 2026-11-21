@@ -29,7 +29,7 @@ from domain.platform_system import (
 )
 from lib.errors import RommAuthError, RommConnectionError
 
-from ._seed import enable_save_sync, seed_install, seed_rom
+from ._seed import enable_save_sync, seed_es_systems, seed_install, seed_rom
 
 pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
 
@@ -267,7 +267,7 @@ async def test_a_game_installed_under_a_system_the_source_no_longer_lists_names_
 
     assert game_core["emulator_data_available"] is False
     assert game_core["emulator_data_reason"] == "system_unknown"
-    assert game_core["emulator_data_system"] == {"name": "gbretired", "installed": True}
+    assert game_core["emulator_data_system"] == {"system_keys": ["gbretired"], "installed": True}
 
 
 async def test_a_platform_page_whose_system_the_source_does_not_list_names_it_as_no_game_s(harness):
@@ -278,4 +278,33 @@ async def test_a_platform_page_whose_system_the_source_does_not_list_names_it_as
     core = await harness.endpoints.get_system_core_info(_SLUG, _FOLDER)
 
     assert core["emulator_data_reason"] == "system_unknown"
-    assert core["emulator_data_system"] == {"name": "gbaretired", "installed": False}
+    assert core["emulator_data_system"] == {"system_keys": ["gbaretired"], "installed": False}
+
+
+async def test_a_platform_s_bios_entry_names_the_system_its_source_does_not_list_as_no_game_s(harness):
+    _seed_server(harness)
+    harness.platform_systems.answers[_SLUG] = (FOUND, SystemPair("esde", "gbaretired"))
+
+    bios = await harness.endpoints.get_platform_firmware_status(_SLUG, _FOLDER)
+
+    assert bios["platform"]["emulator_data_reason"] == "system_unknown"
+    assert bios["platform"]["emulator_data_system"] == {"system_keys": ["gbaretired"], "installed": False}
+
+
+async def test_a_download_for_a_broken_systems_file_is_refused_for_that_catalogue(harness):
+    """The real resolver reads the broken file; the download says the catalogue was refused, not the folders."""
+    seed_es_systems(harness, "<systemList><system>broken")
+    harness.platform_systems.real = harness.real_platform_systems
+    _seed_server(harness)
+    seed_rom(harness, 5, platform_slug=_SLUG, platform_folder=_FOLDER)
+
+    started = await harness.endpoints.start_download(5)
+
+    assert started["success"] is False
+    assert (started["reason"], started["unasked"], started["source"]) == (
+        "platform_system_unasked",
+        "catalogue_invalid",
+        "retrodeck",
+    )
+    with harness.uow_factory() as uow:
+        assert uow.rom_installs.get(5) is None

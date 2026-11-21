@@ -452,7 +452,9 @@ _NAMES_A_FILE = frozenset(
 )
 
 
-def _unavailable(reason: str, source: dict[str, Any] | None, *, system: str | None = None) -> dict[str, Any]:
+def _unavailable(
+    reason: str, source: dict[str, Any] | None, *, system: tuple[str, ...] | None = None
+) -> dict[str, Any]:
     """The picker's "emulator list unavailable" answer, built fresh each call.
 
     A module-level constant would hand every caller the same ``options`` list,
@@ -462,7 +464,7 @@ def _unavailable(reason: str, source: dict[str, Any] | None, *, system: str | No
     """
     answer: dict[str, Any] = {"available": False, "options": [], "reason": reason, "source": source}
     if system is not None:
-        answer["system"] = system
+        answer["system"] = list(system)
     return answer
 
 
@@ -910,7 +912,7 @@ class AtlasCatalogueAdapter:
         if unresolved is not None:
             # The source does not list the system the question names, which is
             # no failed read.
-            return _unavailable(CATALOGUE_SYSTEM_UNKNOWN, payload, system=", ".join(system_keys(system)))
+            return _unavailable(CATALOGUE_SYSTEM_UNKNOWN, payload, system=system_keys(system))
         chosen = _frontend_choice(answer.entries)
         options = [_entry_option(entry, chosen_in_frontend=entry is chosen) for entry in answer.entries]
         return {"available": True, "options": options, "reason": None, "source": payload}
