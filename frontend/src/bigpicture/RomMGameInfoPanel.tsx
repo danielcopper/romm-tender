@@ -43,7 +43,7 @@ import { StrandedPanelCard } from "./StrandedPanelCard";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { detach } from "../utils/detach";
 import { refreshBiosStatus } from "../utils/gameDetailStore";
-import { announceBiosChange } from "./bios/useBiosActions";
+import { announceBiosChange } from "../utils/useBiosActions";
 import { ThrobberLabel } from "../shared/Throbber";
 
 interface RomMGameInfoPanelProps {

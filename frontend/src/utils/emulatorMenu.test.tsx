@@ -318,3 +318,25 @@ describe("the choice made in ES-DE", () => {
     expect(texts).toContain("RPCS3 Shortcut (Standalone) (default) ✓");
   });
 });
+
+describe("shared emulator row helpers", () => {
+  it("formats entry labels, pinned markers, notes, and active state consistently", async () => {
+    const { emulatorEntryLabel, emulatorEntryNotes, isEmulatorEntryActive } = await import("./emulatorMenu");
+    const def = libretroEmu("mgba_libretro", "mGBA", true);
+    const missing = standaloneEmu("Vita3K", false, { reason: "not_installed" });
+
+    expect(emulatorEntryLabel({ ...def, chosen_in_frontend: true }, true, true)).toBe(
+      "mGBA (default) (chosen in ES-DE) (system) ✓",
+    );
+    expect(emulatorEntryLabel({ ...def, chosen_in_frontend: true }, true, true, true)).toBe(
+      "mGBA (default) (pinned) (chosen in ES-DE) (system) ✓",
+    );
+    expect(emulatorEntryNotes(missing)).toBe(" — emulator not installed");
+    expect(emulatorEntryNotes(def)).toBe("");
+    expect(isEmulatorEntryActive(null, def)).toBe(true);
+    expect(isEmulatorEntryActive(null, missing)).toBe(false);
+    expect(isEmulatorEntryActive("Vita3K", missing)).toBe(true);
+    expect(isEmulatorEntryActive("Vita3K", def)).toBe(false);
+    expect(isEmulatorEntryActive(null, def, false)).toBe(false);
+  });
+});

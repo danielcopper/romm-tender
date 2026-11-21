@@ -3382,35 +3382,38 @@ held (`candidates`), and `adapters/atlas_firmware.py::_notes` carries exactly th
 caveat codes and, for a declared FILE, from its `checked` — the resolver's own word for what became of the bytes, but
 for `rejected`, which is Tender's (#2191 D41), carried from the same entry `declaration` is, because a file the emulator
 read and does not recognise WAS checked while one whose bytes never came back was not, and one withheld verdict cannot
-say which. The verdict is the answer alone and carries none of its causes; the verdict decides only which family of
-codes can apply and what to say when none of them is recognised, which is the one sentence written off it —
-`frontend/src/utils/biosFileNote.ts` is the one place both surfaces derive what a row says from — a sentence, the lines
-under it, which is how a satisfied folder's images arrive as a list rather than folded into the row's own name, and the
-description on its own line under the row (`biosFileDescription`). A row is headed by the file it declares on both
-surfaces and never by its description: that is the packager's prose out of a core's `.info`, outside the resolver's
-contract, and it routinely spells the row's own name into its words — so the shared rule takes the name back out and
-answers `null` where nothing is left.
+say which. The verdict is the answer alone and carries none of its causes; for a folder row it decides only which family
+of codes can apply and what to say when none of them is recognised, whereas a declared file row's note comes from its
+caveat codes and `checked` without branching on `satisfied` — `frontend/src/utils/biosFileNote.ts` (alongside
+`frontend/src/utils/biosPlaceWords.ts` and `frontend/src/utils/biosGroup.ts`) is where the surfaces derive what a row
+says — a sentence, the lines under it, which is how a satisfied folder's images arrive as a list rather than folded into
+the row's own name, and the description on its own line under the row (`biosFileDescription`). A row is headed by the
+file it declares on every surface and never by its description: that is the packager's prose out of a core's `.info`,
+outside the resolver's contract, and it routinely spells the row's own name into its words — so the shared rule takes
+the name back out and answers `null` where nothing is left.
 
 **No unknown withdraws a download, because the two questions are independent.** What the resolver could establish is the
 emulator's DEMAND; what is fetchable is what the RomM library HOLDS, and neither answers the other. A platform nothing
 could be read for still has a library behind it, and fetching from it is the one action that moves the platform along at
-all — so every download the BIOS table offers (`frontend/src/bigpicture/bios/BiosFiles.tsx`, on a platform's pane and on
-a game's BIOS tab) is built off the fetchable set (`on_server && !downloaded && declared_kind !== "directory"`, plus the
-offline server) and reads the verdict **nowhere**: not `bios_level`, not `required_withheld`. The two further inputs
-those buttons do read are of the same two kinds — each row's `fetch_for_required` is its emulator's own demand and is
-what `Download required` counts over the shown emulator's rows, and the library's own finished ratio is what stops
-`Download all` offering a set already complete — so neither is a readiness gate either. `fetch_for_required` is
-`domain/firmware_groups.py`'s `fetched_as_required`, the one rule `FirmwareDownloader.download_required_firmware`
-applies too: the files the emulator requires, and the options of its one-of groups that serve a region nothing in place
-covers yet. A pick nothing could identify — a platform with no emulator listed, or one whose first listed emulator the
-resolver names no identity for — is no emulator (#2190 D26): no row is its requirement or one it uses, nothing is
-fetched for it, it has no entry in the emulator selector — so the platform page opens on the first other emulator and
-offers that one's `Download required`, and none where there is no other (#2190 D34) — and the header reads that nothing
-could be established — the empty required set is an absence of an answer, never "nothing required" (the verdict for no
-identity is none, so `emulator_read` is false and the level unknown). Reading readiness there is what took the buttons
-off PS2, GameCube and PSP the moment a BIOS answer was scoped to the emulator that actually launches: those launch
-standalone emulators the resolver holds no card for, so the verdict declines over a library that still holds their
-files.
+all — so every download the BIOS table offers (`useBiosTable` and `biosBulkOffer` in
+`frontend/src/utils/useBiosActions.ts`, drawn on a platform's pane and a game's BIOS tab via
+`frontend/src/bigpicture/bios/BiosFiles.tsx`, and on the desktop game page's Emulation card via
+`frontend/src/desktop/gameview/EmulationSettings.tsx`) is built off the fetchable set
+(`on_server && !downloaded && declared_kind !== "directory"`, plus the offline server) and reads the verdict
+**nowhere**: not `bios_level`, not `required_withheld`. The two further inputs those buttons do read are of the same two
+kinds — each row's `fetch_for_required` is its emulator's own demand and is what `Download required` counts over the
+shown emulator's rows, and the library's own finished ratio is what stops `Download all` offering a set already complete
+— so neither is a readiness gate either. `fetch_for_required` is `domain/firmware_groups.py`'s `fetched_as_required`,
+the one rule `FirmwareDownloader.download_required_firmware` applies too: the files the emulator requires, and the
+options of its one-of groups that serve a region nothing in place covers yet. A pick nothing could identify — a platform
+with no emulator listed, or one whose first listed emulator the resolver names no identity for — is no emulator (#2190
+D26): no row is its requirement or one it uses, nothing is fetched for it, it has no entry in the emulator selector — so
+the platform page opens on the first other emulator and offers that one's `Download required`, and none where there is
+no other (#2190 D34) — and the header reads that nothing could be established — the empty required set is an absence of
+an answer, never "nothing required" (the verdict for no identity is none, so `emulator_read` is false and the level
+unknown). Reading readiness there is what took the buttons off PS2, GameCube and PSP the moment a BIOS answer was scoped
+to the emulator that actually launches: those launch standalone emulators the resolver holds no card for, so the verdict
+declines over a library that still holds their files.
 
 **What the narrowest decline does decide is wording.** "Not read" (`emulator_read` false, `reading_complete_for`) means
 the emulator stated nothing about what it wants — a `read` declaration with an empty list is read, and says it needs

@@ -10,7 +10,7 @@ import { _resetSharedReadsForTests } from "../api/sharedReads";
 import * as cachedStore from "../utils/cachedGameDetailStore";
 import { wirePanelEvents, type PanelEventContext } from "./panelEvents";
 import { loadData, type PanelState } from "./panelState";
-import { announceBiosChange } from "./bios/useBiosActions";
+import { announceBiosChange } from "../utils/useBiosActions";
 
 vi.mock("../utils/cachedGameDetailStore", () => ({
   getCachedGameDetail: vi.fn(),

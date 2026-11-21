@@ -4,8 +4,19 @@
 // with that surface.
 
 import { describe, it, expect } from "vitest";
-import type { FirmwareChecked, FirmwareDeclaredKind } from "../types";
-import { biosFileDescription, biosFileNote, contentsWords, type BiosNoteRow } from "./biosFileNote";
+import type { BiosFileStatus, FirmwareChecked, FirmwareDeclaredKind } from "../types";
+import { BIOS_LIBRARY_VIOLET, BIOS_MISSING_RED, BIOS_MUTED_GREY, BIOS_OK_GREEN, BIOS_SPARE_GREEN } from "./biosColor";
+import {
+  biosDiskMark,
+  biosFileDescription,
+  biosFileNote,
+  biosLegendEntries,
+  biosLibraryMark,
+  biosTableRowLines,
+  contentsWords,
+  declaredFolder,
+  type BiosNoteRow,
+} from "./biosFileNote";
 
 /** The sentence half, for the cases that are about wording alone. */
 const noteOf = (row: BiosNoteRow) => biosFileNote(row).note;
@@ -445,5 +456,90 @@ describe("biosFileDescription", () => {
     // rules above would take out anyway — so this pins the gate, not the
     // outcome. A payload from before the field existed lands here too.
     expect(biosFileDescription({ file_name: "scph5500.bin", description: "scph5500.bin (PS1 JP BIOS)" })).toBeNull();
+  });
+});
+
+describe("biosDiskMark, biosLibraryMark, declaredFolder, biosLegendEntries, and biosTableRowLines", () => {
+  const row = (overrides: Partial<BiosFileStatus> = {}): BiosFileStatus => ({
+    file_name: "scph5501.bin",
+    local_path: "/bios/scph5501.bin",
+    description: "",
+    required_by_active: true,
+    wanted: "needed",
+    downloaded: false,
+    on_server: true,
+    ...overrides,
+  });
+
+  it("maps verdicts, needs, one-of options, and unestablished states to disk marks", () => {
+    expect(biosDiskMark(row({ satisfied: true }))).toEqual({
+      glyph: "✓",
+      color: BIOS_OK_GREEN,
+      title: "required, here",
+    });
+    expect(biosDiskMark(row({ satisfied: false, checked: "mismatch" }))).toEqual({
+      glyph: "✗",
+      color: BIOS_MISSING_RED,
+      title: "required, wrong file",
+    });
+    expect(biosDiskMark(row({ required_by_active: false, satisfied: true }))).toEqual({
+      glyph: "✓",
+      color: BIOS_SPARE_GREEN,
+      title: "here, not required",
+    });
+    expect(
+      biosDiskMark(
+        row({
+          required_by_active: false,
+          one_of: { regions: ["ntsc-u"], every_region: false },
+          satisfied: false,
+        }),
+      ),
+    ).toEqual({
+      glyph: "✗",
+      color: BIOS_MISSING_RED,
+      title: "one of these, missing",
+    });
+    expect(biosDiskMark(row({ declared_kind: "directory", downloaded: true }))).toEqual({
+      glyph: "?",
+      color: BIOS_MUTED_GREY,
+      title: "nothing could establish this either way",
+    });
+    expect(biosDiskMark(row({ wanted: "unknown", satisfied: true }))).toEqual({
+      glyph: "?",
+      color: BIOS_MUTED_GREY,
+      title: "here; nothing could say whether this is wanted",
+    });
+  });
+
+  it("places the library mark only on file rows absent from RomM", () => {
+    expect(biosLibraryMark(row({ on_server: false }))).toEqual({
+      glyph: "⊘",
+      color: BIOS_LIBRARY_VIOLET,
+      title: "not in your RomM library",
+    });
+    expect(biosLibraryMark(row({ on_server: false, declared_kind: "directory" }))).toBeNull();
+    expect(biosLibraryMark(row({ on_server: true }))).toBeNull();
+  });
+
+  it("extracts declared directory prefixes and builds filtered legend entries and deduplicated row lines", () => {
+    expect(declaredFolder(row({ declared_path: "dc/dc_boot.bin" }))).toBe("dc/");
+    expect(declaredFolder(row({ declared_path: "scph5501.bin" }))).toBeNull();
+
+    const wrongReq = row({ satisfied: false, checked: "mismatch", on_server: false });
+    const okSpare = row({ required_by_active: false, satisfied: true });
+    expect(biosLegendEntries([wrongReq, okSpare]).map((e) => e.text)).toEqual([
+      "required, wrong file",
+      "here, not required",
+      "not in your RomM library",
+    ]);
+
+    // Wrong-file note matches Contents words and is not duplicated under the row;
+    // library-absence note is carried by the second mark instead of row lines.
+    expect(biosTableRowLines(wrongReq, "SwanStation", ["placed line"])).toEqual(["placed line"]);
+    expect(biosTableRowLines(row({ on_server: false, satisfied: false }), "SwanStation", [])).toEqual([]);
+    expect(biosTableRowLines(row({ supplied_by: "RetroDECK", satisfied: true }), "Dolphin", [])).toEqual([
+      "provided by RetroDECK",
+    ]);
   });
 });
