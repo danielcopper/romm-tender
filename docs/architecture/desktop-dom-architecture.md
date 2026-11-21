@@ -17,10 +17,9 @@ column holds two cards: About (`frontend/src/desktop/gameview/AboutDetails.tsx`)
 `frontend/src/utils/artworkThumbs.ts`), the title, the summary and the rows `metadataRows` answers, under the labels and
 in the order Big Picture's GAME INFO tab shows them — and Emulation
 (`frontend/src/desktop/gameview/EmulationSettings.tsx`), which draws the game's emulator / core picker (the answering
-source's entries with `(default)` and `(pinned)` markers, where clicking an unpinned entry pins it — keeping a pinned
-entry pressable to clear even when not choosable, and omitting `(pinned)` while `vanishedPick` is set — and clicking the
-pinned entry again clears the pin, alongside installation notes, per-entry launch verdicts for an installed game, and
-active, vanished and frontend-choice notes, writing through `executeGameCoreChange`,
+source's entries with `(default)` and `(pinned)` markers, pinned and cleared by a press as
+[Per-game](core-emulator-selection.md#per-game-coreservice) says, alongside installation notes, per-entry launch
+verdicts for an installed game, and active, vanished and frontend-choice notes, writing through `executeGameCoreChange`,
 `frontend/src/utils/coreOverride.ts`) above its BIOS / firmware readiness, group blocks, emulator tab pills, file table,
 unclaimed RomM library rows (`useIdentifications`, `frontend/src/utils/firmwareIdentifications.ts`), legend
 (`frontend/src/utils/biosFileNote.ts`) and BIOS download, replace and delete presses (`useBiosTable` and

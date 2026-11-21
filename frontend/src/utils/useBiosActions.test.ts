@@ -479,7 +479,7 @@ describe("useBiosTable", () => {
 
     await waitFor(() => expect(result.current.identifications.answers["md5-lib"]).toEqual(["PS1 Extra"]));
     expect(result.current.tab).toBe(launchingTab);
-    expect(result.current.shownEmulator).toBe("DuckStation");
+    expect(result.current.shownEmulatorLabel).toBe("DuckStation");
     expect(result.current.shownRows.map((r) => r.file_name)).toEqual(["scph5501.bin"]);
     expect(result.current.libraryRows.map((r) => r.file_name)).toEqual(["extra.bin"]);
     expect(Array.from(result.current.shownFetchable)).toEqual(["scph5501.bin"]);
@@ -489,7 +489,7 @@ describe("useBiosTable", () => {
       result.current.selectTab(altTab);
     });
     expect(result.current.tab).toBe(altTab);
-    expect(result.current.shownEmulator).toBe("Beetle PSX HW");
+    expect(result.current.shownEmulatorLabel).toBe("Beetle PSX HW");
     expect(result.current.shownRows.map((r) => r.file_name)).toEqual(["scph5502.bin"]);
     expect(Array.from(result.current.shownFetchable)).toEqual(["scph5502.bin"]);
 
@@ -502,13 +502,24 @@ describe("useBiosTable", () => {
       },
     });
     expect(result.current.tab?.emulator).toBe("mednafen_psx_hw_libretro.so");
-    expect(result.current.shownEmulator).toBe("Beetle PSX HW");
+    expect(result.current.shownEmulatorLabel).toBe("Beetle PSX HW");
 
-    // Selecting the launching tab returns tabKey to null.
+    // Choosing the launching tab follows whichever emulator launches, not the one launching when it was chosen.
     act(() => {
       result.current.selectTab(launchingTab);
     });
     expect(result.current.tab?.launching).toBe(true);
+    rerender({
+      answer: {
+        active_core_label: "Beetle PSX HW",
+        emulator_tabs: [
+          { ...launchingTab, launching: false },
+          { ...altTab, launching: true },
+        ],
+        files: [launchingRow, libraryRow],
+      },
+    });
+    expect(result.current.tab?.emulator).toBe("mednafen_psx_hw_libretro.so");
     unmount();
   });
 });

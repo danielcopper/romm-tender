@@ -44,7 +44,7 @@ export function canPickAnother(emulators: readonly EmulatorOption[], activeLabel
  * {@link canPickAnother} for the emulator menu, which opens on a game's page
  * only when more than one emulator is listed.
  */
-export function gameCanPickAnother(emulators: readonly EmulatorOption[], activeLabel: string | null): boolean {
+function gameCanPickAnother(emulators: readonly EmulatorOption[], activeLabel: string | null): boolean {
   return emulators.length > 1 && canPickAnother(emulators, activeLabel);
 }
 
@@ -243,7 +243,7 @@ export function startRefusal(start: EmulatorStart, launch: GameLaunch | null, ca
  */
 export function gameStartRefusal(
   info: CoreInfo,
-  canPick: PickPointer = gameCanPickAnother(info.emulators, info.active_core_label),
+  canPick: PickPointer = pickPointerFor("menu", info.emulators, info.active_core_label),
 ): string | null {
   return startRefusal(info.start, info.launch ?? null, canPick);
 }

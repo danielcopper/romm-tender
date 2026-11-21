@@ -171,35 +171,35 @@ describe("coreOverride — executeGameCoreChange", () => {
     ]);
   });
 
-  it("suppresses toast and logs a warning on prune lease cancellation of the core RPC", async () => {
-    const { PruneLeaseAdmissionCancelled } = await import("./pruneLease");
+  it("logs, without a toast, a set that fails after the page was left, naming the game and the pick", async () => {
     vi.mocked(backend.logWarn).mockClear();
-    vi.mocked(backend.setGameCore).mockRejectedValueOnce(new PruneLeaseAdmissionCancelled("unmounted"));
-
-    const result = await executeGameCoreChange({
-      romId: 42,
-      coreLabel: "Snes9x",
-      leaseOwner,
+    vi.mocked(backend.setGameCore).mockImplementationOnce(async () => {
+      await releasePruneLeasesByOwner(leaseOwner);
+      throw new Error("RPC failed");
     });
+
+    const result = await executeGameCoreChange({ romId: 42, coreLabel: "Snes9x", leaseOwner });
+
     expect(result).toEqual({ status: "cancelled" });
     expect(toaster.toast).not.toHaveBeenCalled();
-    expect(backend.logWarn).toHaveBeenCalledWith("Core selection: continuation was cancelled: Error: unmounted");
+    expect(backend.logWarn).toHaveBeenCalledWith(
+      "Core selection: failed after the page was left for romId=42 (coreLabel=Snes9x): Error: RPC failed",
+    );
+  });
 
+  it("logs, without a toast, a clear that fails after the page was left, naming the game", async () => {
     vi.mocked(backend.logWarn).mockClear();
     vi.mocked(backend.clearGameCore).mockImplementationOnce(async () => {
       await releasePruneLeasesByOwner(leaseOwner);
       throw new Error("RPC dropped after teardown");
     });
-    const staleResult = await executeGameCoreChange({
-      romId: 42,
-      coreLabel: null,
-      leaseOwner,
-      logTag: "clearTag",
-    });
-    expect(staleResult).toEqual({ status: "cancelled" });
+
+    const result = await executeGameCoreChange({ romId: 42, coreLabel: null, leaseOwner, logTag: "clearTag" });
+
+    expect(result).toEqual({ status: "cancelled" });
     expect(toaster.toast).not.toHaveBeenCalled();
     expect(backend.logWarn).toHaveBeenCalledWith(
-      "clearTag: continuation was cancelled: Error: RPC dropped after teardown",
+      "clearTag: failed after the page was left for romId=42 (clear): Error: RPC dropped after teardown",
     );
   });
 

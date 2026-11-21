@@ -14,7 +14,6 @@ import {
   emulatorStartRefusal,
   frontendChoiceLines,
   frontendChoiceSentence,
-  gameCanPickAnother,
   gameStartRefusal,
   isChoosable,
   pickPointerFor,
@@ -107,13 +106,11 @@ describe("whether another entry can be pinned", () => {
   });
 
   it("is never so on a game's page with one emulator, where the page offers no menu", () => {
-    expect(gameCanPickAnother([row("A")], null)).toBe(false);
-    expect(gameCanPickAnother([row("A"), row("B")], "A")).toBe(true);
-  });
-
-  it("derives the surface pointer for menu vs page in one helper", () => {
     expect(pickPointerFor("menu", [row("A")], null)).toBe(false);
     expect(pickPointerFor("menu", [row("A"), row("B")], "A")).toBe(true);
+  });
+
+  it("points at the page itself, which lists every emulator, whenever another entry is choosable", () => {
     expect(pickPointerFor("page", [row("A")], null)).toBe("page");
     expect(pickPointerFor("page", [row("A")], "A")).toBe(false);
     expect(pickPointerFor("page", [row("A"), row("B")], "A")).toBe("page");

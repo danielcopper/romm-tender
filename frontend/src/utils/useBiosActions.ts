@@ -203,7 +203,7 @@ export interface BiosTableComposition {
   shownRows: readonly BiosTableRow[];
   libraryRows: readonly BiosTableRow[];
   identifications: Identifications;
-  shownEmulator: string | null;
+  shownEmulatorLabel: string | null;
   shownFetchable: ReadonlySet<string>;
   libraryFetchable: ReadonlySet<string>;
 }
@@ -228,7 +228,7 @@ export function useBiosTable(answer: BiosAnswerFields): BiosTableComposition {
     libraryRows.flatMap((file) => (file.library?.md5 ? [file.library.md5] : [])),
   );
   const shownLabel = tab ? tabLabel(tab) : null;
-  const shownEmulator = shownLabel ?? answer.active_core_label ?? null;
+  const shownEmulatorLabel = shownLabel ?? answer.active_core_label ?? null;
   const shownFetchable = new Set(shownRows.filter(isFetchable).map((f) => f.file_name));
   const libraryFetchable = new Set(libraryRows.filter(isFetchable).map((f) => f.file_name));
   return {
@@ -238,7 +238,7 @@ export function useBiosTable(answer: BiosAnswerFields): BiosTableComposition {
     shownRows,
     libraryRows,
     identifications,
-    shownEmulator,
+    shownEmulatorLabel,
     shownFetchable,
     libraryFetchable,
   };

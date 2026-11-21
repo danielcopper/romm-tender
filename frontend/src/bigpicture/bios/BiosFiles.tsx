@@ -17,6 +17,7 @@
 
 import type { FC, ReactNode } from "react";
 import { ConfirmModal, DialogButton, showModal } from "@decky/ui";
+import type { EmulatorTab } from "../../types";
 import { downloadName } from "../../utils/biosFetchable";
 import {
   biosDiskMark,
@@ -433,9 +434,11 @@ export interface BiosPartInput {
   stop: BiosRowStop;
 }
 
-export interface BiosPart extends BiosTableComposition {
+export interface BiosPart extends Omit<BiosTableComposition, "selectTab"> {
   input: BiosPartInput;
   focus: BiosFocus;
+  /** Show *chosen*'s files, through {@link BiosFocus.step} so focus follows the switch. */
+  select: (chosen: EmulatorTab) => void;
 }
 
 /**
@@ -443,7 +446,7 @@ export interface BiosPart extends BiosTableComposition {
  * rows, the library's own rows and focus.
  */
 export function useBiosFiles(input: BiosPartInput): BiosPart {
-  const table = useBiosTable(input.answer);
+  const { selectTab, ...table } = useBiosTable(input.answer);
   const focus = useBiosFocus(
     input.busyFolder !== null,
     table.shownRows.map((file) => tableKey(file.file_name)),
@@ -452,22 +455,18 @@ export function useBiosFiles(input: BiosPartInput): BiosPart {
     input,
     focus,
     ...table,
+    select: (chosen) => focus.step(() => selectTab(chosen)),
   };
 }
 
 /** The selector over every emulator the answer holds an entry for. */
 export const BiosEmulatorSelector: FC<{ part: BiosPart; padding?: string }> = ({ part, padding = "0" }) => (
-  <EmulatorSelector
-    tabs={part.tabs}
-    shown={part.tab}
-    onSelect={(chosen) => part.focus.step(() => part.selectTab(chosen))}
-    padding={padding}
-  />
+  <EmulatorSelector tabs={part.tabs} shown={part.tab} onSelect={part.select} padding={padding} />
 );
 
 /** The shown emulator's files, one row each, with the row's button where it has one. */
 export const BiosShownTable: FC<{ part: BiosPart }> = ({ part }) => {
-  const { input, shownRows, focus, shownEmulator, shownFetchable } = part;
+  const { input, shownRows, focus, shownEmulatorLabel, shownFetchable } = part;
   if (shownRows.length === 0) return null;
   return (
     <>
@@ -477,10 +476,10 @@ export const BiosShownTable: FC<{ part: BiosPart }> = ({ part }) => {
           <BiosFileRow
             file={file}
             action={rowAction(part, file, shownFetchable, tableKey(file.file_name))}
-            emulator={shownEmulator}
+            emulator={shownEmulatorLabel}
             placeLines={biosPlaceLines(
               file,
-              shownEmulator,
+              shownEmulatorLabel,
               input.actions.attemptFor(input.platform.folder, file.local_path, downloadName(file)),
             )}
             stop={input.stop}

@@ -8,7 +8,7 @@ import { getBiosStatus, logWarn, type BiosAnswer } from "../../api/backend";
 import { strandedAnswer } from "../../api/host";
 import { getBiosStatusShared } from "../../api/sharedReads";
 import type { AnsweringSource, BiosLevel, BiosStatus, EmulatorOption, EmulatorTab } from "../../types";
-import { BIOS_MISSING_RED, BIOS_MUTED_GREY, GROUP_TONE_COLOR, biosColorForLevel } from "../../utils/biosColor";
+import { BIOS_MISSING_RED, GROUP_TONE_COLOR, biosColorForLevel } from "../../utils/biosColor";
 import { downloadName } from "../../utils/biosFetchable";
 import {
   biosDiskMark,
@@ -102,6 +102,7 @@ interface RomBiosState {
 
 const ACCENT_BLUE = "#4fa3ff";
 const BODY_COLOR = "#dfe3e6";
+const MUTED_COLOR = "#8f98a0";
 
 const HEADING_STYLE: CSSProperties = {
   margin: "0 0 16px 0",
@@ -130,13 +131,13 @@ const SUBHEADING_STYLE: CSSProperties = {
   fontWeight: 700,
   letterSpacing: "0.06em",
   textTransform: "uppercase",
-  color: BIOS_MUTED_GREY,
+  color: MUTED_COLOR,
 };
 
 const MUTED_TEXT_STYLE: CSSProperties = {
   fontSize: "12px",
   lineHeight: 1.45,
-  color: BIOS_MUTED_GREY,
+  color: MUTED_COLOR,
 };
 
 const ERROR_TEXT_STYLE: CSSProperties = {
@@ -193,7 +194,7 @@ const TABLE_HEADER_STYLE: CSSProperties = {
   padding: "6px 8px",
   fontSize: "11px",
   fontWeight: 600,
-  color: BIOS_MUTED_GREY,
+  color: MUTED_COLOR,
   borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
 };
 
@@ -743,7 +744,7 @@ const DesktopBiosFileRow: FC<{
             data-testid="bios-file-name"
             style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
           >
-            {folder && <span style={{ color: BIOS_MUTED_GREY }}>{folder}</span>}
+            {folder && <span style={{ color: MUTED_COLOR }}>{folder}</span>}
             {file.file_name}
           </div>
           <div data-testid="bios-need" style={MUTED_TEXT_STYLE}>
@@ -1053,7 +1054,7 @@ const DesktopBiosAnsweredContent: FC<{
     shownRows,
     libraryRows,
     identifications,
-    shownEmulator,
+    shownEmulatorLabel,
     shownFetchable,
     libraryFetchable,
   } = table;
@@ -1101,10 +1102,10 @@ const DesktopBiosAnsweredContent: FC<{
               <DesktopBiosFileRow
                 key={file.file_name}
                 file={file}
-                emulator={shownEmulator}
+                emulator={shownEmulatorLabel}
                 placeLines={biosPlaceLines(
                   file,
-                  shownEmulator,
+                  shownEmulatorLabel,
                   actions.attemptFor(platform.folder, file.local_path, downloadName(file)),
                 )}
                 actionButton={

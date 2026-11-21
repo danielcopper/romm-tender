@@ -39,8 +39,7 @@ export const AMBER = "#d4a72c";
 /** AMBER at 15% opacity (`0x26` of `0xff`): the fill behind a warning card's
  *  amber edge. */
 export const AMBER_WASH = `${AMBER}26`;
-/** The drive-name tag on a storage tile (`bigpicture/settings/TenderFolderSection.tsx`),
- *  outside the green default-place tag and the blue in-use badge and outline. */
+/** The drive-name tag on a storage tile (`bigpicture/settings/TenderFolderSection.tsx`). */
 export const VIOLET = "#a48fd4";
 
 /**
