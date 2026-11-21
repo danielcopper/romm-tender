@@ -498,8 +498,10 @@ the files are linked:
 - _RetroDECK has several systems for Master System (mark3, mastersystem). Downloads are kept in Tender's firmware store
   and linked into none of them._ — a link lands in one system's place, so none is placed.
 
-Where Tender could not ask the emulator source — RomM could not be reached for the platform's system, say — the sentence
-says why, then _Downloads are kept in Tender's firmware store and linked once the platform's system is known._
+Where every emulator source is switched off, the sentence is _Every emulator source is switched off in Settings ›
+Emulator sources. Downloads are kept in Tender's firmware store and linked once a source is switched on._ Where Tender
+could not ask the emulator source — RomM could not be reached for the platform's system, say — the sentence says why,
+then _Downloads are kept in Tender's firmware store and linked once the platform's system is known._
 
 BIOS files Tender downloaded straight into RetroDECK's BIOS folder before the firmware store existed stay where they
 are, and their **Delete** still removes them there — only inside the BIOS folder RetroDECK names now (see _Deleting BIOS

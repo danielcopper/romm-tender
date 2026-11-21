@@ -261,8 +261,10 @@ not established (`unavailable`), as where the question raised
 ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D19). An answer whose catalogue was refused is no
 answer about the platform either: the platform is not asked, with the catalogue's reason. A download for it is refused
 with `platform_system_unasked` and that reason — a broken systems file, a RetroDECK not set up, a sealed catalogue — and
-the panel says the sentence the emulator list says for it; any other refusal, and a question that raised, leaves
-RetroDECK's folders not established.
+the panel says that catalogue's reason with the download's ending — **"_Source_ has not been set up yet, so Tender
+cannot download its games."**, **"_Source_: ES-DE's systems file is broken, so Tender cannot download its games."**,
+**"_Source_'s emulator list cannot be read yet, so Tender cannot download its games."**; any other refusal, and a
+question that raised, leaves RetroDECK's folders not established.
 
 **Which answer is taken.** One switched-on system is **found**, and every later question about the platform's games
 names it by the pair the answer named it with — the emulator list, the launch, the BIOS answer, a save's place and the
@@ -343,7 +345,7 @@ platform's system yet."**; where RomM answered but refused the read for any othe
 yet."**, and the cause itself shows where Tender's connection state shows it; a downloaded game keeps its recorded
 system and is not affected. The game page's two looks at the disk — whether a download's target is already taken, and
 whether the game is there under another name — must reach no network, so they never read the listing: for them a
-platform with nothing kept is asked as its caller names it, and named by its folder.
+platform with nothing kept is asked as its caller names it.
 
 The platform page names the system taken with its source in its header line ([qam-panel.md](qam-panel.md#library)).
 
@@ -411,22 +413,22 @@ overlay); or it carries `not-set-up` (`not_set_up`), a RetroDECK the resolver fo
 `retrodeck.json` — not started for this home yet, or its first-run setup left unfinished — which answers every question
 with that finding and an empty enumeration; or the system resolved to no one system — several of the source's systems
 answer and the resolver names none (`platform_systems_several`), or the source does not list it (`system_unknown`, which
-carries the system's keys as `system`; the core and BIOS answers send it as `emulator_data_system`, `{name,
-installed}`,
-`installed` saying whether a game's install record holds it, so a game's page says "_Source_ does not list the system
-_system_ this game was installed under, so its emulators are not established." and a platform's page "_Source_ does not
-list the system _system_, so its emulators are not established."). `source` is the answering source's
-`{kind, starts_games}`. The platform page and the picker say why, from `reason`, rather than show an empty list they
-cannot distinguish from a system the frontend knows no emulator for ([qam-panel.md](qam-panel.md#notices-and-homes)); no
-entry is in effect, so a start is refused (#2221 D20). The overlay entries the resolver gives beside
-`emulator-catalogue-sealed` are not read as a list — not for the emulator list, not for saves and not for the firmware
-rows and verdicts, whose answer beside a sealed catalogue reads as nothing established: an incomplete list would look
-complete. The one use is a BIOS link: a place such an answer states is a place a link may go, and the list never decides
-that a link is unwanted ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D37, D40). An empty list
-carrying none of those codes is that real "knows none", and `emulator-catalogue-exclusive` is not a refusal at all: a
-custom `es_systems.xml` declaring itself the whole catalogue gives a complete answer, merely a small one. The test is
-the codes and never an empty caveat list — a broken installation states health findings on every answer it gives.
-`options_to_payload` projects the list to the frontend picker shape
+carries the system's keys as `system`; the core and BIOS answers send it as `emulator_data_system`,
+`{system_keys, installed}`, `installed` saying whether a game's install record holds it, so a game's page says "_Source_
+does not list the system _system_ this game was installed under, so its emulators are not established." and a platform's
+page "_Source_ does not list the system _system_, so its emulators are not established."). `source` is the answering
+source's `{kind, starts_games}`. The platform page and the picker say why, from `reason`, rather than show an empty list
+they cannot distinguish from a system the frontend knows no emulator for
+([qam-panel.md](qam-panel.md#notices-and-homes)); no entry is in effect, so a start is refused (#2221 D20). The overlay
+entries the resolver gives beside `emulator-catalogue-sealed` are not read as a list — not for the emulator list, not
+for saves and not for the firmware rows and verdicts, whose answer beside a sealed catalogue reads as nothing
+established: an incomplete list would look complete. The one use is a BIOS link: a place such an answer states is a
+place a link may go, and the list never decides that a link is unwanted
+([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D37, D40). An empty list carrying none of those codes
+is that real "knows none", and `emulator-catalogue-exclusive` is not a refusal at all: a custom `es_systems.xml`
+declaring itself the whole catalogue gives a complete answer, merely a small one. The test is the codes and never an
+empty caveat list — a broken installation states health findings on every answer it gives. `options_to_payload` projects
+the list to the frontend picker shape
 (`{label, kind, core_so, emulator, declared_index, is_default, chosen_in_frontend, reason}`): every entry is clickable
 but one the resolver states not installed, which reads "emulator not installed" (D9, D23, D31); the default and the
 user's ES-DE choice are marked; an entry's `reason` is its not-established note, else `not_installed`. Whether the

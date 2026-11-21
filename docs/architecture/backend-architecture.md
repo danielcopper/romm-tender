@@ -2217,13 +2217,13 @@ own boot read as far as it goes, a loader that takes the extension and then read
 extension the emulator's builds disagree on, a folder handed to a core whose way of taking it the resolver does not
 follow — the verdict is not established, Play stays on, and `statements` names what was not established; nothing says
 the game can start (#2195 D2, D40, D41 as changed 2026-11-18). The page always says first that whether the game starts
-cannot be established, with its reason, where no statement of its own says what could not be; a note on how the frontend
-lists the file, or on what a folder holds, follows it and never stands in its place. A system that resolved to no one
-system the source holds (`resolution.status` other than `resolved`) is not established for that reason:
-`systems_several` where several of its systems answer and the resolver names none, `system_unknown` otherwise. A file
-the frontend's scan would not list under its name (`frontend-name-unscanned`) is a statement of its own beside a start
-or a verdict not established, and so are a folder whose files the entry would take as games of their own
-(`entry-directory-holds`), an extension the core does not claim though it would be handed the file
+cannot be established, with its reason where the backend states one, where no statement of its own says what could not
+be; a note on how the frontend lists the file, or on what a folder holds, follows it and never stands in its place. A
+system that resolved to no one system the source holds (`resolution.status` other than `resolved`) is not established
+for that reason: `systems_several` where several of its systems answer and the resolver names none, `system_unknown`
+otherwise. A file the frontend's scan would not list under its name (`frontend-name-unscanned`) is a statement of its
+own beside a start or a verdict not established, and so are a folder whose files the entry would take as games of their
+own (`entry-directory-holds`), an extension the core does not claim though it would be handed the file
 (`entry-format-unclaimed`, `format_unclaimed`) and a path the source's sandbox could not be established to reach
 (`launch-path-unestablished`, `sandbox_path_unestablished`, which says what could not be established); beside a refusal
 they ride the answer's `statements` and the page words none of them; the resolver no longer answers "not a launch file".

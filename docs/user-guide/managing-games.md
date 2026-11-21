@@ -389,6 +389,11 @@ system to use, **Download** is refused and the pages say which case holds:
 - **"System _system_ is switched off in _source_."** — none of the platform's systems is switched on in the source, and
   this one is switched off there.
 
+Where the emulator source's own list of systems could not be read, **Download** is refused for that, and the pages say
+**"_Source_ has not been set up yet, so Tender cannot download its games."**, **"_Source_: ES-DE's systems file is
+broken, so Tender cannot download its games."** or **"_Source_'s emulator list cannot be read yet, so Tender cannot
+download its games."**
+
 Where the platform's slug and folder leave several systems of the source — RetroDECK keeps `mark3` and `mastersystem`
 for the Master System — Tender picks none of them: until downloads land in Tender's own library, **Download** is
 refused, and the pages say **"_Source_ has several systems for _platform_ (_systems_), so Tender cannot download its
