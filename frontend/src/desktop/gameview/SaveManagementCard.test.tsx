@@ -2235,6 +2235,7 @@ describe("SaveManagementCard", () => {
         fireEvent.click(await screen.findByRole("button", { name: /speedrun/ }));
         vi.mocked(backend.switchSlot).mockResolvedValueOnce({ success: true, save_status: mockSaveStatus });
         vi.mocked(backend.getSaveSlots).mockRejectedValueOnce(new Error("refresh boom"));
+        vi.mocked(backend.isSaveTrackingConfigured).mockClear();
         fireEvent.click(await screen.findByRole("button", { name: "Activate Slot" }));
         await waitFor(() => {
           expect(warnSpy).toHaveBeenCalledWith(
@@ -2243,6 +2244,7 @@ describe("SaveManagementCard", () => {
           expect(warnSpy).toHaveBeenCalledWith(
             "DesktopSaveManagementCard: failed to refresh save slots for romId=42: Error: refresh boom",
           );
+          expect(backend.isSaveTrackingConfigured).toHaveBeenCalledWith(42);
         });
         autoFailView.unmount();
       } finally {
