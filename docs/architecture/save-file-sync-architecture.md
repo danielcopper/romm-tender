@@ -2298,15 +2298,14 @@ On the proof the ROM's run ends with the `GoneFromRomm` refusal (reason `gone_fr
 Triggered via `frontend/src/utils/gameDetailStore.ts` (`getSaveStatus` on detail load and `refreshSaveStatus`, feeding
 Big Picture's `frontend/src/bigpicture/RomMPlaySection.tsx` and, in the desktop dev build,
 `frontend/src/desktop/gameview/PlayButton.tsx`, `frontend/src/desktop/gameview/PlayButtonBadges.tsx`, and
-`frontend/src/desktop/gameview/SaveManagementCard.tsx`) as well as Big Picture's `frontend/src/bigpicture/panelState.ts`
-(`getSaveStatus(romId)`). Runs `_get_save_status_io` — a read-only counterpart of `MatrixExecutor.sync_rom_saves` that
-returns the same `compute_sync_action` decisions but performs no upload/download I/O. The only mutation it allows is
-recording the
-baseline of a `Skip(adopt_baseline=True)` that needs no acknowledgement, so future drift detection works; one that must
-be acknowledged is left to the next sync, and its row reads "synced", which is true — the bytes are identical
-([Outcomes](#outcomes)). `server_has_saves` says whether RomM's listing of the ROM's saves returned anything, in any
-slot, also for a game with no `files` row; it is false where the query failed or was never sent, with
-`server_query_failed` beside it.
+`frontend/src/desktop/gameview/SaveManagementCard.tsx`) as well as Big Picture's
+`frontend/src/bigpicture/panelEvents.ts` (`getSaveStatus(binding.romId)`). Runs `_get_save_status_io` — a read-only
+counterpart of `MatrixExecutor.sync_rom_saves` that returns the same `compute_sync_action` decisions but performs no
+upload/download I/O. The only mutation it allows is recording the baseline of a `Skip(adopt_baseline=True)` that needs
+no acknowledgement, so future drift detection works; one that must be acknowledged is left to the next sync, and its row
+reads "synced", which is true — the bytes are identical ([Outcomes](#outcomes)). `server_has_saves` says whether RomM's
+listing of the ROM's saves returned anything, in any slot, also for a game with no `files` row; it is false where the
+query failed or was never sent, with `server_query_failed` beside it.
 
 ### This device's save files (save sync off)
 
