@@ -1053,19 +1053,20 @@ kept RomM's platform list is read once (`PlatformSystems.platform_system`).
   (`SaveSyncRefusal`, `frontend/src/bigpicture/saves/SaveSyncRefusal.tsx`) or the inline refusal notice on desktop
   (`RefusalBox` in `frontend/src/desktop/gameview/SaveManagementCard.tsx`, subtitle `save sync unavailable`), whether or
   not its slot is confirmed; its set-up mark and its slots on RomM stay untouched. For `savefiles_in_content_dir`
-  RetroArch's setting stands under the sentence. Any other game shows `SlotSetupWizard`
-  (`frontend/src/bigpicture/SlotSetupWizard.tsx`) on Big Picture or the unconfirmed-slot banner and inline active-slot
-  confirmation prompt on the desktop Saves card when `slot_confirmed=false`, else the save list. A game not downloaded
-  reads a line above them: whose saves will sync once it is, that they will not and why, or — where `established` is
-  false — that whether they will sync could not be established. An active slot holding no save, read from this device
-  and from RomM, reads "No save yet — _label_'s saves for this game sync with RomM once it writes one." where the answer
-  says the downloaded game syncs ("…this game's saves sync with RomM once its emulator writes one." without a label),
-  and "No save yet." where it does not say so; where RomM could not be asked it reads "No save on this device.", and
-  with no status read it reads no line. The wizard still takes its own setup info: a refusal there asked RomM nothing,
-  so it does not feed the shared connection state either. Where the panel already holds RomM as unreachable, the wizard
-  skips the setup info, whose retry ladder would only wait the outage out, and asks `get_save_sync_availability`
-  instead: a downloaded game that cannot sync shows its reason the same way, and any other keeps the unreachable notice
-  and its Retry.
+  RetroArch's setting stands under the sentence. When `slot_confirmed=false`, any other game shows `SlotSetupWizard`
+  (`frontend/src/bigpicture/SlotSetupWizard.tsx`) instead of the save list on Big Picture, whereas the desktop Saves
+  card keeps rendering the slot/save list alongside its inline active-slot confirmation prompt (and adds an
+  unconfirmed-slot banner when `active_slot` is non-null and saves exist). Otherwise Big Picture shows the save list
+  too. A game not downloaded reads a line above them: whose saves will sync once it is, that they will not and why, or —
+  where `established` is false — that whether they will sync could not be established. An active slot holding no save,
+  read from this device and from RomM, reads "No save yet — _label_'s saves for this game sync with RomM once it writes
+  one." where the answer says the downloaded game syncs ("…this game's saves sync with RomM once its emulator writes
+  one." without a label), and "No save yet." where it does not say so; where RomM could not be asked it reads "No save
+  on this device.", and with no status read it reads no line. The wizard still takes its own setup info: a refusal there
+  asked RomM nothing, so it does not feed the shared connection state either. Where the panel already holds RomM as
+  unreachable, the wizard skips the setup info, whose retry ladder would only wait the outage out, and asks
+  `get_save_sync_availability` instead: a downloaded game that cannot sync shows its reason the same way, and any other
+  keeps the unreachable notice and its Retry.
 - **Play button:** `frontend/src/bigpicture/CustomPlayButton.tsx` (`ensureTrackingConfiguredBigPicture`) and
   `frontend/src/desktop/gameview/usePlayLaunch.ts` (`ensureTrackingConfiguredDesktop`, both via
   `frontend/src/utils/launchGateOps.ts`) check before launch. If not configured and server has saves, Big Picture
@@ -1392,18 +1393,21 @@ any surface that shows a conflict:
   for a start whose questions go to the gamepad modals. It does not import the modal: `index.tsx` hands it
   `gamepadLaunchPrompts` (`frontend/src/shared/launchPrompts.ts`), whose `resolveConflicts` is `handleConflicts`, as the
   fallback of `launchPromptsForThisStart` ([Pre-launch sync](#pre-launch-sync)).
-- `VersionHistoryPanel.handleRestore` (in `SavesTab`, `frontend/src/bigpicture/SavesTab.tsx`, through
-  `executeVersionRestore`), through `showSyncConflictModal` for the first conflict — when a version-restore pre-flight
-  returns `conflict_blocked`.
+- `VersionHistoryPanel` (`frontend/src/bigpicture/saves/VersionHistoryPanel.tsx`, backed by
+  `frontend/src/utils/useFileVersionHistory.ts`'s `handleRestore` and `executeVersionRestore`), through
+  `showSyncConflictModal` for the first conflict — when a version-restore pre-flight returns `conflict_blocked`.
 - `useCopyToSlot` (`frontend/src/bigpicture/saves/useCopyToSlot.tsx`, the Saves tab's "Copy to slot…", through
   `executeCopySaveToSlot`), through `showSyncConflictModal` for the first conflict — when a copy returns
   `conflict_blocked`.
 - In the desktop dev build, `SaveManagementCard` (`frontend/src/desktop/gameview/SaveManagementCard.tsx`) and
   `DesktopVersionHistory` (`frontend/src/desktop/gameview/DesktopVersionHistory.tsx`, backed by
-  `frontend/src/utils/useFileVersionHistory.ts`) reach the same conflict dialog through `desktopSlotConflictDialog`
-  (`DesktopSaveConflictDialog`, `frontend/src/desktop/gameview/dialogs/DesktopSaveConflictDialog.tsx`) for both flows,
-  while `PlayButton` (`desktopResolveConflicts`) and `launchPromptHost` use `DesktopSaveConflictDialog` for launch-gate
-  conflicts.
+  `frontend/src/utils/useFileVersionHistory.ts`) reach `DesktopSaveConflictDialog`
+  (`frontend/src/desktop/gameview/dialogs/DesktopSaveConflictDialog.tsx`) through `desktopSlotConflictDialog`
+  (`beforeStart=false`) for both copy and restore flows, while `usePlayLaunch`
+  (`frontend/src/desktop/gameview/usePlayLaunch.ts`) and `launchPromptHost`
+  (`frontend/src/desktop/launchPromptHost.tsx`) use `desktopLaunchPrompts` (`beforeStart=true`) for launch-gate
+  conflicts and `usePlayLaunch` uses `desktopResolveConflicts` (`beforeStart=false`) for Resolve Conflict outside a
+  start.
 
 After post-exit sync, `sessionManager` only fires a toast — the conflict re-surfaces in the modal at the next
 pre-launch.
