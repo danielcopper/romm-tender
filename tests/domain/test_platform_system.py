@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import get_args
 
 import pytest
 from _romm_platforms import LISTED_GAMECUBE
@@ -486,8 +487,8 @@ class TestEveryPlatformRefusalHasItsState:
         assert None not in refusals
 
 
-# Every state a platform with no system to use can be in.
-_NO_SYSTEM_STATES = (NO_SYSTEM, SWITCHED_OFF, NOT_HERE, UNMATCHED, CONTRADICTED, SEVERAL)
+# Every state a platform with no system to use can be in: all but one system found and no source asked.
+_NO_SYSTEM_STATES = tuple(state for state in get_args(PlatformState) if state not in (FOUND, UNASKED))
 
 
 class TestThePanelWordsEveryCatalogueRefusalOfItsOwn:
@@ -497,7 +498,7 @@ class TestThePanelWordsEveryCatalogueRefusalOfItsOwn:
 
     def test_the_two_lists_are_equal(self):
         source = self._WORDING.read_text(encoding="utf-8")
-        start = source.index("const UNASKED_CATALOGUE_SENTENCES")
+        start = source.index("const CATALOGUE_REFUSAL_FACTS")
         record = source[start : source.index("};", start)]
         panel = set(re.findall(r"^\s+(\w+): \(kind\) =>", record, flags=re.MULTILINE))
         assert panel == set(CATALOGUE_REFUSALS_OF_THEIR_OWN)

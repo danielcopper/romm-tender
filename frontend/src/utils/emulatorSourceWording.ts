@@ -280,18 +280,18 @@ export function withPlatformSystemSentence<T>(answer: T): T {
 /** The catalogue refusals a platform's download is refused for before any source is asked about it. */
 export type UnaskedCatalogueReason = Extract<EmulatorDataReason, "catalogue_invalid" | "not_set_up" | "sealed">;
 
-// The sentence for each, naming the source by its kind: the catalogue's reason with the download's ending. A
-// `Record` so that a reason added to {@link UnaskedCatalogueReason} must be worded here.
-const UNASKED_CATALOGUE_SENTENCES: Record<UnaskedCatalogueReason, (kind: string) => string> = {
-  not_set_up: (kind) => `${sourceName(kind)} has not been set up yet, so Tender cannot download its games.`,
-  catalogue_invalid: (kind) =>
-    `${sourceName(kind)}: ES-DE's systems file is broken, so Tender cannot download its games.`,
-  sealed: (kind) => `${sourceName(kind)}'s emulator list cannot be read yet, so Tender cannot download its games.`,
+// The fact each catalogue refusal states, naming the source by its kind — the clause the emulator list's sentence
+// and a refused download's both begin with. A `Record` so that a reason added to {@link UnaskedCatalogueReason} must
+// be worded here.
+const CATALOGUE_REFUSAL_FACTS: Record<UnaskedCatalogueReason, (kind: string) => string> = {
+  not_set_up: (kind) => `${sourceName(kind)} has not been set up yet`,
+  catalogue_invalid: (kind) => `${sourceName(kind)}: ES-DE's systems file is broken`,
+  sealed: (kind) => `${sourceName(kind)}'s emulator list cannot be read yet`,
 };
 
 /** Whether `reason` is one a platform's download is refused for when its source's catalogue was refused. */
 function isUnaskedCatalogueReason(reason: string): reason is UnaskedCatalogueReason {
-  return Object.prototype.hasOwnProperty.call(UNASKED_CATALOGUE_SENTENCES, reason);
+  return Object.prototype.hasOwnProperty.call(CATALOGUE_REFUSAL_FACTS, reason);
 }
 
 /**
@@ -301,7 +301,9 @@ function isUnaskedCatalogueReason(reason: string): reason is UnaskedCatalogueRea
 function unaskedCatalogueSentence(answer: object): string | null {
   const { reason, source, unasked } = answer as Record<string, unknown>;
   if (reason !== "platform_system_unasked" || typeof source !== "string" || typeof unasked !== "string") return null;
-  return isUnaskedCatalogueReason(unasked) ? UNASKED_CATALOGUE_SENTENCES[unasked](source) : null;
+  return isUnaskedCatalogueReason(unasked)
+    ? `${CATALOGUE_REFUSAL_FACTS[unasked](source)}, so Tender cannot download its games.`
+    : null;
 }
 
 /** Main's notice, and the settings section's line, while no emulator source is detected. */
@@ -355,7 +357,7 @@ export const UNCHECKED_START_SOURCE_QUESTION =
 
 /** A source whose emulator list the resolver cannot read yet (EmuDeck's sealed catalogue). */
 export function sealedCatalogueSentence(kind: string): string {
-  return `${sourceName(kind)}'s emulator list cannot be read yet.`;
+  return `${CATALOGUE_REFUSAL_FACTS.sealed(kind)}.`;
 }
 
 /** Why a platform has no system yet: nothing is kept for it, and RomM, whose list of platforms gives it, cannot be reached. */
@@ -491,11 +493,8 @@ export function emulatorDataReasonSentence(
   }
   const noSystem = platformSystemSentence(reason, platformSystem);
   if (noSystem !== null) return noSystem;
-  if (reason === "catalogue_invalid") {
-    return `${sourceName(source.kind)}: ES-DE's systems file is broken, so its emulators are not established.`;
-  }
-  if (reason === "not_set_up") {
-    return `${sourceName(source.kind)} has not been set up yet, so its emulators are not established.`;
+  if (reason === "catalogue_invalid" || reason === "not_set_up") {
+    return `${CATALOGUE_REFUSAL_FACTS[reason](source.kind)}, so its emulators are not established.`;
   }
   if (reason === "sealed") return sealedCatalogueSentence(source.kind);
   return `${sourceName(source.kind)}'s emulator list is not established.`;

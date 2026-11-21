@@ -27,8 +27,10 @@ a pytest ``tmp_path`` and wires the **real** services via the real
   ``RommHttpAdapter`` (settings binding) stays real.
 * ``source_platform_systems`` → :class:`FakeSourcePlatformSystems`, so a
   platform is its own system unless a test says otherwise: the seeded
-  RetroDECK carries no catalogue whose platform tags a RomM id could reach.
-  The kept ids and their live read in ``PlatformSystemService`` stay real.
+  RetroDECK's catalogue tags no system with the pairs a platform is asked
+  by. A test that wants the real resolver's answer over its tree sets the
+  fake's ``real`` to ``real_platform_systems``. The kept platforms and their
+  live read in ``PlatformSystemService`` stay real.
 * ``emit`` → an ``AsyncMock`` so tests assert emissions.
 
 The SQLite database, the file stores, and the settings file all write

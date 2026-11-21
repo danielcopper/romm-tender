@@ -148,9 +148,10 @@ const LINKED_ONCE: Record<PlatformSystemReason, string> = {
 
 /**
  * The one sentence above the table where a download lands in the store and is linked nowhere, or `null` where it
- * may be linked: the emulator the resolver does not cover, no emulator source, the platform's own reason where the
- * source that answered has no one system for it, or — where the source that would answer was not asked — that
- * reason's own sentence, then that the files are linked once the platform's system is known.
+ * may be linked: the emulator the resolver does not cover, no emulator source, every source switched off (the files
+ * linked once a source is switched on), the platform's own reason where the source that answered has no one system
+ * for it, or — where the source that would answer was not asked — that reason's own sentence, then that the files
+ * are linked once the platform's system is known.
  */
 export function storeOnlySentence(
   storeOnly: StoreOnly | null | undefined,
