@@ -13,7 +13,7 @@ use-case orchestration live on
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -22,8 +22,9 @@ from domain.iso_time import parse_iso_to_epoch
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from domain.save_slot import filter_saves_to_slot
 from domain.sync_action import Conflict, Download, Skip, SyncAction, Upload
-from lib.errors import RommApiError, RommConflictError, classify_error
+from lib.errors import RommApiError, RommConflictError, RommNotFoundError, classify_error
 from services.saves._helpers import local_save_target
+from services.saves._refusals import GoneFromRomm, gone_from_romm
 from services.saves._sync_stop import SyncStopped
 
 if TYPE_CHECKING:
@@ -115,6 +116,13 @@ class SyncRunOptions:
     autocleanup_limit: int | None = None
 
 
+@dataclass
+class _RomLookup:
+    """RomM's lookup of the ROM in one run: ``None`` until asked, then whether the lookup proved the ROM gone."""
+
+    proven_gone: bool | None = None
+
+
 @dataclass(frozen=True)
 class RomDispatchContext:
     """The ROM-level constants threaded through one ROM's sync dispatch.
@@ -123,7 +131,7 @@ class RomDispatchContext:
     ``_dispatch_sync_action`` and its sub-dispatchers, so the remaining
     per-call args stay to the values that actually vary per file (mirrors
     ``DispatchSink`` / ``SyncRunOptions``). ``stop`` is the run's own stop,
-    where it can be stopped.
+    where it can be stopped; ``lookup`` keeps the run's one lookup of the ROM.
     """
 
     rom_id: int
@@ -135,6 +143,7 @@ class RomDispatchContext:
     system: str
     core_so: str | None
     stop: SyncStop | None = None
+    lookup: _RomLookup = field(default_factory=_RomLookup)
 
 
 class MatrixExecutor:
@@ -311,8 +320,10 @@ class MatrixExecutor:
         :meth:`SaveTransfer.upload_save_file` turns into a ``RommConflictError``. Either way :meth:`_handle_upload_409`
         re-fetches the slot and lets ``resolve_upload_conflict`` decide from
         hashes alone (download the fresh head when local is provably unchanged,
-        else surface a conflict). Any other ``RommApiError`` propagates to the
-        generic handler in :meth:`_dispatch_sync_action`. Returns the transfer
+        else surface a conflict). A 404 :meth:`_rom_gone_from_romm` confirms
+        raises :class:`GoneFromRomm`, which ends the ROM's run. Any other
+        ``RommApiError`` propagates to the generic handler in
+        :meth:`_dispatch_sync_action`. Returns the transfer
         direction that was issued (``UPLOAD`` on a clean POST, ``DOWNLOAD`` when
         the backstop downgrades), or ``None`` when nothing transferred.
         """
@@ -353,6 +364,38 @@ class MatrixExecutor:
                 options=options,
                 sink=sink,
             )
+        except RommNotFoundError as e:
+            if self._rom_gone_from_romm(ctx):
+                self._logger.info(f"_dispatch_upload({ctx.rom_id}): RomM no longer has this ROM; no further upload")
+                raise gone_from_romm() from e
+            raise
+
+    def _rom_gone_from_romm(self, ctx: RomDispatchContext) -> bool:
+        """Whether RomM's own lookup of the run's ROM answers that it has no such ROM.
+
+        The proof an upload's 404 needs before it means the ROM is gone
+        (``.claude/rules/romm-http.md``, "A 404 is an entity verdict only on
+        proof"): only the lookup's :class:`RommNotFoundError` gives it. An answer,
+        or any other error, leaves the upload's 404 an ordinary error. Asked at
+        most once per run: the verdict is kept on *ctx*.
+        """
+        if ctx.lookup.proven_gone is not None:
+            return ctx.lookup.proven_gone
+        try:
+            self._romm_api.get_rom(ctx.rom_id)
+        except RommNotFoundError:
+            ctx.lookup.proven_gone = True
+            return True
+        except RommApiError as e:
+            self._logger.info(
+                f"_rom_gone_from_romm({ctx.rom_id}): the lookup proves nothing, the 404 stays: {type(e).__name__}: {e}"
+            )
+        except Exception:
+            self._logger.warning(f"_rom_gone_from_romm({ctx.rom_id}): the lookup failed, the 404 stays", exc_info=True)
+        else:
+            self._logger.info(f"_rom_gone_from_romm({ctx.rom_id}): RomM still has this ROM, the 404 stays")
+        ctx.lookup.proven_gone = False
+        return False
 
     def _handle_upload_409(
         self,
@@ -438,7 +481,8 @@ class MatrixExecutor:
         guard) are threaded through for the upload 409 backstop (canonical-target
         regroup + hash re-decision). Returns the :class:`TransferDirection` a
         transfer moved, or ``None`` for a skip, a surfaced conflict, or a failed
-        transfer. A download its stop ended raises :class:`SyncStopped`.
+        transfer. A download its stop ended raises :class:`SyncStopped`, and an
+        upload of a ROM RomM no longer has :class:`GoneFromRomm`.
         """
         try:
             if isinstance(action, Skip):
@@ -480,7 +524,7 @@ class MatrixExecutor:
                     self.build_sync_conflict_entry(ctx.rom_id, filename, action.server_save, local_path, local_hash)
                 )
                 return None
-        except SyncStopped:
+        except (SyncStopped, GoneFromRomm):
             raise
         except RommApiError as e:
             _code, _msg = classify_error(e)
@@ -705,7 +749,9 @@ class MatrixExecutor:
         upload; the operation entry owns the surrounding read/write Unit of Work.
 
         A *stop* that a check of this run sees ends the run there: the counts
-        are of what moved before it.
+        are of what moved before it. An upload that finds RomM no longer has the
+        ROM raises :class:`GoneFromRomm` and ends the run with *save_state*
+        not marked as evaluated.
         """
         t_total = self._clock.time()
         rom_id = int(rom_id)

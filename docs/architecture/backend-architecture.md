@@ -3004,16 +3004,16 @@ every way, to that, traceback included.
 
 `RommNotFoundError` means "RomM's entity layer says this entity does not exist", and downstream that reading is
 authority: the removed-game cleanup deletes on it, the version picker marks a version vanished on it, save-sync drops a
-stale device registration on it. A bare HTTP 404 does not carry that meaning on its own — FastAPI answers a
-misconfigured path prefix with the same status and a generic `{"detail": "Not Found"}` body, and a reverse proxy in
-front of RomM (Cloudflare Tunnel, Traefik) answers a misroute with an HTML or empty one. So on the **API routes** the
-adapter raises `RommNotFoundError` only for a response that proves it came from RomM's entity layer: a JSON content type
-whose body parses to an object carrying a `detail` string that is neither blank nor FastAPI's stock `Not Found` (matched
-case-insensitively — a real entity answer always names the entity, so it is never the bare phrase). The requested id is
-deliberately **not** parsed back out of that detail — its wording moves between RomM releases while the generic default
-stays put, so blocklisting the default is the robust test. Every other 404 shape degrades to a plain `RommApiError`,
-which `classify_error` maps to `server_unreachable`, so infrastructure can no longer authorize a deletion and each
-caller fails **open** on it instead.
+stale device registration on it and stops uploading the saves of a game RomM no longer has on it. A bare HTTP 404 does
+not carry that meaning on its own — FastAPI answers a misconfigured path prefix with the same status and a generic
+`{"detail": "Not Found"}` body, and a reverse proxy in front of RomM (Cloudflare Tunnel, Traefik) answers a misroute
+with an HTML or empty one. So on the **API routes** the adapter raises `RommNotFoundError` only for a response that
+proves it came from RomM's entity layer: a JSON content type whose body parses to an object carrying a `detail` string
+that is neither blank nor FastAPI's stock `Not Found` (matched case-insensitively — a real entity answer always names
+the entity, so it is never the bare phrase). The requested id is deliberately **not** parsed back out of that detail —
+its wording moves between RomM releases while the generic default stays put, so blocklisting the default is the robust
+test. Every other 404 shape degrades to a plain `RommApiError`, which `classify_error` maps to `server_unreachable`, so
+infrastructure can no longer authorize a deletion and each caller fails **open** on it instead.
 
 The **byte-stream routes** — `download`, `download_conditional`, `download_external` — opt out via
 `translate_http_error(..., asset_route=True)` and keep the plain status mapping. Their 404 answers about a _file_, not
@@ -3026,18 +3026,18 @@ unification of the two classes would silently disarm the fallback, so both sides
 Every deletion-authority probe reaches the network through the **JSON-API** entry points, never a byte-stream one:
 `get_rom_once` (`request_once`, on `/api/roms/{id}/simple`) behind the removed-game cleanup's exact-id proof and the
 version picker's liveness probes, `get_rom_simple` (`request`, the same route) behind the picker's bound read, `get_rom`
-(`request`, `/api/roms/{id}`) behind a server-only switch target's fetch, `list_saves` (`request`) behind the
-save-status, copies and slot-setup reads, and `update_device` (`put_json`) behind the device re-registration. The one
-consumer that branches on a byte-stream 404 is the `url_cover` fallback.
+(`request`, `/api/roms/{id}`) behind a server-only switch target's fetch and the proof a save upload's 404 needs,
+`list_saves` (`request`) behind the save-status, copies and slot-setup reads, and `update_device` (`put_json`) behind
+the device re-registration. The one consumer that branches on a byte-stream 404 is the `url_cover` fallback.
 
 The entity-answer shape is captured from RomM 5.1.0, and RomM 5.3.0 raises the same one — a FastAPI
 `HTTPException(status_code=404, detail=…)` naming the entity — for a missing ROM (`exceptions/endpoint_exceptions.py`),
 save (`endpoints/saves.py`) and device (`endpoints/device.py`). If a future release's entity-404 ever carries a
 different body shape (no JSON content type, no `detail` string), every entity-404 on that server degrades to
 `server_unreachable`: the cleanup never confirms a ROM gone, no version is marked vanished, no stale device registration
-is dropped. That is the fail-open direction by design — if a user on such a server reports exactly that symptom set,
-this paragraph is the explanation, and the fix is a version-aware entity check, never a return to trusting the bare
-status.
+is dropped, and a save sync reports each upload of a game RomM no longer has as an error. That is the fail-open
+direction by design — if a user on such a server reports exactly that symptom set, this paragraph is the explanation,
+and the fix is a version-aware entity check, never a return to trusting the bare status.
 
 #### The outgoing User-Agent
 

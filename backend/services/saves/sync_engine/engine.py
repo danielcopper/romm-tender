@@ -77,6 +77,7 @@ from services.saves.sync_engine._gate import (
     SaveSyncGate,
     SaveSyncTimeoutError,
 )
+from services.saves.sync_engine._gone_from_romm import GoneRoms
 from services.saves.sync_engine._pre_launch import PreLaunchRuns, PreLaunchState, completed_answer, stopped_refusal
 from services.saves.sync_engine._result_message import summarize_sync_result
 from services.saves.sync_engine._running_game import RomSyncStops, RunningGameGuard, RunningSkips
@@ -881,6 +882,7 @@ class SyncEngine:
                     session_counts = [0, 0]
                     sweep_tally = SweepTally()
                     running_skips = RunningSkips()
+                    gone = GoneRoms()
 
                     total_synced = 0
                     total_errors: list[str] = []
@@ -911,6 +913,7 @@ class SyncEngine:
                                 sync=sync,
                                 running=self._running,
                                 running_skips=running_skips,
+                                gone=gone,
                             )
                             total_synced += uploaded + downloaded
                             total_errors.extend(errors)
@@ -923,7 +926,7 @@ class SyncEngine:
                         return SaveSweepIncomplete(
                             reason="device_sync_disabled",
                             message=running_skips.annotate(
-                                f"{DEVICE_SYNC_DISABLED} — stopped after syncing {total_synced} save(s)"
+                                gone.annotate(f"{DEVICE_SYNC_DISABLED} — stopped after syncing {total_synced} save(s)")
                             ),
                             synced=total_synced,
                             conflicts=len(all_conflicts),
@@ -947,7 +950,7 @@ class SyncEngine:
                 )
                 return {
                     "success": len(total_errors) == 0 and not sweep_tally.failed,
-                    "message": running_skips.annotate(msg),
+                    "message": running_skips.annotate(gone.annotate(msg)),
                     "synced": total_synced,
                     "conflicts": conflicts_count,
                     "conflicts_list": list(all_conflicts),

@@ -106,10 +106,11 @@ run = [
     "python scripts/check_vendored_trees.py",
     "python scripts/check_generated_tab_icon.py",
     # The scripts that run outside this repository — the installer, the
-    # packager whose tarball it takes, and on a dev target the dispatcher and
-    # the install script setup:remote-target sends. The rest are developer
-    # tooling and stay out of scope. CI's shellcheck step runs the same list.
-    "shellcheck install.sh scripts/package.sh scripts/dev_dispatch.sh scripts/dev_target_install.sh",
+    # packager whose tarball it takes, and on a dev target the dispatcher, the
+    # install script setup:remote-target sends, and the scripts the dev tasks'
+    # --target run there. The rest are developer tooling and stay out of scope.
+    # CI's shellcheck step runs the same list.
+    "shellcheck install.sh scripts/package.sh scripts/dev_dispatch.sh scripts/dev_target_install.sh scripts/dev_target.sh scripts/dev_steam.sh scripts/dev_place_window.sh",
     "python scripts/check_shell_answer_functions.py",
     "python scripts/check_generated_installer_logo.py",
 ]
@@ -179,6 +180,7 @@ description = "Build the panel, restart Steam into the window and display a dev:
 raw = true
 usage = '''
 flag "--surface" help="Build the desktop surface into the panel (build:desktop rather than build:dev). Not remembered: a run without it builds build:dev."
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>: built here, Steam and the backend there."
 '''
 # Why this task restarts Steam rather than loading into the one that is up,
 # and why the window is remembered rather than read:
@@ -196,7 +198,14 @@ flag "--surface" help="Build the desktop surface into the panel (build:desktop r
 # and an interrupted unload leaves behind the half-finished state its start-up
 # routines exist to repair. The backend needs
 # `~/.steam/steam/.cef-enable-remote-debugging` to exist.
+#
+# With --target every dev task hands over to scripts/dev_target.py, which does
+# the same steps on that target, and nothing below the hand-over runs:
+# docs/contributing/frontend-dev-loop.md, "The dev tasks on a target".
 run = '''
+if [ -n "${usage_target:-}" ]; then
+  exec python scripts/dev_target.py --target "$usage_target" ${usage_surface:+--surface} -- dev
+fi
 python scripts/dev_backend_lock.py
 mise run build ${usage_surface:+--surface}
 bash scripts/dev_steam.sh restart
@@ -211,6 +220,23 @@ description = "Build the frontend and assemble the release tarball under build/ 
 # packager takes a directory and builds nothing itself, so the release workflow
 # runs the same two steps and there is one layout with one producer.
 run = ["pnpm -C frontend build", "bash scripts/package.sh --source . --out build"]
+
+[tasks.install]
+description = "Install the newest release tarball under build/ (mise run package) on a target with install.sh --from there, as a user installs a release (--target only)"
+raw = true
+usage = '''
+flag "--target <name>" help="Install it on the target setup:remote-target prepared under <name>."
+flag "--yes" help="Pass --yes to install.sh: the question a first install asks while install.sh still asks it (before its ACK_UNTIL) cannot be answered over the target's login, which has no terminal."
+'''
+# What it sends and runs there, and why --yes is passed only when given:
+# docs/contributing/frontend-dev-loop.md, "Installing the release on a target".
+run = '''
+if [ -z "${usage_target:-}" ]; then
+  echo "install installs the release tarball on a target: give --target <name>. Here, run install.sh --from build/romm-tender-<version>.tar.gz." >&2
+  exit 2
+fi
+exec python scripts/dev_target.py --target "$usage_target" ${usage_yes:+--yes} -- install
+'''
 
 [tasks.docs]
 description = "Serve the documentation site locally with live reload"
@@ -232,6 +258,8 @@ raw = true
 usage = '''
 arg "[mode]" help="'deck' (1.5, = Game Mode metrics), a bare factor (2.0-2.4 = 'Larger text', ~1.28 = docked 1080p, ~1.71 = docked 1440p), 'steam' (adopt the UI Scale set in Steam), or 'auto' (restore automatic scaling and exit)" default="deck"
 complete "mode" run="printf 'deck\\nsteam\\nauto\\n'"
+flag "--stop" help="With --target: stop the dev:ui-scale running there, which restores the scale and the window — for one whose terminal is gone; a Ctrl-C while it runs does the same."
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
 '''
 # Holds until Ctrl-C, then restores BOTH halves as they were BEFORE the run: the
 # scale (auto stays auto; a manual UI Scale is put back as it was, never flipped to
@@ -240,6 +268,13 @@ complete "mode" run="printf 'deck\\nsteam\\nauto\\n'"
 # `exec` so Ctrl-C / SIGTERM reach the script itself (mise is not left in the
 # signal path, which is what makes the restore reliable).
 run = '''
+if [ -n "${usage_target:-}" ]; then
+  exec python scripts/dev_target.py --target "$usage_target" ${usage_stop:+--stop} -- dev:ui-scale "$usage_mode"
+fi
+if [ -n "${usage_stop:-}" ]; then
+  echo "--stop stops a dev:ui-scale on a target: give --target <name>. Here, Ctrl-C stops it." >&2
+  exit 2
+fi
 exec python3 scripts/dev_ui_scale.py "$usage_mode"
 '''
 
@@ -264,9 +299,13 @@ usage = '''
 arg "[display]" help="Monitor for the Big Picture window: 'internal' or an output name (dp2, DP-3, ...). Omitted, the window is placed nowhere and dev remembers that."
 flag "--surface" help="Build the desktop surface into the panel (build:desktop rather than build:dev). Not remembered: a run without it builds build:dev."
 complete "display" run="bash scripts/dev_place_window.sh --list"
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>: built here, Steam and the backend there."
 '''
 # dev, with the window chosen here rather than recalled.
 run = '''
+if [ -n "${usage_target:-}" ]; then
+  exec python scripts/dev_target.py --target "$usage_target" ${usage_surface:+--surface} -- dev:bpm "${usage_display:-}"
+fi
 python scripts/dev_backend_lock.py
 mise run build ${usage_surface:+--surface}
 bash scripts/dev_steam.sh restart bpm "${usage_display:-}"
@@ -280,9 +319,13 @@ usage = '''
 arg "[display]" help="Monitor for the desktop client's window: 'internal' or an output name (dp2, DP-3, ...). Omitted, the window is placed nowhere and dev remembers that."
 flag "--surface" help="Build the desktop surface into the panel (build:desktop rather than build:dev). Not remembered: a run without it builds build:dev."
 complete "display" run="bash scripts/dev_place_window.sh --list"
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>: built here, Steam and the backend there."
 '''
 # dev, with the window chosen here rather than recalled.
 run = '''
+if [ -n "${usage_target:-}" ]; then
+  exec python scripts/dev_target.py --target "$usage_target" ${usage_surface:+--surface} -- dev:desktop "${usage_display:-}"
+fi
 python scripts/dev_backend_lock.py
 mise run build ${usage_surface:+--surface}
 bash scripts/dev_steam.sh restart desktop "${usage_display:-}"
@@ -294,6 +337,7 @@ description = "Build the panel and run the backend against the Steam already run
 raw = true
 usage = '''
 flag "--surface" help="Build the desktop surface into the panel (build:desktop rather than build:dev). Not remembered: a run without it builds build:dev."
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>: built here, Steam and the backend there."
 '''
 # Starts a backend without restarting Steam. What it cannot do — load into a
 # context that already carries the panel's marker, or be reached by a panel a
@@ -301,6 +345,9 @@ flag "--surface" help="Build the desktop surface into the panel (build:desktop r
 # tasks above do; the backend answers it by having Steam reload its JS context
 # once no app is running: docs/contributing/frontend-dev-loop.md.
 run = '''
+if [ -n "${usage_target:-}" ]; then
+  exec python scripts/dev_target.py --target "$usage_target" ${usage_surface:+--surface} -- dev:backend
+fi
 python scripts/dev_backend_lock.py
 mise run build ${usage_surface:+--surface}
 exec python backend/main.py
@@ -313,11 +360,15 @@ usage = '''
 arg "[display]" help="Move the remembered window to this display: 'internal' or an output name (dp2, DP-3, ...). Omitted, the remembered display stands — this task repeats a choice rather than stating one."
 flag "--surface" help="Build the desktop surface into the panel (build:desktop rather than build:dev). Not remembered: a run without it builds build:dev."
 complete "display" run="bash scripts/dev_place_window.sh --list"
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>: built here, Steam and the backend there."
 '''
 # The mirror of dev:backend, and why it needs the opposite question: it starts
 # no backend, so with none running the restart would give a fresh Steam that
 # nothing loads a panel into.
 run = '''
+if [ -n "${usage_target:-}" ]; then
+  exec python scripts/dev_target.py --target "$usage_target" ${usage_surface:+--surface} -- dev:frontend "${usage_display:-}"
+fi
 python scripts/dev_backend_lock.py --require-running
 mise run build ${usage_surface:+--surface}
 bash scripts/dev_steam.sh restart-remembered "${usage_display:-}"
@@ -329,10 +380,14 @@ raw = true
 usage = '''
 arg "[display]" help="Monitor for the Big Picture window: 'internal' or an output name (dp2, DP-3, ...). Omitted, the window is placed nowhere and dev remembers that."
 complete "display" run="bash scripts/dev_place_window.sh --list"
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
 '''
 # Beside Decky Loader the restart also brings back Decky's own QAM, which
 # survives only the first Big Picture entry per Steam process.
 run = '''
+if [ -n "${usage_target:-}" ]; then
+  exec python scripts/dev_target.py --target "$usage_target" -- dev:bpm-reset "${usage_display:-}"
+fi
 bash scripts/dev_steam.sh restart bpm "${usage_display:-}"
 '''
 
@@ -342,7 +397,54 @@ raw = true
 usage = '''
 arg "[display]" help="Monitor for the desktop client's window: 'internal' or an output name (dp2, DP-3, ...). Omitted, the window is placed nowhere and dev remembers that."
 complete "display" run="bash scripts/dev_place_window.sh --list"
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
 '''
 run = '''
+if [ -n "${usage_target:-}" ]; then
+  exec python scripts/dev_target.py --target "$usage_target" -- dev:desktop-reset "${usage_display:-}"
+fi
 bash scripts/dev_steam.sh restart desktop "${usage_display:-}"
+'''
+
+[tasks."dev:stop"]
+description = "Stop the backend on a target — the dev backend or the installed service, whichever holds the lock there — and leave Steam and a dev:ui-scale running (--target only): for a backend whose following ended without a Ctrl-C, or the installed service"
+raw = true
+usage = '''
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
+'''
+run = '''
+if [ -z "${usage_target:-}" ]; then
+  echo "dev:stop stops the backend on a target: give --target <name>. Here, Ctrl-C stops it." >&2
+  exit 2
+fi
+exec python scripts/dev_target.py --target "$usage_target" -- dev:stop
+'''
+
+[tasks."dev:log"]
+description = "Show the backend's log on a target, or follow it with --follow (--target only)"
+raw = true
+usage = '''
+flag "--follow" help="Follow the log until Ctrl-C, which ends only the following."
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
+'''
+run = '''
+if [ -z "${usage_target:-}" ]; then
+  echo "dev:log shows the backend's log on a target: give --target <name>. Here, the backend's terminal shows it." >&2
+  exit 2
+fi
+exec python scripts/dev_target.py --target "$usage_target" ${usage_follow:+--follow} -- dev:log
+'''
+
+[tasks."dev:status"]
+description = "Say what holds the single-instance lock on a target and whether a dev:ui-scale runs there (--target only)"
+raw = true
+usage = '''
+flag "--target <name>" help="Run it on the target setup:remote-target prepared under <name>."
+'''
+run = '''
+if [ -z "${usage_target:-}" ]; then
+  echo "dev:status reports on a target: give --target <name>." >&2
+  exit 2
+fi
+exec python scripts/dev_target.py --target "$usage_target" -- dev:status
 '''

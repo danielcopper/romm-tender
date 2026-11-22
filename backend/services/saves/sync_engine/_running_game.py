@@ -10,8 +10,10 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from services.saves._messages import RUNNING_SKIPPED_ONE, RUNNING_SKIPPED_SEVERAL
 from services.saves._refusals import game_running
 from services.saves._sync_stop import SyncStop
+from services.saves.sync_engine._result_message import joined_names
 
 if TYPE_CHECKING:
     import asyncio
@@ -113,5 +115,5 @@ class RunningSkips:
             return message
         names = [name for _rom_id, name in self.skipped]
         if len(names) == 1:
-            return f"{message}; {names[0]} was skipped because it is running"
-        return f"{message}; {', '.join(names[:-1])} and {names[-1]} were skipped because they are running"
+            return f"{message}; {RUNNING_SKIPPED_ONE.format(name=names[0])}"
+        return f"{message}; {RUNNING_SKIPPED_SEVERAL.format(names=joined_names(names))}"

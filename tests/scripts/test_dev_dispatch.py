@@ -17,6 +17,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -70,8 +71,9 @@ def _dev_target(home: Path) -> Path:
     [
         f"rsync --server -logDtpre.iLsfxCIvu --delete --partial --numeric-ids . {_INCOMING}",
         f"rsync --server -rlptgoDcz --delete-after --force --safe-links . {_INCOMING}",
+        f"rsync --server -vlogDtpre.iLsfxCIvu --delete-excluded . {_INCOMING}",
     ],
-    ids=["delete-partial-numeric-ids", "no-capabilities-delete-after-force-safe-links"],
+    ids=["delete-partial-numeric-ids", "no-capabilities-delete-after-force-safe-links", "the-dev-tasks-copy"],
 )
 def test_the_long_options_a_copy_may_carry_reach_rsync(home: Path, tmp_path: Path, request_text: str) -> None:
     result = _run(home, tmp_path, request_text)
@@ -132,6 +134,18 @@ def test_dev_target_sh_runs_from_the_incoming_copy_with_its_words(home: Path, tm
     assert result.stdout == f"ran in {home} with:restart bpm dp-2 --surface\n"
 
 
+def test_dev_target_sh_reads_what_the_request_sends_on_stdin(home: Path, tmp_path: Path) -> None:
+    """install --target sends the tarball on the stdin of the copy's dev_target.sh."""
+    _dev_target(home).write_text('printf "%s|" "$*"; cat\n', encoding="utf-8")
+
+    result = _run(
+        home, tmp_path, "scripts/dev_target.sh install deck romm-tender-1.0.0.tar.gz --yes", stdin="the tarball"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "install deck romm-tender-1.0.0.tar.gz --yes|the tarball"
+
+
 def test_dev_target_sh_before_any_copy_says_none_has_arrived(home: Path, tmp_path: Path) -> None:
     result = _run(home, tmp_path, "scripts/dev_target.sh restart")
 
@@ -148,6 +162,41 @@ def test_read_log_prints_the_backend_log(home: Path, tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == "one line\nanother\n"
+
+
+def test_follow_log_follows_the_backend_log_by_name(home: Path, tmp_path: Path) -> None:
+    """#2846 D2: the second read request, for dev:log --follow — the system's own tail, following by name."""
+    log = home / ".local/state/romm-tender/backend.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("".join(f"line {number}\n" for number in range(15)), encoding="utf-8")
+    installed = home / ".local/lib/romm-tender-dev/dispatch.sh"
+    installed.parent.mkdir(parents=True)
+    shutil.copyfile(_DISPATCHER, installed)
+    real_tail = tmp_path / "real"
+    real_tail.mkdir()
+    found = shutil.which("tail", path="/usr/bin:/bin")
+    assert found is not None
+    (real_tail / "tail").symlink_to(found)
+    env = {"HOME": str(home), "PATH": f"{real_tail}:{fake_path(tmp_path)}", "SSH_ORIGINAL_COMMAND": "follow log"}
+    process = subprocess.Popen(
+        ["sh", str(installed)], cwd="/", stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
+    )
+    # A tail that stops following ends the test rather than leaving it waiting.
+    watchdog = threading.Timer(15, process.kill)
+    watchdog.start()
+    try:
+        assert process.stdout is not None
+        shown = [process.stdout.readline() for _ in range(10)]
+        log.rename(log.with_name("backend.log.1"))
+        log.write_text("after the rotation\n", encoding="utf-8")
+        followed = process.stdout.readline()
+    finally:
+        watchdog.cancel()
+        process.kill()
+        process.communicate()
+
+    assert shown == [f"line {number}\n" for number in range(5, 15)]
+    assert followed == "after the rotation\n"
 
 
 @pytest.mark.parametrize(
@@ -263,6 +312,10 @@ def test_a_read_of_something_not_there_says_so(home: Path, tmp_path: Path, reque
         pytest.param("read settings", id="read something else"),
         pytest.param("read log database", id="read two things"),
         pytest.param("read log; touch pwned", id="read with a command after it"),
+        pytest.param("follow", id="follow nothing"),
+        pytest.param("follow database", id="follow the database"),
+        pytest.param("follow log -n 1000000", id="follow with options"),
+        pytest.param("follow log; touch pwned", id="follow with a command after it"),
     ],
 )
 def test_anything_else_is_refused_and_runs_nothing(home: Path, tmp_path: Path, request_text: str | None) -> None:

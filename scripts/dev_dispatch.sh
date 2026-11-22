@@ -15,11 +15,16 @@
 #       rsync receiving into the incoming copy, named relative to the home
 #       directory sshd starts a forced command in
 #   scripts/dev_target.sh [word ...]
-#       the incoming copy's scripts/dev_target.sh, with those words
+#       the incoming copy's scripts/dev_target.sh, with those words and the
+#       request's stdin, on which install --target sends the tarball
 #   read log
 #   read database
 #       the backend's log, and its database dumped as SQL through Python's
 #       sqlite3, opened read-only
+#   follow log
+#       the backend's log followed by name, so that a log rotated away or not
+#       written yet is picked up when it appears, until a write finds the
+#       connection gone
 #
 # Everything else is refused with REFUSED, an empty request (a login) among it.
 #
@@ -40,11 +45,10 @@ DEV_TARGET="$ROOT/incoming/scripts/dev_target.sh"
 
 # The backend's names (host/logging_setup.py LOG_FILENAME, bootstrap/adapters.py
 # DB_FILENAME, domain/user_data_location.py APP_DIR_NAME), install.sh's ladder
-# for the directories they lie in, and install.sh's default interpreter. sshd
-# hands a forced command none of the installer's environment (the service unit's
-# Environment= lines among it), so the TENDER_* rungs below hold only for a
-# caller that sets them itself; an install into directories of its own is not
-# found here.
+# for the directories they lie in, and install.sh's default interpreter. The
+# TENDER_* rungs below hold only for a caller that sets them itself (why:
+# docs/contributing/frontend-dev-loop.md, "The dev tasks on a target"); an
+# install into directories of its own is not found here.
 APP_DIR="romm-tender"
 LOG_NAME="backend.log"
 DATABASE_NAME="romm-tender.db"
@@ -55,7 +59,7 @@ PYTHON="${TENDER_PYTHON:-/usr/bin/python3}"
 refuse() {
     printf 'tender-dev: refused: %s\n' "${SSH_ORIGINAL_COMMAND:-(a login)}" >&2
     printf '%s\n' "  This key may only run the setup, copy into the incoming tree, run that tree's" \
-        "  scripts/dev_target.sh, and read the backend's log and database." >&2
+        "  scripts/dev_target.sh, read or follow the backend's log, and read its database." >&2
     exit "$REFUSED"
 }
 
@@ -64,7 +68,10 @@ refuse() {
 # `e` is the protocol's capability string, not options. Among the letters left
 # out are `s`, which sends the arguments inside the protocol where this script
 # cannot see the destination, and `K` (--keep-dirlinks), which has the receiver
-# follow a symlinked directory out of the incoming copy.
+# follow a symlinked directory out of the incoming copy. The lists below are
+# wider than what the dev tasks' rsync sends; they turn away a request nobody
+# expects, and bound nothing: the copy feeds dev_target.sh, which runs what it
+# was sent, so the key's from= is the bound.
 check_rsync() {
     [ "${1:-}" = --server ] || refuse
     shift
@@ -153,6 +160,10 @@ case "$1" in
             exit 1
         }
         exec sh "$DEV_TARGET" "$@"
+        ;;
+    follow)
+        [ "$*" = "follow log" ] || refuse
+        exec tail -F "$LOG_FILE"
         ;;
     read)
         [ $# -eq 2 ] || refuse

@@ -25,6 +25,7 @@ import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import _remote_target
 import pytest
@@ -123,10 +124,11 @@ def remote(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Remot
     host_keys.mkdir()
     (host_keys / "ssh_host_ed25519_key.pub").write_text(f"{_HOST_KEY} root@deck\n", encoding="utf-8")
     world = World(
-        targets={_ADDRESS: Target(home=str(target_home), client_address=_SEEN_FROM, host_key=_HOST_KEY)},
+        targets={},
         log=str(tmp_path / "log"),
     )
     path = fake_path(tools)
+    world.targets[_ADDRESS] = Target(home=str(target_home), client_address=_SEEN_FROM, host_key=_HOST_KEY, path=path)
     monkeypatch.setenv("PATH", path)
     monkeypatch.setenv(WORLD_VARIABLE, str(tmp_path / "world.json"))
     monkeypatch.setattr(setup_remote_target, "HOST_KEY_DIR", str(host_keys))
@@ -167,11 +169,70 @@ class TestTheSetupLogin:
         assert "Running it again changes it." in comment
         assert line == _dispatcher_line(remote, _SEEN_FROM)
         assert log_lines(remote.world) == [
-            "host key shown romm-tender-dev.deck",
+            f"host key shown {_ADDRESS}",
             f"password asked {_ADDRESS}",
             f"login {_ADDRESS} own",
             f"login {_ADDRESS} key",
         ]
+
+    def test_the_users_own_login_names_the_host_not_the_dev_loops_alias(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """OpenSSH names a HostKeyAlias in its password prompt; the user is to see the host there."""
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        assert code == 0, err
+        own_login = ssh_calls(remote.world)[0]
+        assert "hostkeyalias" not in own_login
+        assert f"password asked {_ADDRESS}" in log_lines(remote.world)
+        assert (remote.dev_dir / "known_hosts").read_text(encoding="utf-8") == f"romm-tender-dev.deck {_HOST_KEY}\n"
+
+    def test_a_hostkeyalias_of_the_users_own_config_is_where_their_login_finds_the_key(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Their ssh files the key under their alias; the dev loop's file keeps it under romm-tender-dev.<name>."""
+        remote.world.configs = {"deck": {"user": ["deck"], "hostname": [_ADDRESS], "hostkeyalias": ["my-deck"]}}
+        remote.setup(capsys, "deck", "deck")
+        first = log_lines(remote.world)
+        remote.target().client_address = "10.8.0.99"
+        logged = len(log_lines(remote.world))
+
+        code, _, err = remote.setup(capsys, "deck", "deck")
+
+        assert code == 0, err
+        assert first[0] == "host key shown my-deck"
+        assert not any(line.startswith("host key shown") for line in log_lines(remote.world)[logged:])
+        assert (remote.dev_dir / "known_hosts").read_text(encoding="utf-8") == f"romm-tender-dev.deck {_HOST_KEY}\n"
+
+    @pytest.mark.parametrize("port", ["22", "2222"])
+    def test_a_host_key_recorded_under_the_alias_is_found_by_the_users_own_login_again(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str], port: str
+    ) -> None:
+        remote.world.configs = {"deck": {"user": ["deck"], "hostname": [_ADDRESS], "port": [port]}}
+        remote.setup(capsys, "deck", "deck")
+        remote.target().client_address = "10.8.0.99"
+        logged = len(log_lines(remote.world))
+
+        code, _, err = remote.setup(capsys, "deck", "deck")
+
+        assert code == 0, err
+        assert not any(line.startswith("host key shown") for line in log_lines(remote.world)[logged:])
+        assert f"password asked {_ADDRESS}" in log_lines(remote.world)[logged:]
+        assert (remote.dev_dir / "known_hosts").read_text(encoding="utf-8") == f"romm-tender-dev.deck {_HOST_KEY}\n"
+
+    def test_a_changed_key_at_the_host_fails_the_users_own_login_as_a_changed_key(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Without the dev loop's key, only the user's own login runs: the key recorded under the alias still holds."""
+        remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+        for name in ("id_ed25519", "id_ed25519.pub"):
+            (remote.dev_dir / name).unlink()
+        remote.target().host_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAnotherMachine"
+
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        assert code == 1
+        assert "is not the one recorded for deck" in err
 
     def test_the_line_restricts_the_key_to_the_address_the_target_sees(
         self, remote: Remote, capsys: pytest.CaptureFixture[str]
@@ -280,7 +341,7 @@ class TestTheSetupLogin:
         code, _, err = remote.setup(capsys, "deck", "deck")
 
         assert code == 0, err
-        assert log_lines(remote.world)[0] == "host key shown romm-tender-dev.deck"
+        assert log_lines(remote.world)[0] == f"host key shown {_ADDRESS}"
 
     def test_other_lines_of_authorized_keys_stay_and_an_old_line_of_this_build_host_goes(
         self, remote: Remote, capsys: pytest.CaptureFixture[str]
@@ -407,7 +468,9 @@ class TestRunAgain:
     def test_a_second_target_gets_an_entry_beside_the_first(
         self, remote: Remote, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        remote.world.targets[_NEW_ADDRESS] = Target(home=str(remote.target_home), client_address=_SEEN_FROM)
+        remote.world.targets[_NEW_ADDRESS] = Target(
+            home=str(remote.target_home), client_address=_SEEN_FROM, path=remote.tools_path
+        )
         remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
 
         code, _, err = remote.setup(capsys, "other", f"deck@{_NEW_ADDRESS}")
@@ -915,7 +978,9 @@ class TestTheBuildHostsSide:
     def test_a_target_whose_name_another_target_starts_with_still_gets_the_first_contact_notice(
         self, remote: Remote, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        remote.world.targets[_NEW_ADDRESS] = Target(home=str(remote.target_home), client_address=_SEEN_FROM)
+        remote.world.targets[_NEW_ADDRESS] = Target(
+            home=str(remote.target_home), client_address=_SEEN_FROM, path=remote.tools_path
+        )
         remote.setup(capsys, "deck2", f"deck@{_NEW_ADDRESS}")
 
         _, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
@@ -1010,10 +1075,14 @@ class TestReadingWhatSshSaid:
             trial_known_hosts=Path("/tmp/trial/known_hosts"),
         )
 
+    def _kind(self, stderr: str) -> str | None:
+        failure = setup_remote_target.ssh_failure(stderr, name="deck", destination=self._DESTINATION)
+        return None if failure is None else failure.kind
+
     @pytest.mark.parametrize("case", ["timed out", "no route", "network unreachable", "refused", "kex reset"])
     def test_no_server_answering(self, case: str) -> None:
         assert (self._classify(_STDERR[case]) or "").startswith("tender-dev: no SSH server answers at 192.168.1.20")
-        assert not setup_remote_target.is_no_login(_STDERR[case])
+        assert self._kind(_STDERR[case]) == "no server"
 
     _BEHIND_A_HOP = setup_remote_target.Destination(
         text="deck", user="deck", hostname="192.168.1.20", port="22", proxy_jump="bastion", proxy_command=None
@@ -1052,10 +1121,57 @@ class TestReadingWhatSshSaid:
             "tender-dev: this machine cannot resolve 192.168.1.20"
         )
 
+    def test_a_changed_host_key_with_no_hop_on_the_way_is_the_targets_whatever_file_ssh_names(self) -> None:
+        stderr = (
+            "@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\n"
+            "Offending ED25519 key in /home/u/.ssh/known_hosts:3\n"
+            "Host key for 192.168.1.20 has changed and you have requested strict checking.\n"
+            "Host key verification failed."
+        )
+
+        failure = setup_remote_target.ssh_failure(stderr, name="deck", destination=self._DESTINATION)
+
+        assert failure is not None
+        assert (failure.kind, failure.where) == ("host key changed", "target")
+
+    @pytest.mark.parametrize(
+        "stderr",
+        [
+            "client_loop: send disconnect: Connection reset by peer",
+            "Connection to 192.168.1.20 closed by remote host.",
+            "Timeout, server 192.168.1.20 not responding.",
+            "packet_write_wait: Connection to 192.168.1.20 port 22: Broken pipe",
+            "Read from remote host 192.168.1.20: Connection reset by peer",
+        ],
+        ids=["reset", "closed", "timeout", "broken pipe", "read from remote host"],
+    )
+    def test_a_connection_lost_after_the_login_is_no_failure_before_it(self, stderr: str) -> None:
+        assert setup_remote_target.ssh_failure(stderr, name="deck", destination=self._DESTINATION) is None
+
+    def test_too_many_authentication_failures_hands_nothing_over(self) -> None:
+        """The key was not refused: the login ended before it was tried, and the user's own login is not tried."""
+        result = subprocess.CompletedProcess(
+            ["ssh"],
+            255,
+            "",
+            "Received disconnect from 192.168.1.20 port 22:2: Too many authentication failures\n"
+            "Disconnected from 192.168.1.20 port 22",
+        )
+
+        assert setup_remote_target.hand_over(result, name="deck", destination=self._DESTINATION) is None
+
+    @pytest.mark.parametrize(
+        ("kind", "field"),
+        [("no server", {"key_refused": True}), ("no login", {"offending": "/x"}), ("no server", {"unresolved": "x"})],
+    )
+    def test_a_failure_carries_only_its_own_kinds_fields(self, kind: Any, field: dict[str, Any]) -> None:
+        with pytest.raises(ValueError, match="carries"):
+            setup_remote_target.SshFailure(kind, "target", **field)
+
     @pytest.mark.parametrize("case", ["too many", "denied", "denied then closed"])
     def test_no_login_accepted(self, case: str) -> None:
         assert self._classify(_STDERR[case]) is None
-        assert setup_remote_target.is_no_login(_STDERR[case])
+        assert self._kind(_STDERR[case]) == "no login"
 
 
 _DECK_ENTRY = ["Host deck", "    HostName 192.168.1.20"]
@@ -1456,6 +1572,35 @@ class TestOtherFailures:
         assert on_target.returncode == 0, on_target.stderr
         assert "already holds this line; left as it was" in on_target.stderr
         assert remote.authorized_keys.read_bytes() == before
+
+
+class TestReadingAnEntryBack:
+    """read_entries gives the dev tasks back what config_entry wrote, the one format both sides use."""
+
+    @pytest.mark.parametrize(
+        ("jump", "command"),
+        [(None, None), ("jumper@203.0.113.5:22022", None), (None, "nc -X connect -x proxy.example:3128 %h %p")],
+        ids=["direct", "jump", "proxy-command"],
+    )
+    def test_what_config_entry_writes_reads_back_as_the_destination(
+        self, tmp_path: Path, jump: str | None, command: str | None
+    ) -> None:
+        destination = setup_remote_target.Destination(
+            text="deck",
+            user="deck",
+            hostname=_ADDRESS,
+            port="2222",
+            proxy_jump=jump,
+            proxy_command=command,
+            jump=jump,
+        )
+        entry = setup_remote_target.config_entry(
+            "deck", destination, key=tmp_path / "id_ed25519", known_hosts=tmp_path / "known_hosts"
+        )
+        text = setup_remote_target.updated_config("", "deck", entry, "# deck: a comment")
+
+        assert setup_remote_target.read_entries(text).get("deck") == destination
+        assert "tv" not in setup_remote_target.read_entries(text)
 
 
 class TestArguments:
