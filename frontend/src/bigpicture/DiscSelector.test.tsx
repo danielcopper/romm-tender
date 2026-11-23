@@ -9,12 +9,17 @@
  */
 
 import "@testing-library/jest-dom/vitest";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, waitFor, act, fireEvent, within } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { toaster } from "../api/host";
 import { DiscSelector } from "./DiscSelector";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
+import {
+  installDomEventListenerSpy,
+  uninstallDomEventListenerSpy,
+  domListenerCount,
+} from "../test-utils/dom-event-listener-spy";
 import * as backend from "../api/backend";
 import type { CachedGameDetail, DiscSelection, SelectDiscResult } from "../api/backend";
 import type { DownloadCompleteEvent } from "../types";
@@ -295,17 +300,26 @@ describe("DiscSelector — event-driven re-fetch + cleanup", () => {
     captured.menu = null;
     vi.mocked(getCachedGameDetail).mockReset();
     vi.mocked(backend.getDiscSelection).mockReset();
+    installDomEventListenerSpy();
   });
 
-  it("registers download_complete + romm_rom_uninstalled listeners on mount", async () => {
+  afterEach(() => {
+    uninstallDomEventListenerSpy();
+  });
+
+  it("registers download_complete, romm_rom_uninstalled and romm_data_changed listeners on mount", async () => {
     mockCachedDetail();
     vi.mocked(backend.getDiscSelection).mockResolvedValue({ multi_disc: false });
+    const uninstalledBefore = domListenerCount("romm_rom_uninstalled");
+    const dataChangedBefore = domListenerCount("romm_data_changed");
 
     render(<DiscSelector appId={100} />);
 
     await waitFor(() => {
       expect(hostEventListenerCount("download_complete")).toBe(1);
     });
+    expect(domListenerCount("romm_rom_uninstalled")).toBe(uninstalledBefore + 1);
+    expect(domListenerCount("romm_data_changed")).toBe(dataChangedBefore + 1);
   });
 
   it("re-fetches getDiscSelection on a matching download_complete (newly multi-disc)", async () => {
@@ -368,15 +382,19 @@ describe("DiscSelector — event-driven re-fetch + cleanup", () => {
     expect(container.querySelector('[data-testid="disc-btn"]')).toBeNull();
   });
 
-  it("removes both listeners on unmount", async () => {
+  it("removes all three listeners on unmount", async () => {
     mockCachedDetail();
     vi.mocked(backend.getDiscSelection).mockResolvedValue({ multi_disc: false });
+    const uninstalledBefore = domListenerCount("romm_rom_uninstalled");
+    const dataChangedBefore = domListenerCount("romm_data_changed");
 
     const { unmount } = render(<DiscSelector appId={100} />);
     await waitFor(() => expect(hostEventListenerCount("download_complete")).toBe(1));
 
     unmount();
     expect(hostEventListenerCount("download_complete")).toBe(0);
+    expect(domListenerCount("romm_rom_uninstalled")).toBe(uninstalledBefore);
+    expect(domListenerCount("romm_data_changed")).toBe(dataChangedBefore);
   });
 });
 
