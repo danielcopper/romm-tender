@@ -136,14 +136,15 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   the rom it was read for (`forRom`) and showing it only while that rom shows, and `useRomMetadata`
   (`frontend/src/utils/useRomMetadata.ts`) and `EmulationSettings`
   (`frontend/src/desktop/gameview/EmulationSettings.tsx`, in the desktop dev build) the same way. Both disc selectors
-  (`frontend/src/bigpicture/DiscSelector.tsx`, `frontend/src/desktop/gameview/DiscSelector.tsx`) compare the rom a disc
-  read or a pick was issued for with the rom they hold bound (`romIdRef`) and drop the answer where the two differ; the
-  detail read that sets that ref is ordered by `initSeq`, so only the newest binds. The Saves tab's slot panels and
-  version lists (`frontend/src/bigpicture/SavesTab.tsx`, `frontend/src/bigpicture/saves/SlotPanel.tsx`) carry the rom in
-  their React key, so a change of rom mounts them anew and an answer for the previous one lands in a panel that is gone.
-  Two answers for the SAME rom are ordered by a sequence taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`,
+  (`frontend/src/bigpicture/DiscSelector.tsx`, `frontend/src/desktop/gameview/DiscSelector.tsx`) read and pick through
+  `useDiscSelection` (`frontend/src/utils/useDiscSelection.ts`), which compares the rom a disc read or a pick was issued
+  for with the rom it holds bound (`romIdRef`) and drops the answer where the two differ; the detail read that sets that
+  ref is ordered by `initSeq`, so only the newest binds. The Saves tab's slot panels and version lists
+  (`frontend/src/bigpicture/SavesTab.tsx`, `frontend/src/bigpicture/saves/SlotPanel.tsx`) carry the rom in their React
+  key, so a change of rom mounts them anew and an answer for the previous one lands in a panel that is gone. Two answers
+  for the SAME rom are ordered by a sequence taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`,
   `EmulationSettings`'s `readSeqRef`). Ordered but unbound: the two identity writes (the store's `loadDetail`, the
-  panel's `loadData`), the disc selectors' detail read that sets `romIdRef` (`initSeq`) and the panel's lazy SAVES-tab
+  panel's `loadData`), `useDiscSelection`'s detail read that sets `romIdRef` (`initSeq`) and the panel's lazy SAVES-tab
   slot load (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the
   store's `cached.bios_status` fold. The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on the BIOS
   tab both read through, is bound and ordered (`bios` ticket). The play button is NOT covered
@@ -154,17 +155,18 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   `EmulationSettings` are the desktop game view's metadata and BIOS / launch-verdict reads. A version switch changes the
   rom without closing, so neither the store's generation counter nor the panel's `[appId]` effect sees this class.
   Binding answers the wrong-rom question only; the ordering of two answers for the SAME rom is #1717. Five writes are
-  unbound. Four are ordered: the two identity writes and the disc selectors' detail read (one write, counted once though
-  both selectors have it) install what a binding would compare against, so ordering is all they can have, and the fourth
-  is the panel's lazy SAVES-tab slot load, ordered by the `slots` ticket. The fifth, the store's `cached.bios_status`
-  fold, has neither — it runs in the same synchronous run as its guard. The event lane's `rereadBiosAnswer` re-reads
+  unbound. Four are ordered: the two identity writes and `useDiscSelection`'s detail read (one write, which both
+  selectors share) install what a binding would compare against, so ordering is all they can have, and the fourth is the
+  panel's lazy SAVES-tab slot load, ordered by the `slots` ticket. The fifth, the store's `cached.bios_status` fold, has
+  neither — it runs in the same synchronous run as its guard. The event lane's `rereadBiosAnswer` re-reads
   `get_bios_status` for the rom it shows, whose emulator is resolved per ROM — a per-game pin over the platform's pick —
   and takes the `bios` ticket the panel's other BIOS re-reads take (#1718). The play button's exclusion is #1714. The
   panel's fourteen bound sites each carry a version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`),
   `useRomMetadata`'s and `EmulationSettings`'s bindings are pinned by `frontend/src/utils/useRomMetadata.test.ts` and
-  `frontend/src/desktop/gameview/EmulationSettings.test.tsx`, the disc selectors' by the version-switch tests in
-  `frontend/src/bigpicture/DiscSelector.test.tsx` and `frontend/src/desktop/gameview/DiscSelector.test.tsx`, and the
-  Saves tab's keys by `frontend/src/bigpicture/SavesTab.panelState.test.tsx` and
+  `frontend/src/desktop/gameview/EmulationSettings.test.tsx`, `useDiscSelection`'s by the version-switch tests of both
+  selectors in `frontend/src/bigpicture/DiscSelector.test.tsx` and
+  `frontend/src/desktop/gameview/DiscSelector.test.tsx`, and the Saves tab's keys by
+  `frontend/src/bigpicture/SavesTab.panelState.test.tsx` and
   `frontend/src/bigpicture/saves/VersionHistoryPanel.test.tsx`; the store side and every new write site on either are
   prompt-only, because a checker scoped to the store's own function bodies would be green on the case this rule was
   written for. The reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not restate

@@ -88,16 +88,17 @@ and on a stranded panel.
 Picture has two beside `CustomPlayButton`, `frontend/src/bigpicture/DiscSelector.tsx` and
 `frontend/src/bigpicture/VersionPicker.tsx`: those are two gamepad focus stops, each with a menu of its own, and one
 mouse menu holds both lists. Its menu lists a multi-disc game's discs, then the versions of the game's group. What it
-reads and what a pick does are theirs (`frontend/src/utils/discSelection.ts`, `frontend/src/utils/versionSwitch.ts`),
-and a version's row says what Big Picture's says (`frontend/src/utils/versionPickerWording.ts`). A version gone from
-RomM is listed and offers nothing: Big Picture's way to its removed-game cleanup from the picker has no desktop
-counterpart. A switch that would leave unsynced saves behind asks in a desktop dialog. The selector draws nothing where
-the button draws nothing, and leaves the discs out while the bound version's file is missing. While a switch is under
-way its trigger is disabled and dimmed, with the throbber in place of its face, and PLAY, RESOLVE CONFLICT and DOWNLOAD
-are disabled, with the throbber left of their labels and no pointer cursor ([qam-panel.md](qam-panel.md#waiting) says
-what draws it there); while the Play button's check or a press of DOWNLOAD is under way, the latter until the download
-has started or the adoption flow has ended, its trigger is disabled and dimmed and an open menu closes, since the two
-ask through one dialog host, where a newer question answers the open one dismissed.
+reads and what a pick does are theirs (`frontend/src/utils/useDiscSelection.ts`, `frontend/src/utils/discSelection.ts`,
+`frontend/src/utils/versionSwitch.ts`), and a version's row says what Big Picture's says
+(`frontend/src/utils/versionPickerWording.ts`). A version gone from RomM is listed and offers nothing: Big Picture's way
+to its removed-game cleanup from the picker has no desktop counterpart. A switch that would leave unsynced saves behind
+asks in a desktop dialog. The selector draws nothing where the button draws nothing, and leaves the discs out while the
+bound version's file is missing. While a switch is under way its trigger is disabled and dimmed, with the throbber in
+place of its face, and PLAY, RESOLVE CONFLICT and DOWNLOAD are disabled, with the throbber left of their labels and no
+pointer cursor ([qam-panel.md](qam-panel.md#waiting) says what draws it there); while the Play button's check or a press
+of DOWNLOAD is under way, the latter until the download has started or the adoption flow has ended, its trigger is
+disabled and dimmed and an open menu closes, since the two ask through one dialog host, where a newer question answers
+the open one dismissed.
 
 `PlayButtonBadges` (`frontend/src/desktop/gameview/PlayButtonBadges.tsx`) stands after the selector in the button's row,
 in the place of Steam's own badges, and draws nothing where the button draws nothing. SPACE REQUIRED, LAST PLAYED, PLAY
