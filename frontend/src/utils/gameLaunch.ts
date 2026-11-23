@@ -305,13 +305,32 @@ function withMore(line: string, more: number): string {
 }
 
 /**
- * The entries the resolver names as starting the file, pointed at in the emulator
- * menu (#2195 D21), or nothing where it names none or the menu offers none.
+ * Where a refusal sentence may point the user to choose another emulator:
+ * `false` when no other emulator is choosable, `true` when the emulator menu
+ * offers one, or `"page"` when the game page itself offers the picker (without
+ * naming `"in the emulator menu"`).
  */
-function otherEntriesPointer(launch: GameLaunch, canPick: boolean): string {
+export type PickPointer = boolean | "page";
+
+/**
+ * The sentence pointing at another emulator where one can be chosen, or empty
+ * where none is offered.
+ */
+export function chooseAnotherPointer(canPick: PickPointer): string {
+  if (!canPick) return "";
+  if (canPick === "page") return " Choose another emulator.";
+  return " Choose another emulator in the emulator menu.";
+}
+
+/**
+ * The entries the resolver names as starting the file, pointed at where another
+ * emulator can be chosen, or nothing where it names none or none is offered.
+ */
+function otherEntriesPointer(launch: GameLaunch, canPick: PickPointer): string {
   if (!canPick || launch.other_entries.length === 0) return "";
   const choose = launch.other_entries.length === 1 ? "choose it" : "choose one";
-  return ` ${launch.other_entries.join(" or ")} can — ${choose} in the emulator menu.`;
+  const where = canPick === "page" ? "" : " in the emulator menu";
+  return ` ${launch.other_entries.join(" or ")} can — ${choose}${where}.`;
 }
 
 /**
@@ -339,11 +358,11 @@ export function launchRefused(launch: GameLaunch | null): boolean {
 
 /**
  * Why the game cannot start with its entry, or `null` where the verdict lets it
- * start: the refusal's sentence, then what the resolver says beside it (#2698
- * D8). `canPick` says the emulator menu offers another entry; only then does the
- * text point at it.
+ * start: the refusal's sentence, then what the resolver says beside it.
+ * `canPick` ({@link PickPointer}) says whether and where another entry can be
+ * chosen; only then does the text point at it.
  */
-export function launchRefusal(launch: GameLaunch | null, canPick: boolean): string | null {
+export function launchRefusal(launch: GameLaunch | null, canPick: PickPointer): string | null {
   if (launch === null) return null;
   switch (launch.state) {
     case "needs_installing": {
@@ -359,8 +378,7 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
       const beside = besideARefusal(launch).join("");
       if (refused !== null) return `${refused.page(launch)}${beside}${otherEntriesPointer(launch, canPick)}`;
       if (launch.other_entries.length === 0) return `${launch.entry} does not start ${launch.extension}.${beside}`;
-      const pointer = canPick ? " Choose another emulator in the emulator menu." : "";
-      return `${launch.entry} does not start ${launch.extension}; other emulators of this system do.${beside}${pointer}`;
+      return `${launch.entry} does not start ${launch.extension}; other emulators of this system do.${beside}${chooseAnotherPointer(canPick)}`;
     }
     default:
       return null;

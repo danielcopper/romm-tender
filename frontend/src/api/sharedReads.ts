@@ -47,13 +47,19 @@
  * `get_bios_status` needs that argument made twice over, because a BIOS answer
  * is the one of the three that a user action moves within a single page's
  * lifetime: a firmware download or delete empties the firmware cache, and the
- * next read answers differently. What admits it anyway is that no such action
- * ever leads to a read through this module. Every re-read that follows one is
- * change-driven and calls `api/backend` directly — the play row's post-download
- * `refreshBiosStatus`, the `bios` event's own `get_bios_status`, both
- * stores' core-change handlers, and the info panel's version-switch re-read —
- * and neither store re-runs a LOAD on a `bios` event, so a shared read is never
- * issued after a firmware mutation.
+ * next read answers differently. It also has a third caller on the desktop
+ * client's game view (`desktop/gameview/EmulationSettings.tsx`), which joins
+ * `gameDetailStore`'s page-open read on initial open for an `appId` and calls
+ * `api/backend` directly on every subsequent read on that page (version
+ * switches, `platformFolder` discovery, core picks, BIOS action re-reads, and
+ * `romm_data_changed` events). What admits all three callers is that no
+ * firmware mutation or core change ever leads to a read through this module:
+ * every re-read that follows one calls `api/backend` directly (`refreshBiosStatus`,
+ * `refreshCoreAndBios`, `useBiosActions` re-reads, and the `bios`,
+ * `core_changed`, and `emulator_sources` event handlers), neither store re-runs
+ * a LOAD on a `bios` event, and a version switch in `gameDetailStore` reads
+ * under the new `romId`'s own key while `panelEvents.ts` and
+ * `EmulationSettings.tsx` call `getBiosStatus` directly.
  *
  * The bound on all three: a request is joinable only while it is open, so what
  * a joiner can be handed is an answer read at most one open request ago. That is
@@ -102,11 +108,11 @@ export const getRomMetadataShared = shareInFlight(getRomMetadata);
  *  read that doubled on every single one. */
 export const getPlatformCoreInfoShared = shareInFlight(getPlatformCoreInfo);
 
-/** `get_bios_status` for one ROM, shared across the page's two load lanes. Both
- *  issue it off the same `bios` stale mark on the same cached detail, and the
- *  backend sets that mark whenever the detail carries no BIOS answer — which
- *  includes every platform whose launching emulator needs none, so the pair of
- *  them made this read on nearly every page open. */
+/** `get_bios_status` for one ROM, shared across the page's load lanes and
+ *  `EmulationSettings`'s initial open for an `appId`. The stores issue it off
+ *  the same `bios` stale mark on the cached detail, which the backend sets
+ *  whenever the game has a `platform_slug` and the cached detail carries no
+ *  BIOS answer (including platforms whose launching emulator needs no BIOS). */
 export const getBiosStatusShared = shareInFlight(getBiosStatus);
 
 /** Test-only: forget every open request. A request only ever releases itself by

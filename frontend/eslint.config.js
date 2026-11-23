@@ -75,7 +75,6 @@ const RESOLVER_VOCABULARY = { codes: [...codes, ...values], names };
 // written.
 const RESOLVER_READERS_TODAY = {
   "src/bigpicture/EmulatorSelector.tsx": ["requirements_met"],
-  "src/bigpicture/bios/BiosFiles.tsx": ["checked", "declared_kind", "mismatch", "satisfied"],
   "src/types/firmware.ts": [
     "by-name",
     "by-name-then-content",

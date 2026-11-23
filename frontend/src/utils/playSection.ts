@@ -116,8 +116,8 @@ export function applySaveSyncDisplay(
  *  stale warning standing would assert what nothing can establish any more. A
  *  payload carrying no answer projects to `null`, and the caller writes nothing.
  *
- *  That is the same split `panelState.biosFieldsFromCache` draws off the same
- *  payload; a divergence would leave the badge and the BIOS tab disagreeing
+ *  That is the same split `biosReadState.biosFieldsFromCache` draws off the same
+ *  payload; a divergence would leave the badge and the BIOS view disagreeing
  *  about whether a question was answered.
  *
  *  Core data is sourced separately via `extractCoreInfo`. */

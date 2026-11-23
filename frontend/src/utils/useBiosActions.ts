@@ -1,14 +1,13 @@
 /**
- * What the BIOS part's buttons do — on a platform's page and on a game's BIOS
- * tab alike: the three downloads, "Replace…", a row's Delete and the delete of
+ * What the BIOS part's buttons do — on a platform's page and on a game's page
+ * alike: the three downloads, "Replace…", a row's Delete and the delete of
  * every download of Tender's for a platform, each with the line it leaves under
  * the buttons and what it says on the rows it touched.
  *
- * The page that holds it decides two things only: what is held while a press
- * runs and where its line goes (`setBusy`, `setStatus` — the platform page's
- * hold covers its core switch and its removal too), how its BIOS answer is
- * read again once a press changed something (`reread`), and which game the
- * press is for, if any (`romId`).
+ * The page that holds it decides what is held while a press runs and where its
+ * line goes (`setBusy`, `setStatus`), how its BIOS answer is read again once a
+ * press changed something (`reread`), and which game the press is for, if any
+ * (`romId`).
  *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
  */
@@ -20,14 +19,18 @@ import {
   downloadAllFirmware,
   downloadPlatformFirmwareFile,
   downloadRequiredFirmware,
+  logWarn,
   replaceBiosFile,
-} from "../../api/backend";
-import type { BiosDeleteResult } from "../../api/backend";
-import type { BiosLinkFailure, EndpointFailure, FirmwareDownloadResult } from "../../types";
-import type { RommDataChangedDetail } from "../../types/events";
-import type { RowAttempt } from "../../utils/biosPlaceWords";
-import { backupLines, keptLines, placedSentence } from "../../utils/biosPlaceWords";
-import { detach } from "../../utils/detach";
+  type BiosDeleteResult,
+} from "../api/backend";
+import type { BiosLinkFailure, EmulatorTab, EndpointFailure, FirmwareDownloadResult } from "../types";
+import type { RommDataChangedDetail } from "../types/events";
+import { downloadName, fetchedAsRequired, isFetchable } from "./biosFetchable";
+import type { BiosTableRow } from "./biosFileNote";
+import { backupLines, keptLines, placedSentence, type RowAttempt } from "./biosPlaceWords";
+import { isUnclaimedLibraryRow, selectedTab, tabLabel, tabRows } from "./biosTabs";
+import { detach } from "./detach";
+import { useIdentifications, type Identifications } from "./firmwareIdentifications";
 
 /** How long the pressed button says `Failed` before everything returns. Two of
  *  the two-to-three seconds the device pass asked for: long enough to read one
@@ -48,11 +51,22 @@ export interface BiosStatusLine {
  * The platform an action is for: its slug, which finds its system, and the
  * folder RomM keeps it in (`""` where a game page does not know it), which
  * names it — two listed platforms can share a slug, and the Platforms tab shows
- * each as a row of its own (#2452). Every press passes both (`api/backend.ts`).
+ * each as a row of its own. Every press passes both (`api/backend.ts`).
  */
 export interface PlatformKey {
   slug: string;
   folder: string;
+}
+
+/** The fields of a platform's or a game's BIOS answer a BIOS table and its buttons read. */
+export interface BiosAnswerFields {
+  files?: readonly BiosTableRow[];
+  emulator_tabs?: EmulatorTab[];
+  server_count?: number;
+  local_count?: number;
+  deletable_count?: number;
+  backup_root?: string;
+  active_core_label?: string | null;
 }
 
 /** Every action names its platform by its {@link PlatformKey}; the page's busy
@@ -115,21 +129,197 @@ export interface BiosActions {
   deleteBiosFile: (platform: PlatformKey, fileName: string) => void;
 }
 
+/** A BIOS row's one offered action: fetch it, replace what lies at its place,
+ *  or remove the copy Tender holds. */
+type BiosRowActionOffer =
+  | { kind: "download"; name: string; firmwareId: number | null }
+  | { kind: "replace"; place: string; fileName: string }
+  | { kind: "delete"; name: string };
+
 /**
- * Tell an open game-detail page that this platform's firmware changed, so it
- * re-reads its BIOS requirement instead of leaving the pre-change one standing
- * (#939).
+ * Decide which single action button a BIOS row offers, or `null` when it offers
+ * none.
+ *
+ * Download wins where a row is both fetchable and deletable — the file the
+ * emulator will look for is the one that is missing. "Replace…" is the
+ * backend's decision alone (`replace_offered`). The delete's condition is
+ * `delete_name` and `deletable_count` alone: `downloaded` is the resolver's
+ * presence at the row's place and is equally true of a file the user placed.
+ */
+export function biosRowAction(
+  file: BiosTableRow,
+  rowFetchable: boolean,
+  serverOffline: boolean,
+): BiosRowActionOffer | null {
+  if (rowFetchable && !serverOffline) {
+    return { kind: "download", name: downloadName(file), firmwareId: file.library?.firmware_id ?? null };
+  }
+  if (file.replace_offered && file.local_path) {
+    return { kind: "replace", place: file.local_path, fileName: file.file_name };
+  }
+  // A row from a payload that states no `delete_name` is deleted by its own name.
+  const name = file.delete_name === undefined ? file.file_name : file.delete_name;
+  if (name === null || (file.deletable_count ?? 0) === 0) return null;
+  return { kind: "delete", name };
+}
+
+/**
+ * What a download button shows instead of its label: a spinner while its own run
+ * is going, `failed` for the moment after one fails, or `null`.
+ *
+ * Keyed on the run's platform folder as well as the button's identity, so a
+ * download running for one platform never puts a spinner on another platform's
+ * buttons.
+ */
+export function biosDownloadButtonState(
+  busyFolder: string | null,
+  platformFolder: string,
+  actions: Pick<BiosActions, "downloadPending" | "downloadFailed">,
+  id: string,
+): "spinner" | "failed" | null {
+  if (busyFolder !== platformFolder) return null;
+  if (actions.downloadPending === id) return "spinner";
+  return actions.downloadFailed === id ? "failed" : null;
+}
+
+/** What the platform-wide and requirement-scoped BIOS buttons offer right now. */
+interface BiosBulkOffer {
+  shownEmulator: string | null;
+  requiredLabel: string | null;
+  requiredMissing: number;
+  canDownloadRequired: boolean;
+  canDownloadAll: boolean;
+  deletable: number;
+}
+
+/** Heading for the RomM library BIOS section showing files no emulator here declares. */
+export const UNCLAIMED_LIBRARY_HEADING = "In your RomM library, asked for by no emulator here";
+
+/** UI-free BIOS table state and derived rows shared by Big Picture and desktop BIOS surfaces. */
+export interface BiosTableComposition {
+  tabs: EmulatorTab[] | undefined;
+  tab: EmulatorTab | null;
+  selectTab: (chosen: EmulatorTab) => void;
+  shownRows: readonly BiosTableRow[];
+  libraryRows: readonly BiosTableRow[];
+  identifications: Identifications;
+  shownEmulatorLabel: string | null;
+  shownFetchable: ReadonlySet<string>;
+  libraryFetchable: ReadonlySet<string>;
+}
+
+/**
+ * Compose the BIOS table state from a BIOS answer: selected emulator tab (kept
+ * across answer refreshes and version switches while that emulator stays
+ * listed), shown and unclaimed library rows, firmware identifications, shown
+ * emulator label, and fetchable sets.
+ */
+export function useBiosTable(answer: BiosAnswerFields): BiosTableComposition {
+  const [tabKey, setTabKey] = useState<string | null>(null);
+  const files = answer.files ?? [];
+  const tabs = answer.emulator_tabs;
+  const tab = selectedTab(tabs, tabKey);
+  const selectTab = useCallback((chosen: EmulatorTab) => {
+    setTabKey(chosen.launching ? null : chosen.emulator);
+  }, []);
+  const shownRows = tabRows(files, tabs, tab);
+  const libraryRows = files.filter(isUnclaimedLibraryRow);
+  const identifications = useIdentifications(
+    libraryRows.flatMap((file) => (file.library?.md5 ? [file.library.md5] : [])),
+  );
+  const shownLabel = tab ? tabLabel(tab) : null;
+  const shownEmulatorLabel = shownLabel ?? answer.active_core_label ?? null;
+  const shownFetchable = new Set(shownRows.filter(isFetchable).map((f) => f.file_name));
+  const libraryFetchable = new Set(libraryRows.filter(isFetchable).map((f) => f.file_name));
+  return {
+    tabs,
+    tab,
+    selectTab,
+    shownRows,
+    libraryRows,
+    identifications,
+    shownEmulatorLabel,
+    shownFetchable,
+    libraryFetchable,
+  };
+}
+
+/**
+ * Compute the bulk BIOS button offer from the answer and the shown emulator tab.
+ *
+ * Download affordances read `isFetchable` and `fetchedAsRequired` (the shown
+ * emulator's `fetch_for_required` rows for `Download required`, and the
+ * library's `local_count` / `server_count` ratio for `Download all`) rather
+ * than the readiness verdict (`docs/architecture/backend-architecture.md`),
+ * while `deletable` reads `deletable_count` with no local fallback.
+ */
+export function biosBulkOffer(
+  answer: BiosAnswerFields,
+  tab: EmulatorTab | null,
+  shownRows: readonly BiosTableRow[],
+  serverOffline: boolean,
+  launching: "pick" | "shown",
+): BiosBulkOffer {
+  const files = answer.files ?? [];
+  const otherTab = tab !== null && !tab.launching;
+  // The emulator a download from this table is for: the shown one's identity on
+  // another emulator's view; on the launching one's, the platform's own pick
+  // (`null`) on the platform page and the entry's own emulator on a game page.
+  const shownEmulator = otherTab || launching === "shown" ? (tab?.emulator ?? null) : null;
+  const shownLabel = tab ? tabLabel(tab) : null;
+  const requiredLabel = shownLabel === null ? null : `Download required for ${shownLabel}`;
+  // The library's own progress, counted over what the library holds rather than
+  // over every declared row — rows no library holds cannot be fetched.
+  const total = answer.server_count ?? files.filter((f) => f.on_server).length;
+  const done = answer.local_count ?? files.filter((f) => f.on_server && f.downloaded).length;
+  const requiredMissing = shownRows.filter(isFetchable).filter(fetchedAsRequired).length;
+  // What the delete removes is a record count, with no local fallback: the rows
+  // say nothing about who placed a file, so an absent count offers no delete.
+  const deletable = answer.deletable_count ?? 0;
+  return {
+    shownEmulator,
+    requiredLabel,
+    requiredMissing,
+    canDownloadRequired: requiredMissing > 0 && !serverOffline,
+    canDownloadAll: done !== total && files.some(isFetchable) && !serverOffline,
+    deletable,
+  };
+}
+
+/**
+ * Tell open game-detail surfaces that this platform's firmware changed, so they
+ * re-read their BIOS requirement instead of leaving the pre-change one standing.
  *
  * Call it only when firmware actually changed. The event fans out to every
- * mounted panel and each one that matches the slug pays a live
- * `get_bios_status` for it (#1082) — all but the panel whose own BIOS tab was
- * pressed, which has read its answer already and skips its own event
- * (`announceOwnBiosChange` in `panelEvents.ts`) — so a run that moved no files
- * must stay silent rather than send an event no panel can act on.
+ * mounted view and each one that matches the slug pays a live
+ * `get_bios_status` for it — all but the view whose own BIOS action
+ * ran, which has read its answer already and skips its own event — so a run
+ * that moved no files must stay silent rather than send an event nothing can
+ * act on.
  */
 export function announceBiosChange(platformSlug: string, platformFolder: string): void {
   const detail: RommDataChangedDetail = { type: "bios", platform_slug: platformSlug, platform_fs_slug: platformFolder };
   globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail }));
+}
+
+function downloadStatusLines(result: FirmwareDownloadResult): string[] {
+  const failed = result.failed ?? [];
+  return [failed.length > 0 ? result.message : null, placedSentence(result), ...backupLines(result.backups)].filter(
+    (line): line is string => line !== null,
+  );
+}
+
+function logBiosActionFailure(
+  action: string,
+  target: string,
+  platform: PlatformKey,
+  romId: number | null,
+  detail: unknown,
+): void {
+  const romPart = romId === null ? "" : ` romId=${romId}`;
+  logWarn(
+    `useBiosActions: ${action} (${target}, slug=${platform.slug} folder=${platform.folder}${romPart}) failed: ${detail}`,
+  );
 }
 
 export function useBiosActions({
@@ -145,8 +335,8 @@ export function useBiosActions({
   const [attempts, setAttempts] = useState<Record<string, RowAttempt>>({});
   // Cleared on unmount, so a page left during the window cannot set state on a
   // gone component. A plain timer is the right tool here: the injected-clock
-  // rule is scoped to `backend/services/**`, and this file's siblings
-  // (`CustomPlayButton`) already hold their timers in a ref this way.
+  // rule is scoped to `backend/services/**`, and sibling hooks hold UI timers
+  // in a ref this way.
   const failedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
@@ -190,9 +380,31 @@ export function useBiosActions({
     [setBusy],
   );
 
+  // Success says itself: the spinner ends and the rows come back re-read. Only
+  // what failed gets words — and a batch in which every file it tried failed is
+  // a failure to the reader, whatever the answer's `success` says.
+  const finishDownloadSuccess = useCallback(
+    async (platform: PlatformKey, pending: string, result: FirmwareDownloadResult) => {
+      const { slug, folder } = platform;
+      noteLinkFailures(folder, result.link_failures);
+      await reread(platform);
+      if (result.downloaded > 0 || (result.placed ?? 0) > 0) announce(slug, folder);
+      const lines = downloadStatusLines(result);
+      if (lines.length > 0) setStatus({ folder, scope: "bios", text: lines.join("\n") });
+      if ((result.failed ?? []).length > 0 && result.downloaded === 0) {
+        logBiosActionFailure("download", pending, platform, romId, result.message);
+        reportFailure(pending);
+        return;
+      }
+      setDownloadPending(null);
+      setBusy(null);
+    },
+    [announce, noteLinkFailures, reportFailure, reread, romId, setBusy, setStatus],
+  );
+
   const runDownload = useCallback(
     (platform: PlatformKey, pending: string, work: () => Promise<FirmwareDownloadResult | EndpointFailure>) => {
-      const { slug, folder } = platform;
+      const { folder } = platform;
       setBusy(folder);
       setDownloadPending(pending);
       // Cleared up front, so a previous failure does not stand under a run that
@@ -202,29 +414,11 @@ export function useBiosActions({
         (async () => {
           try {
             const result = await work();
-            // Success says itself: the spinner ends and the rows come back
-            // re-read. Only what failed gets words — and a batch in which every
-            // file it tried failed is a failure to the reader, whatever the
-            // answer's `success` says.
             if (result.success) {
-              noteLinkFailures(folder, result.link_failures);
-              await reread(platform);
-              if (result.downloaded > 0 || (result.placed ?? 0) > 0) announce(slug, folder);
-              const failed = result.failed ?? [];
-              const lines = [
-                failed.length > 0 ? result.message : null,
-                placedSentence(result),
-                ...backupLines(result.backups),
-              ].filter((line) => line !== null);
-              if (lines.length > 0) setStatus({ folder, scope: "bios", text: lines.join("\n") });
-              if (failed.length > 0 && result.downloaded === 0) {
-                reportFailure(pending);
-                return;
-              }
-              setDownloadPending(null);
-              setBusy(null);
+              await finishDownloadSuccess(platform, pending, result);
               return;
             }
+            logBiosActionFailure("download", pending, platform, romId, result.message);
             if (result.reason === "bios_download_damaged") {
               setAttempts((prev) => ({
                 ...prev,
@@ -234,13 +428,14 @@ export function useBiosActions({
             setStatus({ folder, scope: "bios", text: result.message });
             reportFailure(pending);
           } catch (e) {
+            logBiosActionFailure("download", pending, platform, romId, e);
             setStatus({ folder, scope: "bios", text: `Download failed: ${e}` });
             reportFailure(pending);
           }
         })(),
       );
     },
-    [announce, noteLinkFailures, reread, reportFailure, setBusy, setStatus],
+    [finishDownloadSuccess, reportFailure, romId, setBusy, setStatus],
   );
 
   const downloadRequired = useCallback(
@@ -281,6 +476,7 @@ export function useBiosActions({
           try {
             const result = await replaceBiosFile(slug, folder, place, romId);
             if (!result.success) {
+              logBiosActionFailure("replaceBios", place, platform, romId, result.message);
               setStatus({ folder, scope: "bios", text: `Failed to replace the file: ${result.message}` });
               return;
             }
@@ -294,6 +490,7 @@ export function useBiosActions({
             await reread(platform);
             announce(slug, folder);
           } catch (e) {
+            logBiosActionFailure("replaceBios", place, platform, romId, e);
             setStatus({ folder, scope: "bios", text: `Failed to replace the file: ${e}` });
           } finally {
             setBusy(null);
@@ -320,6 +517,7 @@ export function useBiosActions({
         (async () => {
           try {
             const result = await deletePlatformBios(slug, folder);
+            if (!result.success) logBiosActionFailure("deleteBios", folder, platform, romId, result.message);
             const kept = result.success ? keptLines(result.kept) : [];
             setStatus({ folder, scope: "bios", text: [result.message, ...kept].join("\n") });
             // A `delete_incomplete` may have removed files or dropped records
@@ -330,6 +528,7 @@ export function useBiosActions({
               if ((result.deleted_count ?? 0) > 0) announce(slug, folder);
             }
           } catch (e) {
+            logBiosActionFailure("deleteBios", folder, platform, romId, e);
             setStatus({ folder, scope: "bios", text: `Failed to delete BIOS files: ${e}` });
           } finally {
             setBusy(null);
@@ -337,7 +536,7 @@ export function useBiosActions({
         })(),
       );
     },
-    [announce, reread, setBusy, setStatus],
+    [announce, reread, romId, setBusy, setStatus],
   );
 
   /** One row's Delete. A success is said by the rows coming back re-read; only
@@ -353,13 +552,16 @@ export function useBiosActions({
           try {
             const result = await work();
             const kept = result.success ? keptLines(result.kept) : [];
-            if (!result.success) setStatus({ folder, scope: "bios", text: result.message });
-            else if (kept.length > 0) setStatus({ folder, scope: "bios", text: kept.join("\n") });
+            if (!result.success) {
+              logBiosActionFailure("deleteBiosFile", what, platform, romId, result.message);
+              setStatus({ folder, scope: "bios", text: result.message });
+            } else if (kept.length > 0) setStatus({ folder, scope: "bios", text: kept.join("\n") });
             if (result.success || result.reason === "delete_incomplete") {
               await reread(platform);
               if ((result.deleted_count ?? 0) > 0) announce(slug, folder);
             }
           } catch (e) {
+            logBiosActionFailure("deleteBiosFile", what, platform, romId, e);
             setStatus({ folder, scope: "bios", text: `Failed to delete ${what}: ${e}` });
           } finally {
             setBusy(null);
@@ -367,7 +569,7 @@ export function useBiosActions({
         })(),
       );
     },
-    [announce, reread, setBusy, setStatus],
+    [announce, reread, romId, setBusy, setStatus],
   );
 
   const deleteBiosFile = useCallback(

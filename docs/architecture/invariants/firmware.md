@@ -51,12 +51,13 @@ groups, the emulator a set of answers is about, and when it is asked. Files, lin
   condition is `isFetchable` (`frontend/src/utils/biosFetchable.ts`), which reads the row's `library` — the RomM file
   that fills it, by content or, where the resolver's identity is an archive or names no checksum, by name, among the
   platform's own library files (`domain/firmware_rows.py::platform_library`) — its `store_file`, its `link` and its
-  `place_refusal`, called from `frontend/src/bigpicture/bios/BiosFiles.tsx`, the BIOS table both the platform detail and
-  the game page's BIOS tab draw — and since #1815 the per-row Download button reads the same filtered set, so a fourth
-  reader of the axis now exists in that one file. A fifth reads it in the same file for the On-disk cell's second mark
-  (`⊘`), and that one is display alone: it neither counts nor gates, which is what keeps it out of all three folds
-  below. Both pages list every row of the shown emulator
-  ([#2429](https://github.com/danielcopper/romm-tender/issues/2429) D3) and call one predicate, `isFetchable`, through
+  `place_refusal`, called from `frontend/src/utils/useBiosActions.ts` (`biosBulkOffer`, for the bulk download buttons,
+  and `useBiosTable`, for the per-row Download button's filtered sets handed to `biosRowAction` and drawn by
+  `frontend/src/bigpicture/bios/BiosFiles.tsx` and `frontend/src/desktop/gameview/EmulationSettings.tsx`). In
+  `frontend/src/utils/biosFileNote.ts`, `biosLibraryMark` (shared by both BIOS table surfaces) reads `on_server` for the
+  On-disk cell's second mark (`⊘`), and that one is display alone: it neither counts nor gates, which is what keeps it
+  out of all three folds below. Every BIOS surface lists every row of the shown emulator
+  ([#2429](https://github.com/danielcopper/romm-tender/issues/2429) D3) and calls one predicate, `isFetchable`, through
   one module rather than spelling its clauses twice: a second copy would let one page point at a download button the
   other does not offer. Each fold has its own quiet failure: drop the row from the required counts and a sentence reads
   "all in place" under a red verdict; add it to the ratio and a SNES page reports `0 / 26 files, 26 missing` for
@@ -195,13 +196,15 @@ groups, the emulator a set of answers is about, and when it is asked. Files, lin
   and `TestOneRomOneEmulator`, and `TestDownloadRequiredFirmware`'s group cases) pins it end to end, that the game page
   judges the ROM's own console regions (`console_regions_of`), and that the button's count and the download are one set;
   the frontend halves are `frontend/src/utils/biosSummary.test.ts`, `frontend/src/utils/biosGroup.test.ts`,
-  `frontend/src/bigpicture/BiosTab.test.tsx` and `frontend/src/bigpicture/library/PlatformsTab.test.tsx`. The rule spans
-  the adapter (`adapters/atlas_firmware.py::_wants` and `_groups`), two domain modules (`domain/firmware_groups.py`
-  judges, `domain/bios_status.py` counts), the service (`services/firmware/status.py`, `downloads.py`, `game_detail.py`
-  passing the ROM's regions), six frontend modules (`frontend/src/utils/biosSummary.ts`,
-  `frontend/src/utils/biosGroup.ts`, `frontend/src/utils/biosFetchable.ts`,
-  `frontend/src/bigpicture/bios/BiosFiles.tsx`, `frontend/src/bigpicture/BiosTab.tsx`,
-  `frontend/src/bigpicture/library/PlatformDetail.tsx`) and the two type modules they share
+  `frontend/src/bigpicture/BiosTab.test.tsx`, `frontend/src/bigpicture/library/PlatformsTab.test.tsx` and
+  `frontend/src/desktop/gameview/EmulationSettings.test.tsx`. The rule spans the adapter
+  (`adapters/atlas_firmware.py::_wants` and `_groups`), two domain modules (`domain/firmware_groups.py` judges,
+  `domain/bios_status.py` counts), the service (`services/firmware/status.py`, `downloads.py`, `game_detail.py` passing
+  the ROM's regions), ten frontend modules (`frontend/src/utils/biosSummary.ts`, `frontend/src/utils/biosGroup.ts`,
+  `frontend/src/utils/biosFetchable.ts`, `frontend/src/utils/biosFileNote.ts`, `frontend/src/utils/biosColor.ts`,
+  `frontend/src/utils/useBiosActions.ts`, `frontend/src/bigpicture/bios/BiosFiles.tsx`,
+  `frontend/src/bigpicture/BiosTab.tsx`, `frontend/src/bigpicture/library/PlatformDetail.tsx`,
+  `frontend/src/desktop/gameview/EmulationSettings.tsx`) and the two type modules they share
   (`frontend/src/types/firmware.ts`, `frontend/src/api/backend.ts`), and nothing joins them. **Prompt-only**, each of
   those at a NEW site: no consumer reads an option's `need` as its row's `required` — `required` comes off an emulator's
   plain declarations alone; a group's verdict is never folded into a colour on the wire — the state is one of four words

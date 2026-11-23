@@ -1174,7 +1174,7 @@ describe("no surface words a summary itself", () => {
 
   it("searches the surfaces that render these states, not an empty sweep", () => {
     // The sweep throws when a pattern finds nothing, so this pins the other
-    // half: that it really reaches the three components rendering a BIOS state
+    // half: that it really reaches the four components rendering a BIOS state
     // today. A `bigpicture/` pattern narrowed to one of its subdirectories would
     // still find files and would silently stop covering the rest.
     const paths = componentSources().map((entry) => entry.path);
@@ -1183,6 +1183,7 @@ describe("no surface words a summary itself", () => {
         "bigpicture/BiosTab.tsx",
         "bigpicture/library/PlatformDetail.tsx",
         "bigpicture/library/PlatformsTab.tsx",
+        "desktop/gameview/EmulationSettings.tsx",
       ]),
     );
   });

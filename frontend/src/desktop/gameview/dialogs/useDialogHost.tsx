@@ -8,7 +8,7 @@
  * cancel exit instead of waiting forever.
  */
 
-import { Fragment, useCallback, useEffect, useRef, useState, type FC, type ReactNode } from "react";
+import { Fragment, useCallback, useLayoutEffect, useRef, useState, type FC, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { AskDialog } from "./askDialog";
 
@@ -41,7 +41,11 @@ export function useDialogHost(): DialogHost {
   const mountedRef = useRef(false);
   const questionSeqRef = useRef(0);
 
-  useEffect(() => {
+  // `useLayoutEffect`, not `useEffect`: an async mount puts its buttons in the
+  // DOM at commit before passive effects flush, so a press arriving in that
+  // window would otherwise see `mountedRef` false and settle dismissed without
+  // drawing the dialog.
+  useLayoutEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
