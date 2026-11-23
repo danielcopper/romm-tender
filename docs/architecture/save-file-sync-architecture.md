@@ -307,13 +307,16 @@ tracking is cleared, and the slot starts fresh — with every prior save recover
 whitespace / `None` slot **name** is a different thing entirely: it is rejected up front with
 `reason="invalid_slot_name"` — the slot-less legacy bucket is no longer a switch target, see below.)
 
-On the SAVES tab every slot is a collapsible panel, and the active slot's panel starts open. When the active slot
-changes — **Activate Slot**, or a copy that makes its target active — the new active slot's panel opens and the old
-one's closes, reading its files again when it is reopened. Every other panel keeps its state. Activate Slot and New Slot
-both switch through `executeSlotSwitch` in `frontend/src/utils/saveSlotFlow.ts`, which answers the new save status or
-the sentence the tab shows. On either partial answer, `switch_incomplete` or `switch_stopped`, it also announces the
-ROM's save sync, so the tab reads back the slot and the files the backend saved, and the surface shows the sentence as a
-toast rather than inline.
+On the SAVES tab every slot is a collapsible panel, and the active slot's panel starts open. An inactive slot reads its
+server saves (`get_slot_saves`) the first time it is opened. Where that read fails or answers a failure, the panel says
+"Couldn't load this slot's saves: …" with the endpoint's message (or "Couldn't load this slot's saves." where the call
+threw) in place of the list, never "No saves in this slot", logs the failure as a warning, and reads again the next time
+it is opened. When the active slot changes — **Activate Slot**, or a copy that makes its target active — the new active
+slot's panel opens and the old one's closes, reading its files again when it is reopened. Every other panel keeps its
+state. Activate Slot and New Slot both switch through `executeSlotSwitch` in `frontend/src/utils/saveSlotFlow.ts`, which
+answers the new save status or the sentence the tab shows. On either partial answer, `switch_incomplete` or
+`switch_stopped`, it also announces the ROM's save sync, so the tab reads back the slot and the files the backend saved,
+and the surface shows the sentence as a toast rather than inline.
 
 #### Inside `.romm-backup` — naming and retention
 
