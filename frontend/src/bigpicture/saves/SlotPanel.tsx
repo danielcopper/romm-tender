@@ -6,12 +6,12 @@
 
 import { useState, useRef, useEffect, FC, type ReactElement } from "react";
 import { ConfirmModal, DialogButton, showModal } from "@decky/ui";
-import { getSlotSaves, debugLog, logError } from "../../api/backend";
+import { getSlotSaves, logError, logWarn } from "../../api/backend";
 import type { SaveStatus, SyncConflict, SaveSlotSummary, SlotSaveFile } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { MUTED_COLOR, computeSyncSummary, displaySlot } from "../../utils/saveHelpers";
 import { NO_SAVE_ON_DEVICE } from "../../utils/saveSyncStatement";
-import { formatSlotDeleteDescription } from "../../utils/saveSlotWording";
+import { formatSlotDeleteDescription, slotSavesUnreadMessage } from "../../utils/saveSlotWording";
 import { executeSlotDelete, executeSlotSwitch, loadSlotDeleteInfo } from "../../utils/saveSlotFlow";
 import { renderSaveFileRow } from "./SaveFileRow";
 import { InactiveSlotBody } from "./InactiveSlotBody";
@@ -158,6 +158,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [slotFiles, setSlotFiles] = useState<SlotSaveFile[] | null>(null);
   const [loadingSlot, setLoadingSlot] = useState(false);
+  const [slotLoadError, setSlotLoadError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -175,15 +176,22 @@ export const SlotPanel: FC<SlotPanelProps> = ({
     const willExpand = !expanded;
     setExpanded(willExpand);
 
-    // Lazy-load slot saves for inactive slots on first expand
+    // An inactive slot's saves are read on the first expand that finds them
+    // unread; a read that failed leaves them unread, so the next expand asks again.
     if (willExpand && !isActive && slotFiles === null) {
       setLoadingSlot(true);
+      setSlotLoadError(null);
       try {
         const result = await getSlotSaves(romId, slotName);
-        setSlotFiles(result.success ? result.saves : []);
+        if (result.success) {
+          setSlotFiles(result.saves);
+        } else {
+          logWarn(`SavesTab: slot '${slotName}' saves could not be read: ${result.message}`);
+          setSlotLoadError(slotSavesUnreadMessage(result.message));
+        }
       } catch (e) {
-        detach(debugLog(`SavesTab: failed to load slot saves for ${slotName}: ${e}`));
-        setSlotFiles([]);
+        logWarn(`SavesTab: slot '${slotName}' saves could not be read: ${e}`);
+        setSlotLoadError(slotSavesUnreadMessage());
       } finally {
         setLoadingSlot(false);
       }
@@ -341,6 +349,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
         key="body"
         loadingSlot={loadingSlot}
         slotFiles={slotFiles}
+        loadError={slotLoadError}
         switching={switching}
         switchError={switchError}
         isOffline={isOffline}

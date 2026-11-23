@@ -16,6 +16,8 @@ import { ThrobberLabel } from "../../shared/Throbber";
 export interface InactiveSlotBodyProps {
   loadingSlot: boolean;
   slotFiles: SlotSaveFile[] | null;
+  /** Why the slot's saves could not be read, which stands in place of the list. */
+  loadError: string | null;
   switching: boolean;
   switchError: string | null;
   isOffline: boolean;
@@ -35,6 +37,7 @@ export interface InactiveSlotBodyProps {
 export const InactiveSlotBody: FC<InactiveSlotBodyProps> = ({
   loadingSlot,
   slotFiles,
+  loadError,
   switching,
   switchError,
   isOffline,
@@ -50,6 +53,12 @@ export const InactiveSlotBody: FC<InactiveSlotBodyProps> = ({
     children.push(
       <div key="loading" style={{ fontSize: "13px", color: MUTED_COLOR }}>
         <ThrobberLabel busy>Loading...</ThrobberLabel>
+      </div>,
+    );
+  } else if (loadError !== null) {
+    children.push(
+      <div key="load-error" style={{ fontSize: "11px", color: "#c46161", fontStyle: "italic" as const }}>
+        {loadError}
       </div>,
     );
   } else if (slotFiles && slotFiles.length > 0) {
