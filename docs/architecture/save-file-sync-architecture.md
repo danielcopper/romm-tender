@@ -1634,10 +1634,15 @@ restore that went through (`ok` or `put_failed`) only the restored file's Previo
 list again when reopened; every other panel on the tab keeps its state, and an open version list re-reads itself on the
 `romm_data_changed` the restore dispatches.
 
-A version switch keeps the tab mounted and hands it the new ROM, so the slot panels and version lists take the ROM into
-their keys (`SavesTab.tsx`, `SlotPanel.tsx`): each is mounted anew for it, an open inactive slot or version list closes,
-and a slot or version read still under way for the previous ROM lands in a panel that is gone. Opened again, each reads
-for the ROM now bound, and a Restore sends a version id from that ROM's list only.
+## The Saves tab across a game-version switch
+
+A switch to another of the game's versions binds its shortcut to another ROM
+([Managing Games → Versions](../user-guide/managing-games.md#versions)) — not to be confused with restoring an older
+save version above. The SAVES tab stays mounted and is handed the new ROM, so the slot panels and their version lists
+take the ROM into their keys (`SavesTab.tsx`, `SlotPanel.tsx`): each is mounted anew for it. The active slot opens on
+the game version now bound, an open inactive slot or Previous Versions list closes, and a slot or version read still
+under way for the previous ROM lands in a panel that is gone. Opened again, each reads for the ROM now bound, and a
+Restore sends a version id from that ROM's list only.
 
 ## Copy a save to another slot
 

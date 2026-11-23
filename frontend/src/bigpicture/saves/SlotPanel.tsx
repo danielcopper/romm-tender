@@ -98,7 +98,7 @@ function renderActiveSlotBody(
           ) : null}
           <VersionHistoryPanel
             // The ROM is in the key: a list belongs to the ROM it was read for
-            // (docs/architecture/save-file-sync-architecture.md, "Failure handling").
+            // (docs/architecture/save-file-sync-architecture.md, "The Saves tab across a game-version switch").
             key={`vhp-${romId}-${f.filename}`}
             romId={romId}
             slot={slot}
