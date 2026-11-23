@@ -3192,7 +3192,7 @@ describe("Library › Platforms", () => {
       });
 
       it("keeps an unestablished verdict and an unestablished need ahead of it", async () => {
-        // The order in `diskMark` is load-bearing: a row nothing could judge is
+        // The order in `biosDiskMark` is load-bearing: a row nothing could judge is
         // `?` whatever the group says, and so is a row no installed emulator
         // could be asked about — both grey, the colour of "not established".
         const container = await renderPlatform([

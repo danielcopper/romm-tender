@@ -355,8 +355,8 @@ alike, and `adapters/atlas_catalogue.py` reads it:
 - **startable** — whether it starts a game is the command's answer (above).
 - **not installed** — reason `not_installed`, whichever of the resolver's causes it states (no find rule matched, the
   program or its launcher script is missing, or the core is). It stands in place of any command: no command is asked for
-  it, the picker shows it disabled as "emulator not installed" (`entryNotes`, `frontend/src/utils/emulatorMenu.tsx`),
-  and as the default or a stored pick it cannot start.
+  it, the picker shows it disabled as "emulator not installed" (`emulatorEntryNotes`,
+  `frontend/src/utils/emulatorMenu.tsx`), and as the default or a stored pick it cannot start.
 - **not established** — the resolver cannot tell. The entry carries a note (`EmulatorOption.not_established`, sent as
   the entry's `reason`) naming the cause where the reading knows it: `no_find_rule` (ES-DE has no rule for the emulator
   or the core), `find_rules_unread`, `lookup_unsupported` (the resolver does not follow this lookup yet — the
@@ -660,19 +660,24 @@ detail page:
 
 ### Per-game (`CoreService`)
 
-The frontend CPU-button menu on the game detail page drives two backend endpoints:
+The game detail page's emulator pickers — the `Emulator Core` menu in `frontend/src/bigpicture/RomMPlaySection.tsx` and,
+in the desktop dev build, the Emulation card in `frontend/src/desktop/gameview/EmulationSettings.tsx` — share
+`executeGameCoreChange` (`frontend/src/utils/coreOverride.ts`) and drive two backend endpoints:
 
 - **`set_game_core(rom_id, label)`** checks the LABEL **first** against the ROM platform's classified command list. A
   label the list does not carry, or one whose emulator the resolver states not installed, is refused with
   `core_unavailable` and **nothing is written**; an entry the resolver gives no complete command for is pinned like any
   other, and its start is then refused at Play. On success it `pin`s the override.
-- **`clear_game_core(rom_id)`** (triggered by picking the **default-marked core** in the menu) `clear`s the override to
-  `NULL`, so the ROM follows the per-platform core or the default from its next start. There is no separate "Reset" item
-  — selecting the default-marked entry is the clear path; any other entry pins that core.
+- **`clear_game_core(rom_id)`** (triggered by `Use System Override (<entry>)` in the Big Picture menu, or by pressing
+  the `(pinned)` entry again on the desktop Emulation card) `clear`s the override to `NULL`, so the ROM follows the
+  per-platform core or the default from its next start; picking any unpinned entry pins that core. On the desktop
+  Emulation card, a pinned entry stays pressable to clear even when not choosable (e.g., `not_installed`), and
+  `(pinned)` is not derived while `vanished_pick` is set so picking the fallback entry pins it instead.
 
 Both refuse a ROM Tender does not track with `not_found`; a pin also refuses with `not_found` when the ROM is retired
 while its label is resolved, and with `core_unavailable` when its platform changed meanwhile. Both answer
-`{success: true}` and write nothing to the shortcut, so the panel toasts success once the backend has answered.
+`{success: true}` and write nothing to the shortcut, so `executeGameCoreChange` toasts success once the backend has
+answered and returns `{ status: "applied" | "cancelled" | "failed" }` for callers that render inline state.
 
 ### Per-platform (`CoreService.set_system_core`)
 

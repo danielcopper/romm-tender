@@ -12,11 +12,26 @@ handed — a `DesktopGamePage` with an optional `gameView` and `playButton` — 
 `gameView` the page's content sections, `playButton` Steam's Play button and the badges beside it. A part left out
 leaves Steam's own in place, and the play bar, the hero and the controls beside them are adapted either way.
 
-It hands both. `GameView` (`frontend/src/desktop/gameview/GameView.tsx`) draws the page's cards in two columns. Its one
-card so far is About — the cover Steam shows (`steamsCover`, `frontend/src/utils/artworkThumbs.ts`), the title, the
-summary and the rows `metadataRows` answers, under the labels and in the order Big Picture's GAME INFO tab shows them.
-While it is drawn it holds two things `RomMPlaySection` holds on Big Picture's game page: the connection heartbeat, and
-the automatic artwork, whose apply in flight it cancels on leaving.
+It hands both. `GameView` (`frontend/src/desktop/gameview/GameView.tsx`) draws the page's cards in two columns. The left
+column holds two cards: About (`frontend/src/desktop/gameview/AboutDetails.tsx`) — the cover Steam shows (`steamsCover`,
+`frontend/src/utils/artworkThumbs.ts`), the title, the summary and the rows `metadataRows` answers, under the labels and
+in the order Big Picture's GAME INFO tab shows them — and Emulation
+(`frontend/src/desktop/gameview/EmulationSettings.tsx`), which draws the game's emulator / core picker (the answering
+source's entries with `(default)` and `(pinned)` markers, pinned and cleared by a press as
+[Per-game](core-emulator-selection.md#per-game-coreservice) says, alongside installation notes, per-entry launch
+verdicts for an installed game, and active, vanished and frontend-choice notes, writing through `executeGameCoreChange`,
+`frontend/src/utils/coreOverride.ts`) above its BIOS / firmware readiness, group blocks, emulator tab pills, file table,
+unclaimed RomM library rows (`useIdentifications`, `frontend/src/utils/firmwareIdentifications.ts`), legend
+(`frontend/src/utils/biosFileNote.ts`) and BIOS download, replace and delete presses (`useBiosTable` and
+`useBiosActions`, `frontend/src/utils/useBiosActions.ts`, keeping the selected emulator tab across version switches),
+whose confirmation copy (`frontend/src/utils/biosConfirmWording.ts`) opens in the desktop dialogs
+(`frontend/src/desktop/gameview/dialogs/DesktopBiosConfirmDialog.tsx`). Emulation issues its first BIOS read for an
+`appId` through `frontend/src/api/sharedReads.ts`, calls `getBiosStatus` (`frontend/src/api/backend.ts`) directly on
+later reads (version switches, newly recorded `platformFolder`, core picks, action re-reads, and matching external
+`romm_data_changed` events), tags its held answer by `romId` and orders reads for the same ROM by sequence, and draws
+nothing before the ROM identity is known or on a stranded panel ([invariant register](invariants/panel.md)). While
+`GameView` is drawn it holds two things `RomMPlaySection` holds on Big Picture's game page: the connection heartbeat,
+and the automatic artwork, whose apply in flight it cancels on leaving.
 
 While a RetroDECK migration is pending it draws the migration card
 (`frontend/src/desktop/gameview/MigrationBlockedCard.tsx`) in place of the columns, as the game page's section does on
@@ -60,12 +75,14 @@ one. What a download, an adoption or an uninstall puts on the button — STARTIN
 carries the transfer, READY!, UNINSTALLING..., the verdict it holds after — stays with the version it was pressed for,
 so a version switch while it runs leaves it behind and the button draws the new version's own state. Where the game
 cannot start — its emulator cannot, or its file does not start with it — PLAY is disabled with the sentence
-`startRefusal` (`frontend/src/utils/emulatorStart.ts`) answers. While the page checks whether the game can start, and
-where that check went wrong, PLAY does what Big Picture's does
-([Launch-target validation](backend-architecture.md#launch-target-validation)), and reads CHECKING... where Big
-Picture's shows its throbber. On a stranded panel it gates as the [invariant register](invariants/panel.md)'s
-stranded-panel entry says. Steam's Play button and the badges beside it are hidden as soon as the button's root has
-rendered, also while it draws nothing — before the page's detail names the ROM, and on a stranded panel.
+`startRefusal` (`frontend/src/utils/emulatorStart.ts`) answers, pointing at choosing another emulator (without naming
+the emulator menu) when another entry is choosable, and `recheckStart` (`frontend/src/utils/gameDetailStore.ts`) words a
+recheck on the page the same way. While the page checks whether the game can start, and where that check went wrong,
+PLAY does what Big Picture's does ([Launch-target validation](backend-architecture.md#launch-target-validation)), and
+reads CHECKING... where Big Picture's shows its throbber. On a stranded panel it gates as the
+[invariant register](invariants/panel.md)'s stranded-panel entry says. Steam's Play button and the badges beside it are
+hidden as soon as the button's root has rendered, also while it draws nothing — before the page's detail names the ROM,
+and on a stranded panel.
 
 `DiscSelector` (`frontend/src/desktop/gameview/DiscSelector.tsx`) sits beside the Play button, one control where Big
 Picture has two beside `CustomPlayButton`, `frontend/src/bigpicture/DiscSelector.tsx` and
@@ -97,7 +114,8 @@ cannot sync says why in grey, in the backend's few words for the refusal (`short
 only a downloaded game's refusal stands. Both are asked again when a save sync, a platform's core or the emulator
 sources change, and a read that fails holds no answer rather than the one from before. With nothing established yet the
 badge makes no claim either: it reads **Not checked**, in grey. A time since the last sync moves on while the page stays
-open. None of the badges takes a press.
+open. BIOS is a button: pressing it dispatches `romm_tab_switch` (`{ tab: "bios" }`), which scrolls the Emulation card
+into view. None of the other badges takes a press.
 
 The row takes its type and spacing from Steam's own play bar, as measured on a Linux desktop running Steam client build
 1792618285: Save Sync and BIOS keep their own colours, every other value is Steam's. It also behaves as Steam's does

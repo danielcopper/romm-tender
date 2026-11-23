@@ -34,6 +34,7 @@ import type {
   LastKnownSlots,
 } from "../types";
 import { applyRefreshSlotResult } from "../utils/slotState";
+import { biosFieldsFromCache } from "../utils/biosReadState";
 import { detach } from "../utils/detach";
 import { keptArtworkSlot } from "../utils/artworkSlotsStore";
 
@@ -303,42 +304,6 @@ function refreshMetadataInBackground(binding: RomBinding): Promise<void> {
   return getRomMetadataShared(binding.romId)
     .then((meta) => binding.write((prev) => ({ ...prev, metadata: meta })))
     .catch(() => {});
-}
-
-/** What the BIOS tab's status says when the requirement could not be
- *  established — what {@link biosFieldsFromCache} lays over an answer that ran
- *  and said so (the flag with the `"unknown"` level). `BiosTab` renders the
- *  grey dot off that level, over the sentence `utils/biosSummary.ts` gives a
- *  declined level with no gap it can name. No file rows, because there is
- *  nothing Tender could say about any file; what the answer's own status carries
- *  besides — its emulator entries and delete counts — stands, as on the platform
- *  page. */
-const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_unknown: true };
-
-/** The panel's two BIOS fields as a BIOS answer carries them — a cached game
- *  detail or the live `get_bios_status` read below, which ship the identical
- *  shape — or `null` when the payload carries no BIOS answer at all. Which
- *  payloads those are is the wire type's to say (`BiosAnswer` in
- *  `api/backend.ts`); the "unknown" level is an answer and is shown as one.
- *
- *  What a `null` does is each caller's: a live read marks itself failed and
- *  keeps the shown status ({@link foldBiosRead}), a core change keeps the shown
- *  status and reads again (`panelEvents.ts`), and a version switch and the
- *  mount load wait for the live read instead, because what is shown is another
- *  ROM's or nothing.
- *
- *  `bios_level` is computed by the backend (`compute_bios_level`) and threaded
- *  straight through, never re-derived. */
-export function biosFieldsFromCache(cached: BiosAnswer): Pick<PanelState, "biosStatus" | "biosLevel"> | null {
-  if (cached.bios_status_unknown) {
-    if (cached.bios_level !== "unknown") return null;
-    return { biosStatus: { ...cached.bios_status, ...UNKNOWN_REQUIREMENT_STATUS, files: [] }, biosLevel: "unknown" };
-  }
-  if (!cached.bios_status) return null;
-  return {
-    biosStatus: { needs_bios: true, ...cached.bios_status },
-    biosLevel: cached.bios_level ?? null,
-  };
 }
 
 /** Go back for the BIOS answer the cached detail could not give, and fold it in.

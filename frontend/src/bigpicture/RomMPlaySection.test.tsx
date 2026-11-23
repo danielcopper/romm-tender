@@ -5451,6 +5451,20 @@ describe("RomMPlaySection", () => {
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBe(sentence);
     });
 
+    it("points at no emulator menu with one emulator and no default, which the page opens only when more than one is listed", async () => {
+      const { container } = await mountWith({
+        activeCoreLabel: null,
+        emulators: [standaloneEmu("RPCS3 Shortcut (Standalone)", false, { reason: "no_find_rule", declared_index: 0 })],
+        emulatorStart: { state: "choose", reason: "no_find_rule", entry: "RPCS3 Shortcut (Standalone)" },
+        gameLaunch: null,
+      });
+      const sentence =
+        "No emulator is the default, because whether RPCS3 Shortcut (Standalone) is installed could not be established (ES-DE has no rule for finding it).";
+      expect(container.textContent).toContain(sentence);
+      expect(container.textContent).not.toContain("emulator menu");
+      expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBe(sentence);
+    });
+
     it("names a pick that no longer exists, and the user's choice in ES-DE that Tender does not start with", async () => {
       const { container } = await mountWith({
         activeCoreLabel: "Genesis Plus GX",

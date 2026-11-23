@@ -2602,7 +2602,7 @@ describe("gameDetailStore — the page's check of whether the game can start (#2
     expect(getGameDetail(nextAppId)).toMatchObject({ startCheck: { state: "answered" }, gameLaunch: launch });
   });
 
-  it("a press's answer points at the emulator menu only where the asker's page has one", async () => {
+  it("a press's answer points at the emulator menu or the page only where another entry is choosable", async () => {
     const cannotStart = coreInfoFixture({
       start: { state: "cannot_start", reason: "not_installed", entry: "DuckStation" },
       emulators: [standaloneEmu("DuckStation", true), libretroEmu("swanstation_libretro", "SwanStation")],
@@ -2611,10 +2611,43 @@ describe("gameDetailStore — the page's check of whether the game can start (#2
     vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(cannotStart);
 
     const withMenu = await recheckStart(nextAppId, 42);
-    const withoutMenu = await recheckStart(nextAppId, 42, false);
+    const onPage = await recheckStart(nextAppId, 42, "page");
 
-    expect(withMenu).toContain("Choose another emulator in the emulator menu.");
-    expect(withoutMenu).toBe("DuckStation is not installed, so this game cannot start.");
+    expect(withMenu).toBe(
+      "DuckStation is not installed, so this game cannot start. Choose another emulator in the emulator menu.",
+    );
+    expect(onPage).toBe("DuckStation is not installed, so this game cannot start. Choose another emulator.");
+
+    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
+      coreInfoFixture({
+        start: { state: "cannot_start", reason: "no_find_rule", entry: "DuckStation" },
+        emulators: [
+          { ...standaloneEmu("DuckStation", true), reason: "no_find_rule" },
+          { ...libretroEmu("swanstation_libretro", "SwanStation"), reason: "not_installed" },
+        ],
+        active_core_label: "DuckStation",
+      }),
+    );
+    expect(await recheckStart(nextAppId, 42)).toBe(
+      "Whether DuckStation is installed could not be established: ES-DE has no rule for finding it.",
+    );
+    expect(await recheckStart(nextAppId, 42, "page")).toBe(
+      "Whether DuckStation is installed could not be established: ES-DE has no rule for finding it.",
+    );
+
+    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
+      coreInfoFixture({
+        start: { state: "choose", reason: "no_find_rule", entry: "BlastEm" },
+        emulators: [{ ...standaloneEmu("BlastEm", false), reason: "no_find_rule" }],
+        active_core_label: null,
+      }),
+    );
+    expect(await recheckStart(nextAppId, 42)).toBe(
+      "No emulator is the default, because whether BlastEm is installed could not be established (ES-DE has no rule for finding it).",
+    );
+    expect(await recheckStart(nextAppId, 42, "page")).toBe(
+      "No emulator is the default, because whether BlastEm is installed could not be established (ES-DE has no rule for finding it). Choose an emulator.",
+    );
   });
 
   it("a press whose ask fails too writes nothing and lets the start go ahead (#2195 D33)", async () => {

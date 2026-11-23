@@ -13,12 +13,33 @@
  */
 
 import type { BiosLevel } from "../types";
+import type { GroupLineTone } from "./biosGroup";
 
 /** The red a requirement the resolver says is not met is drawn in. Named
  *  because one surface needs the colour WITHOUT the level: the play row's badge
  *  has a single appearance and asks {@link biosColorForLevel} nothing. Sharing
  *  the spelling is what keeps that badge and the tab's red dot the same red. */
 export const BIOS_MISSING_RED = "#d94126";
+export const BIOS_OK_GREEN = "#5ba32b";
+/** The BIOS table's verdict mark for a row whose verdict is met (`satisfied`,
+ *  with known `wanted`) and that the launching emulator neither requires nor
+ *  lists as a one-of group option — green's quieter twin, so "met and needed"
+ *  and "met and spare" are one glance apart rather than one reading apart. */
+export const BIOS_SPARE_GREEN = "#8fc46b";
+export const BIOS_MUTED_GREY = "#8f98a0";
+/** The BIOS table's library mark, deliberately outside the verdict palette's
+ *  traffic light: what it reports — that the RomM library does not hold the
+ *  file — is not a degree of wrongness. */
+export const BIOS_LIBRARY_VIOLET = "#a48fd4";
+
+/** The dot beside one line of a one-of group block. */
+export const GROUP_TONE_COLOR: Readonly<Record<GroupLineTone, string>> = {
+  here: BIOS_OK_GREEN,
+  missing: BIOS_MISSING_RED,
+  other: BIOS_MUTED_GREY,
+  // Not established is grey, never amber.
+  unchecked: BIOS_MUTED_GREY,
+};
 
 /** Map a backend BIOS level to the status-dot hex color.
  *  - `ok` (met) → green
@@ -29,14 +50,14 @@ export const BIOS_MISSING_RED = "#d94126";
 export function biosColorForLevel(level: BiosLevel | null): string {
   switch (level) {
     case "ok":
-      return "#5ba32b";
+      return BIOS_OK_GREEN;
     case "partial":
       return "#d4a72c";
     case "missing":
       return BIOS_MISSING_RED;
     case "unknown":
-      return "#8f98a0";
+      return BIOS_MUTED_GREY;
     default:
-      return "#8f98a0";
+      return BIOS_MUTED_GREY;
   }
 }

@@ -15,6 +15,7 @@ import { registerConnectionHeartbeat } from "../../utils/connectionHeartbeat";
 import { useMigrationStatus } from "../../utils/migrationStore";
 import { useMigrationRefresh } from "../../utils/migrationRefresh";
 import { AboutDetails } from "./AboutDetails";
+import { EmulationSettings } from "./EmulationSettings";
 import { MigrationBlockedCard } from "./MigrationBlockedCard";
 import { CARD_STYLE } from "./styles";
 
@@ -79,6 +80,7 @@ export const GameView: FC<GameViewProps> = ({ appId }) => {
               covers={steamsCover(appId, detail.romId)}
             />
           </div>
+          <EmulationSettings appId={appId} detail={detail} />
         </div>
         <div style={COLUMN_STYLE} />
       </div>
