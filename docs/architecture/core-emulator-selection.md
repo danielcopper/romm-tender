@@ -271,11 +271,14 @@ names it by the pair the answer named it with — the emulator list, the launch,
 folder a download lands in. **Tender picks no system of its own**: where the two pairs leave several switched-on systems
 (on RetroDECK with emu-atlas 0.35.0 the Amiga CD32, the Atari 8-bit, MSX, the Master System and the TurboGrafx-16 keep
 two each), the platform has **several**, and every later question is asked with the two pairs, which the resolver
-answers for those systems alike or for none ([#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8). Such
-a game is linked into no frontend folder, since the folder is where the systems differ, and its page says so under Play:
-**"_Source_ has several systems for _platform_ (_systems_), and Tender links its games into none of them."** A download
-into RetroDECK and an adoption, which land in one system's folder, are refused until downloads land in Tender's own
-library ([#2223](https://github.com/danielcopper/romm-tender/issues/2223),
+answers for those systems alike or for none ([#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8). Where
+they answer alike (`unanimous`, since emu-atlas 0.36.0) the answer holds for the platform: the game gets the systems'
+shared emulator list, BIOS answer, launch verdict and start command, and **starts** (#2751 D3). Where they answer
+differently (`ambiguous`) there is no list and no start, and the page says so. Such a game is linked into no frontend
+folder, since the folder is where the systems differ, and its page says so under Play: **"_Source_ has several systems
+for _platform_ (_systems_), and Tender links its games into none of them."** A download into RetroDECK and an adoption,
+which land in one system's folder, are refused until downloads land in Tender's own library
+([#2223](https://github.com/danielcopper/romm-tender/issues/2223),
 [#2738](https://github.com/danielcopper/romm-tender/issues/2738)), and the refusal, the emulator list and the platform's
 pages say **"_Source_ has several systems for _platform_ (_systems_), so Tender cannot download its games yet."**
 (`platform_systems_several`). Its BIOS downloads land in Tender's firmware store and are linked nowhere, since a link
@@ -412,13 +415,13 @@ EmuDeck's on a runtime with no zstd codec, see
 overlay); or it carries `not-set-up` (`not_set_up`), a RetroDECK the resolver found by its Flatpak deploy with no
 `retrodeck.json` — not started for this home yet, or its first-run setup left unfinished — which answers every question
 with that finding and an empty enumeration; or the system resolved to no one system — several of the source's systems
-answer and the resolver names none (`platform_systems_several`), or the source does not list it (`system_unknown`, which
-carries the system's keys as `system`; the core and BIOS answers send it as `emulator_data_system`,
-`{system_keys, installed}`, `installed` saying whether a game's install record holds it, so a game's page says "_Source_
-does not list the system _system_ this game was installed under, so its emulators are not established." and a platform's
-page "_Source_ does not list the system _system_, so its emulators are not established."). `source` is the answering
-source's `{kind, starts_games}`. The platform page and the picker say why, from `reason`, rather than show an empty list
-they cannot distinguish from a system the frontend knows no emulator for
+answer differently and the resolver names none (`platform_systems_several`; where they answer alike the list is their
+shared one), or the source does not list it (`system_unknown`, which carries the system's keys as `system`; the core and
+BIOS answers send it as `emulator_data_system`, `{system_keys, installed}`, `installed` saying whether a game's install
+record holds it, so a game's page says "_Source_ does not list the system _system_ this game was installed under, so its
+emulators are not established." and a platform's page "_Source_ does not list the system _system_, so its emulators are
+not established."). `source` is the answering source's `{kind, starts_games}`. The platform page and the picker say why,
+from `reason`, rather than show an empty list they cannot distinguish from a system the frontend knows no emulator for
 ([qam-panel.md](qam-panel.md#notices-and-homes)); no entry is in effect, so a start is refused (#2221 D20). The overlay
 entries the resolver gives beside `emulator-catalogue-sealed` are not read as a list — not for the emulator list, not
 for saves and not for the firmware rows and verdicts, whose answer beside a sealed catalogue reads as nothing

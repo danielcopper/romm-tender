@@ -1,16 +1,17 @@
 # emu-atlas recorded machines — vendored
 
 `vectors/` is [emu-atlas](https://github.com/danielcopper/emu-atlas)'s `vectors/` folder, copied verbatim from the
-release asset `emu-atlas-vectors-v0.35.0.tar.gz`
-(`sha256:e49f7b83134d0b14c143a799ffa7787939f212268759de6df7ff4cc20a522731`). It is the same release as the resolver
+release asset `emu-atlas-vectors-v0.36.0.tar.gz`
+(`sha256:eab00525df0af4817df871e0ef6558e486253c9be1fa4b241bc83749cbfd744c`). It is the same release as the resolver
 vendored at `backend/_vendor/atlas/`, and upstream's release manifest, vendored verbatim as
 `backend/_vendor/atlas.SHA256SUMS`, lists that digest for that asset.
 
 Each vector is a whole machine the resolver is run against — files, folders, links and what each core answers — and the
-answer it must give there. `tests/services/test_firmware_vectors.py` runs the firmware questions among them
-(`machines/firmware.json`, `machines/disc-region.json` and `machines/named-cases.json`) through Tender's BIOS reading
-and compares the level with the resolver's verdict, and `tests/adapters/test_launch_vectors.py` runs every launch
-question among them through Tender's launch reading; each docstring says what it compares and what it leaves out.
+answer it must give there. `tests/services/test_firmware_vectors.py` runs every firmware question among them
+(`machines/firmware.json`, `machines/disc-region.json`, `machines/named-cases.json` and, since 0.36.0, the shared
+answers of `machines/several-named-systems.json`) through Tender's BIOS reading and compares the level with the
+resolver's verdict, and `tests/adapters/test_launch_vectors.py` runs every launch question among them through Tender's
+launch reading; each docstring says what it compares and what it leaves out.
 `tests/adapters/test_atlas_launchability.py` asks a few of the launch machines (`machines/disc-opens.json`) one by one.
 `tests/adapters/test_platform_table_vectors.py` runs the platform table's translations
 (`platform-table/translations.json`) and every recorded platform question, by one pair (`platform_systems_query`, in
