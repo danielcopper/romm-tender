@@ -97,8 +97,8 @@ function renderActiveSlotBody(
             </div>
           ) : null}
           <VersionHistoryPanel
-            // Keyed by the ROM as well: a list read for one ROM never stands under
-            // another, nor does a Restore from it.
+            // The ROM is in the key: a list belongs to the ROM it was read for
+            // (docs/architecture/save-file-sync-architecture.md, "Failure handling").
             key={`vhp-${romId}-${f.filename}`}
             romId={romId}
             slot={slot}

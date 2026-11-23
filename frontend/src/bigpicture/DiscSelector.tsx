@@ -46,8 +46,6 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId }) => {
   const [selected, setSelected] = useState<DiscOptionData>(null);
   const romIdRef = useRef<number | null>(null);
 
-  // The bound version's discs, asked again when a download of it completes (it
-  // may now be multi-disc) and when a switch binds another version.
   useEffect(() => {
     mountPruneLeaseOwner(leaseOwner);
     let cancelled = false;
