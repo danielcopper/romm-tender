@@ -122,6 +122,19 @@ function renderActiveSlotBody(
   ];
 }
 
+/** An inactive slot's saves, or the line saying why they could not be read; a failure is logged, never thrown. */
+async function readSlotSaves(romId: number, slotName: string): Promise<{ files: SlotSaveFile[] } | { error: string }> {
+  try {
+    const result = await getSlotSaves(romId, slotName);
+    if (result.success) return { files: result.saves };
+    logWarn(`SavesTab: slot '${slotName}' saves could not be read: ${result.message}`);
+    return { error: slotSavesUnreadMessage(result.message) };
+  } catch (e) {
+    logWarn(`SavesTab: slot '${slotName}' saves could not be read: ${e}`);
+    return { error: slotSavesUnreadMessage() };
+  }
+}
+
 interface SlotPanelProps {
   romId: number;
   slot: SaveSlotSummary;
@@ -181,26 +194,15 @@ export const SlotPanel: FC<SlotPanelProps> = ({
 
     // An inactive slot's saves are read on the first expand that finds them
     // unread; a read that failed leaves them unread, so the next expand asks again.
-    if (willExpand && !isActive && slotFiles === null) {
-      const seq = ++slotReadSeqRef.current;
-      const isLatest = () => seq === slotReadSeqRef.current;
-      setLoadingSlot(true);
-      setSlotLoadError(null);
-      try {
-        const result = await getSlotSaves(romId, slotName);
-        if (result.success) {
-          if (isLatest()) setSlotFiles(result.saves);
-        } else {
-          logWarn(`SavesTab: slot '${slotName}' saves could not be read: ${result.message}`);
-          if (isLatest()) setSlotLoadError(slotSavesUnreadMessage(result.message));
-        }
-      } catch (e) {
-        logWarn(`SavesTab: slot '${slotName}' saves could not be read: ${e}`);
-        if (isLatest()) setSlotLoadError(slotSavesUnreadMessage());
-      } finally {
-        if (isLatest()) setLoadingSlot(false);
-      }
-    }
+    if (!willExpand || isActive || slotFiles !== null) return;
+    const seq = ++slotReadSeqRef.current;
+    setLoadingSlot(true);
+    setSlotLoadError(null);
+    const answer = await readSlotSaves(romId, slotName);
+    if (seq !== slotReadSeqRef.current) return;
+    if ("files" in answer) setSlotFiles(answer.files);
+    else setSlotLoadError(answer.error);
+    setLoadingSlot(false);
   };
 
   const handleActivate = async () => {
