@@ -1634,6 +1634,11 @@ restore that went through (`ok` or `put_failed`) only the restored file's Previo
 list again when reopened; every other panel on the tab keeps its state, and an open version list re-reads itself on the
 `romm_data_changed` the restore dispatches.
 
+A version switch keeps the tab mounted and hands it the new ROM, so the slot panels and version lists take the ROM into
+their keys (`SavesTab.tsx`, `SlotPanel.tsx`): each is mounted anew for it, an open inactive slot or version list closes,
+and a slot or version read still under way for the previous ROM lands in a panel that is gone. Opened again, each reads
+for the ROM now bound, and a Restore sends a version id from that ROM's list only.
+
 ## Copy a save to another slot
 
 A per-save **"Copy to slot…"** action (`SaveCopyService`, `services/saves/copies.py`; endpoint `copy_save_to_slot`)

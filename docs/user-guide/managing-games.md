@@ -820,6 +820,10 @@ The selected disc is **saved**, and it survives the things that would otherwise 
 If the specific disc you pinned ever goes missing (for example a partial re-download), the game quietly falls back to
 the default disc rather than failing to launch.
 
+Each [version](#versions) of a game keeps its own pick. After a version switch the dropdown shows the discs and the pick
+of the version now bound — or disappears, where that version has a single disc or is not downloaded — and a disc you
+pick from then on is the one that version starts with.
+
 ### Where it applies
 
 The disc you pick applies to **the Steam shortcut Tender created for the game**, whenever Steam launches it — in **game
