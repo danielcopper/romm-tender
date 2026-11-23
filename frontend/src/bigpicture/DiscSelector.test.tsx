@@ -582,6 +582,38 @@ describe("DiscSelector — a version switch", () => {
     expect(r.getByTestId("disc-btn").textContent).toBe("1");
   });
 
+  it("holds no ROM between the switch and the new version's detail read", async () => {
+    mockCachedDetail();
+    discsByRom({ 42: discDefaultSelection });
+    const r = render(<DiscSelector appId={100} />);
+    await r.findByTestId("disc-btn");
+
+    vi.mocked(getCachedGameDetail).mockReturnValue(new Promise<CachedGameDetail>(() => undefined));
+    await dataChanged({ type: "version_switched", app_id: 100, rom_id: 43 });
+    await downloadComplete(42);
+    await flushAsync();
+
+    expect(backend.getDiscSelection).toHaveBeenCalledExactlyOnceWith(42);
+    expect(r.queryByTestId("disc-btn")).toBeNull();
+  });
+
+  it("pins nothing from a menu opened before the switch while the new version is still being read", async () => {
+    mockCachedDetail();
+    discsByRom({ 42: discDefaultSelection });
+    const r = render(<DiscSelector appId={100} />);
+    await r.findByTestId("disc-btn");
+    const menu = openMenu(r);
+
+    vi.mocked(getCachedGameDetail).mockReturnValue(new Promise<CachedGameDetail>(() => undefined));
+    await dataChanged({ type: "version_switched", app_id: 100, rom_id: 43 });
+    await act(async () => {
+      fireEvent.click(within(menu.container).getByText("Disc 1"));
+      await Promise.resolve();
+    });
+
+    expect(backend.selectDisc).not.toHaveBeenCalled();
+  });
+
   it("stops listening for switches once unmounted", async () => {
     mockCachedDetail();
     discsByRom({ 42: discDefaultSelection });
