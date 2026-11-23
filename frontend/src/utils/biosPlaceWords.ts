@@ -141,7 +141,7 @@ const NO_ANSWER: StoreOnlyAnswer = { source: null, platformSystem: null };
 
 /**
  * What a game's store-only line is worded from: the BIOS answer's own platform system and answering source, the core
- * read's standing in where the BIOS answer carries neither.
+ * read's standing in for each one the BIOS answer does not carry.
  */
 export function storeOnlyAnswerOf(
   bios: Pick<BiosStatus, "emulator_source" | "platform_system">,
