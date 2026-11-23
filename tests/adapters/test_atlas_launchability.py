@@ -15,7 +15,7 @@ import os
 from typing import Any
 
 import pytest
-from _atlas_machines import asked_system, fixture_machine, vectors_asking
+from _atlas_machines import asked_system, fixture_machine, vector_named
 from _vendor import atlas
 from _vendor.atlas import (
     CAVEAT_ARCHIVE_CONTENTS_UNREAD,
@@ -897,13 +897,8 @@ class TestWhatADiscFileOpensInTendersWords:
         assert result.payload(platform_name="PlayStation")["reason_file"] == "Game (Track 2).bin"
 
 
-def _launch_vector(stem: str, name: str) -> dict[str, Any]:
-    """The recorded launch question *name* of ``machines/<stem>.json``."""
-    return next(vector for each, vector in vectors_asking("launchable") if each == stem and vector["name"] == name)
-
-
 def _disc_opens_vector(name: str) -> dict[str, Any]:
-    return _launch_vector("disc-opens", name)
+    return vector_named("launchable", "disc-opens", name)
 
 
 def _through_tender(inp: dict[str, Any], traces: list[str], label: str = "Genesis Plus GX"):
@@ -1109,7 +1104,7 @@ class TestSystemsThatAnswerAlike:
         """A recorded machine answers for its own ``/var/lib/flatpak`` deploy; nothing on this host is read."""
 
     def test_twins_that_refuse_a_file_alike_refuse_it_through_the_shared_answer(self, traces):
-        vector = _launch_vector("several-named-systems", self._NAME)
+        vector = vector_named("launchable", "several-named-systems", self._NAME)
 
         result = _through_tender(vector["input"], traces, label="Gambatte (Windows)")
 

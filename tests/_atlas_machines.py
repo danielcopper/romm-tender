@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from _vendor import atlas
 from _vendor.atlas.machine import FixtureMachine
 
 from domain.platform_system import SystemArgument, SystemPair
@@ -70,6 +71,19 @@ def vectors_asking(question: str) -> list[tuple[str, dict[str, Any]]]:
         for vector in json.loads(path.read_text(encoding="utf-8"))["vectors"]
         if question in vector["expected"]
     ]
+
+
+def vector_named(question: str, stem: str, name: str) -> dict[str, Any]:
+    """The recorded machine *name* of ``machines/<stem>.json`` whose expectations answer *question*."""
+    return next(vector for each, vector in vectors_asking(question) if each == stem and vector["name"] == name)
+
+
+def asked_launch_command(vector: dict[str, Any]) -> Any:
+    """The resolver's live answer to the vector's launch-command question, asked as the vector records it."""
+    inp = vector["input"]
+    query = inp["launch_command_query"]
+    installation = select(atlas.detect(inp["home"], fixture_machine(inp)), query.get("installation"))
+    return installation.launch_command(query["system"], query["content_path"], label=query.get("label"))
 
 
 def _projected_sources(answers: list[dict[str, Any]]) -> list[dict[str, Any]]:

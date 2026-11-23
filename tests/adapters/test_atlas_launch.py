@@ -12,8 +12,7 @@ from dataclasses import replace
 from typing import Any, cast
 
 import pytest
-from _atlas_machines import asked_system, fixture_machine, select, vectors_asking
-from _vendor import atlas
+from _atlas_machines import asked_launch_command, vector_named
 from _vendor.atlas import (
     AVAILABILITY_NOT_INSTALLED,
     AVAILABILITY_STARTABLE,
@@ -335,16 +334,10 @@ class TestARefusedCommand:
         Asked of a recorded machine whose EmuDeck twins answer alike, so the
         entry is the resolver's own entry of a shared answer.
         """
-        [(_stem, vector)] = [
-            each
-            for each in vectors_asking("launch_command")
-            if each[1]["name"] == "emudeck-siblings-declared-alike-answer-every-question-alike"
-        ]
-        inp = vector["input"]
-        query = inp["launch_command_query"]
-        installation = select(atlas.detect(inp["home"], fixture_machine(inp)), query.get("installation"))
-        answer = installation.launch_command(
-            asked_system(query["system"]), query["content_path"], label=query.get("label")
+        answer = asked_launch_command(
+            vector_named(
+                "launch_command", "several-named-systems", "emudeck-siblings-declared-alike-answer-every-question-alike"
+            )
         )
 
         assert answer.resolution.status == RESOLUTION_UNANIMOUS
