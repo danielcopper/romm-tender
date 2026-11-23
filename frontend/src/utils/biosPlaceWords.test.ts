@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { LibraryMatch } from "../types";
+import type { LibraryMatch, PlatformSystemAnswer } from "../types";
 import {
   DOWNLOAD_DAMAGED,
   backupLines,
@@ -179,6 +179,77 @@ describe("storeOnlySentence", () => {
       "No emulator source is set up for Switch. Downloads are kept in Tender's firmware store and linked once one is.",
     );
     expect(storeOnlySentence(null, "Ryubing", "Switch")).toBeNull();
+  });
+
+  // The platform's own reason where the source that answered has no one system for it.
+  const RETRODECK = { kind: "retrodeck", starts_games: true };
+  const answer = (systems: string[]): PlatformSystemAnswer => ({
+    state: "no_system",
+    source: "retrodeck",
+    systems,
+    platform: "Master System",
+    slug: "sms",
+    folder: "mastersystem",
+  });
+
+  it.each([
+    [
+      "no_platform_system",
+      [],
+      "RetroDECK has no system for Master System. Downloads are kept in Tender's firmware store and linked once it has one.",
+    ],
+    [
+      "platform_unmatched",
+      [],
+      "Tender cannot match Master System to a system yet. Downloads are kept in Tender's firmware store and linked once it can.",
+    ],
+    [
+      "platform_pairs_contradict",
+      [],
+      'RomM\'s slug "sms" and folder "mastersystem" point to different systems. Downloads are kept in Tender\'s firmware store and linked once they agree.',
+    ],
+    [
+      "platform_system_not_here",
+      ["mastersystem"],
+      "RetroDECK has a system for Master System (mastersystem), but it is not set up on this machine. Downloads are kept in Tender's firmware store and linked once it is.",
+    ],
+    [
+      "platform_system_off",
+      ["mastersystem"],
+      "System mastersystem is switched off in RetroDECK. Downloads are kept in Tender's firmware store and linked once it is switched on.",
+    ],
+    [
+      "platform_systems_several",
+      ["mark3", "mastersystem"],
+      "RetroDECK has several systems for Master System (mark3, mastersystem). Downloads are kept in Tender's firmware store and linked into none of them.",
+    ],
+  ] as const)("words %s from the platform's answer", (reason, systems, sentence) => {
+    expect(
+      storeOnlySentence(reason, null, "Master System", { source: RETRODECK, platformSystem: answer([...systems]) }),
+    ).toBe(sentence);
+  });
+
+  it("says every source is switched off, with no source to name", () => {
+    expect(storeOnlySentence("switched_off", null, "Master System", { source: null, platformSystem: null })).toBe(
+      "Every emulator source is switched off in Settings › Emulator sources. Downloads are kept in Tender's firmware store and linked once a source is switched on.",
+    );
+  });
+
+  it("says nothing of a switched-off system it cannot name", () => {
+    expect(
+      storeOnlySentence("platform_system_off", null, "Master System", {
+        source: RETRODECK,
+        platformSystem: answer([]),
+      }),
+    ).toBeNull();
+  });
+
+  it("says why the source that would answer was not asked, then that the files wait for the system", () => {
+    expect(
+      storeOnlySentence("server_unreachable", null, "Master System", { source: RETRODECK, platformSystem: null }),
+    ).toBe(
+      "RomM cannot be reached, so Tender does not know this platform's system yet. Downloads are kept in Tender's firmware store and linked once the platform's system is known.",
+    );
   });
 });
 

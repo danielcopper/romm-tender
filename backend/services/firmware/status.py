@@ -42,9 +42,11 @@ from domain.bios_status import (
 )
 from domain.emulator_commands import options_to_payload, resolve_firmware_option
 from domain.emulator_pick import pick_for, source_kind
+from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, NO_SOURCE_DETECTED, unlisted_system
 from domain.firmware_groups import console_regions_of, judge_groups
 from domain.firmware_rows import leaves_its_folder, library_file
 from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
+from domain.platform_system import UNASKED, PlatformKeys
 from services.firmware.emulator_answers import (
     EMULATOR_FIELDS,
     EmulatorAnswer,
@@ -65,7 +67,7 @@ if TYPE_CHECKING:
     from domain.emulator_commands import EmulatorOption, LaunchingEmulator
     from domain.firmware_groups import GroupVerdict
     from domain.firmware_wants import FirmwareCatalogue
-    from domain.platform_system import PlatformSystem
+    from domain.platform_system import PlatformSystem, SystemArgument
     from domain.rom_install import RomInstall
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
@@ -139,7 +141,11 @@ class FirmwareStatusReader:
         return kept
 
     def _platform_rows(
-        self, system: str | None, platform_folder: str, platform_firmware: list[dict[str, Any]], emulator: str | None
+        self,
+        system: SystemArgument | None,
+        platform_folder: str,
+        platform_firmware: list[dict[str, Any]],
+        emulator: str | None,
     ) -> tuple[FirmwareCatalogue, list[BiosFileEntry], dict[str, list[BiosFileEntry]]]:
         """One platform's demand and its whole row set, in one worker hop. Blocking.
 
@@ -402,18 +408,19 @@ class FirmwareStatusReader:
         ``emulators`` list is the full classified picker payload and
         ``emulator_data_available`` flags whether the answering emulator source
         gave an emulator list, with ``emulator_data_reason`` and
-        ``emulator_source`` saying why not and which source answered.
+        ``emulator_source`` saying why not and which source answered, and
+        ``emulator_data_system`` the system a ``system_unknown`` reason names
+        (:func:`domain.emulator_sources.unlisted_system`).
 
         ``store_only`` says why a download here lands in the store and nowhere
-        else: ``unsupported`` for a launching emulator the resolver does not
-        cover, ``no_source`` for a platform no emulator source answers for.
+        else (:func:`_store_only`).
 
         **The demand is read per platform**, because a standalone emulator's
         declarations belong to a platform only by way of the emulators ES-DE
         offers for it.
         """
-        slug = plat["platform_slug"]
-        platform = await self._loop.run_in_executor(None, self._platform_systems.platform_system, slug)
+        keys = PlatformKeys.of(plat["platform_slug"], folder)
+        platform = await self._loop.run_in_executor(None, self._platform_systems.platform_system, keys)
         system = platform.taken
         options = await self._emulator_options(platform)
         emulator = self._platform_emulator(folder, options)
@@ -423,6 +430,7 @@ class FirmwareStatusReader:
         plat["emulators"] = options_to_payload(options["options"])
         plat["emulator_data_available"] = options["available"]
         plat["emulator_data_reason"] = options["reason"]
+        plat["emulator_data_system"] = unlisted_system(options, installed=False)
         plat["emulator_source"] = options["source"]
         plat["platform_system"] = platform.payload()
         catalogue, files, others = await self._loop.run_in_executor(
@@ -433,7 +441,7 @@ class FirmwareStatusReader:
             key=lambda f: (f.get("declared_path") or f.get("file_name", "")).lower(),
         )
         plat["store_files"] = await self._loop.run_in_executor(None, self._store_files, folder)
-        plat["store_only"] = _store_only(system, catalogue, identity)
+        plat["store_only"] = _store_only(platform, catalogue, identity)
         plat["backup_root"] = self._store.backup_root()
         plat["has_games"] = folder in synced_folders
         plat["all_downloaded"] = all(f["downloaded"] for f in plat["files"])
@@ -442,7 +450,7 @@ class FirmwareStatusReader:
         )
         self._stamp_deletable(plat, records)
         answer = emulator_answer(catalogue, identity, judge_groups(catalogue.groups_for(identity)))
-        self._set_platform_bios_aggregates(plat, slug, tuple(files), answer)
+        self._set_platform_bios_aggregates(plat, keys.slug, tuple(files), answer)
 
     def _set_platform_bios_aggregates(self, plat: dict[str, Any], slug: str, files, answer: EmulatorAnswer) -> None:
         """Stamp the per-platform BIOS aggregates onto a ``get_platform_firmware_status`` entry.
@@ -580,11 +588,13 @@ class FirmwareStatusReader:
 
         Every answer, that one included, carries what the game page's BIOS part
         stands on, as the platform entry does: the emulator entries, where a
-        download lands (``store_only``, ``backup_root``), the delete counts
+        download lands (``store_only``, ``backup_root``) and what the line
+        saying so is worded from (``platform_system``, ``emulator_source``), the delete counts
         (:meth:`_stamp_deletable`) and ``server_offline``, whether the library's
         listing could be read.
         """
-        platform = await self._loop.run_in_executor(None, self._platform_systems.rom_system, platform_slug, install)
+        keys = PlatformKeys.of(platform_slug, platform_folder)
+        platform = await self._loop.run_in_executor(None, self._platform_systems.rom_system, keys, install)
         system = platform.taken
         options = await self._emulator_options(platform)
         pick = self._resolve_launching_emulator(platform_folder, options, launching_emulator)
@@ -614,7 +624,10 @@ class FirmwareStatusReader:
             payload = self._bios_payload(files, platform_slug, answer, pick)
             if not files and met is True:
                 payload["needs_bios"] = False
-        payload["store_only"] = _store_only(system, catalogue, identity)
+        payload["store_only"] = _store_only(platform, catalogue, identity)
+        # What the store-only line is worded from, carried by this answer itself.
+        payload["platform_system"] = platform.payload()
+        payload["emulator_source"] = options["source"]
         payload["backup_root"] = self._store.backup_root()
         payload["emulator_tabs"] = emulator_tabs(
             catalogue, identity, pick.label if pick is not None else None, options["options"], others
@@ -657,15 +670,26 @@ def _overview_payload(entry: BiosFileEntry) -> dict[str, Any]:
     }
 
 
-def _store_only(system: str | None, catalogue: FirmwareCatalogue, emulator: str | None) -> str | None:
+def _store_only(platform: PlatformSystem, catalogue: FirmwareCatalogue, emulator: str | None) -> str | None:
     """Why a download here lands in the store and is linked nowhere, or ``None`` where it may be linked.
 
-    ``no_source`` where no emulator source answers for the platform;
+    Where no source was asked, why: ``no_source`` where none is detected and
+    ``switched_off`` where every one is switched off, whatever else failed;
+    else the reason the one that would answer was not asked (RomM's list of
+    platforms could not be read, its catalogue refused). Where the source that answered has no one
+    system for the platform, its :class:`~domain.platform_system.PlatformRefusal`
+    — several among them, since a link lands in one system's place.
     ``unsupported`` where the resolver does not cover the launching emulator —
     it states it so, or a reading that happened holds no entry for it.
     """
-    if system is None:
-        return "no_source"
+    if platform.state == UNASKED:
+        if platform.source is None:
+            # No source answers, whatever else failed: none is detected, or every one is switched off.
+            return ALL_SOURCES_SWITCHED_OFF if platform.unanswered == ALL_SOURCES_SWITCHED_OFF else NO_SOURCE_DETECTED
+        return platform.unasked or NO_SOURCE_DETECTED
+    reason = platform.no_system_reason
+    if reason is not None:
+        return reason
     if not catalogue.resolved or emulator is None:
         return None
     verdict = catalogue.verdict_for(emulator)

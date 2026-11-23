@@ -12,7 +12,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path><extension>.sfc .smc .zip</extension>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gba/Golden Sun (USA).gba": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -68,7 +68,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -100,7 +101,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path><extension>.sfc .smc .zip</extension>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gb/Pokemon Crystal (USA).gbc": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -157,7 +158,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -166,7 +168,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -196,7 +199,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path><extension>.sfc .smc .zip</extension>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gba/Golden Sun (USA).gba": "rom",
           "/mnt/sd/retrodeck/saves/Golden Sun (USA).srm": "sram",
           "/mnt/sd/retrodeck/saves/Golden Sun (USA).rtc": "stale clock data",
@@ -253,7 +256,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -285,7 +289,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path><extension>.sfc .smc .zip</extension>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gb/Tetris (World).gb": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -343,7 +347,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -352,7 +357,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -500,7 +506,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path><extension>.sfc .smc .zip</extension>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gba/Golden Sun (USA).gba": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -556,7 +562,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -597,7 +604,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path>\n    <command label=\"Snes9x 2005\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x2005_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path><extension>.sfc .smc .zip</extension>\n    <command label=\"Snes9x 2005\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x2005_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/snes/Chrono Trigger (USA).sfc": "rom",
           "/mnt/sd/retrodeck/saves/Chrono Trigger (USA).srm": "sram",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
@@ -649,7 +656,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "unknown",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -674,7 +682,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path><extension>.sfc .smc .zip</extension>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gba/Golden Sun (USA).gba": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -743,7 +751,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path><extension>.sfc .smc .zip</extension>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gba/Golden Sun (USA).gba": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -802,7 +810,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -834,7 +843,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>msx</name><path>%ROMPATH%/msx</path>\n    <command label=\"blueMSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/bluemsx_libretro.so %ROM%</command>\n  </system>\n  <system><name>arduboy</name><path>%ROMPATH%/arduboy</path>\n    <command label=\"Arduous\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/arduous_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>msx</name><path>%ROMPATH%/msx</path><extension>.rom .dsk .zip</extension>\n    <command label=\"blueMSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/bluemsx_libretro.so %ROM%</command>\n  </system>\n  <system><name>arduboy</name><path>%ROMPATH%/arduboy</path><extension>.hex .zip</extension>\n    <command label=\"Arduous\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/arduous_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/msx/Puzzle Game (Japan).rom": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -904,7 +913,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path>\n    <command label=\"DeSmuME\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume_libretro.so %ROM%</command>\n  </system>\n  <system><name>arduboy</name><path>%ROMPATH%/arduboy</path>\n    <command label=\"Arduous\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/arduous_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path><extension>.nds .zip</extension>\n    <command label=\"DeSmuME\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume_libretro.so %ROM%</command>\n  </system>\n  <system><name>arduboy</name><path>%ROMPATH%/arduboy</path><extension>.hex .zip</extension>\n    <command label=\"Arduous\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/arduous_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/arduboy/Mystic Balloon.hex": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -956,7 +965,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -986,7 +996,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megadrive</name><path>%ROMPATH%/megadrive</path>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megadrive</name><path>%ROMPATH%/megadrive</path><extension>.md .bin .gen .zip</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/megadrive/Phantasy Star IV (USA).md": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -1066,7 +1076,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -1106,7 +1117,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>snes</name><path>%ROMPATH%/snes</path>\n    <command label=\"Snes9x - Current\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n  <system><name>satellaview</name><path>%ROMPATH%/satellaview</path>\n    <command label=\"Snes9x - Current\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>snes</name><path>%ROMPATH%/snes</path><extension>.sfc .smc .zip</extension>\n    <command label=\"Snes9x - Current\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n  <system><name>satellaview</name><path>%ROMPATH%/satellaview</path><extension>.bs .zip</extension>\n    <command label=\"Snes9x - Current\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/snes/Chrono Trigger (USA).sfc": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -1159,7 +1170,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -1168,7 +1180,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -1198,7 +1211,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path>\n    <command label=\"MAME - Current\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame_libretro.so %ROM%</command>\n    <command label=\"DICE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dice_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path><extension>.zip .ZIP</extension>\n    <command label=\"MAME - Current\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame_libretro.so %ROM%</command>\n    <command label=\"DICE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dice_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/arcade/rtype.zip": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -1270,7 +1283,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megadrive</name><path>%ROMPATH%/megadrive</path>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megadrive</name><path>%ROMPATH%/megadrive</path><extension>.md .bin .gen .zip</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/megadrive/Sonic 3 & Knuckles.md": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -1323,7 +1336,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -1353,7 +1367,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path>\n    <command label=\"MAME - Current\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path><extension>.zip .ZIP</extension>\n    <command label=\"MAME - Current\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/arcade/dkong.zip": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -1421,7 +1435,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame/cfg",
@@ -1430,7 +1445,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame/cfg",
@@ -1439,14 +1455,16 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame/diff",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "disk-diff",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -1505,7 +1523,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path>\n    <command label=\"FinalBurn Neo\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path><extension>.zip .ZIP</extension>\n    <command label=\"FinalBurn Neo\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/arcade/rtype.zip": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -1559,7 +1577,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/fbneo",
@@ -1568,7 +1587,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/fbneo",
@@ -1577,7 +1597,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "high-score",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -1637,7 +1658,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path>\n    <command label=\"FinalBurn Neo\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path><extension>.zip .ZIP</extension>\n    <command label=\"FinalBurn Neo\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/arcade/simpsons.zip": "rom",
           "/mnt/sd/retrodeck/saves/fbneo/simpsons.nv": "eeprom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
@@ -1689,7 +1710,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -1749,7 +1771,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path>\n    <command label=\"FinalBurn Neo\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path><extension>.zip .ZIP</extension>\n    <command label=\"FinalBurn Neo\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/arcade/rtype.zip": "rom",
           "/mnt/sd/retrodeck/saves/fbneo/rtype.hi": "scores",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
@@ -1801,7 +1823,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "high-score",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -1861,7 +1884,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"VBA-M\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vbam_libretro.so %ROM%</command>\n  </system>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"VBA-M\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vbam_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"VBA-M\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vbam_libretro.so %ROM%</command>\n  </system>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"VBA-M\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vbam_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gb/Zelda.gb": "rom",
           "/mnt/sd/retrodeck/roms/gba/Zelda.gba": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
@@ -1915,7 +1938,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -1924,7 +1948,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -1954,7 +1979,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"VBA-M\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vbam_libretro.so %ROM%</command>\n  </system>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"VBA-M\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vbam_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"VBA-M\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vbam_libretro.so %ROM%</command>\n  </system>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"VBA-M\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vbam_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gb/Zelda.gb": "rom",
           "/mnt/sd/retrodeck/roms/gba/Zelda.gba": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
@@ -2007,7 +2032,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -2037,7 +2063,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"SameBoy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/sameboy_libretro.so %ROM%</command>\n    <command label=\"Gearboy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gearboy_libretro.so %ROM%</command>\n    <command label=\"TGB Dual\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/tgbdual_libretro.so %ROM%</command>\n    <command label=\"DoubleCherryGB\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/DoubleCherryGB_libretro.so %ROM%</command>\n  </system>\n  <system><name>sgb</name><path>%ROMPATH%/sgb</path>\n    <command label=\"SameBoy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/sameboy_libretro.so %ROM%</command>\n  </system>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"gpSP\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gpsp_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"SameBoy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/sameboy_libretro.so %ROM%</command>\n    <command label=\"Gearboy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gearboy_libretro.so %ROM%</command>\n    <command label=\"TGB Dual\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/tgbdual_libretro.so %ROM%</command>\n    <command label=\"DoubleCherryGB\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/DoubleCherryGB_libretro.so %ROM%</command>\n  </system>\n  <system><name>sgb</name><path>%ROMPATH%/sgb</path><extension>.gb .GB</extension>\n    <command label=\"SameBoy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/sameboy_libretro.so %ROM%</command>\n  </system>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"gpSP\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gpsp_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gb/Tetris (World).gb": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -2111,7 +2137,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -2120,7 +2147,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -2150,7 +2178,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"SameBoy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/sameboy_libretro.so %ROM%</command>\n    <command label=\"Gearboy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gearboy_libretro.so %ROM%</command>\n    <command label=\"TGB Dual\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/tgbdual_libretro.so %ROM%</command>\n    <command label=\"DoubleCherryGB\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/DoubleCherryGB_libretro.so %ROM%</command>\n  </system>\n  <system><name>sgb</name><path>%ROMPATH%/sgb</path>\n    <command label=\"SameBoy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/sameboy_libretro.so %ROM%</command>\n  </system>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"gpSP\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gpsp_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"SameBoy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/sameboy_libretro.so %ROM%</command>\n    <command label=\"Gearboy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gearboy_libretro.so %ROM%</command>\n    <command label=\"TGB Dual\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/tgbdual_libretro.so %ROM%</command>\n    <command label=\"DoubleCherryGB\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/DoubleCherryGB_libretro.so %ROM%</command>\n  </system>\n  <system><name>sgb</name><path>%ROMPATH%/sgb</path><extension>.gb .GB</extension>\n    <command label=\"SameBoy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/sameboy_libretro.so %ROM%</command>\n  </system>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"gpSP\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gpsp_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/sgb/Donkey Kong (World).sgb": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -2223,7 +2251,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -2232,7 +2261,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -2262,7 +2292,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"SameBoy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/sameboy_libretro.so %ROM%</command>\n    <command label=\"Gearboy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gearboy_libretro.so %ROM%</command>\n    <command label=\"TGB Dual\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/tgbdual_libretro.so %ROM%</command>\n    <command label=\"DoubleCherryGB\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/DoubleCherryGB_libretro.so %ROM%</command>\n  </system>\n  <system><name>sgb</name><path>%ROMPATH%/sgb</path>\n    <command label=\"SameBoy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/sameboy_libretro.so %ROM%</command>\n  </system>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"gpSP\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gpsp_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"SameBoy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/sameboy_libretro.so %ROM%</command>\n    <command label=\"Gearboy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gearboy_libretro.so %ROM%</command>\n    <command label=\"TGB Dual\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/tgbdual_libretro.so %ROM%</command>\n    <command label=\"DoubleCherryGB\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/DoubleCherryGB_libretro.so %ROM%</command>\n  </system>\n  <system><name>sgb</name><path>%ROMPATH%/sgb</path><extension>.gb .GB</extension>\n    <command label=\"SameBoy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/sameboy_libretro.so %ROM%</command>\n  </system>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"gpSP\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gpsp_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gba/Golden Sun (USA).gba": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -2334,7 +2364,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -2364,7 +2395,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path>\n    <command label=\"DeSmuME\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume_libretro.so %ROM%</command>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n    <command label=\"melonDS DS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/melondsds_libretro.so %ROM%</command>\n    <command label=\"melonDS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/melonds_libretro.so %ROM%</command>\n  </system>\n  <system><name>atarilynx</name><path>%ROMPATH%/atarilynx</path>\n    <command label=\"Handy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/handy_libretro.so %ROM%</command>\n    <command label=\"Beetle Lynx\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_lynx_libretro.so %ROM%</command>\n    <command label=\"Holani\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/holani_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path><extension>.nds .zip</extension>\n    <command label=\"DeSmuME\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume_libretro.so %ROM%</command>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n    <command label=\"melonDS DS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/melondsds_libretro.so %ROM%</command>\n    <command label=\"melonDS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/melonds_libretro.so %ROM%</command>\n  </system>\n  <system><name>atarilynx</name><path>%ROMPATH%/atarilynx</path><extension>.lnx .zip</extension>\n    <command label=\"Handy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/handy_libretro.so %ROM%</command>\n    <command label=\"Beetle Lynx\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_lynx_libretro.so %ROM%</command>\n    <command label=\"Holani\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/holani_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/nds/Castlevania (USA).nds": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -2441,7 +2472,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -2464,7 +2496,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path>\n    <command label=\"DeSmuME\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume_libretro.so %ROM%</command>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n    <command label=\"melonDS DS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/melondsds_libretro.so %ROM%</command>\n    <command label=\"melonDS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/melonds_libretro.so %ROM%</command>\n  </system>\n  <system><name>atarilynx</name><path>%ROMPATH%/atarilynx</path>\n    <command label=\"Handy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/handy_libretro.so %ROM%</command>\n    <command label=\"Beetle Lynx\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_lynx_libretro.so %ROM%</command>\n    <command label=\"Holani\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/holani_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path><extension>.nds .zip</extension>\n    <command label=\"DeSmuME\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume_libretro.so %ROM%</command>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n    <command label=\"melonDS DS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/melondsds_libretro.so %ROM%</command>\n    <command label=\"melonDS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/melonds_libretro.so %ROM%</command>\n  </system>\n  <system><name>atarilynx</name><path>%ROMPATH%/atarilynx</path><extension>.lnx .zip</extension>\n    <command label=\"Handy\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/handy_libretro.so %ROM%</command>\n    <command label=\"Beetle Lynx\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_lynx_libretro.so %ROM%</command>\n    <command label=\"Holani\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/holani_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/atarilynx/Chip's Challenge (USA).lnx": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -2560,7 +2592,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path>\n    <command label=\"MAME 2000\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2000_libretro.so %ROM%</command>\n    <command label=\"MAME 2010\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2010_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path><extension>.zip .ZIP</extension>\n    <command label=\"MAME 2000\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2000_libretro.so %ROM%</command>\n    <command label=\"MAME 2010\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2010_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/arcade/dkong.zip": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -2617,7 +2649,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2000/hi",
@@ -2626,7 +2659,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "high-score",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2000/cfg",
@@ -2635,7 +2669,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -2679,7 +2714,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path>\n    <command label=\"MAME 2000\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2000_libretro.so %ROM%</command>\n    <command label=\"MAME 2010\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2010_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path><extension>.zip .ZIP</extension>\n    <command label=\"MAME 2000\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2000_libretro.so %ROM%</command>\n    <command label=\"MAME 2010\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2010_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/arcade/dkong.zip": "rom",
           "/mnt/sd/retrodeck/saves/mame2000/nvram/dkong.nv": "nv",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
@@ -2737,7 +2772,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -2797,7 +2833,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path>\n    <command label=\"MAME 2000\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2000_libretro.so %ROM%</command>\n    <command label=\"MAME 2010\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2010_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path><extension>.zip .ZIP</extension>\n    <command label=\"MAME 2000\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2000_libretro.so %ROM%</command>\n    <command label=\"MAME 2010\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2010_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/arcade/dkong.zip": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -2854,7 +2890,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2010/hi",
@@ -2863,7 +2900,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "high-score",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2010/cfg",
@@ -2872,7 +2910,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2010/cfg",
@@ -2881,21 +2920,24 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2010/memcard",
                 "files": null,
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2010/diff",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "disk-diff",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2010/comment",
@@ -2904,7 +2946,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "notes",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2010/ini",
@@ -2913,14 +2956,16 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2010/ctrlr",
                 "files": null,
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -2991,7 +3036,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\nglobal_core_options = \"true\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path>\n    <command label=\"MAME 2003\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2003_libretro.so %ROM%</command>\n    <command label=\"MAME 2003-Plus\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path><extension>.zip .ZIP</extension>\n    <command label=\"MAME 2003\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2003_libretro.so %ROM%</command>\n    <command label=\"MAME 2003-Plus\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/arcade/dkong.zip": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -3048,7 +3093,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2003/hi",
@@ -3057,7 +3103,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "high-score",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2003/cfg",
@@ -3066,21 +3113,24 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2003/memcard",
                 "files": null,
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame2003/diff",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "disk-diff",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -3161,7 +3211,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\nglobal_core_options = \"true\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path>\n    <command label=\"MAME 2003\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2003_libretro.so %ROM%</command>\n    <command label=\"MAME 2003-Plus\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path><extension>.zip .ZIP</extension>\n    <command label=\"MAME 2003\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2003_libretro.so %ROM%</command>\n    <command label=\"MAME 2003-Plus\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/arcade/dkong.zip": "rom",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "mame2003-plus_core_save_subfolder = \"disabled\"\n",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
@@ -3219,7 +3269,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/hi",
@@ -3228,7 +3279,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "high-score",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/cfg",
@@ -3237,21 +3289,24 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/memcard",
                 "files": null,
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/diff",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "disk-diff",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -3332,7 +3387,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\nglobal_core_options = \"true\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>cps2</name><path>%ROMPATH%/cps2</path>\n    <command label=\"FB Alpha 2012 CPS-2\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbalpha2012_cps2_libretro.so %ROM%</command>\n  </system>\n  <system><name>fba</name><path>%ROMPATH%/fba</path>\n    <command label=\"FB Alpha 2012 Neo Geo\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbalpha2012_neogeo_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>cps2</name><path>%ROMPATH%/cps2</path><extension>.zip .ZIP</extension>\n    <command label=\"FB Alpha 2012 CPS-2\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbalpha2012_cps2_libretro.so %ROM%</command>\n  </system>\n  <system><name>fba</name><path>%ROMPATH%/fba</path><extension>.zip</extension>\n    <command label=\"FB Alpha 2012 Neo Geo\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbalpha2012_neogeo_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/cps2/ssf2t.zip": "rom",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "fba2012cps2_hiscores = \"enabled\"\n",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
@@ -3400,7 +3455,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -3409,7 +3465,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "high-score",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -3471,7 +3528,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\nglobal_core_options = \"true\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>cps2</name><path>%ROMPATH%/cps2</path>\n    <command label=\"FB Alpha 2012 CPS-2\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbalpha2012_cps2_libretro.so %ROM%</command>\n  </system>\n  <system><name>fba</name><path>%ROMPATH%/fba</path>\n    <command label=\"FB Alpha 2012 Neo Geo\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbalpha2012_neogeo_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>cps2</name><path>%ROMPATH%/cps2</path><extension>.zip .ZIP</extension>\n    <command label=\"FB Alpha 2012 CPS-2\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbalpha2012_cps2_libretro.so %ROM%</command>\n  </system>\n  <system><name>fba</name><path>%ROMPATH%/fba</path><extension>.zip</extension>\n    <command label=\"FB Alpha 2012 Neo Geo\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbalpha2012_neogeo_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/fba/mslug.zip": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -3537,7 +3594,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -3581,7 +3639,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path>\n    <command label=\"melonDS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/melonds_libretro.so %ROM%</command>\n  </system>\n  <system><name>ngp</name><path>%ROMPATH%/ngp</path>\n    <command label=\"RACE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/race_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path><extension>.nds .zip</extension>\n    <command label=\"melonDS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/melonds_libretro.so %ROM%</command>\n  </system>\n  <system><name>ngp</name><path>%ROMPATH%/ngp</path><extension>.ngp .zip</extension>\n    <command label=\"RACE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/race_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/nds/Castlevania (USA).nds": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -3638,7 +3696,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -3670,7 +3729,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path>\n    <command label=\"melonDS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/melonds_libretro.so %ROM%</command>\n  </system>\n  <system><name>ngp</name><path>%ROMPATH%/ngp</path>\n    <command label=\"RACE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/race_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path><extension>.nds .zip</extension>\n    <command label=\"melonDS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/melonds_libretro.so %ROM%</command>\n  </system>\n  <system><name>ngp</name><path>%ROMPATH%/ngp</path><extension>.ngp .zip</extension>\n    <command label=\"RACE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/race_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/ngp/Metal Slug 2nd Mission.ngp": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -3727,7 +3786,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -3759,7 +3819,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"version\": \"0.10.9b\", \"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>ngp</name><path>%ROMPATH%/ngp</path>\n    <command label=\"Beetle NeoPop\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_ngp_libretro.so %ROM%</command>\n  </system>\n  <system><name>ngpc</name><path>%ROMPATH%/ngpc</path>\n    <command label=\"Beetle NeoPop\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_ngp_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>ngp</name><path>%ROMPATH%/ngp</path><extension>.ngp .zip</extension>\n    <command label=\"Beetle NeoPop\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_ngp_libretro.so %ROM%</command>\n  </system>\n  <system><name>ngpc</name><path>%ROMPATH%/ngpc</path><extension>.ngc .zip</extension>\n    <command label=\"Beetle NeoPop\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_ngp_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/ngp/Pocket Falcon Rally (World).ngp": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -3812,7 +3872,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -3835,7 +3896,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"version\": \"0.10.9b\", \"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>ngp</name><path>%ROMPATH%/ngp</path>\n    <command label=\"Beetle NeoPop\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_ngp_libretro.so %ROM%</command>\n  </system>\n  <system><name>ngpc</name><path>%ROMPATH%/ngpc</path>\n    <command label=\"Beetle NeoPop\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_ngp_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>ngp</name><path>%ROMPATH%/ngp</path><extension>.ngp .zip</extension>\n    <command label=\"Beetle NeoPop\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_ngp_libretro.so %ROM%</command>\n  </system>\n  <system><name>ngpc</name><path>%ROMPATH%/ngpc</path><extension>.ngc .zip</extension>\n    <command label=\"Beetle NeoPop\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_ngp_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/ngpc/Neon Kite Legends (World).ngc": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -3888,7 +3949,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -3911,7 +3973,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>neogeo</name><path>%ROMPATH%/neogeo</path>\n    <command label=\"Geolith\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/geolith_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>neogeo</name><path>%ROMPATH%/neogeo</path><extension>.zip</extension>\n    <command label=\"Geolith\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/geolith_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/neogeo/mslug.zip": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -3966,7 +4028,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -3975,7 +4038,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -3984,7 +4048,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -3993,7 +4058,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -4025,7 +4091,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n    <command label=\"VBA-M\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vbam_libretro.so %ROM%</command>\n    <command label=\"VBA Next\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vba_next_libretro.so %ROM%</command>\n    <command label=\"gpSP\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gpsp_libretro.so %ROM%</command>\n    <command label=\"NooDS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/noods_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n    <command label=\"VBA-M\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vbam_libretro.so %ROM%</command>\n    <command label=\"VBA Next\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vba_next_libretro.so %ROM%</command>\n    <command label=\"gpSP\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gpsp_libretro.so %ROM%</command>\n    <command label=\"NooDS\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/noods_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gba/Golden Sun (USA).gba": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -4094,7 +4160,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -4126,7 +4193,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>ports</name><path>%ROMPATH%/ports</path>\n    <command label=\"Cannonball\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/cannonball_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>ports</name><path>%ROMPATH%/ports</path><extension>.sh</extension>\n    <command label=\"Cannonball\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/cannonball_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/ports/outrun.zip": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -4182,7 +4249,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "high-score",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -4214,7 +4282,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>doom</name><path>%ROMPATH%/doom</path>\n    <command label=\"PrBoom\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/prboom_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>doom</name><path>%ROMPATH%/doom</path><extension>.wad .WAD</extension>\n    <command label=\"PrBoom\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/prboom_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/doom/Doom (USA).wad": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -4281,7 +4349,8 @@
                 ],
                 "granularity": "per-game-files",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/Doom (USA)",
@@ -4290,7 +4359,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -4342,7 +4412,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>quake2</name><path>%ROMPATH%/quake2</path>\n    <command label=\"vitaQuake 2\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vitaquake2_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>quake2</name><path>%ROMPATH%/quake2</path><extension>.pak</extension>\n    <command label=\"vitaQuake 2\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vitaquake2_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/quake2/baseq2/pak0.pak": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -4394,14 +4464,16 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/baseq2/save",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -4442,7 +4514,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>doom3</name><path>%ROMPATH%/doom3</path>\n    <command label=\"boom3\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/boom3_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>doom3</name><path>%ROMPATH%/doom3</path><extension>.pk4</extension>\n    <command label=\"boom3\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/boom3_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/doom3/base/pak000.pk4": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -4494,14 +4566,16 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/roms/doom3/base/savegames",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -4536,13 +4610,13 @@
     },
     {
       "name": "a-save-whose-directory-is-the-launchs-own",
-      "rationale": "DeSmuME 2015 composes its save path from a variable its libretro build never fills, so <rom_stem>.dsv (and the .dsv.bak the core makes before overwriting) lands relative to the working directory of whatever process loaded the core. That is a property of the launch, not of the machine, so the answer's root is working_directory: dir is the <cwd> template, needs carries the cwd hole only the launcher can fill, the file names are stated anyway — the reading is not wasted — and the save-dir-launch-dependent caveat carries the sentence. Nothing on the machine is read for a template: no observation, no link view, no fallback.",
+      "rationale": "DeSmuME 2015 composes its save path from a variable its libretro build never fills, so <rom_stem>.dsv, the one file this build writes, lands relative to the working directory of whatever process loaded the core. That is a property of the launch, not of the machine, so the answer's root is working_directory: dir is the <cwd> template, needs carries the cwd hole only the launcher can fill, the file name is stated anyway — the reading is not wasted — and the save-dir-launch-dependent caveat carries the sentence. Nothing on the machine is read for a template: no observation, no link view, no fallback.",
       "input": {
         "home": "/home/deck",
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path><extension>.nds .zip</extension>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/nds/Game (Europe).nds": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -4585,20 +4659,19 @@
           "file_set": {
             "state": "declared",
             "files": [
-              "Game (Europe).dsv",
-              "Game (Europe).dsv.bak"
+              "Game (Europe).dsv"
             ],
             "complete": false,
             "groups": [
               {
                 "dir": "<cwd>",
                 "files": [
-                  "Game (Europe).dsv",
-                  "Game (Europe).dsv.bak"
+                  "Game (Europe).dsv"
                 ],
-                "granularity": "per-game-files",
+                "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -4620,7 +4693,7 @@
           ],
           "redirects": null,
           "granularity": {
-            "value": "per-game-files",
+            "value": "per-game-file",
             "mode": "always",
             "readings": [],
             "alternatives": []
@@ -4636,7 +4709,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path><extension>.nds .zip</extension>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/nds/Game (Europe).nds": "rom",
           "/home/deck/launch/Game (Europe).dsv": "save",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
@@ -4689,9 +4762,10 @@
                 "files": [
                   "Game (Europe).dsv"
                 ],
-                "granularity": "per-game-files",
+                "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -4707,7 +4781,7 @@
           ],
           "redirects": null,
           "granularity": {
-            "value": "per-game-files",
+            "value": "per-game-file",
             "mode": "always",
             "readings": [],
             "alternatives": []
@@ -4723,7 +4797,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path><extension>.nds .zip</extension>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/nds/Game (Europe).nds": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
           "/home/deck/.var/app/org.other.App/Game (Europe).dsv": "save",
@@ -4777,9 +4851,10 @@
                 "files": [
                   "Game (Europe).dsv"
                 ],
-                "granularity": "per-game-files",
+                "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -4803,7 +4878,7 @@
           ],
           "redirects": null,
           "granularity": {
-            "value": "per-game-files",
+            "value": "per-game-file",
             "mode": "always",
             "readings": [],
             "alternatives": []
@@ -4819,7 +4894,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path><extension>.nds .zip</extension>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/nds/Game (Europe).nds": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
           "/run/user/1000/launcher/Game (Europe).dsv": "save"
@@ -4872,9 +4947,10 @@
                 "files": [
                   "Game (Europe).dsv"
                 ],
-                "granularity": "per-game-files",
+                "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -4896,7 +4972,7 @@
           ],
           "redirects": null,
           "granularity": {
-            "value": "per-game-files",
+            "value": "per-game-file",
             "mode": "always",
             "readings": [],
             "alternatives": []
@@ -4912,7 +4988,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path><extension>.nds .zip</extension>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/nds/Game (Europe).nds": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -4954,20 +5030,19 @@
           "file_set": {
             "state": "declared",
             "files": [
-              "Game (Europe).dsv",
-              "Game (Europe).dsv.bak"
+              "Game (Europe).dsv"
             ],
             "complete": false,
             "groups": [
               {
                 "dir": "/home/deck",
                 "files": [
-                  "Game (Europe).dsv",
-                  "Game (Europe).dsv.bak"
+                  "Game (Europe).dsv"
                 ],
-                "granularity": "per-game-files",
+                "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -4991,7 +5066,7 @@
           ],
           "redirects": null,
           "granularity": {
-            "value": "per-game-files",
+            "value": "per-game-file",
             "mode": "always",
             "readings": [],
             "alternatives": []
@@ -5007,7 +5082,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>nds</name><path>%ROMPATH%/nds</path><extension>.nds .zip</extension>\n    <command label=\"DeSmuME 2015\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume2015_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/nds/Game (Europe).nds": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -5052,20 +5127,19 @@
           "file_set": {
             "state": "declared",
             "files": [
-              "Game (Europe).dsv",
-              "Game (Europe).dsv.bak"
+              "Game (Europe).dsv"
             ],
             "complete": false,
             "groups": [
               {
                 "dir": "/home/deck",
                 "files": [
-                  "Game (Europe).dsv",
-                  "Game (Europe).dsv.bak"
+                  "Game (Europe).dsv"
                 ],
-                "granularity": "per-game-files",
+                "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -5089,7 +5163,7 @@
           ],
           "redirects": null,
           "granularity": {
-            "value": "per-game-files",
+            "value": "per-game-file",
             "mode": "always",
             "readings": [],
             "alternatives": []
@@ -5145,20 +5219,19 @@
           "file_set": {
             "state": "declared",
             "files": [
-              "Game (Europe).dsv",
-              "Game (Europe).dsv.bak"
+              "Game (Europe).dsv"
             ],
             "complete": false,
             "groups": [
               {
                 "dir": "/home/deck/launch",
                 "files": [
-                  "Game (Europe).dsv",
-                  "Game (Europe).dsv.bak"
+                  "Game (Europe).dsv"
                 ],
-                "granularity": "per-game-files",
+                "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -5188,7 +5261,7 @@
           ],
           "redirects": null,
           "granularity": {
-            "value": "per-game-files",
+            "value": "per-game-file",
             "mode": "always",
             "readings": [],
             "alternatives": []
@@ -5259,20 +5332,19 @@
               "file_set": {
                 "state": "declared",
                 "files": [
-                  "Game (Europe).dsv",
-                  "Game (Europe).dsv.bak"
+                  "Game (Europe).dsv"
                 ],
                 "complete": false,
                 "groups": [
                   {
                     "dir": "/home/deck/launch",
                     "files": [
-                      "Game (Europe).dsv",
-                      "Game (Europe).dsv.bak"
+                      "Game (Europe).dsv"
                     ],
-                    "granularity": "per-game-files",
+                    "granularity": "per-game-file",
                     "role": "battery",
-                    "size_fixed": null
+                    "size_fixed": null,
+                    "slots": []
                   }
                 ]
               },
@@ -5288,7 +5360,7 @@
               ],
               "redirects": null,
               "granularity": {
-                "value": "per-game-files",
+                "value": "per-game-file",
                 "mode": "always",
                 "readings": [],
                 "alternatives": []
@@ -5306,7 +5378,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megacd</name><path>%ROMPATH%/megacd</path>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megacd</name><path>%ROMPATH%/megacd</path><extension>.chd .cue</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/megacd/Game (Europe).chd": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -5391,7 +5463,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -5400,7 +5473,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -5531,7 +5605,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>quake</name><path>%ROMPATH%/quake</path>\n    <command label=\"TyrQuake\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/tyrquake_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>quake</name><path>%ROMPATH%/quake</path><extension>.pak</extension>\n    <command label=\"TyrQuake\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/tyrquake_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/quake/id1/pak0.pak": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -5606,7 +5680,8 @@
                 ],
                 "granularity": "per-game-files",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/id1",
@@ -5615,7 +5690,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -5671,7 +5747,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"true\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>quake</name><path>%ROMPATH%/quake</path>\n    <command label=\"TyrQuake\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/tyrquake_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>quake</name><path>%ROMPATH%/quake</path><extension>.pak</extension>\n    <command label=\"TyrQuake\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/tyrquake_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
@@ -5768,7 +5844,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nglobal_core_options = \"true\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>pc88</name><path>%ROMPATH%/pc88</path>\n    <command label=\"QUASI88\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/quasi88_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>pc88</name><path>%ROMPATH%/pc88</path><extension>.d88 .zip</extension>\n    <command label=\"QUASI88\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/quasi88_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/pc88/Game (Japan).d88": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -5829,7 +5905,8 @@
                 ],
                 "granularity": "per-game-files",
                 "role": "disk-diff",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -5890,7 +5967,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nglobal_core_options = \"true\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>pc88</name><path>%ROMPATH%/pc88</path>\n    <command label=\"QUASI88\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/quasi88_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>pc88</name><path>%ROMPATH%/pc88</path><extension>.d88 .zip</extension>\n    <command label=\"QUASI88\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/quasi88_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/pc88/Game (Japan).d88": "rom",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "q88_save_to_disk_image = \"enabled\"\n",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
@@ -6439,7 +6516,8 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -6546,7 +6624,8 @@
                 ],
                 "granularity": "per-game-files",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -6683,7 +6762,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -6692,7 +6774,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "2"
+                ]
               }
             ]
           },
@@ -6799,6 +6884,212 @@
                   "swanstation_MemoryCards_Card2Type": "PerGameTitle"
                 },
                 "values": [
+                  "per-game-file"
+                ],
+                "caveats": []
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "swanstation-s-two-shared-cards-are-a-group-per-slot",
+      "rationale": "With both of SwanStation's slots on a shared card, the mode states two cards in one directory, and each is read by its own slot: the answer states one group per card, each naming the slot that reads it, so a client copying slot 1's card never takes slot 2's with it (#577 D23).",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nglobal_core_options = \"true\"\nlibretro_directory = \"/app/cores\"\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "swanstation_MemoryCards_Card1Type = \"Shared\"\nswanstation_MemoryCards_Card2Type = \"Shared\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/mnt/sd/retrodeck/roms/psx/Game (Europe).chd": "rom"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/swanstation_libretro.so": {
+            "library_name": "SwanStation",
+            "library_version": "1.0 4d309c0",
+            "options": {
+              "swanstation_MemoryCards_Card1Type": {
+                "default": "Libretro",
+                "values": [
+                  "Libretro",
+                  "Shared",
+                  "PerGame",
+                  "PerGameTitle",
+                  "None"
+                ]
+              },
+              "swanstation_MemoryCards_Card2Type": {
+                "default": "None",
+                "values": [
+                  "None",
+                  "Shared",
+                  "PerGame",
+                  "PerGameTitle"
+                ]
+              },
+              "swanstation_MemoryCards_UsePlaylistTitle": {
+                "default": "true",
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          }
+        },
+        "savefile_query": {
+          "content_path": "/mnt/sd/retrodeck/roms/psx/Game (Europe).chd",
+          "core_so": "swanstation_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "savefile_location": {
+          "dir": "/mnt/sd/retrodeck/saves",
+          "root_kind": "savefile_directory",
+          "needs": [],
+          "fallback_dir": null,
+          "physical_dir": null,
+          "file_set": {
+            "state": "declared",
+            "files": [
+              "duckstation_shared_card_1.mcd",
+              "duckstation_shared_card_2.mcd"
+            ],
+            "complete": false,
+            "groups": [
+              {
+                "dir": "/mnt/sd/retrodeck/saves",
+                "files": [
+                  "duckstation_shared_card_1.mcd"
+                ],
+                "granularity": "shared-file",
+                "role": "memory-card",
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
+              },
+              {
+                "dir": "/mnt/sd/retrodeck/saves",
+                "files": [
+                  "duckstation_shared_card_2.mcd"
+                ],
+                "granularity": "shared-file",
+                "role": "memory-card",
+                "size_fixed": true,
+                "slots": [
+                  "2"
+                ]
+              }
+            ]
+          },
+          "caveats": [],
+          "redirects": null,
+          "granularity": {
+            "value": "shared-file",
+            "mode": "card1-shared+card2-shared",
+            "readings": [
+              {
+                "key": "swanstation_MemoryCards_Card1Type",
+                "value": "Shared",
+                "options_file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg"
+              },
+              {
+                "key": "swanstation_MemoryCards_Card2Type",
+                "value": "Shared",
+                "options_file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg"
+              }
+            ],
+            "alternatives": [
+              {
+                "mode": "card1-libretro+card2-shared",
+                "options": {
+                  "swanstation_MemoryCards_Card1Type": "Libretro"
+                },
+                "values": [
+                  "per-game-file",
+                  "shared-file"
+                ],
+                "caveats": []
+              },
+              {
+                "mode": "card1-per-code+card2-shared",
+                "options": {
+                  "swanstation_MemoryCards_Card1Type": "PerGame"
+                },
+                "values": [
+                  "per-game-file",
+                  "shared-file"
+                ],
+                "caveats": []
+              },
+              {
+                "mode": "card1-per-title+card2-shared",
+                "options": {
+                  "swanstation_MemoryCards_Card1Type": "PerGameTitle"
+                },
+                "values": [
+                  "per-game-file",
+                  "shared-file"
+                ],
+                "caveats": []
+              },
+              {
+                "mode": "card1-none+card2-shared",
+                "options": {
+                  "swanstation_MemoryCards_Card1Type": "None"
+                },
+                "values": [
+                  "shared-file"
+                ],
+                "caveats": []
+              },
+              {
+                "mode": "card1-shared+card2-none",
+                "options": {
+                  "swanstation_MemoryCards_Card2Type": "None"
+                },
+                "values": [
+                  "shared-file"
+                ],
+                "caveats": []
+              },
+              {
+                "mode": "card1-shared+card2-per-code",
+                "options": {
+                  "swanstation_MemoryCards_Card2Type": "PerGame"
+                },
+                "values": [
+                  "shared-file",
+                  "per-game-file"
+                ],
+                "caveats": []
+              },
+              {
+                "mode": "card1-shared+card2-per-title",
+                "options": {
+                  "swanstation_MemoryCards_Card2Type": "PerGameTitle"
+                },
+                "values": [
+                  "shared-file",
                   "per-game-file"
                 ],
                 "caveats": []
@@ -8223,7 +8514,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megadrive</name><path>%ROMPATH%/megadrive</path>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megadrive</name><path>%ROMPATH%/megadrive</path><extension>.md .bin .gen .zip</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/megadrive/Phantasy Star IV (USA).md": "rom",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "genesis_plus_gx_bram = \"per game\"\ngenesis_plus_gx_system_bram = \"per bios\"\ngenesis_plus_gx_cart_bram = \"per cart\"\n",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
@@ -8304,7 +8595,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -8821,6 +9113,209 @@
           ],
           "redirects": null,
           "granularity": null
+        }
+      }
+    },
+    {
+      "name": "beetle-psx-s-two-mednafen-cards-are-a-group-per-slot",
+      "rationale": "With Beetle PSX's Mednafen card method and its second card on, the mode states the content's two cards in one directory, and each is read by its own slot: the answer states one group per card, each naming the slot that reads it (#577 D23).",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nglobal_core_options = \"true\"\nlibretro_directory = \"/app/cores\"\n",
+          "/mnt/sd/retrodeck/roms/psx/Game (Europe).cue": "rom",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "beetle_psx_use_mednafen_memcard0_method = \"mednafen\"\nbeetle_psx_enable_memcard1 = \"enabled\"\nbeetle_psx_shared_memory_cards = \"disabled\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_libretro.so": {
+            "library_name": "Beetle PSX",
+            "library_version": "0.9.44.1 d6383bf",
+            "options": {
+              "beetle_psx_use_mednafen_memcard0_method": {
+                "default": "libretro",
+                "values": [
+                  "libretro",
+                  "mednafen"
+                ]
+              },
+              "beetle_psx_enable_memcard1": {
+                "default": "enabled",
+                "values": [
+                  "enabled",
+                  "disabled"
+                ]
+              },
+              "beetle_psx_shared_memory_cards": {
+                "default": "disabled",
+                "values": [
+                  "enabled",
+                  "disabled"
+                ]
+              },
+              "beetle_psx_memcard_left_index": {
+                "default": "0",
+                "values": [
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7"
+                ]
+              },
+              "beetle_psx_memcard_right_index": {
+                "default": "1",
+                "values": [
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7"
+                ]
+              }
+            }
+          }
+        },
+        "savefile_query": {
+          "content_path": "/mnt/sd/retrodeck/roms/psx/Game (Europe).cue",
+          "core_so": "mednafen_psx_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "savefile_location": {
+          "dir": "/mnt/sd/retrodeck/saves",
+          "root_kind": "savefile_directory",
+          "needs": [],
+          "fallback_dir": null,
+          "physical_dir": null,
+          "file_set": {
+            "state": "declared",
+            "files": [
+              "Game (Europe).0.mcr",
+              "Game (Europe).1.mcr"
+            ],
+            "complete": false,
+            "groups": [
+              {
+                "dir": "/mnt/sd/retrodeck/saves",
+                "files": [
+                  "Game (Europe).0.mcr"
+                ],
+                "granularity": "per-game-files",
+                "role": "memory-card",
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
+              },
+              {
+                "dir": "/mnt/sd/retrodeck/saves",
+                "files": [
+                  "Game (Europe).1.mcr"
+                ],
+                "granularity": "per-game-files",
+                "role": "memory-card",
+                "size_fixed": true,
+                "slots": [
+                  "2"
+                ]
+              }
+            ]
+          },
+          "caveats": [],
+          "redirects": null,
+          "granularity": {
+            "value": "per-game-files",
+            "mode": "mcr+second-card",
+            "readings": [
+              {
+                "key": "beetle_psx_use_mednafen_memcard0_method",
+                "value": "mednafen",
+                "options_file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg"
+              },
+              {
+                "key": "beetle_psx_enable_memcard1",
+                "value": "enabled",
+                "options_file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg"
+              },
+              {
+                "key": "beetle_psx_shared_memory_cards",
+                "value": "disabled",
+                "options_file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg"
+              },
+              {
+                "key": "beetle_psx_memcard_left_index",
+                "value": "0",
+                "options_file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg"
+              },
+              {
+                "key": "beetle_psx_memcard_right_index",
+                "value": "1",
+                "options_file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg"
+              }
+            ],
+            "alternatives": [
+              {
+                "mode": "srm+second-card",
+                "options": {
+                  "beetle_psx_use_mednafen_memcard0_method": "libretro",
+                  "beetle_psx_enable_memcard1": "enabled",
+                  "beetle_psx_shared_memory_cards": "disabled"
+                },
+                "values": [
+                  "per-game-file"
+                ],
+                "caveats": []
+              },
+              {
+                "mode": "mcr-only",
+                "options": {
+                  "beetle_psx_use_mednafen_memcard0_method": "mednafen",
+                  "beetle_psx_enable_memcard1": "disabled",
+                  "beetle_psx_shared_memory_cards": "disabled"
+                },
+                "values": [
+                  "per-game-file"
+                ],
+                "caveats": []
+              },
+              {
+                "mode": "mcr+second-card-shared",
+                "options": {
+                  "beetle_psx_use_mednafen_memcard0_method": "mednafen",
+                  "beetle_psx_enable_memcard1": "enabled",
+                  "beetle_psx_shared_memory_cards": "enabled"
+                },
+                "values": [
+                  "shared-file"
+                ],
+                "caveats": []
+              }
+            ]
+          }
         }
       }
     },
@@ -9473,7 +9968,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "disk-diff",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -9482,7 +9978,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "disk-diff",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -9678,7 +10175,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -9854,7 +10352,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -10739,7 +11238,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -10908,7 +11408,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -11247,7 +11748,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "disk-diff",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -11256,7 +11758,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "disk-diff",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -11781,7 +12284,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -12140,7 +12644,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -12325,7 +12830,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -12533,7 +13039,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -12754,7 +13261,8 @@
                 ],
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -12963,7 +13471,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -13167,7 +13676,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -13364,7 +13874,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -13578,7 +14089,8 @@
                 ],
                 "granularity": "shared-card",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -14308,7 +14820,8 @@
                 ],
                 "granularity": "per-game-files",
                 "role": "disk-diff",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -14318,7 +14831,8 @@
                 ],
                 "granularity": "per-game-files",
                 "role": "disk-diff",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -14683,7 +15197,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -14860,7 +15375,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -15040,7 +15556,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -15533,7 +16050,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -16462,7 +16980,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -16671,7 +17190,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -16879,7 +17399,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -17088,7 +17609,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -17297,7 +17819,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -17501,7 +18024,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -17704,7 +18228,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -18054,7 +18579,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -18257,7 +18783,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -19183,7 +19710,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -19697,7 +20225,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -19904,7 +20433,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -20707,7 +21237,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -21848,7 +22379,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -22052,7 +22584,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -22289,7 +22822,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\nsave_file_compression = \"true\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path><extension>.sfc .smc .zip</extension>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gba/Golden Sun (USA).gba": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
           "/mnt/sd/retrodeck/roms/gb/Pokemon Crystal (USA).gbc": "rom"
@@ -22347,7 +22880,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -22356,7 +22890,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -22394,7 +22929,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\nsave_file_compression = \"false\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path><extension>.sfc .smc .zip</extension>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gba/Golden Sun (USA).gba": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/config/Gambatte/Gambatte.cfg": "save_file_compression = \"true\"\n",
@@ -22453,7 +22988,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -22462,7 +22998,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -22500,7 +23037,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba .zip</extension>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>gb</name><path>%ROMPATH%/gb</path><extension>.gb .gbc .sgb .zip</extension>\n    <command label=\"Gambatte\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/gambatte_libretro.so %ROM%</command>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n  <system><name>snes</name><path>%ROMPATH%/snes</path><extension>.sfc .smc .zip</extension>\n    <command label=\"Snes9x\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/gba/Golden Sun (USA).gba": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
           "/mnt/sd/retrodeck/roms/gb/Pokemon Crystal (USA).gbc": "rom"
@@ -22558,7 +23095,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -22567,7 +23105,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -22597,7 +23136,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megadrive</name><path>%ROMPATH%/megadrive</path>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megadrive</name><path>%ROMPATH%/megadrive</path><extension>.md .bin .gen .zip</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/megadrive/Phantasy Star IV (USA).md": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
           "/mnt/sd/retrodeck/saves/Phantasy Star IV (USA).srm": "sram"
@@ -22678,7 +23217,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -22718,7 +23258,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\nsave_file_compression = \"true\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megadrive</name><path>%ROMPATH%/megadrive</path>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megadrive</name><path>%ROMPATH%/megadrive</path><extension>.md .bin .gen .zip</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/megadrive/Phantasy Star IV (USA).md": "rom",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
@@ -22798,7 +23338,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -22838,7 +23379,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path>\n    <command label=\"MAME - Current\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>arcade</name><path>%ROMPATH%/arcade</path><extension>.zip .ZIP</extension>\n    <command label=\"MAME - Current\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
           "/mnt/sd/retrodeck/roms/arcade/default.zip": "rom"
         },
@@ -22906,7 +23447,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame/cfg",
@@ -22915,14 +23457,16 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/mame/diff",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "disk-diff",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -22998,7 +23542,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\nglobal_core_options = \"true\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megacd</name><path>%ROMPATH%/megacd</path>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megacd</name><path>%ROMPATH%/megacd</path><extension>.chd .cue</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
           "/mnt/sd/retrodeck/roms/megacd/4Mbit_cart.chd": "rom",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "genesis_plus_gx_system_bram = \"per game\"\n"
@@ -23079,7 +23623,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -23230,7 +23775,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\nglobal_core_options = \"true\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megacd</name><path>%ROMPATH%/megacd</path>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megacd</name><path>%ROMPATH%/megacd</path><extension>.chd .cue</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
           "/mnt/sd/retrodeck/roms/megacd/4Mbit_cart.chd": "rom",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "genesis_plus_gx_system_bram = \"per game\"\n",
@@ -23312,7 +23857,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -23463,7 +24009,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\nglobal_core_options = \"true\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megacd</name><path>%ROMPATH%/megacd</path>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>megacd</name><path>%ROMPATH%/megacd</path><extension>.chd .cue</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "genesis_plus_gx_system_bram = \"per game\"\ngenesis_plus_gx_cart_bram = \"per game\"\ngenesis_plus_gx_cart_size = \"512k\"\n",
           "/mnt/sd/retrodeck/roms/megacd/Lunar - The Silver Star (USA).chd": "rom"
@@ -23545,7 +24091,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -23554,7 +24101,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -23685,7 +24233,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\nglobal_core_options = \"true\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>snes</name><path>%ROMPATH%/snes</path>\n    <command label=\"bsnes-jg\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/bsnes-jg_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>snes</name><path>%ROMPATH%/snes</path><extension>.sfc .smc .zip</extension>\n    <command label=\"bsnes-jg\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/bsnes-jg_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
           "/mnt/sd/retrodeck/roms/snes/Daikaijuu Monogatari II (Japan).sfc": "rom"
         },
@@ -23738,7 +24286,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves",
@@ -23747,7 +24296,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },

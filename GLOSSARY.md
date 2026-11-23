@@ -487,20 +487,17 @@ until those land), and `file_path` + `rom_dir` are its forward-compatible projec
 
 Whether an installed game's file starts with the entry Tender starts it through — the resolver's answer, asked with that
 entry's label when the game's page, its emulator menu or a press on Steam's own Play reads it, and stored nowhere
-([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D2, D13, D26). It has five states, each with its own
+([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D2, D13, D26). It has four states, each with its own
 sentence: it **starts**; it **has to be installed first** in an emulator (a PS3 `.pkg`, a 3DS `.cia`), named by the
-system's entry for it where the system has one (D35); it is **not a launch file** of the system, which starts from other
-extensions (a single Dreamcast track); **this emulator does not start it**, with the resolver's reason where it states
-one (RPCS3 Shortcut takes no folder) and the other emulators of the system established to start it, where there are any;
-or whether it starts is **not established**, with the reason. A file that starts may still carry what the resolver's
-reading of it stopped short of — RPCS3's own list of games not read, a disc image's key not checked, whether the entry
-reads its format at all — and is said with it (D40, D41). Which of them refuse a start is
-`frontend/src/utils/gameLaunch.ts`'s. The resolver compares the file's extension case-exactly, as ES-DE does, and Tender
-folds no case before it asks (D3).
-
-Launchability is a statement about a start, never about the download. Every installed game is recorded with its files
-whatever its launchability, and a start asks for its command whatever that is (D28); installing a package by hand in the
-emulator is the documented RetroDECK procedure, and the files are what it needs.
+system's entry for it where the system has one (D35); **this emulator does not start it**, with the resolver's reason
+where it states one (RPCS3 Shortcut takes no folder) and the other emulators of the system established to start it,
+where there are any; or whether it starts is **not established** — the resolver's reading of the file ended without a
+take or a refusal, or no verdict could be given — which keeps Play on, names what could not be established (RPCS3's own
+list of games not read, a disc image's key not checked, whether the entry reads its format at all) and never says the
+game can start (D40, D41). The resolver judges a file by what the emulator starts, not by what the frontend lists; a
+file the frontend would not list under its name gets a note saying so beside a start or a verdict not established. Which
+of them refuse a start is `frontend/src/utils/gameLaunch.ts`'s. The resolver compares the file's extension case-exactly,
+as ES-DE does, and Tender folds no case before it asks (D3).
 
 ### Start command / start hand-over
 
@@ -650,11 +647,20 @@ folder is the resolver's answer.
 
 ### Platform system
 
-The system a RomM platform's games belong to in one emulator source — `snes`, `psx` — as that source answers it for the
-ids RomM holds for the platform (IGDB, libretro, ScreenScraper, TheGamesDB). Never RomM's slug, which only sometimes
-equals a system's name, and never Tender's own table; a platform can be one system in RetroDECK and another in EmuDeck.
-Only a switched-on system is taken; where there is none, the platform has **no system** or only a **switched-off** one,
-and nothing of it is downloaded. An installed game keeps the system its install record holds. Rules:
+The system a RomM platform's games belong to in one emulator source — `snes`, `psx` — as that source answers the
+resolver's platform question asked with RomM's slug and the platform's folder in RomM as two (source, key) pairs — the
+folder a game lies in, or the one a page is about, never another folder of the same slug
+([#2217](https://github.com/danielcopper/romm-tender/issues/2217) D16). Never RomM's slug or folder taken as a system's
+name, and never Tender's own table; a platform can be one system in RetroDECK and another in EmuDeck, and every later
+question names it as the answer named it. Only one switched-on system is taken; where the pairs leave **several**,
+Tender picks none, asks every later question with the pairs, and links the games into no frontend folder; where those
+systems answer alike (**unanimous**) the platform's emulator list and BIOS answer are their shared ones, and no game is
+started through the shared answer yet ([#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8,
+[#2751](https://github.com/danielcopper/romm-tender/issues/2751) D3, D4). Where there is none, the platform is one
+Tender **cannot match**, one whose slug and folder in RomM **contradict** each other, one the source has **no system**
+for, one whose system is **not set up** on this machine, or one with none switched on and a **switched-off** one
+([#2751](https://github.com/danielcopper/romm-tender/issues/2751) D2), and nothing of it is downloaded. An installed
+game keeps the system its install record holds. Rules:
 [core-emulator-selection.md](docs/architecture/core-emulator-selection.md#a-platforms-system). _Avoid_: platform map,
 mapped system — there is no map.
 

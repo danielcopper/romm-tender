@@ -1,12 +1,14 @@
-"""Which system a RomM platform is in one emulator source, decided from the resolver's answers.
+"""Which system a RomM platform is in one emulator source, read from the resolver's answer.
 
-RomM names a platform by its own slug, which only sometimes equals a system a
-source declares, and by the ids it holds for the platform in public
-vocabularies, four of which the resolver knows. The source answers per id which of its systems belong to that
-platform; ``adapters/atlas_platforms.py`` asks and reads those answers into
-:class:`IdAnswer`, and this module decides from them which system the
-platform is there, or why it is none. RomM's slug is never a system name: it
-only chooses among the platforms the resolver named.
+RomM names a platform by its own slug and by its folder in RomM (``fs_slug``),
+neither of which is a system a source declares. The resolver is asked with
+both, as (source, key) pairs (``adapters/atlas_platforms.py``), and answers in
+the source's own systems; this module holds what that answer comes to — one
+system, several, a switched-off one, one this machine does not have, none, a
+platform the resolver cannot match, or a slug and a folder that name
+different systems — and why there is none to use. Tender
+picks no system among several and translates none: a later question names the
+system as the answer named it.
 
 What is kept of each platform RomM lists lives offline beside the platform
 names (``kv_config``), under the platform's folder in RomM (``fs_slug``);
@@ -21,22 +23,58 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
-from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, NO_SOURCE_DETECTED, ArrangedSource
-from domain.platform_listing import listed_number, listed_text, platform_entry_of
+from domain.emulator_sources import (
+    ALL_SOURCES_SWITCHED_OFF,
+    CATALOGUE_INVALID,
+    CATALOGUE_NOT_SET_UP,
+    CATALOGUE_SEALED,
+    NO_SOURCE_DETECTED,
+    ArrangedSource,
+)
+from domain.platform_listing import listed_text, platform_entry_of
 from domain.retrodeck_folders import FolderRefused, not_installed, switched_off, unanswered_refusal
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
 
 # Where the listed platforms are kept in ``kv_config``, beside ``platform_names``.
 PLATFORM_IDS_KEY = "platform_ids"
 
-# The fields of RomM's platform the resolver can be asked about, in the order
-# they are asked. RomM's other ids have no crosswalk in the resolver and are
-# not asked.
-ID_FIELDS = ("igdb_id", "libretro_slug", "ss_id", "tgdb_id")
+
+class SystemPair(NamedTuple):
+    """A system as the resolver names it: the source whose key spells it, and that key as the source spells it."""
+
+    source: str
+    key: str
+
+
+# What a question about a game names its system by: the pair the platform's
+# answer named, the name an install record holds — a bare key, which the
+# resolver reads in the answering source's own catalogue — or, where the answer
+# named several systems, the pairs the platform was asked with, which the
+# resolver answers for alike or names no system for.
+SystemArgument = str | SystemPair | tuple[SystemPair, ...]
+
+
+def system_key(system: SystemArgument) -> str | None:
+    """The key *system* names its one system by, for a record or a sentence; ``None`` for several pairs.
+
+    The one place that tells the three forms apart: a ``SystemPair`` is itself
+    a tuple, so it is tested before the tuple of several pairs.
+    """
+    if isinstance(system, SystemPair):
+        return system.key
+    return None if isinstance(system, tuple) else system
+
+
+def system_keys(system: SystemArgument) -> tuple[str, ...]:
+    """Every key *system* names, each once: its one key, or the key of each of several pairs."""
+    key = system_key(system)
+    if key is not None:
+        return (key,)
+    return tuple(dict.fromkeys(pair.key for pair in system if isinstance(pair, SystemPair)))
 
 
 class SystemStatus(StrEnum):
@@ -47,46 +85,114 @@ class SystemStatus(StrEnum):
     NOT_HERE = "not_here"
 
 
-FOUND = "found"
-SWITCHED_OFF = "switched_off"
-NO_SYSTEM = "no_system"
-# No source was asked: none answers, the one named is not detected, or the
-# question raised. ``PlatformSystem.unasked`` says which.
-UNASKED = "unasked"
+PlatformState = Literal[
+    "found", "several", "switched_off", "not_here", "no_system", "unmatched", "contradicted", "unasked"
+]
 
-NO_PLATFORM_SYSTEM = "no_platform_system"
-PLATFORM_SYSTEM_OFF = "platform_system_off"
+FOUND: PlatformState = "found"
+# Several switched-on systems answer the platform; Tender picks none.
+SEVERAL: PlatformState = "several"
+SWITCHED_OFF: PlatformState = "switched_off"
+# The source's frontend has a system for the platform, and this machine has not set it up.
+NOT_HERE: PlatformState = "not_here"
+# The resolver knows the platform, and the source's frontend has no system for it.
+NO_SYSTEM: PlatformState = "no_system"
+# The resolver cannot match the platform to a system: it knows neither pair.
+UNMATCHED: PlatformState = "unmatched"
+# RomM's slug and the platform's folder name different systems, so the resolver names none (#2751 D2).
+CONTRADICTED: PlatformState = "contradicted"
+# No source was asked: none answers, the one named is not detected, or the
+# question raised. ``PlatformSystem.unasked`` says why.
+UNASKED: PlatformState = "unasked"
+
+
+# A platform no source was asked about because the catalogue of the one that
+# would answer was refused — its systems file is broken, it has not been set up,
+# or it is sealed — refused as that, with the catalogue's reason as ``unasked``,
+# which the panel words as that catalogue's reason with the download's ending.
+PLATFORM_SYSTEM_UNASKED = "platform_system_unasked"
+
+# The catalogue refusals that stand for themselves; any other one, and a
+# question that raised, leaves the folders not established.
+CATALOGUE_REFUSALS_OF_THEIR_OWN = frozenset({CATALOGUE_INVALID, CATALOGUE_NOT_SET_UP, CATALOGUE_SEALED})
+
+
+class PlatformRefusal(StrEnum):
+    """Why a platform has no system to use, as its refusal and its emulator list name it (#2751 D2, #2225 D8)."""
+
+    NO_SYSTEM = "no_platform_system"
+    SWITCHED_OFF = "platform_system_off"
+    NOT_HERE = "platform_system_not_here"
+    UNMATCHED = "platform_unmatched"
+    CONTRADICTED = "platform_pairs_contradict"
+    SEVERAL = "platform_systems_several"
 
 
 @dataclass(frozen=True, slots=True)
-class PlatformIds:
-    """A RomM platform's ids in the vocabularies the resolver knows; ``None`` where RomM holds none.
+class _NoSystemToUse:
+    """What a state with no system to use is refused with: its reason, and the fact its message states.
 
-    ``name`` is the ``name`` RomM's platform listing gives it, kept beside them
-    so the platform's system can name a platform the platform-name cache holds
-    no name for.
+    The fact is worded from the platform's name, the source's kind and the
+    systems shown, for the log and a caller without the panel; the sentences
+    a user reads are the panel's (``frontend/src/utils/emulatorSourceWording.ts``),
+    worded from the refusal's details, and these are no copy of them. The
+    reason is a field annotated with its enum, which is how the reason parity
+    check (``scripts/check_reason_parity.py``) reads a reason passed on.
     """
 
-    igdb_id: int | None = None
-    libretro_slug: str | None = None
-    ss_id: int | None = None
-    tgdb_id: int | None = None
-    name: str | None = None
-
-    def questions(self) -> tuple[tuple[str, str], ...]:
-        """``(field, value)`` for every id held, in the order they are asked; a numeric id as its digits."""
-        return tuple((field, str(value)) for field in ID_FIELDS if (value := getattr(self, field)) is not None)
+    platform_refusal: PlatformRefusal
+    fact: Callable[[PlatformSystem, str | None, str], str]
 
 
-def platform_ids_of(platform: Mapping[str, Any]) -> PlatformIds:
-    """The ids one RomM platform carries, and its ``name``; a value of the wrong kind counts as none."""
-    return PlatformIds(
-        igdb_id=listed_number(platform.get("igdb_id")),
-        libretro_slug=listed_text(platform.get("libretro_slug")),
-        ss_id=listed_number(platform.get("ss_id")),
-        tgdb_id=listed_number(platform.get("tgdb_id")),
-        name=listed_text(platform.get("name")),
-    )
+_CASE_OF_STATE: dict[PlatformState, _NoSystemToUse] = {
+    NO_SYSTEM: _NoSystemToUse(
+        PlatformRefusal.NO_SYSTEM, lambda p, kind, _s: f"{kind} has no system for {p.platform_name}."
+    ),
+    SWITCHED_OFF: _NoSystemToUse(
+        PlatformRefusal.SWITCHED_OFF, lambda _p, kind, s: f"System {s} is switched off in {kind}."
+    ),
+    NOT_HERE: _NoSystemToUse(
+        PlatformRefusal.NOT_HERE,
+        lambda p, kind, s: f"{kind} has a system for {p.platform_name} ({s}) that is not set up on this machine.",
+    ),
+    UNMATCHED: _NoSystemToUse(PlatformRefusal.UNMATCHED, lambda p, _kind, _s: f"No system matches {p.platform_name}."),
+    CONTRADICTED: _NoSystemToUse(
+        PlatformRefusal.CONTRADICTED,
+        lambda p, _kind, _s: f'RomM\'s slug "{p.keys.slug}" and folder "{p.keys.folder or ""}" name different systems.',
+    ),
+    SEVERAL: _NoSystemToUse(
+        PlatformRefusal.SEVERAL, lambda p, kind, s: f"{kind} has several systems for {p.platform_name} ({s})."
+    ),
+}
+
+
+@dataclass(frozen=True, slots=True)
+class PlatformKeys:
+    """What a platform is asked about by: RomM's slug for it, and its folder in RomM where one is known.
+
+    Which folder that is: ``docs/architecture/core-emulator-selection.md``, "A platform's system".
+    """
+
+    slug: str
+    folder: str | None = None
+
+    @property
+    def kept_as(self) -> str:
+        """What the platform is kept and named under: its folder, else its slug."""
+        return self.folder or self.slug
+
+    @classmethod
+    def of(cls, slug: str | None, folder: str | None) -> PlatformKeys:
+        """The keys of a platform by *slug* and *folder*, either as a row or RomM gives it.
+
+        An empty folder is no folder; a missing slug is the empty slug, which no platform has.
+        """
+        return cls(slug or "", folder or None)
+
+    @classmethod
+    def of_detail(cls, rom_detail: Mapping[str, Any]) -> PlatformKeys:
+        """The keys of the platform RomM's detail of a game puts it in."""
+        return cls.of(rom_detail.get("platform_slug"), rom_detail.get("platform_fs_slug"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,9 +200,9 @@ class KeptPlatform:
     """What is kept of one platform RomM lists, under its folder in RomM (``fs_slug``).
 
     ``ids`` holds every field of RomM's platform whose name ends in ``_id`` or
-    ``_slug``, each as RomM sent it. Tender reads none of them but the ones
-    :meth:`question_ids` asks the resolver with. ``romm_version`` is the RomM
-    version known when the listing was read, ``None`` where none was.
+    ``_slug``, each as RomM sent it; Tender reads none of them. ``romm_version``
+    is the RomM version known when the listing was read, ``None`` where none
+    was.
     """
 
     slug: str | None = None
@@ -106,10 +212,6 @@ class KeptPlatform:
     is_identified: bool | None = None
     romm_version: str | None = None
     ids: dict[str, Any] = field(default_factory=dict)
-
-    def question_ids(self) -> PlatformIds:
-        """The ids and name the platform's system is asked with."""
-        return platform_ids_of({**self.ids, "name": self.name})
 
 
 def kept_platform_of(platform: Mapping[str, Any], romm_version: str | None) -> KeptPlatform:
@@ -136,11 +238,19 @@ def kept_platforms(platforms: Iterable[Mapping[str, Any]], romm_version: str | N
 
 
 def kept_by_slug(kept: Mapping[str, KeptPlatform], slug: str) -> KeptPlatform | None:
-    """The kept platform whose slug is *slug* — of several, the last kept — or ``None``."""
-    # Folders that share a slug carry the same ids: RomM looks every
-    # metadata id up by the platform's slug (``handler/scan_handler.py::
-    # scan_platform``, 5.4.1), so which of them answers changes no question.
+    """The kept platform whose slug is *slug* — of several, the last kept — or ``None``.
+
+    Only a platform asked about by its slug alone is found this way, and only
+    its name is read off it (:func:`kept_entry`).
+    """
     return next((entry for entry in reversed(list(kept.values())) if entry.slug == slug), None)
+
+
+def kept_entry(kept: Mapping[str, KeptPlatform], keys: PlatformKeys) -> KeptPlatform | None:
+    """What is kept for the platform *keys* names: the record of its folder, or — without one — of its slug."""
+    if keys.folder is not None:
+        return kept.get(keys.folder)
+    return kept_by_slug(kept, keys.slug)
 
 
 def kept_folders_of_slug(raw: str | None, slug: str) -> frozenset[str]:
@@ -190,7 +300,7 @@ def _decode_entry(key: str, entry: Mapping[str, Any]) -> KeptPlatform:
         return KeptPlatform(
             slug=listed_text(key),
             name=listed_text(entry.get("name")),
-            ids={f: entry[f] for f in ID_FIELDS if f in entry},
+            ids=dict(platform_entry_of(entry).ids),
         )
     kept = kept_platform_of(entry, listed_text(entry.get("romm_version")))
     return KeptPlatform(
@@ -204,140 +314,158 @@ def _decode_entry(key: str, entry: Mapping[str, Any]) -> KeptPlatform:
     )
 
 
-@dataclass(frozen=True, slots=True)
-class SystemMatch:
-    """One system of the source answering to an id: its name, its status, and its platform tags."""
+def matched_state(
+    matches: Iterable[tuple[SystemPair, SystemStatus]],
+) -> tuple[PlatformState, tuple[SystemPair, ...]]:
+    """What the systems the resolver matched to a platform come to, and the systems that state names.
 
-    system: str
-    status: SystemStatus
-    tags: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class IdAnswer:
-    """The source's answer to one id.
-
-    ``platforms`` is what the id was resolved to, ``systems`` the one system an
-    id stands for alone (then ``platforms`` is empty), and ``matches`` every
-    system answering to either, in the resolver's order.
+    One switched-on system is :data:`FOUND`; several are :data:`SEVERAL`, and
+    none of them is picked. With none switched on, the switched-off ones are
+    :data:`SWITCHED_OFF`, else the ones this machine has not set up
+    :data:`NOT_HERE`; with no system matched at all, :data:`NO_SYSTEM`.
     """
-
-    platforms: tuple[str, ...]
-    systems: tuple[str, ...]
-    matches: tuple[SystemMatch, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class SystemPick:
-    """What the answers decide: a switched-on system, a switched-off one, or none."""
-
-    state: str
-    system: str | None = None
-
-
-def pick_system(answers: Iterable[IdAnswer], platform_slug: str) -> SystemPick:
-    """The system a platform is in the source, from its ids' answers in the order they are asked.
-
-    The first id that gives a switched-on system decides. An answer naming
-    several platforms speaks only for the one that is RomM's slug with its
-    hyphens dropped, and an answer naming several without that one is passed
-    over: another platform is never taken in its place. Among several systems
-    of the platform an answer stands for, with the same status, the first
-    named like that platform is taken, else the first the resolver lists —
-    Tender's own choice, since the resolver names every match and prefers
-    none (its order is alphabetical within each status). Where no id gives a
-    switched-on system, the first switched-off one is named; where none gives
-    any, there is no system. Which region each of several regional systems
-    stands for is a statement the resolver does not make yet; once it does
-    (emu-atlas#583), that statement replaces this rule's choice among them.
-
-    *answers* is consumed lazily, so an id after the deciding one is never asked.
-    """
-    wanted = platform_slug.replace("-", "")
-    first_off: str | None = None
-    for answer in answers:
-        platform = _platform_of(answer, wanted)
-        if platform is None and answer.platforms:
-            continue
-        on = _choose(answer, platform, SystemStatus.ON)
-        if on is not None:
-            return SystemPick(FOUND, on)
-        first_off = first_off or _choose(answer, platform, SystemStatus.OFF)
-    if first_off is not None:
-        return SystemPick(SWITCHED_OFF, first_off)
-    return SystemPick(NO_SYSTEM)
-
-
-def _platform_of(answer: IdAnswer, wanted: str) -> str | None:
-    """The platform an answer stands for: its only one, or the one equal to *wanted*; ``None`` otherwise."""
-    if len(answer.platforms) == 1:
-        return answer.platforms[0]
-    return wanted if wanted in answer.platforms else None
-
-
-def _choose(answer: IdAnswer, platform: str | None, status: SystemStatus) -> str | None:
-    """Among *answer*'s systems of *platform* with *status*, the one Tender's rule takes, or ``None``."""
-    candidates = [
-        match.system
-        for match in answer.matches
-        if match.status == status and (platform is None or platform in match.tags)
-    ]
-    named = (platform,) if platform is not None else answer.platforms
-    return next((system for system in candidates if system in named), candidates[0] if candidates else None)
+    matched = tuple(matches)
+    on = tuple(system for system, status in matched if status == SystemStatus.ON)
+    if on:
+        return (FOUND if len(on) == 1 else SEVERAL), on
+    fallbacks: tuple[tuple[SystemStatus, PlatformState], ...] = (
+        (SystemStatus.OFF, SWITCHED_OFF),
+        (SystemStatus.NOT_HERE, NOT_HERE),
+    )
+    for status, state in fallbacks:
+        named = tuple(system for system, each in matched if each == status)
+        if named:
+            return state, named
+    return NO_SYSTEM, ()
 
 
 @dataclass(frozen=True, slots=True)
 class PlatformSystem:
     """The system one platform is in one source, or why there is none to use.
 
-    ``system`` is the system taken under :data:`FOUND`, and the switched-off one
-    named under :data:`SWITCHED_OFF`. ``source`` is the source asked — or, where
-    RomM's listing could not be read, the source that would have been — and
-    ``None`` where there is none, and for a system an install record holds,
-    which no source was asked for. ``unasked`` says why none was asked, in the vocabulary of
-    :mod:`domain.emulator_sources` — or, where RomM's listing could not be read
-    for the platform's ids, the reason that read failed with, and
-    ``unasked_message`` its message.
+    ``keys`` is what the platform was asked about by: RomM's slug and the
+    folder in RomM, ``None`` where none was given. ``named`` is every system the
+    answer named for its state — the one found, the several switched on, the
+    switched-off ones, or the ones this machine has not set up — and ``asked``
+    the pairs the platform was asked with. ``recorded`` is the name an install
+    record holds, which no source was asked for. ``source`` is the source
+    asked — or, where RomM's listing could not be read, the source that would
+    have been — and ``None`` where there is none, and for a recorded system.
+    ``unasked`` says why none was asked, in the vocabulary of
+    :mod:`domain.emulator_sources` — or, where RomM's listing could not be read,
+    the reason that read failed with, and ``unasked_message`` its message.
+    ``unanswered`` is why no source is, or would have been, asked — no source
+    detected, every one switched off, detection failed — on every unasked
+    answer that names no source, else ``None``.
     """
 
-    state: str
-    platform_slug: str
+    state: PlatformState
+    keys: PlatformKeys
     platform_name: str
-    system: str | None = None
     source: ArrangedSource | None = None
+    named: tuple[SystemPair, ...] = ()
+    asked: tuple[SystemPair, ...] = ()
+    recorded: str | None = None
     unasked: str | None = None
     unasked_message: str | None = None
+    unanswered: str | None = None
 
     @property
-    def taken(self) -> str | None:
-        """The system to use — ``None`` where there is none, a switched-off one included."""
-        return self.system if self.state == FOUND else None
+    def one_system(self) -> str | SystemPair | None:
+        """The one system a download lands in and a frontend link goes to; ``None`` where there is not one."""
+        if self.state != FOUND:
+            return None
+        if self.recorded is not None:
+            return self.recorded
+        return self.named[0] if self.named else None
+
+    @property
+    def taken(self) -> SystemArgument | None:
+        """What a question about the platform's games names its system by; ``None`` where there is none.
+
+        The one system found, or — where several answer and Tender picks none
+        (#2225 D8) — the pairs the platform was asked with, which the resolver
+        answers for those systems alike or for none.
+        """
+        if self.state == SEVERAL and self.asked:
+            return self.asked
+        return self.one_system
+
+    @property
+    def no_system_reason(self) -> PlatformRefusal | None:
+        """Why the platform has no one system to use in the source asked; ``None`` where it has one, or none was asked.
+
+        Several systems are such a reason too: what lands in one system's folder
+        lands in none of them.
+        """
+        case = _CASE_OF_STATE.get(self.state)
+        return None if case is None else case.platform_refusal
+
+    def wanting_systems(self) -> tuple[str | SystemPair, ...]:
+        """Every system whose emulators may want what the platform's files are linked to, each asked on its own.
+
+        The systems the answer named — the one found, each of several, the
+        switched-off ones, the ones not set up here — or the system an install
+        record holds; none where the platform has no system.
+        """
+        if self.named:
+            return self.named
+        return () if self.recorded is None else (self.recorded,)
+
+    def download_system(self, purpose: str) -> tuple[str | SystemPair, str] | FolderRefused:
+        """The system a *purpose* download lands under — as its folder is asked for, and as its install records it.
+
+        A download lands in one system's folder, so anything but one system
+        found is the platform's refusal.
+        """
+        system = self.one_system
+        if system is None:
+            return self.refusal(purpose)
+        return system, system.key if isinstance(system, SystemPair) else system
+
+    def shown(self) -> tuple[str, ...]:
+        """The keys the sentences name the platform's systems by."""
+        return tuple(system.key if isinstance(system, SystemPair) else system for system in self.wanting_systems())
 
     def refusal(self, purpose: str) -> FolderRefused:
         """Why a *purpose* download, or anything refused like one, may not go ahead for this platform.
 
-        The panel words the two refusals of its own from their details; their
+        The panel words the refusals of its own from their details; their
         messages stand where it does not.
         """
-        kind = self.source.kind if self.source is not None else None
-        details = {"source": kind, "platform": self.platform_name, "system": self.system}
-        if self.state == NO_SYSTEM:
-            return FolderRefused(NO_PLATFORM_SYSTEM, f"{kind} has no system for {self.platform_name}.", **details)
-        if self.state == SWITCHED_OFF:
-            return FolderRefused(PLATFORM_SYSTEM_OFF, f"System {self.system} is switched off in {kind}.", **details)
+        case = _CASE_OF_STATE.get(self.state)
+        if case is not None:
+            kind = self.source.kind if self.source is not None else None
+            shown = self.shown()
+            details = {
+                "source": kind,
+                "platform": self.platform_name,
+                "systems": list(shown),
+                "slug": self.keys.slug,
+                "folder": self.keys.folder,
+            }
+            return FolderRefused(case.platform_refusal.value, case.fact(self, kind, ", ".join(shown)), **details)
         if self.state != UNASKED:
-            raise ValueError(f"a platform with system {self.system!r} is not refused")
+            raise ValueError(f"a platform with system {self.one_system!r} is not refused")
         if self.unasked is not None and self.unasked_message is not None:
             return FolderRefused(self.unasked, self.unasked_message)
         if self.unasked == NO_SOURCE_DETECTED:
             return not_installed(purpose)
         if self.unasked == ALL_SOURCES_SWITCHED_OFF:
             return switched_off(purpose)
+        if self.unasked in CATALOGUE_REFUSALS_OF_THEIR_OWN and self.source is not None:
+            return FolderRefused(
+                PLATFORM_SYSTEM_UNASKED,
+                f"{self.source.kind}'s catalogue was refused ({self.unasked}), so no system was asked for "
+                f"{self.platform_name}.",
+                source=self.source.kind,
+                unasked=self.unasked,
+            )
         return unanswered_refusal()
 
     def unavailable_options(self) -> dict[str, Any]:
         """The emulator list's "unavailable" answer for a platform with no system to list emulators for."""
-        reason = {NO_SYSTEM: NO_PLATFORM_SYSTEM, SWITCHED_OFF: PLATFORM_SYSTEM_OFF}.get(self.state, self.unasked)
+        reason = self.no_system_reason or self.unasked
         source = None if self.source is None else {"kind": self.source.kind, "starts_games": self.source.starts_games}
         return {"available": False, "options": [], "reason": reason, "source": source}
 
@@ -345,4 +473,11 @@ class PlatformSystem:
         """The platform's system as the pages read it; ``None`` where no source was asked."""
         if self.state == UNASKED or self.source is None:
             return None
-        return {"state": self.state, "source": self.source.kind, "system": self.system, "platform": self.platform_name}
+        return {
+            "state": self.state,
+            "source": self.source.kind,
+            "systems": list(self.shown()),
+            "platform": self.platform_name,
+            "slug": self.keys.slug,
+            "folder": self.keys.folder,
+        }

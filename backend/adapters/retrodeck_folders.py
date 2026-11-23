@@ -47,8 +47,10 @@ from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import HEALTH_ISSUE_ROOT_MISSING
 
+from adapters.atlas_catalogue import resolution_trace, resolved
 from adapters.emulator_sources import source_roots
 from domain.emulator_sources import RETRODECK
+from domain.platform_system import system_keys
 from domain.retrodeck_folders import (
     GAME_DOWNLOAD,
     FolderRefused,
@@ -78,6 +80,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
     from adapters.emulator_sources import EmulatorSourcesAdapter
+    from domain.platform_system import SystemArgument
 
 
 class _Unasked(Exception):
@@ -114,8 +117,11 @@ class RetroDeckFoldersAdapter:
         self._sources = sources
         self._log_debug = log_debug
 
-    def download_folder(self, system: str) -> str | FolderRefused:
-        """Where a download of a *system* game lands — or why it may not."""
+    def download_folder(self, system: SystemArgument) -> str | FolderRefused:
+        """Where a download of a *system* game lands — or why it may not.
+
+        A system that resolves to no one system RetroDECK holds has no folder.
+        """
         retrodeck = self._for_download(GAME_DOWNLOAD)
         if isinstance(retrodeck, FolderRefused):
             return retrodeck
@@ -126,11 +132,13 @@ class RetroDeckFoldersAdapter:
             placement = self._ask(retrodeck.installation, f"rom_location({system!r})", lambda h: h.rom_location(system))
         except _Unasked:
             return unanswered_refusal()
-        if placement.dir is None or root is None:
+        if placement.dir is None or root is None or not resolved(placement):
             self._log_debug(
-                f"[folders] no ROM folder for {system!r}: caveats={sorted({c.code for c in placement.caveats})}"
+                f"[folders] no ROM folder for {system!r}: {resolution_trace(placement)} "
+                f"caveats={sorted({c.code for c in placement.caveats})}"
             )
-            return no_rom_folder(system)
+            # Several pairs are named by every key they hold, never folded into one.
+            return no_rom_folder(", ".join(system_keys(system)))
         folder, root = os.path.realpath(placement.dir), os.path.realpath(root)
         if os.path.isdir(folder) or (_inside(folder, root) and os.path.isdir(root)):
             return folder
@@ -167,7 +175,9 @@ class RetroDeckFoldersAdapter:
             placement = self._ask(installation, f"rom_location({system!r})", lambda h: h.rom_location(system))
         except _Unasked:
             return system_unanswered_refusal()
-        return no_rom_root() if placement.dir is None else os.path.realpath(placement.dir)
+        if placement.dir is None or not resolved(placement):
+            return no_rom_root()
+        return os.path.realpath(placement.dir)
 
     def bios_folder(self) -> str | FolderRefused | None:
         """The BIOS folder a removal is bounded by; ``None`` where no RetroDECK is detected.

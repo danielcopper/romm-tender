@@ -15,6 +15,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+# The answer for the system the start was asked for does not hold: several of
+# the source's systems answer differently and the resolver names none of them,
+# or the source does not list it — the launch verdict's own words for the same two cases.
+from domain.launchability import SYSTEM_UNKNOWN as SYSTEM_UNKNOWN
+from domain.launchability import SYSTEMS_SEVERAL as SYSTEMS_SEVERAL
+
 # Why the resolver gives no complete command for an entry, in Tender's words.
 # How ES-DE starts it could not be read: shell syntax beyond plain words, an
 # ``env`` option, an entry ES-DE itself refuses, a value a second shell would

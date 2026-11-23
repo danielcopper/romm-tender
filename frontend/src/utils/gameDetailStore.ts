@@ -119,6 +119,7 @@ const DEFAULT_STATE: GameDetailState = {
   emulators: [],
   emulatorDataAvailable: true,
   emulatorDataReason: null,
+  emulatorDataSystem: null,
   emulatorSource: null,
   emulatorPlatformSystem: null,
   platformCoreLabel: null,

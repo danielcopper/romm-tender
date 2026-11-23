@@ -36,7 +36,7 @@ class _Installation:
 
     def systems(self) -> SystemsAnswer:
         caveats = (Caveat(CAVEAT_EMULATOR_CATALOGUE_SEALED, "prose"),) if self._sealed else ()
-        return SystemsAnswer(systems=("gba",), caveats=caveats)
+        return SystemsAnswer(systems=(("esde", "gba"),), caveats=caveats)
 
 
 class _Rig:

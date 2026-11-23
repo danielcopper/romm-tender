@@ -174,6 +174,7 @@ function detailState(overrides: Partial<GameDetailState> = {}): GameDetailState 
     emulators: [],
     emulatorDataAvailable: true,
     emulatorDataReason: null,
+    emulatorDataSystem: null,
     emulatorSource: null,
     emulatorPlatformSystem: null,
     platformCoreLabel: null,
@@ -184,9 +185,9 @@ function detailState(overrides: Partial<GameDetailState> = {}): GameDetailState 
   };
 }
 
-/** A verdict that the game's file is not one its system starts from, unless the overrides say otherwise. */
-const notALaunchFile = (overrides: Partial<GameLaunch> = {}): GameLaunch => ({
-  state: "not_a_launch_file",
+/** A verdict that the game's emulator does not start its file, unless the overrides say otherwise. */
+const refusedFile = (overrides: Partial<GameLaunch> = {}): GameLaunch => ({
+  state: "not_this_emulator",
   entry: "Snes9x",
   system: "snes",
   platform_name: "Super Nintendo",
@@ -463,7 +464,7 @@ describe("PlayButton", () => {
     });
 
     it("is disabled with the file's refusal as its title where the file does not start with its emulator", () => {
-      const launch = notALaunchFile();
+      const launch = refusedFile();
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
         detailState({
           emulatorStart: { state: "starts", reason: null, entry: "Snes9x" },
@@ -476,11 +477,11 @@ describe("PlayButton", () => {
       const play = screen.getByRole("button", { name: /^PLAY/ });
       expect(play).toBeDisabled();
       expect(play).toHaveAttribute("title", launchRefusal(launch, false));
-      expect(play.getAttribute("title")).toContain("smw.zip is not the file Super Nintendo starts from");
+      expect(play.getAttribute("title")).toContain("Snes9x does not start .zip.");
     });
 
     it("says the file's refusal first, then that Tender cannot start the entry yet (#2221 D20)", () => {
-      const launch = notALaunchFile();
+      const launch = refusedFile();
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
         detailState({
           emulatorStart: { state: "cannot_start", reason: "desktop_file", entry: "Snes9x" },
@@ -499,7 +500,7 @@ describe("PlayButton", () => {
     });
 
     it("points at choosing another emulator without naming the emulator menu only when another entry is choosable", () => {
-      const launch = notALaunchFile({ state: "not_this_emulator", extension: ".sfc", other_entries: ["bsnes"] });
+      const launch = refusedFile({ extension: ".sfc", other_entries: ["bsnes"] });
       const snes9x = {
         label: "Snes9x",
         emulator: "snes9x_libretro.so",
@@ -573,7 +574,7 @@ describe("PlayButton", () => {
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
         detailState({
           emulatorStart: { state: "cannot_start", reason: "not_installed", entry: "DuckStation" },
-          gameLaunch: notALaunchFile(),
+          gameLaunch: refusedFile(),
           startCheck: { state: "answered" },
         }),
       );
@@ -620,7 +621,7 @@ describe("PlayButton", () => {
         detailState({
           emulatorStart: { state: "starts", reason: null, entry: "Snes9x" },
           // A refusing answer beside the failed check, which refuses nothing.
-          gameLaunch: notALaunchFile(),
+          gameLaunch: refusedFile(),
           startCheck: { state: "failed", why: "Tender could not check whether this game can start: x." },
         }),
       );

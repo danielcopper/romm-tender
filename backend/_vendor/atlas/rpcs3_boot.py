@@ -120,6 +120,7 @@ _NO_GUI = "--no-gui"
 _GAME_ID_ARGUMENT = "%RPCS3_GAMEID%:%INJECT%=%BASENAME%.ps3"
 _BOOT_LIST = ("EBOOT.BIN", "USRDIR/EBOOT.BIN", "USRDIR/ISO.BIN.EDAT", "PS3_GAME/USRDIR/EBOOT.BIN")
 _SAVESTATE_SUFFIXES = (".SAVESTAT", ".zst", ".gz")
+_UNCOMPRESSED_SAVESTATE = ".SAVESTAT"
 _KEY_SUFFIXES = (".dkey", ".key")
 _ASCII_DIGITS = "0123456789"
 _GAME_DIR = "PS3_GAME"
@@ -325,6 +326,26 @@ class _Reading:
         if result.status != PS3_FILE_OK or result.facts is None:
             return self._untold(path)
         return result.facts
+
+    def takes(self, path: str) -> bool:
+        """Whether ``Load`` takes the file at *path* as one of its own rather than refusing it — ``False`` where unread.
+
+        The three files ``Load`` takes rather than refuses, each by what it
+        holds: a ``.SAVESTAT`` opening with ``RPCS3SAV``, the one savestate
+        ``make_savestate_reader`` resumes without decompressing it
+        (savestate_utils.cpp:178-195), an ISO 9660 image, or a SELF or ELF
+        (Emulator::Load, System.cpp:2802-2815). A file whose content cannot be
+        read is not named, since nothing says RPCS3 would take it. Nor is a
+        ``.zst`` or ``.gz`` savestate: its magic sits inside the compression,
+        which atlas does not read (:196-227), and its own leading bytes are the
+        compressor's, which no other take matches.
+        """
+        facts = self._facts(path)
+        if not isinstance(facts, Ps3FileFacts):
+            return False
+        if path.endswith(_UNCOMPRESSED_SAVESTATE):
+            return facts.savestate
+        return facts.iso is not None or facts.executable
 
     def _file(self, path: str) -> BootReading:
         """``Load`` over a file: a savestate, an image, an executable, or nothing it boots."""
@@ -661,6 +682,22 @@ def _beneath(path: str | None, directory: str | None) -> bool:
     if not path or not directory:
         return False
     return (path.rstrip("/") + "/").startswith(directory.rstrip("/") + "/")
+
+
+def takes_file(label: str, path: str, view: CommandView, read_file: ReadFile) -> bool:
+    """Whether the entry *label*'s RPCS3 would take the file at *path* as a file of its own (:meth:`_Reading.takes`).
+
+    What a directory handed to RPCS3 holds that it would take when handed the
+    file itself, whether or not it boots the directory (#776 D5): every
+    probe goes through *view*, the frontend's own, and *read_file* reads the
+    file's bytes on the host.
+    """
+    return _Reading(label, view, read_file, _no_dirs).takes(path)
+
+
+def _no_dirs() -> Dirs:
+    """RPCS3's own directories, which the question whether a file is one ``Load`` takes never asks for."""
+    raise AssertionError("takes_file reads no RPCS3 directory")
 
 
 def read_boot(

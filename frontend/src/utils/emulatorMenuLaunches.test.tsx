@@ -50,6 +50,7 @@ function config(overrides: Partial<EmulatorMenuConfig> = {}): EmulatorMenuConfig
     emulators: [standaloneEmu(SHORTCUT, true), standaloneEmu(DIRECTORY)],
     emulatorDataAvailable: true,
     emulatorDataReason: null,
+    emulatorDataSystem: null,
     emulatorSource: { kind: "retrodeck", starts_games: true },
     emulatorPlatformSystem: null,
     activeLabel: null,

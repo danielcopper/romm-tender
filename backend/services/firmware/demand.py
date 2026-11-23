@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from domain.firmware_wants import FirmwareCatalogue
 
 if TYPE_CHECKING:
+    from domain.platform_system import SystemArgument
     from services.protocols import FirmwarePlatformResolver
 
 
@@ -34,7 +35,7 @@ class FirmwareDemand:
     def __init__(self, *, config: FirmwareDemandConfig) -> None:
         self._platform_firmware_resolver = config.platform_firmware_resolver
 
-    def platform_catalogue(self, system: str | None) -> FirmwareCatalogue:
+    def platform_catalogue(self, system: SystemArgument | None) -> FirmwareCatalogue:
         """What *system*'s emulators want in the source that answers for it, read fresh and verified. Blocking.
 
         The question every platform-scoped answer asks, and the only one that

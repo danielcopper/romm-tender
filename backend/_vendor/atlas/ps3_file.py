@@ -11,6 +11,9 @@ performs those reads and nothing past them:
   (``rpcs3/Emu/System.cpp:5052-5067``), ``Emulator::Load`` decrypts a file
   opening with ``SCE\\0`` as a SELF (:2543-2559), and a file opening with
   ``\\x7fELF`` is an ELF its executable loaders open (:2561-2815);
+- **the leading eight bytes**, which ``make_savestate_reader`` compares
+  against ``RPCS3SAV`` before it resumes an uncompressed ``.SAVESTAT``
+  (``rpcs3/Emu/savestate_utils.cpp:189``);
 - **the ISO 9660 identifier**: ``is_iso_file`` takes a file holding at least
   ``0x8006`` bytes whose ``CD001`` follows the first volume descriptor's type
   byte at ``0x8000`` (``rpcs3/Loader/ISO.cpp:63-118``), and only then is the
@@ -48,6 +51,8 @@ MAGIC_SFB: Final = ".SFB"
 MAGIC_SELF: Final = "SCE\x00"
 MAGIC_ELF: Final = "\x7fELF"
 MAGIC_PSF: Final = "\x00PSF"
+# The eight bytes an uncompressed savestate opens with (savestate_utils.cpp:189).
+_SAVESTATE_MAGIC = b"RPCS3SAV"
 
 # ``ISO_SECTOR_SIZE`` and ``ISO_DESCRIPTORS_OFFSET`` (rpcs3/Loader/ISO.h:28-31).
 ISO_SECTOR_SIZE: Final = 2048
@@ -127,10 +132,14 @@ class Ps3FileFacts:
     """The image header where ``is_iso_file`` takes the file, ``None`` where it does not."""
     category: str = ""
     """What ``psf::load`` yields for ``CATEGORY`` — empty where the file is no PARAM.SFO the loader keeps."""
+    savestate: bool = False
+    """Whether the file opens with ``RPCS3SAV``, the eight bytes a savestate RPCS3 resumes opens with."""
 
     def __post_init__(self) -> None:
         if len(self.magic) > MAGIC_LENGTH:
             raise ValueError(f"Ps3FileFacts: magic is at most {MAGIC_LENGTH} bytes, got {self.magic!r}")
+        if self.savestate and self.magic != _SAVESTATE_MAGIC[:MAGIC_LENGTH].decode("latin-1"):
+            raise ValueError(f"Ps3FileFacts: a savestate opens with {_SAVESTATE_MAGIC!r}, got the magic {self.magic!r}")
         if self.category and (self.magic != MAGIC_PSF or self.category not in PSF_CATEGORIES):
             raise ValueError(
                 "Ps3FileFacts: a category is read only out of a PARAM.SFO the loader keeps — the magic "
@@ -147,11 +156,13 @@ def read_facts(handle: BinaryIO) -> Ps3FileFacts:
     """The facts of the file *handle* reads, from its start — every read bounded by the file's size."""
     size = os.fstat(handle.fileno()).st_size
     handle.seek(0)
-    magic = handle.read(MAGIC_LENGTH).decode("latin-1")
+    leading = handle.read(len(_SAVESTATE_MAGIC))
+    magic = leading[:MAGIC_LENGTH].decode("latin-1")
     return Ps3FileFacts(
         magic=magic,
         iso=_iso_header(handle, size),
         category=_psf_category(handle, size) if magic == MAGIC_PSF else "",
+        savestate=leading == _SAVESTATE_MAGIC,
     )
 
 

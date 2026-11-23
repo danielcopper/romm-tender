@@ -4,7 +4,8 @@
     // docs/assets is excluded as well as being outside the md include: passing an
     // explicit path (deno fmt docs/) overrides include but still honours exclude,
     // and deno fmt treats SVG as markup — it has re-expanded the minified logo.
-    // Why the resolver's recorded machines are left out: tests/adapters/atlas_vectors/README.md.
+    // Why the resolver's recorded machines are left out: tests/adapters/atlas_vectors/README.md;
+    // why the vendored atlas tree is: backend/_vendor/README.md, "Markdown".
     "exclude": [
       "CHANGELOG.md",
       "site/",
@@ -12,7 +13,8 @@
       ".claude/worktrees/",
       ".worktrees/",
       "docs/assets",
-      "tests/adapters/atlas_vectors/vectors/"
+      "tests/adapters/atlas_vectors/vectors/",
+      "backend/_vendor/atlas/"
     ],
     "proseWrap": "always",
     "lineWidth": 120

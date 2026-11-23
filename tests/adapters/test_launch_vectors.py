@@ -30,7 +30,7 @@ import os
 from typing import Any
 
 import pytest
-from _atlas_machines import fixture_machine, select, vectors_asking
+from _atlas_machines import asked_system, fixture_machine, select, vectors_asking
 from _vendor import atlas
 from _vendor.atlas import (
     EFFECT_GOES_ON,
@@ -39,7 +39,8 @@ from _vendor.atlas import (
     VERDICT_ENTRY_NOT_ACCEPTED,
     VERDICT_LAUNCHABLE,
     VERDICT_NEEDS_INSTALLATION,
-    VERDICT_NOT_ACCEPTED,
+    VERDICT_UNESTABLISHED,
+    VERDICT_UNKNOWN,
 )
 
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
@@ -52,7 +53,6 @@ from domain.launchability import (
     GOES_ON_SHEET_REFUSED,
     GOES_ON_TRACK_REFUSED,
     NEEDS_INSTALLING,
-    NOT_A_LAUNCH_FILE,
     NOT_ESTABLISHED,
     NOT_THIS_EMULATOR,
     OPENED_FILE_MISSING,
@@ -68,7 +68,6 @@ from domain.launchability import (
 # ``REFUSING``), each the reading of one refusing verdict.
 _REFUSING = {
     VERDICT_ENTRY_NOT_ACCEPTED: NOT_THIS_EMULATOR,
-    VERDICT_NOT_ACCEPTED: NOT_A_LAUNCH_FILE,
     VERDICT_NEEDS_INSTALLATION: NEEDS_INSTALLING,
 }
 
@@ -109,7 +108,7 @@ def _read(kind: str, answer: Any, query: dict[str, Any], label: str) -> Any:
         ),
         log_debug=lambda _line: None,
     )
-    return adapter.launchability(query["system"], query["content_path"], label=label)
+    return adapter.launchability(asked_system(query["system"]), query["content_path"], label=label)
 
 
 def _asked(vector: dict[str, Any]) -> tuple[str, Any, dict[str, Any], str]:
@@ -135,8 +134,8 @@ def test_the_sweep_reaches_every_verdict_and_every_effect():
         verdicts.add(launchable["verdict"])
         stated |= {caveat["data"]["effect"] for caveat in launchable["caveats"] if "effect" in caveat.get("data", {})}
 
-    assert len(_VECTORS) == 134
-    assert verdicts == {*_REFUSING, VERDICT_LAUNCHABLE, "unknown"}
+    assert len(_VECTORS) == 211
+    assert verdicts == {*_REFUSING, VERDICT_LAUNCHABLE, VERDICT_UNESTABLISHED, VERDICT_UNKNOWN}
     assert stated == {EFFECT_STOPS, EFFECT_GOES_ON, EFFECT_UNESTABLISHED}
 
 

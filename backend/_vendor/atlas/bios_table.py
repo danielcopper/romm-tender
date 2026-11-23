@@ -207,7 +207,7 @@ class BiosTable:
         return size is not None and size in self._sizes
 
     def system_of_size(self, size: int | None) -> str | None:
-        """Which console's BIOS is this long, in atlas's system vocabulary.
+        """Which console's BIOS is this long, as the ES-DE system name its size class files it under.
 
         A table pins no size per row — it recognises an image by md5 alone —
         so the size a file was kept at is the only thing it says about which

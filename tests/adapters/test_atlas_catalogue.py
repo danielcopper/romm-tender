@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
@@ -49,10 +50,17 @@ from _vendor.atlas import (
     KIND_LIBRETRO,
     KIND_RETROARCH_FOREIGN_CORE,
     KIND_STANDALONE,
+    RESOLUTION_AMBIGUOUS,
+    RESOLUTION_CONFLICT,
+    RESOLUTION_UNANIMOUS,
+    RESOLUTION_UNKNOWN,
+    SystemCandidate,
+    SystemResolution,
     find_rules,
+    translate,
 )
 from _vendor.atlas.esde import CatalogueKind, EmulatorSpec
-from _vendor.atlas.installations import CatalogueAnswer, EmulatorEntry, RomPlacement, SystemsAnswer
+from _vendor.atlas.installations import CatalogueAnswer, EmulatorEntry, RomPlacement
 from _vendor.atlas.launch import Launcher, LaunchResolution
 from _vendor.atlas.placement import Caveat
 
@@ -60,6 +68,7 @@ from adapters import atlas_catalogue
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.emulator_commands import CORE, FOREIGN_CORE, PROGRAM, default_option
+from domain.platform_system import SystemPair
 
 if TYPE_CHECKING:
     from _vendor.atlas import Availability
@@ -182,16 +191,13 @@ class _Installation:
         *,
         catalogue: CatalogueAnswer | Exception | None = None,
         placement: RomPlacement | Exception | None = None,
-        systems: SystemsAnswer | Exception | None = None,
         kind: str = "retrodeck",
     ) -> None:
         self.kind = kind
         self._catalogue = catalogue
         self._placement = placement
-        self._systems = systems
         self.catalogue_calls: list[str] = []
         self.placement_calls: list[str] = []
-        self.systems_calls = 0
 
     def emulators_for(self, system: str, *, content_path: str | None = None) -> CatalogueAnswer:
         self.catalogue_calls.append(system)
@@ -200,10 +206,6 @@ class _Installation:
     def rom_location(self, system: str) -> RomPlacement:
         self.placement_calls.append(system)
         return _answered(self._placement, RomPlacement())
-
-    def systems(self) -> SystemsAnswer:
-        self.systems_calls += 1
-        return _answered(self._systems, SystemsAnswer())
 
 
 def _answered(prepared: Any, fallback: Any) -> Any:
@@ -438,15 +440,15 @@ class TestCatalogueRefusals:
         # The resolver never logs, so a code that reaches no log reaches nobody
         # — and the catalogue is not the only answer that carries one.
         installation = _Installation(
-            systems=SystemsAnswer(caveats=(_refusal(CAVEAT_EMULATOR_CATALOGUE_UNESTABLISHED),)),
+            catalogue=_answer(caveats=(_refusal(CAVEAT_EMULATOR_CATALOGUE_UNESTABLISHED),)),
             placement=RomPlacement(caveats=(_refusal(CAVEAT_EMULATOR_CATALOGUE_UNREADABLE),)),
         )
         adapter = _adapter(installation, traces)
 
-        adapter.is_known_system("ps3")
+        adapter.get_emulator_options("ps3")
         adapter.get_supported_extensions("ps3")
 
-        assert any("systems" in line and CAVEAT_EMULATOR_CATALOGUE_UNESTABLISHED in line for line in traces)
+        assert any("entries" in line and CAVEAT_EMULATOR_CATALOGUE_UNESTABLISHED in line for line in traces)
         assert any("extensions" in line and CAVEAT_EMULATOR_CATALOGUE_UNREADABLE in line for line in traces)
 
 
@@ -497,8 +499,8 @@ class TestNothingToAsk:
             "source": None,
         }
 
-    def test_a_raising_systems_read_answers_neither_yes_nor_no(self, traces):
-        installation = _Installation(systems=ValueError("an invariant of its own"))
+    def test_a_raising_location_read_answers_neither_yes_nor_no(self, traces):
+        installation = _Installation(placement=ValueError("an invariant of its own"))
         assert _adapter(installation, traces).is_known_system("ps3") is None
 
     def test_a_raising_location_read_answers_the_default_safe_empty(self, traces):
@@ -755,18 +757,120 @@ class TestAcceptList:
         assert _adapter(installation, traces).get_supported_extensions("psx") == frozenset()
 
 
+_NOT_HELD = SystemResolution(RESOLUTION_UNKNOWN, None, None)
+
+
 class TestKnownSystem:
-    def test_a_listed_system_is_known(self, traces):
-        installation = _Installation(systems=SystemsAnswer(systems=("psx", "ps2", "ps3")))
+    """Whether the catalogue holds a system is the resolver's resolution of it, never a name compared by Tender."""
+
+    def test_a_system_the_resolver_resolves_is_known(self, traces):
+        installation = _Installation(placement=RomPlacement(dir="/roms/ps2", extensions=(".chd",)))
         assert _adapter(installation, traces).is_known_system("ps2") is True
 
-    def test_a_system_the_catalogue_does_not_name_is_a_positive_no(self, traces):
-        installation = _Installation(systems=SystemsAnswer(systems=("psx", "ps2")))
+    def test_a_system_the_catalogue_does_not_hold_is_a_positive_no(self, traces):
+        installation = _Installation(placement=RomPlacement(resolution=_NOT_HELD))
         assert _adapter(installation, traces).is_known_system("nintendo64") is False
 
     def test_a_refused_catalogue_answers_none_rather_than_no(self, traces):
-        installation = _Installation(systems=SystemsAnswer(caveats=(_refusal(CAVEAT_EMULATOR_CATALOGUE_UNREADABLE),)))
+        installation = _Installation(placement=RomPlacement(caveats=(_refusal(CAVEAT_EMULATOR_CATALOGUE_UNREADABLE),)))
         assert _adapter(installation, traces).is_known_system("ps2") is None
+
+    def test_several_systems_answer_neither_yes_nor_no(self, traces):
+        several = SystemResolution(
+            RESOLUTION_AMBIGUOUS,
+            None,
+            None,
+            candidates=(
+                SystemCandidate(("esde", "mark3"), "declared"),
+                SystemCandidate(("esde", "mastersystem"), "declared"),
+            ),
+            translation=translate((("romm", "sms"),)),
+        )
+        installation = _Installation(placement=RomPlacement(resolution=several))
+        pairs = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
+        assert _adapter(installation, traces).is_known_system(pairs) is None
+
+    def test_several_systems_answering_alike_answer_neither_yes_nor_no(self, traces):
+        """Whether the catalogue holds a system is one system's question; a shared answer names none (#2751 D3)."""
+        alike = SystemResolution(
+            RESOLUTION_UNANIMOUS,
+            None,
+            None,
+            candidates=(
+                SystemCandidate(("esde", "mark3"), "declared"),
+                SystemCandidate(("esde", "mastersystem"), "declared"),
+            ),
+            translation=translate((("romm", "sms"),)),
+        )
+        installation = _Installation(placement=RomPlacement(resolution=alike))
+        pairs = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
+        assert _adapter(installation, traces).is_known_system(pairs) is None
+
+    def test_pairs_that_name_different_systems_answer_neither_yes_nor_no(self, traces):
+        """A contradiction says nothing about what the catalogue holds."""
+        conflict = SystemResolution(RESOLUTION_CONFLICT, None, None, translation=translate((("romm", "snes"),)))
+        installation = _Installation(placement=RomPlacement(resolution=conflict))
+        pairs = (SystemPair("romm", "snes"), SystemPair("folder", "xbox360"))
+        assert _adapter(installation, traces).is_known_system(pairs) is None
+
+
+class TestASystemThatResolvedToNoOneSystem:
+    """#2751: an emulator list under a resolution other than resolved is no list, never "this frontend knows none"."""
+
+    def test_several_systems_answering_is_unavailable_for_that_reason(self, traces):
+        several = SystemResolution(
+            RESOLUTION_AMBIGUOUS,
+            None,
+            None,
+            candidates=(
+                SystemCandidate(("esde", "mark3"), "declared"),
+                SystemCandidate(("esde", "mastersystem"), "declared"),
+            ),
+            translation=translate((("romm", "sms"),)),
+        )
+        installation = _Installation(catalogue=replace(_answer(), resolution=several))
+        pairs = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
+
+        answer = _adapter(installation, traces).get_emulator_options(pairs)
+
+        assert (answer["available"], answer["options"], answer["reason"]) == (False, [], "platform_systems_several")
+        assert installation.catalogue_calls == [pairs]
+
+    def test_several_systems_answering_alike_give_their_shared_list(self, traces):
+        """#2225 D8, #2751 D3: where they agree the list holds for the platform and names no system."""
+        alike = SystemResolution(
+            RESOLUTION_UNANIMOUS,
+            None,
+            None,
+            candidates=(
+                SystemCandidate(("esde", "mark3"), "declared"),
+                SystemCandidate(("esde", "mastersystem"), "declared"),
+            ),
+            translation=translate((("romm", "sms"),)),
+        )
+        installation = _Installation(catalogue=replace(_answer(), resolution=alike))
+        pairs = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
+
+        answer = _adapter(installation, traces).get_emulator_options(pairs)
+
+        assert (answer["available"], answer["reason"]) == (True, None)
+        assert (
+            answer["options"]
+            == _adapter(_Installation(catalogue=_answer()), traces).get_emulator_options("mastersystem")["options"]
+        )
+
+    def test_a_system_the_source_does_not_hold_is_unavailable(self, traces):
+        installation = _Installation(catalogue=replace(_answer(), resolution=_NOT_HELD))
+
+        answer = _adapter(installation, traces).get_emulator_options("nintendo64")
+
+        # A system the source does not list is said as such, naming it — no failed read.
+        assert (answer["available"], answer["reason"], answer["system"]) == (False, "system_unknown", ["nintendo64"])
+
+    def test_its_extensions_are_the_default_safe_empty_set(self, traces):
+        installation = _Installation(placement=RomPlacement(extensions=(".z64",), resolution=_NOT_HELD))
+
+        assert _adapter(installation, traces).get_supported_extensions("nintendo64") == frozenset()
 
 
 class TestHowLongAnAnswerIsKept:
@@ -793,18 +897,18 @@ class TestHowLongAnAnswerIsKept:
 
         assert installation.catalogue_calls == ["ps3", "psx"]
 
-    def test_a_panel_call_asks_the_listing_afresh(self, traces):
+    def test_a_panel_call_asks_the_location_afresh(self, traces):
         # Nothing outlives the call that asked it: each call takes a reading of
         # its own, so a catalogue edited between two calls is read again rather
         # than answered from the first.
-        installation = _Installation(systems=SystemsAnswer(systems=("psx", "ps2")))
+        installation = _Installation(placement=RomPlacement(dir="/roms/psx"))
         adapter = _adapter(installation, traces)
 
         adapter.is_known_system("psx")
-        adapter.is_known_system("ps2")
-        adapter.is_known_system("n64")
+        adapter.is_known_system("psx")
+        adapter.is_known_system("psx")
 
-        assert installation.systems_calls == 3
+        assert installation.placement_calls == ["psx", "psx", "psx"]
 
     def test_a_run_reading_asks_each_question_once(self, traces):
         installation = _Installation(
@@ -1112,17 +1216,20 @@ class TestTheRealResolverOverARealTree:
         }
         assert adapter.is_known_system("gba") is None
 
-    def test_an_empty_but_valid_catalogue_is_a_real_knows_none(self, tmp_path, traces):
+    def test_an_empty_but_valid_catalogue_holds_no_system_and_lists_no_emulator_as_none(self, tmp_path, traces):
         # The boundary of the case above: a document ES-DE loads fine that simply
-        # declares no system is a statement about the machine, not a failure.
+        # declares no system is a statement about the machine, not a failure —
+        # it holds no gba, so the gba question resolves to no system, and its
+        # empty entry list is no list (#2751).
         home = _seed_retrodeck(tmp_path, catalogue='<?xml version="1.0"?>\n<systemList/>\n')
         adapter = self._adapter(home, traces)
 
         assert adapter.get_emulator_options("gba") == {
-            "available": True,
+            "available": False,
             "options": [],
-            "reason": None,
+            "reason": "system_unknown",
             "source": _RETRODECK,
+            "system": ["gba"],
         }
         assert adapter.is_known_system("gba") is False
 

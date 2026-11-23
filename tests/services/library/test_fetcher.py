@@ -2588,7 +2588,7 @@ class TestThePlanPredictsWhatTheCollectionGateDecides:
 
 
 class TestTheSyncKeepsThePlatformsIds:
-    """Every sync keeps each listed platform's ids, which the platform's system is asked with offline."""
+    """Every sync keeps each listed platform's record, whose slug and folder the platform's system is asked with."""
 
     @pytest.mark.asyncio
     async def test_every_listed_platform_is_kept_switched_off_ones_too(self, make_library, fake_romm_api):

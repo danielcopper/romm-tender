@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { EmulatorSource, PlatformSystemAnswer } from "../types/emulatorSources";
+import type { EmulatorDataReason, EmulatorSource, PlatformSystemAnswer } from "../types/emulatorSources";
 import {
   NO_SOURCE_BANNER,
   SOURCES_READING,
@@ -17,6 +17,8 @@ import {
   startingSourceOffSentence,
   withFindingSentence,
   withPlatformSystemSentence,
+  platformSystemNotes,
+  unmatchedPlatformSentence,
 } from "./emulatorSourceWording";
 
 const REPAIR = " Repair it with RetroDECK's 'Repair RetroDECK Paths'.";
@@ -385,7 +387,7 @@ describe("emulatorDataReasonSentence", () => {
     }
   });
 
-  it("says RomM cannot be reached where it could not give the platform's ids", () => {
+  it("says RomM cannot be reached where it could not give its list of platforms", () => {
     const sentence = "RomM cannot be reached, so Tender does not know this platform's system yet.";
     expect(emulatorDataReasonSentence("server_unreachable", RETRODECK, null)).toBe(sentence);
     expect(emulatorDataReasonSentence("server_unreachable", null, null)).toBe(sentence);
@@ -398,8 +400,8 @@ describe("emulatorDataReasonSentence", () => {
     "unsupported",
     "unknown",
     "platform_listing_unreadable",
-  ] as const)("says RomM did not give the platform's ids where the read that gives them failed with %s", (reason) => {
-    const sentence = "RomM did not give this platform's ids, so Tender does not know its system yet.";
+  ] as const)("says RomM did not give its list of platforms where the read of it failed with %s", (reason) => {
+    const sentence = "RomM did not give its list of platforms, so Tender does not know this platform's system yet.";
     expect(emulatorDataReasonSentence(reason, RETRODECK, null)).toBe(sentence);
     expect(emulatorDataReasonSentence(reason, null, null)).toBe(sentence);
   });
@@ -417,18 +419,125 @@ describe("emulatorDataReasonSentence", () => {
   });
 });
 
-describe("a platform with no switched-on system", () => {
+describe("each case of a platform with no system to use says which it is (#2751 D2, #2225 D8)", () => {
+  const answer = (state: PlatformSystemAnswer["state"], systems: string[]): PlatformSystemAnswer => ({
+    state,
+    source: "retrodeck",
+    systems,
+    platform: "Sega Master System",
+    slug: "sms",
+    folder: "megadrive",
+  });
+  const cases: [EmulatorDataReason, PlatformSystemAnswer, string][] = [
+    [
+      "platform_unmatched",
+      answer("unmatched", []),
+      "Tender cannot match Sega Master System to a system yet, so it cannot download its games.",
+    ],
+    [
+      "platform_pairs_contradict",
+      answer("contradicted", []),
+      'RomM\'s slug "sms" and folder "megadrive" point to different systems, so Tender cannot match Sega Master System to a system.',
+    ],
+    [
+      "no_platform_system",
+      answer("no_system", []),
+      "RetroDECK has no system for Sega Master System, so Tender cannot download its games.",
+    ],
+    [
+      "platform_system_not_here",
+      answer("not_here", ["mastersystem"]),
+      "RetroDECK has a system for Sega Master System (mastersystem), but it is not set up on this machine, so Tender cannot download its games.",
+    ],
+    [
+      "platform_system_off",
+      answer("switched_off", ["mastersystem"]),
+      "System mastersystem is switched off in RetroDECK.",
+    ],
+    [
+      "platform_systems_several",
+      answer("several", ["mark3", "mastersystem"]),
+      "RetroDECK has several systems for Sega Master System (mark3, mastersystem), so Tender cannot download its games yet.",
+    ],
+  ];
+
+  it.each(cases)("words %s on the page as its own sentence", (reason, platformSystem, sentence) => {
+    expect(emulatorDataReasonSentence(reason, RETRODECK, platformSystem)).toBe(sentence);
+  });
+
+  it.each(cases)("rewords a press refused for %s the way the page says it", (reason, platformSystem, sentence) => {
+    const { state: _state, ...details } = platformSystem;
+    const refused = { success: false, reason, message: "backend's own", ...details };
+
+    expect(withPlatformSystemSentence(refused).message).toBe(sentence);
+  });
+  it("words a press refused for a catalogue that was refused, naming the source", () => {
+    const refused = {
+      success: false,
+      reason: "platform_system_unasked",
+      message: "retrodeck's catalogue was refused (not_set_up), so no system was asked for Game Boy.",
+      source: "retrodeck",
+      unasked: "not_set_up",
+    };
+    expect(withPlatformSystemSentence(refused).message).toBe(
+      "RetroDECK has not been set up yet, so Tender cannot download its games.",
+    );
+  });
+
+  it.each([
+    ["not_set_up", "RetroDECK has not been set up yet, so Tender cannot download its games."],
+    ["catalogue_invalid", "RetroDECK: ES-DE's systems file is broken, so Tender cannot download its games."],
+    ["sealed", "RetroDECK's emulator list cannot be read yet, so Tender cannot download its games."],
+  ])("words a download refused for a %s catalogue with the download's ending", (unasked, sentence) => {
+    const refused = {
+      success: false,
+      reason: "platform_system_unasked",
+      message: "fact",
+      source: "retrodeck",
+      unasked,
+    };
+    expect(withPlatformSystemSentence(refused).message).toBe(sentence);
+  });
+
+  it("gives every case a sentence of its own", () => {
+    expect(new Set(cases.map(([, , sentence]) => sentence)).size).toBe(cases.length);
+  });
+
+  it("never says RomM does not know a platform it cannot match (#2751 D2)", () => {
+    expect(unmatchedPlatformSentence("Sega Master System")).not.toMatch(/RomM/);
+  });
+
+  it("names every switched-off system where several are", () => {
+    expect(emulatorDataReasonSentence("platform_system_off", RETRODECK, answer("switched_off", ["mark3", "sms"]))).toBe(
+      "System mark3, sms is switched off in RetroDECK.",
+    );
+  });
+
+  it("says on a game's page why a platform of several systems gets no frontend link, and nothing otherwise", () => {
+    expect(platformSystemNotes(answer("several", ["mark3", "mastersystem"]))).toEqual([
+      "RetroDECK has several systems for Sega Master System (mark3, mastersystem), and Tender links its games into none of them.",
+    ]);
+    expect(platformSystemNotes(answer("found", ["mastersystem"]))).toEqual([]);
+    expect(platformSystemNotes(null)).toEqual([]);
+  });
+});
+
+describe("a platform with no system to use", () => {
   const NO_SYSTEM: PlatformSystemAnswer = {
     state: "no_system",
     source: "retrodeck",
-    system: null,
+    systems: [],
     platform: "Commodore VIC-20",
+    slug: "vic-20",
+    folder: "vic20",
   };
   const SWITCHED_OFF: PlatformSystemAnswer = {
     state: "switched_off",
     source: "emudeck",
-    system: "xbox360",
+    systems: ["xbox360"],
     platform: "Xbox 360",
+    slug: "xbox360",
+    folder: "xbox360",
   };
 
   it("says the source has no system for the platform, by the source's and the platform's names", () => {
@@ -463,15 +572,21 @@ describe("a platform with no switched-on system", () => {
       message: "retrodeck has no system for Commodore VIC-20.",
       source: "retrodeck",
       platform: "Commodore VIC-20",
-      system: null,
+      systems: [],
+      slug: "vic-20",
+      folder: "vic20",
     };
     expect(withPlatformSystemSentence(refused)).toEqual({
       ...refused,
       message: "RetroDECK has no system for Commodore VIC-20, so Tender cannot download its games.",
     });
     expect(
-      withPlatformSystemSentence({ ...refused, reason: "platform_system_off", system: "vic20", source: "emudeck" })
-        .message,
+      withPlatformSystemSentence({
+        ...refused,
+        reason: "platform_system_off",
+        systems: ["vic20"],
+        source: "emudeck",
+      }).message,
     ).toBe("System vic20 is switched off in EmuDeck.");
   });
 

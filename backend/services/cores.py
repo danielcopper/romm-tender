@@ -35,7 +35,9 @@ from domain.emulator_commands import (
     shipped_default,
 )
 from domain.emulator_pick import game_platform_pick, pick_for, platform_pick_value, source_kind
+from domain.emulator_sources import unlisted_system
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
+from domain.platform_system import PlatformKeys
 from domain.rom_files import asked_path
 from domain.start_command import source_refusal, start_verdict
 from lib.errors import Refused, require_platform_folder
@@ -141,11 +143,14 @@ class CoreService:
         indistinguishable), so the flag drives the "follow the system" reset
         item's checkmark. ``emulator_data_available`` is ``False`` where the
         answering emulator source gives no emulator list, so the menu can say so
-        instead of showing an empty list; ``emulator_data_reason`` says why and
+        instead of showing an empty list; ``emulator_data_reason`` says why,
+        ``emulator_data_system`` names the system a ``system_unknown`` reason is
+        about and whether a game's install record holds it
+        (:func:`domain.emulator_sources.unlisted_system`; ``None`` otherwise), and
         ``emulator_source`` names the answering source
         (:meth:`adapters.atlas_catalogue.AtlasCatalogueAdapter.get_emulator_options`);
-        where the platform has no switched-on system there, the reason is
-        ``no_platform_system`` or ``platform_system_off``. ``platform_system`` is
+        where the platform has no system to use there, the reason is that case's
+        (:meth:`domain.platform_system.PlatformSystem.unavailable_options`). ``platform_system`` is
         :meth:`domain.platform_system.PlatformSystem.payload` — the install
         record's system for an installed ROM, which no source was asked for.
         When ``rom_id`` is unknown the emulator list is empty and the active
@@ -170,6 +175,7 @@ class CoreService:
                 "emulators": [],
                 "emulator_data_available": True,
                 "emulator_data_reason": None,
+                "emulator_data_system": None,
                 "emulator_source": None,
                 "platform_system": None,
                 "active_core": None,
@@ -180,7 +186,7 @@ class CoreService:
                 "launch": None,
                 "vanished_pick": None,
             }
-        platform = self._platform_systems.rom_system(rom.platform_slug, install)
+        platform = self._platform_systems.rom_system(PlatformKeys.of(rom.platform_slug, rom.platform_fs_slug), install)
         options = self._emulator_options(platform, content_path=install.file_path if install is not None else None)
         resolved = self._active_core.resolve_rom(rom_id)
         choice = resolved.choice if resolved is not None else _NO_CHOICE
@@ -198,6 +204,7 @@ class CoreService:
             "emulators": options_to_payload(options["options"]),
             "emulator_data_available": options["available"],
             "emulator_data_reason": options["reason"],
+            "emulator_data_system": unlisted_system(options, installed=platform.recorded is not None),
             "emulator_source": options["source"],
             "platform_system": platform.payload(),
             "active_core": option.emulator if option is not None else None,
@@ -345,11 +352,12 @@ class CoreService:
         return await self._loop.run_in_executor(None, self._system_core_info_io, platform_slug, platform_folder)
 
     def _system_core_info_io(self, platform_slug: str, platform_folder: str) -> dict[str, Any]:
-        platform = self._platform_systems.platform_system(platform_slug)
+        keys = PlatformKeys.of(platform_slug, platform_folder)
+        platform = self._platform_systems.platform_system(keys)
         options = self._emulator_options(platform)
         stored = pick_for(self._platform_core_reader.get_platform_core(platform_folder), source_kind(options))
         choice = choose_emulator(options["options"], game=None, platform=stored)
-        source_defaults = self._source_defaults(platform_slug, answered=(platform, options))
+        source_defaults = self._source_defaults(keys, answered=(platform, options))
         tender_default = next(
             ({"kind": entry["kind"], "label": entry["default"]} for entry in source_defaults if entry["offers"]),
             None,
@@ -369,6 +377,7 @@ class CoreService:
             "emulators": options_to_payload(options["options"]),
             "emulator_data_available": options["available"],
             "emulator_data_reason": options["reason"],
+            "emulator_data_system": unlisted_system(options, installed=platform.recorded is not None),
             "emulator_source": options["source"],
             "platform_system": platform.payload(),
             "active_core_label": active_label,
@@ -383,9 +392,9 @@ class CoreService:
         }
 
     def _source_defaults(
-        self, platform_slug: str, *, answered: tuple[PlatformSystem, dict[str, Any]]
+        self, keys: PlatformKeys, *, answered: tuple[PlatformSystem, dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """Every enabled source in the user's order, with its own default for *platform_slug*.
+        """Every enabled source in the user's order, with its own default for the platform *keys* names.
 
         ``offers`` says the source lists an entry for the platform's system that
         it ships as default; ``default`` is that entry's label, ``None`` where
@@ -403,7 +412,7 @@ class CoreService:
             if source.kind == source_kind(answered[1]):
                 answer = answered[1]
             else:
-                platform = self._platform_systems.platform_system(platform_slug, source=source.kind, reading=reading)
+                platform = self._platform_systems.platform_system(keys, source=source.kind, reading=reading)
                 answer = (
                     platform.unavailable_options()
                     if platform.taken is None
@@ -450,7 +459,8 @@ class CoreService:
         """
         value = None
         if core_label:
-            source = source_kind(self._emulator_options(self._platform_systems.platform_system(platform_slug)))
+            keys = PlatformKeys.of(platform_slug, platform_folder)
+            source = source_kind(self._emulator_options(self._platform_systems.platform_system(keys)))
             if source is None:
                 raise Refused("core_unavailable", f"No emulator source answers for {platform_slug}")
             value = platform_pick_value(core_label, source)
@@ -501,19 +511,19 @@ class CoreService:
             rom = uow.roms.get(rom_id)
             if rom is None:
                 raise Refused("not_found", f"ROM {rom_id} is not tracked")
-            platform_slug = rom.platform_slug
+            keys = PlatformKeys.of(rom.platform_slug, rom.platform_fs_slug)
             install = uow.rom_installs.get(rom_id)
         # Resolve the label between the two transactions: the platform's system
         # and the emulator-options read each ask the resolver on every call, and
         # a UoW holds SQLite's BEGIN IMMEDIATE write lock — file I/O inside one
         # stalls every other writer for its duration.
-        options = self._emulator_options(self._platform_systems.rom_system(platform_slug, install))
+        options = self._emulator_options(self._platform_systems.rom_system(keys, install))
         source = source_kind(options)
         option = option_for_label(options["options"], label)
         if option is None or option.not_installed or source is None:
             # Refuse BEFORE any write — never persist a label the system does not
             # list, or one whose emulator the resolver states not installed.
-            raise Refused("core_unavailable", f"Emulator '{label}' is not available for {platform_slug}")
+            raise Refused("core_unavailable", f"Emulator '{label}' is not available for {keys.slug}")
         with self._uow_factory() as uow:
             # The row is re-read because the label was resolved against a
             # snapshot: a background sync, a finishing download or the
@@ -522,9 +532,9 @@ class CoreService:
             rom = uow.roms.get(rom_id)
             if rom is None:
                 raise Refused("not_found", f"ROM {rom_id} is not tracked")
-            if rom.platform_slug != platform_slug:
-                # A re-sync rewrites platform_slug (it is a synced-identity
-                # column). The label was validated against the platform the
+            if PlatformKeys.of(rom.platform_slug, rom.platform_fs_slug) != keys:
+                # A re-sync rewrites platform_slug and the platform's folder
+                # (synced-identity columns). The label was validated against the platform the
                 # snapshot named, so pinning it now would persist a label that
                 # was never checked against the platform it will resolve under.
                 # The message says exactly that rather than calling the label

@@ -18,8 +18,8 @@ reason the domain may hold those literals at all.
 over whatever RetroDECK this machine has, because no fabricated tree can reach a
 rule-card answer — atlas loads the core's own ``.so`` to ask it, so a seeded
 placeholder answers ``core-unqueryable``. Those cases skip where no installation
-is detected, which means CI does not run them and a developer's pre-push gate
-does.
+is detected, or the resolver finds it not set up, which means CI does not run
+them and a developer's pre-push gate on a machine with RetroDECK set up does.
 """
 
 from __future__ import annotations
@@ -60,6 +60,7 @@ from _vendor.atlas import (
     PLACE_NOT_READ_CODES,
     PROVENANCE_ASSUMED,
     PROVENANCE_READ,
+    RESOLUTION_UNKNOWN,
     ROLE_BATTERY,
     ROLE_HIGH_SCORE,
     ROLE_NOTES,
@@ -72,6 +73,7 @@ from _vendor.atlas import (
     STATE_ROOT_CONTENT_DIRECTORY,
     SavestateAbsence,
     SavestatePlacement,
+    SystemResolution,
     Unresolved,
     detect,
 )
@@ -213,6 +215,7 @@ class _Catalogue:
     def __init__(self, entries: tuple[_Entry, ...], caveats: tuple[str, ...] = ()) -> None:
         self.entries = entries
         self.caveats = tuple(_caveat(code) for code in caveats)
+        self.resolution = None
 
 
 class _Installation:
@@ -227,8 +230,10 @@ class _Installation:
         kind: str = "retrodeck",
         health: tuple[str | Caveat, ...] | Exception = (),
         roots: RootsAnswer | Exception | None = None,
+        resolution: Any = None,
     ) -> None:
         self.kind = kind
+        self._resolution = resolution
         self._entries = entries
         self._raises = raises
         self._caveats = caveats
@@ -250,7 +255,9 @@ class _Installation:
         self.asked.append((system, content_path))
         if self._raises is not None:
             raise self._raises
-        return _Catalogue(self._entries, self._caveats)
+        catalogue = _Catalogue(self._entries, self._caveats)
+        catalogue.resolution = self._resolution
+        return catalogue
 
 
 _SAVES_ROOT = "/run/media/sd/saves"
@@ -1169,6 +1176,39 @@ class TestHowTheQuestionIsPut:
         assert machines == [held, held, held]
 
 
+class TestASystemThatResolvedToNoOneSystem:
+    """An entry beside a resolution other than resolved is asked nothing: its system is not established (#2751).
+
+    The resolver was asked and established nothing — not "never asked".
+    """
+
+    def test_no_save_place_is_asked_of_any_entry(self, traces):
+        entry = _Entry("mGBA", _placement(files=("Game Title.srm",)))
+        installation = _Installation((entry,), resolution=SystemResolution(RESOLUTION_UNKNOWN, None, None))
+
+        answer = _adapter(installation, traces).resolve_save_answer(
+            system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+        )
+
+        assert answer.unestablished == UNESTABLISHED_NOTHING
+        assert entry.asked == []
+
+    def test_no_savestate_place_is_asked_of_any_entry(self, traces):
+        entry = _Entry(
+            "mGBA",
+            _placement(files=("Game Title.srm",)),
+            states=SavestateAbsence(token="mgba", citation="none", sources=()),
+        )
+        installation = _Installation((entry,), resolution=SystemResolution(RESOLUTION_UNKNOWN, None, None))
+
+        states = _adapter(installation, traces).resolve_savestate_location(
+            system="gba", content_path=_CONTENT, emulator_label="mGBA"
+        )
+
+        assert states is None
+        assert entry.states_asked == []
+
+
 class TestWhichSourceAnswers:
     """A game's save answer comes from the source it starts through."""
 
@@ -1661,14 +1701,23 @@ def machine() -> Any:
     installations = detect(pwd.getpwuid(os.getuid()).pw_dir)
     if not installations:
         pytest.skip("no emulator installation on this machine — the real-resolver tier cannot run")
-    return installations[0]
+    installation = installations[0]
+    # The resolver's own finding decides, never a path of Tender's: an
+    # installation never set up answers every question "not set up".
+    if any(issue.code == HEALTH_ISSUE_NOT_SET_UP for issue in installation.health().issues):
+        pytest.skip(
+            f"{installation.kind} is installed here but not set up (the resolver's {HEALTH_ISSUE_NOT_SET_UP} finding)"
+            " — the real-resolver tier cannot run"
+        )
+    return installation
 
 
 class TestTheRealMachineAnswers:
     """The pinned per-system answers.
 
-    Skipped where no RetroDECK is installed, so CI does not run this and a
-    developer's pre-push gate does. No fabricated tree can stand in: atlas loads
+    Skipped where no RetroDECK is installed, or one is installed but not set
+    up, so CI does not run this and a developer's pre-push gate on a machine
+    with RetroDECK set up does. No fabricated tree can stand in: atlas loads
     a core's own ``.so`` to ask it what it writes, and a seeded placeholder
     answers ``core-unqueryable``.
     """

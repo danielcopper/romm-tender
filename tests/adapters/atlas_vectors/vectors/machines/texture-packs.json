@@ -627,7 +627,8 @@
             "code": "standalone-unsupported",
             "data": {
               "label": "Flycast (Standalone)",
-              "system": "dreamcast"
+              "source": "esde",
+              "key": "dreamcast"
             }
           }
         }
@@ -812,7 +813,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -1335,7 +1337,8 @@
             "code": "standalone-unsupported",
             "data": {
               "label": "Vita3K (Standalone)",
-              "system": "psvita"
+              "source": "esde",
+              "key": "psvita"
             }
           }
         }
@@ -1825,7 +1828,8 @@
             "code": "standalone-variant-unestablished",
             "data": {
               "label": "Dolphin (Standalone)",
-              "system": "gc",
+              "source": "esde",
+              "key": "gc",
               "variant": "proton"
             }
           }
@@ -2918,7 +2922,8 @@
             "code": "standalone-unsupported",
             "data": {
               "label": "XRoar CoCo 2 NTSC (Standalone)",
-              "system": "coco"
+              "source": "esde",
+              "key": "coco"
             }
           }
         }

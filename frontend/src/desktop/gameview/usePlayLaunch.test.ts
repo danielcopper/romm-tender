@@ -476,7 +476,7 @@ describe("usePlayLaunch", () => {
   });
 
   describe("after the page's check of whether the game can start went wrong", () => {
-    const REFUSED = "smw.zip is not the file Super Nintendo starts from; it starts from .sfc.";
+    const REFUSED = "Snes9x cannot start smw.zip: it is neither a disc image nor a game program.";
 
     const pressAfterRecheck = async (recheckResult: string | null) => {
       vi.mocked(gameDetailStore.recheckStart).mockResolvedValueOnce(recheckResult);

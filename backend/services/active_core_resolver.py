@@ -27,12 +27,14 @@ from typing import TYPE_CHECKING
 from domain.emulator_choice import ResolvedEmulator, choose_emulator, starting_entry
 from domain.emulator_commands import option_for_label
 from domain.emulator_pick import StoredPick, game_platform_pick, pick_for, source_kind
+from domain.platform_system import PlatformKeys
 
 if TYPE_CHECKING:
     import logging
 
     from domain.emulator_commands import EmulatorOption
     from domain.emulator_sources import SourcesReading
+    from domain.platform_system import SystemArgument
     from domain.rom import Rom
     from domain.rom_install import RomInstall
     from services.protocols import (
@@ -101,7 +103,9 @@ class ActiveCoreResolver:
             self._logger.warning("active_core_resolver: no ROM for rom_id=%s; no emulator to resolve", rom_id)
             return None
 
-        platform = self._platform_systems.rom_system(rom.platform_slug, install, reading=reading)
+        platform = self._platform_systems.rom_system(
+            PlatformKeys.of(rom.platform_slug, rom.platform_fs_slug), install, reading=reading
+        )
         system = platform.taken
         if system is None:
             return None
@@ -137,7 +141,7 @@ class ActiveCoreResolver:
         platform: StoredPick | None,
         options: list[EmulatorOption],
         rom: Rom,
-        system: str,
+        system: SystemArgument,
     ) -> None:
         """Warn for each stored label the precedence passed over because no entry carries it any more."""
         if game is not None and option_for_label(options, game.label) is None:

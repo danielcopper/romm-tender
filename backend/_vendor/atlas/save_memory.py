@@ -59,6 +59,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Mapping
 
+from ._agreement import Agreement, agreement
 from ._data import packaged_text
 from .placement import SIZE_FILLS, TEMPLATE_ROM_STEM, SizeFact
 from .systems import known_systems
@@ -244,10 +245,23 @@ class SaveMemoryRecord:
         so with ``file-set-across-systems``, because a core run for a system
         the record never names has established nothing here.
         """
-        distinct = {entry.memory_types for entry in self.systems.values()}
-        if len(distinct) != 1:
-            return None
-        return next(iter(self.systems.values()), None)
+        return self.agreeing(tuple(self.systems))
+
+    def agreeing(self, systems: tuple[str, ...]) -> SystemMemory | None:
+        """The one entry this record states for every one of *systems* it covers, if it states them alike.
+
+        :meth:`unanimous` over a chosen set rather than over the whole record:
+        a system the platform table names as several ES-DE systems keys a
+        record where the entries it holds for them state the same memory ids
+        (#784 D50). A system it does not cover is no disagreement — the answer
+        names it instead (:meth:`agreement`); none covered, or two that differ,
+        answer ``None`` rather than a pick.
+        """
+        return self.agreement(systems).entry
+
+    def agreement(self, systems: tuple[str, ...]) -> Agreement[SystemMemory]:
+        """:meth:`agreeing` with the systems it covers and the ones it does not, as the answer names them."""
+        return agreement(self.systems, systems, lambda entry: entry.memory_types)
 
     def size(self, system: str | None, memory_type: str) -> SizeFact | None:
         """Whether the file of *memory_type* keeps its size on *system*, or ``None`` unstated.
@@ -263,11 +277,17 @@ class SaveMemoryRecord:
         if system is not None:
             entry = self.systems.get(system)
             return entry.sizes.get(memory_type) if entry is not None else None
-        facts = [entry.sizes.get(memory_type) for entry in self.systems.values()]
-        if any(fact is None for fact in facts):
-            return None
-        claims = {(fact.fixed, fact.fill) for fact in facts if fact is not None}
-        return facts[0] if len(claims) == 1 else None
+        return self.size_among(tuple(self.systems), memory_type)
+
+    def size_among(self, systems: tuple[str, ...], memory_type: str) -> SizeFact | None:
+        """:meth:`size` agreed over the *systems* this record covers, as :meth:`agreeing` agrees on their files."""
+
+        def claim(entry: SystemMemory) -> tuple[bool | None, str | None] | None:
+            fact = entry.sizes.get(memory_type)
+            return None if fact is None else (fact.fixed, fact.fill)
+
+        agreed = agreement(self.systems, systems, claim).entry
+        return None if agreed is None else agreed.sizes.get(memory_type)
 
 
 def _size_fact(value: object, where: str) -> SizeFact:
@@ -338,8 +358,8 @@ def _record(key: str, entry: Any) -> SaveMemoryRecord:
     unknown = sorted(name for name in systems if name not in vocabulary)
     if unknown:
         raise ValueError(
-            f"{where}: {unknown!r} are not atlas system ids — a record is keyed by the same "
-            "vocabulary every other question about a system takes"
+            f"{where}: {unknown!r} are not system names known_systems() lists — a record is keyed by "
+            "the catalogue name of each system it covers (RetroDECK 0.10.9b's: ES-DE's plus primehack and portmaster)"
         )
     return SaveMemoryRecord(
         key=key,

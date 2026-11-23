@@ -837,11 +837,13 @@ _TWO_SYSTEMS_XML = """\
   <system>
     <name>gba</name>
     <path>%ROMPATH%/gba</path>
+    <extension>.gba .GBA .7z .7Z .zip .ZIP</extension>
     <command label="mGBA">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>
   </system>
   <system>
     <name>snes</name>
     <path>%ROMPATH%/snes</path>
+    <extension>.sfc .SFC .smc .SMC .7z .7Z .zip .ZIP</extension>
     <command label="Snes9x">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>
   </system>
 </systemList>

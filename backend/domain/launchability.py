@@ -1,7 +1,7 @@
 """Whether one installed game's file starts with the entry Tender starts it through, in Tender's words.
 
 The verdict is the resolver's, read in :mod:`adapters.atlas_catalogue`; this is
-the value it is read into. Each of the five states has its own sentence, worded
+the value it is read into. Each of the four states has its own sentence, worded
 by the panel (#2195 D2), which also decides which of them refuse a start
 (``frontend/src/utils/gameLaunch.ts``).
 
@@ -18,15 +18,18 @@ STARTS = "starts"
 # The format is real content for the system, and has to be installed in an
 # emulator before anything starts it.
 NEEDS_INSTALLING = "needs_installing"
-# The system does not start this file; it starts from other extensions.
-NOT_A_LAUNCH_FILE = "not_a_launch_file"
 # The system starts this file, but the entry asked about does not.
 NOT_THIS_EMULATOR = "not_this_emulator"
-# Whether the file starts could not be established.
+# Whether the file starts could not be established: the entry's reading of it
+# ended without a take or a refusal, or no verdict could be given.
 NOT_ESTABLISHED = "not_established"
 
-# Why a verdict could not be established, in Tender's words.
+# Why no verdict could be given, in Tender's words: the system asked about is
+# none the source holds, several of its systems answer differently and the
+# resolver names none of them, the entry asked about is none the system lists, the source's
+# list of emulators could not be read, or no source is installed and switched on.
 SYSTEM_UNKNOWN = "system_unknown"
+SYSTEMS_SEVERAL = "systems_several"
 ENTRY_UNKNOWN = "entry_unknown"
 CATALOGUE_UNREAD = "catalogue_unread"
 NO_SOURCE = "no_source"
@@ -90,12 +93,22 @@ OPENED_FILE_UNREAD = "opened_file_unread"
 PATCH_SETTING_UNREAD = "patch_setting_unread"
 OPENS_PAST_BOUND = "opens_past_bound"
 PATH_TOO_LONG_UNCHECKED = "path_too_long_unchecked"
+# How the entry takes a game installed as a folder was not followed to the end.
+FOLDER_ROUTE_UNREAD = "folder_route_unread"
 
-# Said beside a start as statements of their own (#2698 D8): whether the entry
-# reads the format was not established (#2195 D41), and an archive's contents
-# were not read.
+# Said beside a verdict as statements of their own (#2698 D8): whether the
+# entry reads the format was not established (#2195 D41), an archive's contents
+# were not read, the frontend would not list the file under its name though the
+# emulator starts it (#2195 D2), a folder holds files the entry would take
+# as games of their own, the entry does not list the extension among the files
+# it takes though it would be handed the file, and whether the entry can reach
+# the file inside the source's sandbox could not be established.
 FORMAT_UNESTABLISHED = "format_unestablished"
 CONTENTS_UNREAD = "contents_unread"
+FRONTEND_WOULD_NOT_LIST = "frontend_would_not_list"
+FOLDER_HOLDS_GAMES = "folder_holds_games"
+FORMAT_UNCLAIMED = "format_unclaimed"
+SANDBOX_PATH_UNESTABLISHED = "sandbox_path_unestablished"
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,16 +127,17 @@ class LaunchStatement:
 class Launchability:
     """One file's verdict for one entry, with what each state's sentence names.
 
-    ``system`` is the system it was asked as, ``file`` the file's name and
-    ``extension`` the token compared, as the resolver states it.
-    ``starts_from`` is the system's accept-list, read for
-    :data:`NOT_A_LAUNCH_FILE`; ``other_entries`` the labels of the system's
+    ``system`` is the key of the system it was asked as, ``None`` where it was
+    asked by several pairs; ``file`` the file's name and ``extension`` the
+    token compared, as the resolver states it. ``starts_from`` is the system's
+    accept-list, the names the frontend lists, read for
+    :data:`FRONTEND_WOULD_NOT_LIST`; ``other_entries`` the labels of the system's
     entries established to start the file, read for :data:`NOT_THIS_EMULATOR`;
     ``install_in`` the labels of the system's entries that install it, ``None``
     on every state but :data:`NEEDS_INSTALLING`, where an empty tuple says the
     system has an entry for none of the emulators known to (#2195 D35).
     ``reason`` is the resolver's reason in Tender's words, ``None`` where it
-    named none Tender words: why a verdict was :data:`NOT_ESTABLISHED`
+    named none Tender words: why no verdict could be given
     (:data:`SYSTEM_UNKNOWN` …), why the entry does not start the file on
     :data:`NOT_THIS_EMULATOR` (:data:`TAKES_NO_FOLDER` …), and what could not be
     established about a file that :data:`STARTS` (:data:`CONTENT_MISSING` …)
@@ -132,9 +146,10 @@ class Launchability:
     what a start says is ``statements``. ``reason_file`` is the name of the file
     the reason is about, where the resolver names one, and ``None`` otherwise.
     ``statements`` is everything said beside the verdict, in the resolver's
-    order (#2698 D8): each statement beside a start, and beside a refusal each
-    file the emulator would have gone on without, what else it is established
-    to do, and each thing the resolver could not establish.
+    order (#2698 D8): each statement beside a start, and beside a refusal or a
+    verdict not established each file the emulator would go on without, what
+    else it is established to do, and each thing the resolver could not
+    establish.
     ``contents_unread`` says the file is an archive whose contents were not
     read; ``format_unestablished`` that whether the entry reads this format was
     not established.
@@ -142,7 +157,7 @@ class Launchability:
 
     state: str
     entry: str
-    system: str
+    system: str | None
     file: str
     extension: str
     starts_from: tuple[str, ...] = ()

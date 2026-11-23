@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.emulator_choice import starting_entry
 from domain.emulator_sources import RETRODECK
+from domain.platform_system import PlatformKeys
 from domain.retrodeck_folders import FolderRefused
 from domain.save_answer import UNESTABLISHED_NOT_ASKED, unestablished_answer
 
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from domain.emulator_commands import EmulatorOption
+    from domain.platform_system import SystemArgument
     from domain.save_answer import SaveAnswer
     from services.protocols import (
         ActiveCoreReader,
@@ -185,8 +187,9 @@ class RomInfoService:
             # No name, so no extension, so no question — not a statement about
             # any emulator.
             return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
-        platform = self._platform_systems.platform_system(rom.platform_slug, source=RETRODECK)
-        system = platform.taken
+        keys = PlatformKeys.of(rom.platform_slug, rom.platform_fs_slug)
+        platform = self._platform_systems.platform_system(keys, source=RETRODECK)
+        system = platform.one_system
         if system is None:
             # No system to download it as, so no path to ask about.
             return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
@@ -210,7 +213,7 @@ class RomInfoService:
         return self._ask_resolver(system, file_path, entry(), installed=True)
 
     def _ask_resolver(
-        self, system: str, content_path: str, emulator: EmulatorOption | None, *, installed: bool
+        self, system: SystemArgument, content_path: str, emulator: EmulatorOption | None, *, installed: bool
     ) -> SaveAnswer:
         """Put the question to *emulator*, the entry this ROM would launch with.
 

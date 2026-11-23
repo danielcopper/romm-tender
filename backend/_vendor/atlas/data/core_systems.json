@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "spec": "The system a libretro core that declares no libretro database name is named by (#784 D46): one cited (source, key) pair per core, keyed by the .so short name, a hand judgement from a table source that spells the system. A bare RetroArch names its systems by the libretro database names its cores' .info files declare, and a core that declares none would otherwise be named by no key at all. 'systemname' is the core's own name for its system as the deployed .info states it (empty where it states none), held against the deployed cores by tests/test_core_systems_tripwire.py together with the absence of a database line, so an entry whose core gained a database or changed its name turns red. A core that is itself a game, a player or a tool rather than an emulator of a system, or that emulates one no table source spells, has no entry and is named under no system; the tripwire names each of them. Read by atlas.firmware.packaged_core_systems.",
+  "cores": {
+    "applewin": {
+      "source": "esde",
+      "key": "apple2",
+      "systemname": "II",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/applewin_libretro.info:13 states systemname = \"II\" and no database line; ES-DE's apple2 (Apple II, es-de:resources/systems/linux/es_systems.xml at v3.5.0:131) launches AppleWin (:135)."
+    },
+    "b2": {
+      "source": "esde",
+      "key": "bbcmicro",
+      "systemname": "BBC Micro",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/b2_libretro.info:33 states systemname = \"BBC Micro\" and no database line; ES-DE's bbcmicro (Acorn Computers BBC Micro, es-de:resources/systems/linux/es_systems.xml at v3.5.0:355) launches b2 (:360)."
+    },
+    "dirksimple": {
+      "source": "esde",
+      "key": "daphne",
+      "systemname": "Laserdisc arcade game",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/dirksimple_libretro.info:14 states systemname = \"Laserdisc arcade game\" and no database line; ES-DE's daphne (Daphne Arcade LaserDisc Emulator, es-de:resources/systems/linux/es_systems.xml at v3.5.0:563) launches DirkSimple (:572) and takes its .dirksimple files (:566)."
+    },
+    "fbalpha2012": {
+      "source": "esde",
+      "key": "arcade",
+      "systemname": "Arcade (various)",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/fbalpha2012_libretro.info:13 states systemname = \"Arcade (various)\" and no database line; ES-DE's arcade (es-de:resources/systems/linux/es_systems.xml at v3.5.0:158) launches FB Alpha 2012 (:172), the system the systemname map files Arcade (various) under."
+    },
+    "fbalpha2012_cps1": {
+      "source": "esde",
+      "key": "cps1",
+      "systemname": "CP System I",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/fbalpha2012_cps1_libretro.info:13 states systemname = \"CP System I\" and no database line; ES-DE's cps1 (Capcom Play System I, es-de:resources/systems/linux/es_systems.xml at v3.5.0:498) launches FB Alpha 2012 CPS-1 (:511)."
+    },
+    "fbalpha2012_cps2": {
+      "source": "esde",
+      "key": "cps2",
+      "systemname": "CP System II",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/fbalpha2012_cps2_libretro.info:13 states systemname = \"CP System II\" and no database line; ES-DE's cps2 (es-de:resources/systems/linux/es_systems.xml at v3.5.0:516) launches FB Alpha 2012 CPS-2 (:529)."
+    },
+    "fbalpha2012_cps3": {
+      "source": "esde",
+      "key": "cps3",
+      "systemname": "CP System III",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/fbalpha2012_cps3_libretro.info:13 states systemname = \"CP System III\" and no database line; ES-DE's cps3 (es-de:resources/systems/linux/es_systems.xml at v3.5.0:534) launches FB Alpha 2012 CPS-3 (:547)."
+    },
+    "fbalpha2012_neogeo": {
+      "source": "esde",
+      "key": "neogeo",
+      "systemname": "Neo Geo",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/fbalpha2012_neogeo_libretro.info:13 states systemname = \"Neo Geo\" and no database line; ES-DE's neogeo (es-de:resources/systems/linux/es_systems.xml at v3.5.0:1458) is the system the systemname map files Neo Geo under; FB Alpha 2012 Neo Geo is launched by the arcade-family systems (:717)."
+    },
+    "galaksija": {
+      "source": "romm",
+      "key": "galaksija",
+      "systemname": "",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/galaksija_libretro.info:2 names the core \"Elektronika Inženjering - Galaksija (Galaksija)\" and states neither a systemname nor a database line; no ES-DE build names the Galaksija; RomM's slug galaksija (romm:backend/utils/platform_slugs.py:147) is the one table key that spells it."
+    },
+    "minivmac": {
+      "source": "esde",
+      "key": "macintosh",
+      "systemname": "Mac68k",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/minivmac_libretro.info:11 states systemname = \"Mac68k\" and no database line; ES-DE's macintosh (Apple Macintosh, es-de:resources/systems/linux/es_systems.xml at v3.5.0:1066) launches Mini vMac (:1076), the system the systemname map files Mac68k under."
+    },
+    "mu": {
+      "source": "esde",
+      "key": "palm",
+      "systemname": "Palm OS",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/mu_libretro.info:13 states systemname = \"Palm OS\" and no database line; ES-DE's palm (Palm OS, es-de:resources/systems/linux/es_systems.xml at v3.5.0:1588) launches Mu (:1592)."
+    },
+    "numero": {
+      "source": "romm",
+      "key": "ti-83",
+      "systemname": "TI83",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/numero_libretro.info:13 states systemname = \"TI83\" and no database line; no ES-DE build names the TI-83 (its ti99 is the TI-99/4A home computer); RomM's slug ti-83 (romm:backend/utils/platform_slugs.py:403) is the one table key that spells it, the target the systemname map files TI83 under."
+    },
+    "pcee2": {
+      "source": "esde",
+      "key": "ps2",
+      "systemname": "Sony PlayStation 2",
+      "citation": "pcee2 ships no .info; atlas's packaged declaration (atlas/data/core_declarations.json) states systemname = \"Sony PlayStation 2\" and no database. ES-DE's ps2 (es-de:resources/systems/linux/es_systems.xml at v3.5.0:1740) is the system the systemname map files that name under."
+    },
+    "pcem": {
+      "source": "esde",
+      "key": "pc",
+      "systemname": "PC",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/pcem_libretro.info:13 states systemname = \"PC\" and no database line; ES-DE's pc (IBM PC, es-de:resources/systems/linux/es_systems.xml at v3.5.0:1597) is the hardware PCem emulates; no ES-DE build launches PCem."
+    },
+    "sameduck": {
+      "source": "esde",
+      "key": "megaduck",
+      "systemname": "Mega Duck",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/sameduck_libretro.info:13 states systemname = \"Mega Duck\" and no database line; ES-DE's megaduck (Creatronic Mega Duck, es-de:resources/systems/linux/es_systems.xml at v3.5.0:1233) launches SameDuck (:1237)."
+    },
+    "vemulator": {
+      "source": "romm",
+      "key": "vmu",
+      "systemname": "SEGA Visual Memory Unit",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/vemulator_libretro.info:13 states systemname = \"SEGA Visual Memory Unit\" and no database line; no ES-DE build names the Dreamcast VMU as a system; RomM's slug vmu (romm:backend/utils/platform_slugs.py:441) is the one table key that spells it."
+    },
+    "virtualxt": {
+      "source": "esde",
+      "key": "pc",
+      "systemname": "PC/XT",
+      "citation": "the RetroDECK Flatpak's retroarch/rd_extras/cores/virtualxt_libretro.info:13 states systemname = \"PC/XT\" and no database line; ES-DE's pc (IBM PC, es-de:resources/systems/linux/es_systems.xml at v3.5.0:1597) launches VirtualXT (:1608), the IBM PC/XT hardware it emulates; ES-DE's dos also lists it (:614), and DOS names the operating system, not the machine."
+    }
+  }
+}

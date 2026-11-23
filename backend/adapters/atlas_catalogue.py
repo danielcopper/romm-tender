@@ -81,6 +81,8 @@ from _vendor.atlas import (
     CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
     CAVEAT_EMULATOR_NOT_FOUND,
     CAVEAT_EMULATOR_RULES_MISSING,
+    CAVEAT_ENTRY_DIRECTORY_HOLDS,
+    CAVEAT_ENTRY_DIRECTORY_UNREAD,
     CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT,
     CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD,
     CAVEAT_ENTRY_FORMAT_UNCLAIMED,
@@ -88,6 +90,7 @@ from _vendor.atlas import (
     CAVEAT_ENTRY_TAKES_NO_DIRECTORY,
     CAVEAT_FIND_RULES_REWRITTEN_AT_START,
     CAVEAT_FIND_RULES_UNREADABLE,
+    CAVEAT_FRONTEND_NAME_UNSCANNED,
     CAVEAT_LAUNCH_COMMAND_LABEL_UNKNOWN,
     CAVEAT_LAUNCH_PATH_ASSUMED,
     CAVEAT_LAUNCH_PATH_UNESTABLISHED,
@@ -108,6 +111,9 @@ from _vendor.atlas import (
     CAVEAT_PROGRAM_NOT_FOUND,
     CAVEAT_ROM_PATH_UNDECLARED,
     CAVEAT_RUN_GAME_DIFFERS,
+    CAVEAT_SYSTEM_AMBIGUOUS,
+    CAVEAT_SYSTEM_PAIRS_CONFLICT,
+    CAVEAT_SYSTEM_UNANIMOUS,
     CAVEAT_SYSTEM_UNKNOWN,
     EFFECT_GOES_ON,
     EFFECT_STOPS,
@@ -117,10 +123,14 @@ from _vendor.atlas import (
     KIND_LIBRETRO,
     KIND_RETROARCH_FOREIGN_CORE,
     KIND_STANDALONE,
+    RESOLUTION_AMBIGUOUS,
+    RESOLUTION_RESOLVED,
+    RESOLUTION_UNANIMOUS,
+    RESOLUTION_UNKNOWN,
     VERDICT_ENTRY_NOT_ACCEPTED,
     VERDICT_LAUNCHABLE,
     VERDICT_NEEDS_INSTALLATION,
-    VERDICT_NOT_ACCEPTED,
+    VERDICT_UNESTABLISHED,
 )
 
 from adapters.atlas_identity import emulator_identity
@@ -140,6 +150,7 @@ from domain.emulator_sources import (
     CATALOGUE_INVALID,
     CATALOGUE_NOT_SET_UP,
     CATALOGUE_SEALED,
+    CATALOGUE_SYSTEM_UNKNOWN,
     CATALOGUE_UNAVAILABLE,
 )
 from domain.launchability import (
@@ -155,8 +166,12 @@ from domain.launchability import (
     EMULATOR_DRIVE_UNKNOWN,
     ENCRYPTION_UNREAD,
     ENTRY_UNKNOWN,
+    FOLDER_HOLDS_GAMES,
+    FOLDER_ROUTE_UNREAD,
     FORMAT_REFUSED,
+    FORMAT_UNCLAIMED,
     FORMAT_UNESTABLISHED,
+    FRONTEND_WOULD_NOT_LIST,
     GAME_KIND_UNFOLLOWED,
     GAME_LIST_UNREAD,
     GOES_ON_FILE_MISSING,
@@ -171,7 +186,6 @@ from domain.launchability import (
     NEEDS_INSTALLING,
     NO_SOURCE,
     NOT_A_GAME_FILE,
-    NOT_A_LAUNCH_FILE,
     NOT_THIS_EMULATOR,
     NOTHING_TO_START,
     OPENED_CONTENT_UNREAD,
@@ -184,10 +198,12 @@ from domain.launchability import (
     PATH_TOO_LONG_UNCHECKED,
     PLAYLIST_DISCS_PAST_LIMIT,
     PLAYLIST_REFUSED,
+    SANDBOX_PATH_UNESTABLISHED,
     SAVESTATE_UNREAD,
     SHEET_REFUSED,
     STARTS,
     SYSTEM_UNKNOWN,
+    SYSTEMS_SEVERAL,
     TAKES_NO_FOLDER,
     TRACK_REFUSED,
     VERSION_DEPENDENT,
@@ -195,6 +211,7 @@ from domain.launchability import (
     LaunchStatement,
 )
 from domain.launchability import NOT_ESTABLISHED as LAUNCH_NOT_ESTABLISHED
+from domain.platform_system import PlatformRefusal, system_key, system_keys
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -202,14 +219,16 @@ if TYPE_CHECKING:
     from adapters.emulator_sources import EmulatorSourcesAdapter
     from domain.emulator_commands import EmulatorOption
     from domain.emulator_sources import SourcesReading
+    from domain.platform_system import SystemArgument
 
 # The codes on which Tender declines to answer from a catalogue. The first
 # four are the resolver's own "nobody could answer" family: the arrangement ships
 # none, atlas has not established where it keeps one, the one it has could not be
-# read, or part of it sits where atlas does not open. Only their absence makes an
-# empty entry list a statement about the machine — "the catalogue was read and
-# this frontend knows no emulator for this system" — and that is the one empty
-# the picker may render as an empty list.
+# read, or part of it sits where atlas does not open. Only their absence, on an
+# answer whose system resolved to one, makes an empty entry list a statement
+# about the machine — "the catalogue was read and this frontend knows no
+# emulator for this system" — and that is the one empty the picker may render
+# as an empty list.
 #
 # ``catalogue-invalid`` is Tender's own addition, and it reads the same
 # answer differently from the resolver on purpose. It means a catalogue file
@@ -283,17 +302,24 @@ _CORE_SO_SUFFIX = ".so"
 # does not hold reads as a program of its own.
 _KINDS = {KIND_LIBRETRO: CORE, KIND_STANDALONE: PROGRAM, KIND_RETROARCH_FOREIGN_CORE: FOREIGN_CORE}
 
-# The launchability verdicts, each in Tender's word. The resolver's ``unknown``
-# is "a statement about the look, never about the file, and never collapsed
-# into either 'no'" (``launchable``'s docstring, atlas/installations.py), so it
-# reads as not established; a verdict this map does not hold reads so too,
-# since Tender cannot word it as a yes or a no.
+# The launchability verdicts, each in Tender's word. The resolver's
+# ``unestablished`` is an entry reading that ended without a take or a refusal,
+# and its ``unknown`` "a statement about the look, never about the file"
+# (``launchable``'s docstring, atlas/installations.py); both read as not
+# established, and so does a verdict this map does not hold, since Tender
+# cannot word it as a yes or a no.
 _LAUNCH_STATES = {
     VERDICT_LAUNCHABLE: STARTS,
     VERDICT_NEEDS_INSTALLATION: NEEDS_INSTALLING,
-    VERDICT_NOT_ACCEPTED: NOT_A_LAUNCH_FILE,
     VERDICT_ENTRY_NOT_ACCEPTED: NOT_THIS_EMULATOR,
+    VERDICT_UNESTABLISHED: LAUNCH_NOT_ESTABLISHED,
 }
+
+# Why a system question named no single system, stated beside the answer's
+# resolution: the status is what is read ("Branch on the status, not on the
+# caveat codes", atlas docs/how-to-use.md, "Naming a system"), and the code is
+# only traced (:func:`resolution_trace`).
+_RESOLUTION_STATED_BECAUSE = frozenset({CAVEAT_SYSTEM_AMBIGUOUS, CAVEAT_SYSTEM_PAIRS_CONFLICT, CAVEAT_SYSTEM_UNANIMOUS})
 
 # Why a verdict could not be established, in Tender's word, the first code
 # found winning. A label the system's entries do not carry is the caller's own
@@ -350,12 +376,13 @@ _STARTS_WITH_A_NOTE_BECAUSE = {
     CAVEAT_OPENS_ENTRY_IGNORED: PLAYLIST_DISCS_PAST_LIMIT,
 }
 
-# What the resolver's reading of a file the entry starts stopped short of, on a
-# launchable verdict (#2195 D40): the entry's own boot read as far as it goes,
-# a loader that takes the extension and then reads content atlas does not, an
-# extension the emulator's builds disagree on, or the files a disc file opens
-# read as far as they go (#2698 D7). None of them refuses the start; each is said
-# beside it.
+# What the resolver's reading of a file the entry starts stopped short of
+# (#2195 D40): the entry's own boot read as far as it goes, a loader that takes
+# the extension and then reads content atlas does not, an extension the
+# emulator's builds disagree on, the files a disc file opens read as far as
+# they go (#2698 D7), or a folder handed to a core whose way of taking it atlas
+# does not follow. None of them refuses the start; each is said beside the
+# verdict, which is most often ``unestablished`` for them.
 _STOPPED_SHORT_BECAUSE = {
     CAVEAT_BOOT_PATH_MISSING: CONTENT_MISSING,
     CAVEAT_BOOT_PATH_UNESTABLISHED: CONTENT_UNREADABLE,
@@ -377,11 +404,10 @@ _STOPPED_SHORT_BECAUSE = {
     CAVEAT_OPENS_FILE_UNREAD: OPENED_FILE_UNREAD,
     CAVEAT_OPENS_SETTING_UNREAD: PATCH_SETTING_UNREAD,
     CAVEAT_OPENS_BOUND_EXCEEDED: OPENS_PAST_BOUND,
+    CAVEAT_ENTRY_DIRECTORY_UNREAD: FOLDER_ROUTE_UNREAD,
 }
 
-# Codes a launchability answer carries that change nothing Tender says.
-# ``entry-format-unclaimed`` stands on a verdict that lets the file start:
-# RetroArch hands a direct load to the core whatever it claims. A foreign core's
+# Codes a launchability answer carries that change nothing Tender says. A foreign core's
 # refusal (``core-file-foreign``) is the entry-not-accepted verdict it stands
 # beside, worded as that verdict. ``arrangement-version-drifted`` says the
 # installation's version is not the one the reading is pinned to, on every
@@ -391,19 +417,26 @@ _STOPPED_SHORT_BECAUSE = {
 # the file starts.
 _LAUNCH_NOTES_UNWORDED = frozenset(
     {
-        CAVEAT_ENTRY_FORMAT_UNCLAIMED,
         CAVEAT_CORE_FILE_FOREIGN,
         CAVEAT_ARRANGEMENT_VERSION_DRIFTED,
         CAVEAT_ROM_PATH_UNDECLARED,
     }
 )
 
-# Beside a start, the format the entry was not established to read (#2195 D41)
-# and an archive whose contents were not read, each a statement of its own
-# beside the rest (#2698 D8).
+# Beside a verdict, the format the entry was not established to read (#2195
+# D41), an archive whose contents were not read, a name ES-DE's scan would not
+# list the file under although the emulator is judged on it (#2195 D2), the
+# files in a folder the entry would take as games of their own, an extension
+# the core does not claim though it would be handed the file all the same, and
+# a path the source's sandbox could not be established to reach, each a
+# statement of its own beside the rest (#2698 D8).
 _STARTS_ALSO_SAYS = {
     CAVEAT_ENTRY_FORMAT_UNESTABLISHED: FORMAT_UNESTABLISHED,
     CAVEAT_ARCHIVE_CONTENTS_UNREAD: CONTENTS_UNREAD,
+    CAVEAT_FRONTEND_NAME_UNSCANNED: FRONTEND_WOULD_NOT_LIST,
+    CAVEAT_ENTRY_DIRECTORY_HOLDS: FOLDER_HOLDS_GAMES,
+    CAVEAT_ENTRY_FORMAT_UNCLAIMED: FORMAT_UNCLAIMED,
+    CAVEAT_LAUNCH_PATH_UNESTABLISHED: SANDBOX_PATH_UNESTABLISHED,
 }
 
 # The codes of the reading of the files a disc file opens. Each sentence names
@@ -421,13 +454,20 @@ _NAMES_A_FILE = frozenset(
 )
 
 
-def _unavailable(reason: str, source: dict[str, Any] | None) -> dict[str, Any]:
+def _unavailable(
+    reason: str, source: dict[str, Any] | None, *, system: tuple[str, ...] | None = None
+) -> dict[str, Any]:
     """The picker's "emulator list unavailable" answer, built fresh each call.
 
     A module-level constant would hand every caller the same ``options`` list,
-    which a caller is free to mutate.
+    which a caller is free to mutate. *system* is carried, as ``system``, only
+    with :data:`~domain.emulator_sources.CATALOGUE_SYSTEM_UNKNOWN`: the keys of
+    the system the source does not list, which its sentence names.
     """
-    return {"available": False, "options": [], "reason": reason, "source": source}
+    answer: dict[str, Any] = {"available": False, "options": [], "reason": reason, "source": source}
+    if system is not None:
+        answer["system"] = list(system)
+    return answer
 
 
 def _source_payload(reading: SourcesReading) -> dict[str, Any] | None:
@@ -446,8 +486,8 @@ def _named_source_payload(reading: SourcesReading, kind: str) -> dict[str, Any] 
     return {"kind": named.kind, "starts_games": named.starts_games}
 
 
-def _refusal_reason(answer: Any) -> str:
-    """Which refusal a refused catalogue answer is, as the page words it."""
+def catalogue_refusal_reason(answer: Any) -> str:
+    """Which refusal a refused catalogue answer is, as the page words it. Public for :mod:`adapters.atlas_platforms`."""
     codes = set(_caveat_codes(answer))
     if HEALTH_ISSUE_NOT_SET_UP in codes:
         return CATALOGUE_NOT_SET_UP
@@ -548,18 +588,41 @@ def _named_file(caveat: Any) -> str | None:
     file = caveat.data.get("file")
     if not isinstance(file, str):
         return None
-    return os.path.basename(file.rstrip("/")) or file
+    return _file_name(file)
+
+
+def _file_name(path: str) -> str:
+    """*path* without its folder: a folder's path by its last folder, a path with no name of its own as it is."""
+    return os.path.basename(path.rstrip("/")) or path
+
+
+def _named_files(caveat: Any) -> str | None:
+    """The names of the files *caveat* lists, without their folder, joined by ", "; ``None`` where it lists none.
+
+    It fills :attr:`~domain.launchability.LaunchStatement.file` for what a
+    folder holds, which the panel names as one list.
+    """
+    files = caveat.data.get("files")
+    if not isinstance(files, (list, tuple)) or not files:
+        return None
+    return ", ".join(_file_name(str(file)) for file in files)
 
 
 def _statement(caveat: Any, reason: str) -> LaunchStatement:
-    """*caveat* said as *reason*, naming its file where it is one of the opens reading's codes."""
+    """*caveat* said as *reason*, naming its file where it is an opens code, or the files a folder holds."""
+    if caveat.code == CAVEAT_ENTRY_DIRECTORY_HOLDS:
+        return LaunchStatement(reason, _named_files(caveat))
     return LaunchStatement(reason, _named_file(caveat) if caveat.code in _NAMES_A_FILE else None)
 
 
 def _beside_a_refusal(caveat: Any) -> str | None:
-    """What *caveat* says beside a refusal, in Tender's word: a file the emulator would have gone on without, what
-    else it is established to do, or something the resolver could not establish; ``None`` for the stop itself and
-    for anything else."""
+    """What *caveat* says beside a refusal or a verdict not established, in Tender's word; ``None`` for the stop itself
+    and for anything else.
+
+    A file the emulator would have gone on without, what else it is established
+    to do, something the resolver could not establish, or a statement of its own
+    (:data:`_STARTS_ALSO_SAYS`).
+    """
     for effect in (EFFECT_GOES_ON, EFFECT_UNESTABLISHED):
         reason = _open_failure(caveat, effect)
         if reason is not None:
@@ -575,11 +638,13 @@ def _statements(answer: Any, state: str) -> tuple[LaunchStatement, ...]:
     """Every statement Tender says beside *answer*'s verdict, in the resolver's caveat order (#2698 D8).
 
     Beside a start, each one Tender words; beside a refusal, whose stop is the
-    verdict's reason, each file the emulator would have gone on without, what
-    else it is established to do, and each thing the resolver could not
-    establish.
+    verdict's reason, and beside a verdict that could not be established, each
+    file the emulator would go on without, what else it is established to do,
+    each thing the resolver could not establish, and each statement of its own
+    (:data:`_STARTS_ALSO_SAYS`: the format, an archive, the frontend's name, a
+    folder's games, an unclaimed extension, the sandbox's path).
     """
-    if state == NOT_THIS_EMULATOR:
+    if state in (NOT_THIS_EMULATOR, LAUNCH_NOT_ESTABLISHED):
         return tuple(
             _statement(caveat, reason) for caveat in answer.caveats if (reason := _beside_a_refusal(caveat)) is not None
         )
@@ -612,7 +677,16 @@ def _first_said_beside_a_start(answer: Any) -> tuple[str | None, str | None]:
 
 
 def _not_established_reason(answer: Any) -> str | None:
-    """Why the verdict could not be established, in Tender's word."""
+    """Why the verdict could not be established, in Tender's word.
+
+    Where the answer does not hold for the platform (:func:`answer_holds`), its
+    resolution says why: several systems answer differently and the resolver
+    names none of them, or none here (#2751). An entry reading that ended without a take or a refusal names no
+    reason of its own; what it could not establish is the answer's statements.
+    """
+    unresolved = unresolved_reason(answer)
+    if unresolved is not None:
+        return unresolved
     codes = _caveat_codes(answer)
     reason = next((reason for code, reason in _NOT_ESTABLISHED_LAUNCH_BECAUSE if code in codes), None)
     if reason is None and catalogue_refused(answer):
@@ -647,15 +721,16 @@ def _installed_in(installers: Any) -> tuple[str, ...]:
     return tuple(installer.entry.label for installer in installers if installer.entry is not None)
 
 
-def _launchability(answer: Any, *, system: str, content_path: str, label: str) -> Launchability:
-    """*answer* in Tender's words."""
-    state = _LAUNCH_STATES.get(answer.verdict, LAUNCH_NOT_ESTABLISHED)
+def _launchability(answer: Any, *, system: SystemArgument, content_path: str, label: str) -> Launchability:
+    """*answer* in Tender's words; one that does not hold for the platform is not established, whatever it says."""
+    holds = answer_holds(answer)
+    state = _LAUNCH_STATES.get(answer.verdict, LAUNCH_NOT_ESTABLISHED) if holds else LAUNCH_NOT_ESTABLISHED
     codes = set(_caveat_codes(answer))
     reason, reason_file = _launch_reason(answer, state)
     return Launchability(
         state=state,
         entry=label,
-        system=system,
+        system=system_key(system),
         file=os.path.basename(content_path),
         extension=answer.extension,
         starts_from=tuple(answer.accepted),
@@ -675,12 +750,57 @@ def catalogue_refused(answer: Any) -> bool:
     That is, no catalogue could be read, or what was read cannot be taken as the
     whole list: a sealed one, a systems file ES-DE refuses to load, or the empty
     answer of an installation that has not been set up. Public for
-    :mod:`adapters.atlas_saves` and :mod:`adapters.emulator_sources`, which decline
-    on the same codes: entries beside a refusal (EmuDeck's overlay beside
-    ``emulator-catalogue-sealed``) are an incomplete list, and an incomplete
-    list would look complete.
+    :mod:`adapters.atlas_saves`, :mod:`adapters.atlas_platforms` and
+    :mod:`adapters.emulator_sources`, which decline on the same codes: entries
+    beside a refusal (EmuDeck's overlay beside ``emulator-catalogue-sealed``)
+    are an incomplete list, and an incomplete list would look complete.
     """
     return not _CATALOGUE_REFUSALS.isdisjoint(_caveat_codes(answer))
+
+
+def resolution_status(answer: Any) -> str:
+    """How the system *answer* was asked about resolved, as the resolver states it (``answer.resolution.status``).
+
+    An answer that states no resolution is one to a question that named no
+    system, and reads as resolved: nothing stood between the question and its
+    answer. Public for every reading module whose answers name a system.
+    """
+    resolution = answer.resolution
+    return RESOLUTION_RESOLVED if resolution is None else resolution.status
+
+
+def resolved(answer: Any) -> bool:
+    """Whether the system *answer* was asked about resolved to one system (:func:`resolution_status`)."""
+    return resolution_status(answer) == RESOLUTION_RESOLVED
+
+
+def answer_holds(answer: Any) -> bool:
+    """Whether *answer* holds for the platform whose system it was asked about: ``resolved`` or ``unanimous``.
+
+    The rule, and which questions read it, is ``docs/architecture/invariants/resolver.md``'s ("An answer about a
+    system says how it resolved it"); a question that needs one system's place reads :func:`resolved` instead.
+    """
+    return resolution_status(answer) in (RESOLUTION_RESOLVED, RESOLUTION_UNANIMOUS)
+
+
+def unresolved_reason(answer: Any) -> str | None:
+    """Why *answer* does not hold for the platform (:func:`answer_holds`), in Tender's word; ``None`` where it does.
+
+    :data:`~domain.launchability.SYSTEMS_SEVERAL` where several of the
+    source's systems answer differently and the resolver names none of them,
+    else :data:`~domain.launchability.SYSTEM_UNKNOWN`: the source has no system
+    the question names, or the pairs asked with name different ones. The one
+    place that splits the two.
+    """
+    if answer_holds(answer):
+        return None
+    return SYSTEMS_SEVERAL if resolution_status(answer) == RESOLUTION_AMBIGUOUS else SYSTEM_UNKNOWN
+
+
+def resolution_trace(answer: Any) -> str:
+    """The resolution of the system *answer* was asked about, with the codes that state why, for a log line."""
+    codes = sorted(code for code in _caveat_codes(answer) if code in _RESOLUTION_STATED_BECAUSE)
+    return f"resolution={resolution_status(answer)} {codes}"
 
 
 class AtlasCatalogueAdapter:
@@ -712,7 +832,7 @@ class AtlasCatalogueAdapter:
     # -- public API ----------------------------------------------------------
 
     def get_active_core(
-        self, system_name: str, *, reading: SourcesReading | None = None
+        self, system: SystemArgument, *, reading: SourcesReading | None = None
     ) -> tuple[str | None, str | None]:
         """Resolve the system-layer libretro active core for a system.
 
@@ -735,8 +855,8 @@ class AtlasCatalogueAdapter:
         emulator, and that is a different question from "which emulator is this
         platform about".
         """
-        answer = self._catalogue_answer(system_name, self._reading(reading))
-        if answer is None or catalogue_refused(answer):
+        answer = self._catalogue_answer(system, self._reading(reading))
+        if answer is None or catalogue_refused(answer) or not answer_holds(answer):
             return (None, None)
         cores = [
             entry
@@ -748,7 +868,7 @@ class AtlasCatalogueAdapter:
 
     def get_emulator_options(
         self,
-        system_name: str,
+        system: SystemArgument,
         *,
         reading: SourcesReading | None = None,
         content_path: str | None = None,
@@ -761,11 +881,16 @@ class AtlasCatalogueAdapter:
         six catalogue refusals, or when the resolver could not be asked at all —
         the caller surfaces that as "emulator list unavailable" rather than
         seeing an empty list it cannot distinguish from a system the frontend
-        knows no emulator for. ``reason`` says which, and is ``None`` where the
-        list is available: ``no_source`` / ``switched_off`` where no source
-        answers, ``not_set_up`` / ``catalogue_invalid`` / ``sealed`` /
-        ``unavailable`` for a refusal. ``source`` is the answering source's ``{"kind",
-        "starts_games"}``, ``None`` where none answers.
+        knows no emulator for — and when the answer does not hold for the
+        platform (:func:`answer_holds`), which is no list either. Where several
+        of the source's systems answer alike the list is their shared one.
+        ``reason`` says which, and is ``None`` where the list is available:
+        ``no_source`` / ``switched_off`` where no source answers, ``not_set_up``
+        / ``catalogue_invalid`` / ``sealed`` / ``unavailable`` for a refusal,
+        ``platform_systems_several`` where several of the source's systems
+        answer differently and the resolver names none, and ``system_unknown``
+        where the source does not list the system. ``source`` is the answering
+        source's ``{"kind", "starts_games"}``, ``None`` where none answers.
 
         ``options`` is in the order the resolver gives: a choice the user made
         inside ES-DE first, marked ``chosen_in_frontend``, the rest as declared.
@@ -776,7 +901,7 @@ class AtlasCatalogueAdapter:
         ``availability``, libretro cores included: one it states not installed
         is ``not_installed``, and as the default cannot start; one it could not
         establish carries a ``not_established`` note and is never the default
-        by itself. A system the catalogue does not declare yields
+        by itself. A system the catalogue declares with no entry yields
         ``available: True`` with an empty list.
 
         *source* names a detected source to ask instead of the answering one,
@@ -788,11 +913,18 @@ class AtlasCatalogueAdapter:
         payload = _source_payload(reading) if source is None else _named_source_payload(reading, source)
         if payload is None:
             return _unavailable(reading.no_answer_reason() if source is None else CATALOGUE_UNAVAILABLE, None)
-        answer = self._catalogue_answer(system_name, reading, content_path=content_path, source=source)
+        answer = self._catalogue_answer(system, reading, content_path=content_path, source=source)
         if answer is None:
             return _unavailable(CATALOGUE_UNAVAILABLE, payload)
         if catalogue_refused(answer):
-            return _unavailable(_refusal_reason(answer), payload)
+            return _unavailable(catalogue_refusal_reason(answer), payload)
+        unresolved = unresolved_reason(answer)
+        if unresolved == SYSTEMS_SEVERAL:
+            return _unavailable(PlatformRefusal.SEVERAL.value, payload)
+        if unresolved is not None:
+            # The source does not list the system the question names, which is
+            # no failed read.
+            return _unavailable(CATALOGUE_SYSTEM_UNKNOWN, payload, system=system_keys(system))
         chosen = _frontend_choice(answer.entries)
         options = [_entry_option(entry, chosen_in_frontend=entry is chosen) for entry in answer.entries]
         return {"available": True, "options": options, "reason": None, "source": payload}
@@ -801,8 +933,8 @@ class AtlasCatalogueAdapter:
         """A fresh reading of the emulator sources, for a call that asks every source in the user's order."""
         return self._sources.read()
 
-    def system_supports_m3u(self, system_name: str) -> bool:
-        """True iff the catalogue lists ``.m3u`` as a supported extension for *system_name*.
+    def system_supports_m3u(self, system: SystemArgument) -> bool:
+        """True iff the catalogue lists ``.m3u`` as a supported extension for *system*.
 
         Reads the same per-system accept-list ES-DE uses to decide
         directory-collapse, so the answer can never disagree with ES-DE. Returns
@@ -810,41 +942,49 @@ class AtlasCatalogueAdapter:
         (default-safe: a missing playlist only degrades; a wrong one breaks the
         launch).
         """
-        return ".m3u" in self.get_supported_extensions(system_name)
+        return ".m3u" in self.get_supported_extensions(system)
 
-    def is_known_system(self, system_name: str) -> bool | None:
-        """Whether the frontend's catalogue declares *system_name*.
+    def is_known_system(self, system: SystemArgument) -> bool | None:
+        """Whether the frontend's catalogue holds *system*, as the resolver resolves it.
 
-        ``None`` when the catalogue could not be read at all — the caller must not
-        read a source that did not answer as a denial, which is the same
-        default-safe rule :meth:`get_supported_extensions` follows by returning an
-        empty set. ``False`` is therefore a positive statement: this catalogue was
-        read, and it does not name this system.
+        ``None`` when the catalogue could not be read at all, the system
+        resolved to several of its systems, or the pairs asked with name
+        different ones — the caller must not read a source that did not
+        answer as a denial, which is the same default-safe rule
+        :meth:`get_supported_extensions` follows by returning an empty set.
+        ``False`` is therefore a positive statement: this catalogue was read,
+        and it holds no such system.
         """
-        answer = self._systems_answer(self._sources.read())
-        if answer is None or catalogue_refused(answer):
+        placement = self._rom_location(system, self._sources.read())
+        if placement is None or catalogue_refused(placement):
             return None
-        return system_name in answer.systems
+        status = resolution_status(placement)
+        if status == RESOLUTION_RESOLVED:
+            return True
+        return False if status == RESOLUTION_UNKNOWN else None
 
-    def get_supported_extensions(self, system_name: str, *, reading: SourcesReading | None = None) -> frozenset[str]:
-        """Return the extensions the catalogue accepts for *system_name*, verbatim.
+    def get_supported_extensions(
+        self, system: SystemArgument, *, reading: SourcesReading | None = None
+    ) -> frozenset[str]:
+        """Return the extensions the catalogue accepts for *system*, verbatim.
 
         Reads the same per-system declaration ES-DE consults, so a caller can
         intersect it with the disc-image set and never offer a disc the emulator
         cannot launch. The tokens are ES-DE's own, both cases listed where the
         file lists both, and ES-DE compares them case-exactly. Returns an empty
-        frozenset for an unknown system or when the catalogue could not be read
-        (default-safe: the caller falls back to the full disc set).
+        frozenset where the system resolved to no one system the catalogue
+        holds or the catalogue could not be read (default-safe: the caller
+        falls back to the full disc set).
         """
-        placement = self._rom_location(system_name, self._reading(reading))
-        if placement is None:
+        placement = self._rom_location(system, self._reading(reading))
+        if placement is None or not resolved(placement):
             return frozenset()
         return frozenset(placement.extensions)
 
     def launchability(
-        self, system_name: str, content_path: str, *, label: str, reading: SourcesReading | None = None
+        self, system: SystemArgument, content_path: str, *, label: str, reading: SourcesReading | None = None
     ) -> Launchability:
-        """Whether *content_path* starts as *system_name*'s content with the entry *label* names.
+        """Whether *content_path* starts as *system*'s content with the entry *label* names.
 
         The verdict is the answering source's, asked with the entry Tender
         starts the game through, so it is about that entry rather than the one
@@ -858,29 +998,29 @@ class AtlasCatalogueAdapter:
             return Launchability(
                 state=LAUNCH_NOT_ESTABLISHED,
                 entry=label,
-                system=system_name,
+                system=system_key(system),
                 file=os.path.basename(content_path),
                 extension="",
                 reason=NO_SOURCE,
             )
 
         def ask() -> Any:
-            subject = f"launchable({system_name!r}, label={label!r})"
-            answer = self._ask(lambda: installation.launchable(system_name, content_path, label=label), subject)
+            subject = f"launchable({system!r}, label={label!r})"
+            answer = self._ask(lambda: installation.launchable(system, content_path, label=label), subject)
             if answer is not None:
-                self._trace(system_name, f"verdict={answer.verdict}", answer)
+                self._trace(repr(system), f"verdict={answer.verdict}", answer)
             return answer
 
-        answer = reading.remember(("launchable", system_name, content_path, label), ask)
+        answer = reading.remember(("launchable", system, content_path, label), ask)
         if answer is None:
             return Launchability(
                 state=LAUNCH_NOT_ESTABLISHED,
                 entry=label,
-                system=system_name,
+                system=system_key(system),
                 file=os.path.basename(content_path),
                 extension="",
             )
-        return _launchability(answer, system=system_name, content_path=content_path, label=label)
+        return _launchability(answer, system=system, content_path=content_path, label=label)
 
     # -- helpers -------------------------------------------------------------
 
@@ -896,7 +1036,7 @@ class AtlasCatalogueAdapter:
         """
         self._log_debug(f"[catalogue] {subject}: {shape} caveats={sorted(set(_caveat_codes(answer)))}")
 
-    def _trace_undeclared(self, system_name: str, entries: tuple[Any, ...]) -> None:
+    def _trace_undeclared(self, system: SystemArgument, entries: tuple[Any, ...]) -> None:
         """Say when a listing carries entries no layer declared a position for.
 
         Such an entry has no shipped place to sort by and cannot become the
@@ -907,7 +1047,7 @@ class AtlasCatalogueAdapter:
         undeclared = [entry.label for entry in entries if entry.declared_index is None]
         if undeclared:
             self._log_debug(
-                f"[catalogue] {system_name}: {len(undeclared)} of {len(entries)} entries carry no declared "
+                f"[catalogue] {system}: {len(undeclared)} of {len(entries)} entries carry no declared "
                 f"position and can hold no default: {undeclared}"
             )
 
@@ -936,9 +1076,14 @@ class AtlasCatalogueAdapter:
         return installation
 
     def _catalogue_answer(
-        self, system_name: str, reading: SourcesReading, *, content_path: str | None = None, source: str | None = None
+        self,
+        system: SystemArgument,
+        reading: SourcesReading,
+        *,
+        content_path: str | None = None,
+        source: str | None = None,
     ) -> Any:
-        """The catalogue's answer for *system_name* through *reading*, or ``None`` with nothing to ask.
+        """The catalogue's answer for *system* through *reading*, or ``None`` with nothing to ask.
 
         Asked with *content_path* where a caller names one game: the answer then
         states that game's own choice in ES-DE (``<altemulator>``) as well.
@@ -946,41 +1091,27 @@ class AtlasCatalogueAdapter:
         installation = self._installation(reading, source)
         if installation is None:
             return None
-        subject = f"emulators_for({system_name!r})"
+        subject = f"emulators_for({system!r})"
 
         def ask() -> Any:
-            answer = self._ask(lambda: installation.emulators_for(system_name, content_path=content_path), subject)
+            answer = self._ask(lambda: installation.emulators_for(system, content_path=content_path), subject)
             if answer is not None:
-                self._trace(system_name, f"entries={len(answer.entries)}", answer)
-                self._trace_undeclared(system_name, answer.entries)
+                self._trace(repr(system), f"entries={len(answer.entries)}", answer)
+                self._trace_undeclared(system, answer.entries)
             return answer
 
-        return reading.remember(("emulators_for", system_name, content_path, source), ask)
+        return reading.remember(("emulators_for", system, content_path, source), ask)
 
-    def _systems_answer(self, reading: SourcesReading) -> Any:
-        """Every system the catalogue declares through *reading*, or ``None`` with nothing to ask."""
+    def _rom_location(self, system: SystemArgument, reading: SourcesReading) -> Any:
+        """Where *system*'s content lives and what it accepts, through *reading*, or ``None``."""
         installation = self._installation(reading)
         if installation is None:
             return None
 
         def ask() -> Any:
-            answer = self._ask(installation.systems, "systems")
-            if answer is not None:
-                self._trace("systems", f"declared={len(answer.systems)}", answer)
-            return answer
-
-        return reading.remember(("systems",), ask)
-
-    def _rom_location(self, system_name: str, reading: SourcesReading) -> Any:
-        """Where *system_name*'s content lives and what it accepts, through *reading*, or ``None``."""
-        installation = self._installation(reading)
-        if installation is None:
-            return None
-
-        def ask() -> Any:
-            placement = self._ask(lambda: installation.rom_location(system_name), f"rom_location({system_name!r})")
+            placement = self._ask(lambda: installation.rom_location(system), f"rom_location({system!r})")
             if placement is not None:
-                self._trace(system_name, f"extensions={len(placement.extensions)}", placement)
+                self._trace(repr(system), f"extensions={len(placement.extensions)}", placement)
             return placement
 
-        return reading.remember(("rom_location", system_name), ask)
+        return reading.remember(("rom_location", system), ask)

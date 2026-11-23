@@ -14,6 +14,7 @@ import type {
   EmulatorOption,
   EmulatorStart,
   PlatformSystemAnswer,
+  UnlistedSystem,
   VanishedPick,
 } from "../types";
 
@@ -30,6 +31,7 @@ interface CoreState {
   emulators: EmulatorOption[];
   emulatorDataAvailable: boolean;
   emulatorDataReason: EmulatorDataReason | null;
+  emulatorDataSystem: UnlistedSystem | null;
   emulatorSource: AnsweringSource | null;
   emulatorPlatformSystem: PlatformSystemAnswer | null;
   platformCoreLabel: string | null;
@@ -218,6 +220,7 @@ describe("refreshCoreInfoInBackground", () => {
         has_game_override: false,
         emulator_data_available: true,
         emulator_data_reason: null,
+        emulator_data_system: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
         platform_system: null,
         emulators: [
@@ -241,6 +244,7 @@ describe("refreshCoreInfoInBackground", () => {
       emulators: [],
       emulatorDataAvailable: true,
       emulatorDataReason: null,
+      emulatorDataSystem: null,
       emulatorSource: { kind: "retrodeck", starts_games: true },
       emulatorPlatformSystem: null,
       platformCoreLabel: null,
@@ -265,6 +269,7 @@ describe("refreshCoreInfoInBackground", () => {
         has_game_override: false,
         emulator_data_available: true,
         emulator_data_reason: null,
+        emulator_data_system: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
         platform_system: null,
         emulators: [],
@@ -295,6 +300,7 @@ describe("refreshCoreInfoInBackground", () => {
         has_game_override: false,
         emulator_data_available: true,
         emulator_data_reason: null,
+        emulator_data_system: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
         platform_system: null,
         emulators: [],

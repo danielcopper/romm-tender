@@ -32,6 +32,7 @@ import { DiscSelector } from "./DiscSelector";
 import { VersionPicker } from "./VersionPicker";
 import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { Muted, SELECTION_ACCENT } from "./layout/pane";
+import { platformSystemNotes } from "../utils/emulatorSourceWording";
 import { activeEmulatorNote, isNotEstablished } from "../utils/emulatorInstallation";
 import { useTriggerHandler } from "./emulatorStepping";
 import { useBumperHandler, usePlayRowRef } from "./tabStepping";
@@ -708,6 +709,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         emulators: detail.emulators,
         emulatorDataAvailable: detail.emulatorDataAvailable,
         emulatorDataReason: detail.emulatorDataReason,
+        emulatorDataSystem: detail.emulatorDataSystem,
         emulatorSource: detail.emulatorSource,
         emulatorPlatformSystem: detail.emulatorPlatformSystem,
         activeLabel: detail.activeCoreLabel,
@@ -964,11 +966,15 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const emulatorRefusal =
     stranded || fileMissing || startCheckFailed || detail.emulatorStart === null
       ? null
-      : startRefusal(detail.emulatorStart, gameLaunch, canPick);
+      : startRefusal(detail.emulatorStart, gameLaunch, canPick, detail.emulatorSource);
   const startNotes =
     stranded || fileMissing || startCheckFailed || emulatorRefusal !== null
       ? []
-      : [...launchNotes(gameLaunch, detail.emulatorSource), ...startRemarkSentences(detail.emulatorStart?.remarks)];
+      : [
+          ...launchNotes(gameLaunch, detail.emulatorSource),
+          ...startRemarkSentences(detail.emulatorStart?.remarks),
+          ...platformSystemNotes(detail.emulatorPlatformSystem),
+        ];
 
   const warningLine = (testId: string, text: string) => (
     <div

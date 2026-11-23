@@ -39,7 +39,7 @@ from fakes.fake_source_platform_systems import FakeSourcePlatformSystems
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
 import services.library._convergence as convergence_module
-from domain.platform_system import PLATFORM_IDS_KEY, decode_platform_ids
+from domain.platform_system import PLATFORM_IDS_KEY, PlatformKeys, decode_platform_ids
 from domain.playtime import Playtime
 from domain.rom_install import RomInstall
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
@@ -6540,7 +6540,7 @@ class TestPlatformTurnedOffAndBackOn:
 
         async def bind_every_game(unit, event):
             if unit.slug == "gba":
-                platform_systems.platform_system("n64")
+                platform_systems.platform_system(PlatformKeys("n64", "n64"))
             event.set()
             return {"n64": {"1": 5001}, "gba": {"4": 5004, "5": 5005}}.get(unit.slug, {})
 

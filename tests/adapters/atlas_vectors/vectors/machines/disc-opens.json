@@ -19,7 +19,8 @@
           },
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -95,7 +96,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -137,7 +141,17 @@
               "present": false
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -156,7 +170,8 @@
           },
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -233,7 +248,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "Beetle PSX HW",
             "kind": "libretro",
             "core_so": "mednafen_psx_hw_libretro.so",
@@ -275,7 +293,17 @@
               "present": false
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -296,7 +324,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Disc 2).cue": "FILE \"Game (Disc 2).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n",
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Disc 2).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -372,7 +401,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -432,7 +464,17 @@
               "present": false
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -453,7 +495,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Disc 2).cue": "FILE \"Game (Disc 2).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n",
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Disc 2).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -530,7 +573,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "Beetle PSX HW",
             "kind": "libretro",
             "core_so": "mednafen_psx_hw_libretro.so",
@@ -590,7 +636,17 @@
               "present": false
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -606,7 +662,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game.cue": "FILE \"Game (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n",
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -683,7 +740,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "Beetle PSX",
             "kind": "libretro",
             "core_so": "mednafen_psx_libretro.so",
@@ -730,7 +790,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -746,7 +816,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game.cue": "FILE \"Renamed.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n",
           "/mnt/sd/retrodeck/roms/psx/Game/Game.bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -822,7 +893,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -864,7 +938,17 @@
               "present": false
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -883,7 +967,8 @@
           },
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).wav": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -959,7 +1044,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -1001,7 +1089,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1020,7 +1118,8 @@
           },
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).wav": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -1080,7 +1179,7 @@
           }
         ],
         "launchable": {
-          "verdict": "launchable",
+          "verdict": "unestablished",
           "extension": ".cue",
           "accepted": [
             ".bin",
@@ -1097,7 +1196,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "Beetle PSX",
             "kind": "libretro",
             "core_so": "mednafen_psx_libretro.so",
@@ -1147,7 +1249,17 @@
                 "file": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).wav"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1166,7 +1278,8 @@
           },
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).mp3": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -1243,7 +1356,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "Beetle PSX",
             "kind": "libretro",
             "core_so": "mednafen_psx_libretro.so",
@@ -1291,7 +1407,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1310,7 +1436,8 @@
           },
           "/mnt/sd/retrodeck/roms/saturn/Game/Game (Track 2).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -1382,7 +1509,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "saturn",
+            "system": {
+              "source": "esde",
+              "key": "saturn"
+            },
             "label": "Beetle Saturn",
             "kind": "libretro",
             "core_so": "mednafen_saturn_libretro.so",
@@ -1424,7 +1554,17 @@
               "present": false
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "saturn"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1443,7 +1583,8 @@
           },
           "/mnt/sd/retrodeck/roms/saturn/Game/Game (Track 2).mp3": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -1515,7 +1656,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "saturn",
+            "system": {
+              "source": "esde",
+              "key": "saturn"
+            },
             "label": "Beetle Saturn",
             "kind": "libretro",
             "core_so": "mednafen_saturn_libretro.so",
@@ -1561,7 +1705,17 @@
                 "effect": "goes-on"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "saturn"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1580,7 +1734,8 @@
           },
           "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game (Track 2).wav": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -1652,7 +1807,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "pcenginecd",
+            "system": {
+              "source": "esde",
+              "key": "pcenginecd"
+            },
             "label": "Beetle PCE",
             "kind": "libretro",
             "core_so": "mednafen_pce_libretro.so",
@@ -1694,7 +1852,17 @@
               "present": false
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "pcenginecd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1713,7 +1881,8 @@
           },
           "/mnt/sd/retrodeck/roms/psx/Game/Game.sub": {
             "size": 96
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -1773,7 +1942,7 @@
           }
         ],
         "launchable": {
-          "verdict": "launchable",
+          "verdict": "unestablished",
           "extension": ".ccd",
           "accepted": [
             ".bin",
@@ -1790,7 +1959,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "Beetle PSX",
             "kind": "libretro",
             "core_so": "mednafen_psx_libretro.so",
@@ -1834,7 +2006,17 @@
                 "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.ccd"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1856,7 +2038,8 @@
           },
           "/mnt/sd/retrodeck/roms/psx/Game/Game.sbi": {
             "size": 4
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -1932,7 +2115,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -1974,7 +2160,17 @@
               "present": true
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1993,7 +2189,8 @@
           },
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -2070,7 +2267,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "DuckStation (Legacy) (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -2118,7 +2318,17 @@
               "present": false
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2141,7 +2351,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf": {
             "size": 64
           },
-          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[CDROM]\nLoadImagePatches = true\n"
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[CDROM]\nLoadImagePatches = true\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -2201,7 +2412,7 @@
           }
         ],
         "launchable": {
-          "verdict": "launchable",
+          "verdict": "unestablished",
           "extension": ".cue",
           "accepted": [
             ".bin",
@@ -2218,7 +2429,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "DuckStation (Legacy) (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -2280,7 +2494,417 @@
                 "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
+        }
+      }
+    },
+    {
+      "name": "opens-duckstation-an-untold-patch-where-the-setting-loads-it-is-not-established",
+      "rationale": "[CDROM] LoadImagePatches is on and whether the .ppf of the image's name is there cannot be told (a directory stands at its path): a patch DuckStation cannot apply fails the open (cd_image.cpp:120-135), so the take is not established (#776 D9).",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.cue": "FILE \"Game (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
+            "size": 2352
+          },
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[CDROM]\nLoadImagePatches = true\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf",
+          "/mnt/sd/retrodeck/saves"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/swanstation_libretro.so": {
+            "library_name": "SwanStation",
+            "valid_extensions": "exe|psexe|cue|bin|img|iso|chd|pbp|ecm|mds|psf|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_libretro.so": {
+            "library_name": "Beetle PSX",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_hw_libretro.so": {
+            "library_name": "Beetle PSX HW",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/pcsx_rearmed_libretro.so": {
+            "library_name": "PCSX-ReARMed",
+            "valid_extensions": "bin|cue|img|mdf|pbp|toc|cbn|m3u|ccd|chd|iso|exe"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_saturn_libretro.so": {
+            "library_name": "Beetle Saturn",
+            "valid_extensions": "ccd|chd|cue|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_libretro.so": {
+            "library_name": "Beetle PCE",
+            "valid_extensions": "pce|sgx|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_fast_libretro.so": {
+            "library_name": "Beetle PCE Fast",
+            "valid_extensions": "pce|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pcfx_libretro.so": {
+            "library_name": "Beetle PC-FX",
+            "valid_extensions": "cue|ccd|toc|chd"
+          }
+        },
+        "launchable_query": {
+          "system": "psx",
+          "content_path": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+          "label": "DuckStation (Legacy) (Standalone)"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "unestablished",
+          "extension": ".cue",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".ccd",
+            ".CCD",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".m3u",
+            ".M3U",
+            ".mds",
+            ".MDS"
+          ],
+          "entry": {
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "label": "DuckStation (Legacy) (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DUCKSTATION",
+            "declared_index": 4,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.sbi",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.lsd",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": null
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-file-unread",
+              "data": {
+                "entry": "DuckStation (Legacy) (Standalone)",
+                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf"
+              }
+            }
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
+        }
+      }
+    },
+    {
+      "name": "opens-duckstation-a-patch-beside-a-later-disc-rides-a-launchable-answer",
+      "rationale": "[CDROM] LoadImagePatches is on, and the playlist's second disc has a .ppf of its name beside it while the first has none. DuckStation opens the playlist's first entry at launch and every other only when the player switches to it (cd_image_m3u.cpp), so the patch it cannot apply would fail that later open, not the launch: the take stands, with opens-content-unread stating the patch atlas does not read.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.cue": "FILE \"Game (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
+            "size": 2352
+          },
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[CDROM]\nLoadImagePatches = true\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Disc2.cue": "FILE \"Disc2 (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE \"Disc2 (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Disc2 (Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/psx/Game/Disc2 (Track 2).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/psx/Game/Disc2.ppf": {
+            "size": 64
+          },
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u": "Game.cue\nDisc2.cue\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/swanstation_libretro.so": {
+            "library_name": "SwanStation",
+            "valid_extensions": "exe|psexe|cue|bin|img|iso|chd|pbp|ecm|mds|psf|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_libretro.so": {
+            "library_name": "Beetle PSX",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_hw_libretro.so": {
+            "library_name": "Beetle PSX HW",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/pcsx_rearmed_libretro.so": {
+            "library_name": "PCSX-ReARMed",
+            "valid_extensions": "bin|cue|img|mdf|pbp|toc|cbn|m3u|ccd|chd|iso|exe"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_saturn_libretro.so": {
+            "library_name": "Beetle Saturn",
+            "valid_extensions": "ccd|chd|cue|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_libretro.so": {
+            "library_name": "Beetle PCE",
+            "valid_extensions": "pce|sgx|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_fast_libretro.so": {
+            "library_name": "Beetle PCE Fast",
+            "valid_extensions": "pce|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pcfx_libretro.so": {
+            "library_name": "Beetle PC-FX",
+            "valid_extensions": "cue|ccd|toc|chd"
+          }
+        },
+        "launchable_query": {
+          "system": "psx",
+          "content_path": "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u",
+          "label": "DuckStation (Legacy) (Standalone)"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".m3u",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".ccd",
+            ".CCD",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".m3u",
+            ".M3U",
+            ".mds",
+            ".MDS"
+          ],
+          "entry": {
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "label": "DuckStation (Legacy) (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DUCKSTATION",
+            "declared_index": 4,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.sbi",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.lsd",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Disc2.cue",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Disc2 (Track 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Disc2.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Disc2 (Track 2).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Disc2.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Disc2.sbi",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Disc2.cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Disc2.lsd",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Disc2.cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Disc2.ppf",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Disc2.cue",
+              "present": true
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-content-unread",
+              "data": {
+                "entry": "DuckStation (Legacy) (Standalone)",
+                "file": "/mnt/sd/retrodeck/roms/psx/Game/Disc2.ppf"
+              }
+            }
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2303,7 +2927,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf": {
             "size": 64
           },
-          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[CDROM]\nLoadImagePatches = false\n"
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[CDROM]\nLoadImagePatches = false\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -2380,7 +3005,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "DuckStation (Legacy) (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -2428,13 +3056,23 @@
               "present": false
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
     {
       "name": "opens-duckstation-an-unreadable-settings-file-leaves-the-patch-open",
-      "rationale": "DuckStation's settings file is there and cannot be read, so whether it loads patches is not established: the .ppf of the image's name is listed with its presence unknown.",
+      "rationale": "DuckStation's settings file is there and cannot be read, so whether it loads patches is not established, and the .ppf of the image's name is looked for all the same: none is there, so nothing a patch could do decides the open.",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -2450,7 +3088,8 @@
           },
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": {
             "status": "unreadable"
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -2527,7 +3166,186 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "label": "DuckStation (Legacy) (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DUCKSTATION",
+            "declared_index": 4,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.sbi",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.lsd",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": false
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-setting-unread",
+              "data": {
+                "entry": "DuckStation (Legacy) (Standalone)",
+                "setting": "[CDROM] LoadImagePatches"
+              }
+            }
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
+        }
+      }
+    },
+    {
+      "name": "opens-duckstation-an-untold-patch-beside-an-unread-setting-is-not-established",
+      "rationale": "DuckStation's settings file cannot be read, so it may load patches, and whether a .ppf of the image's name is there cannot be told (a directory stands at its path): a patch it cannot apply fails the open, so the take is not established (#776 D9).",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.cue": "FILE \"Game (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
+            "size": 2352
+          },
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": {
+            "status": "unreadable"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf",
+          "/mnt/sd/retrodeck/saves"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/swanstation_libretro.so": {
+            "library_name": "SwanStation",
+            "valid_extensions": "exe|psexe|cue|bin|img|iso|chd|pbp|ecm|mds|psf|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_libretro.so": {
+            "library_name": "Beetle PSX",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_hw_libretro.so": {
+            "library_name": "Beetle PSX HW",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/pcsx_rearmed_libretro.so": {
+            "library_name": "PCSX-ReARMed",
+            "valid_extensions": "bin|cue|img|mdf|pbp|toc|cbn|m3u|ccd|chd|iso|exe"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_saturn_libretro.so": {
+            "library_name": "Beetle Saturn",
+            "valid_extensions": "ccd|chd|cue|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_libretro.so": {
+            "library_name": "Beetle PCE",
+            "valid_extensions": "pce|sgx|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_fast_libretro.so": {
+            "library_name": "Beetle PCE Fast",
+            "valid_extensions": "pce|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pcfx_libretro.so": {
+            "library_name": "Beetle PC-FX",
+            "valid_extensions": "cue|ccd|toc|chd"
+          }
+        },
+        "launchable_query": {
+          "system": "psx",
+          "content_path": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+          "label": "DuckStation (Legacy) (Standalone)"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "unestablished",
+          "extension": ".cue",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".ccd",
+            ".CCD",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".m3u",
+            ".M3U",
+            ".mds",
+            ".MDS"
+          ],
+          "entry": {
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "DuckStation (Legacy) (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -2588,8 +3406,210 @@
                 "entry": "DuckStation (Legacy) (Standalone)",
                 "setting": "[CDROM] LoadImagePatches"
               }
+            },
+            {
+              "code": "opens-file-unread",
+              "data": {
+                "entry": "DuckStation (Legacy) (Standalone)",
+                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf"
+              }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
+        }
+      }
+    },
+    {
+      "name": "opens-duckstation-a-patch-beside-an-unread-setting-is-not-established",
+      "rationale": "DuckStation's settings file cannot be read, so it may load patches, and the .ppf of the image's name is there: a patch it cannot apply fails the open (cd_image.cpp:120-135), and atlas does not read the patch, so the take is not established (#776 D9).",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.cue": "FILE \"Game (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
+            "size": 2352
+          },
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": {
+            "status": "unreadable"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf": {
+            "size": 64
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/swanstation_libretro.so": {
+            "library_name": "SwanStation",
+            "valid_extensions": "exe|psexe|cue|bin|img|iso|chd|pbp|ecm|mds|psf|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_libretro.so": {
+            "library_name": "Beetle PSX",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_hw_libretro.so": {
+            "library_name": "Beetle PSX HW",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/pcsx_rearmed_libretro.so": {
+            "library_name": "PCSX-ReARMed",
+            "valid_extensions": "bin|cue|img|mdf|pbp|toc|cbn|m3u|ccd|chd|iso|exe"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_saturn_libretro.so": {
+            "library_name": "Beetle Saturn",
+            "valid_extensions": "ccd|chd|cue|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_libretro.so": {
+            "library_name": "Beetle PCE",
+            "valid_extensions": "pce|sgx|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_fast_libretro.so": {
+            "library_name": "Beetle PCE Fast",
+            "valid_extensions": "pce|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pcfx_libretro.so": {
+            "library_name": "Beetle PC-FX",
+            "valid_extensions": "cue|ccd|toc|chd"
+          }
+        },
+        "launchable_query": {
+          "system": "psx",
+          "content_path": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+          "label": "DuckStation (Legacy) (Standalone)"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "unestablished",
+          "extension": ".cue",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".ccd",
+            ".CCD",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".m3u",
+            ".M3U",
+            ".mds",
+            ".MDS"
+          ],
+          "entry": {
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "label": "DuckStation (Legacy) (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DUCKSTATION",
+            "declared_index": 4,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.sbi",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.lsd",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-setting-unread",
+              "data": {
+                "entry": "DuckStation (Legacy) (Standalone)",
+                "setting": "[CDROM] LoadImagePatches"
+              }
+            },
+            {
+              "code": "opens-content-unread",
+              "data": {
+                "entry": "DuckStation (Legacy) (Standalone)",
+                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf"
+              }
+            }
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2612,7 +3632,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf": {
             "size": 64
           },
-          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "swanstation_CDROM_LoadImagePatches = \"true\"\n"
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "swanstation_CDROM_LoadImagePatches = \"true\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -2688,7 +3709,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -2736,13 +3760,23 @@
               "present": true
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
     {
       "name": "opens-swanstation-an-option-value-it-does-not-declare-leaves-the-patch-open",
-      "rationale": "swanstation_CDROM_LoadImagePatches carries a value the core does not declare, so whether it loads patches is not established: the .ppf of the launched path's name is listed with its presence unknown.",
+      "rationale": "swanstation_CDROM_LoadImagePatches carries a value the core does not declare, so whether it loads patches is not established, and the .ppf of the launched path's name is looked for all the same: none is there.",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -2756,7 +3790,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
             "size": 2352
           },
-          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "swanstation_CDROM_LoadImagePatches = \"maybe\"\n"
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "swanstation_CDROM_LoadImagePatches = \"maybe\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -2832,7 +3867,346 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "label": "SwanStation",
+            "kind": "libretro",
+            "core_so": "swanstation_libretro.so",
+            "emulator": "swanstation_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.sbi",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": false
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-setting-unread",
+              "data": {
+                "entry": "SwanStation",
+                "setting": "swanstation_CDROM_LoadImagePatches"
+              }
+            }
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
+        }
+      }
+    },
+    {
+      "name": "opens-swanstation-a-patch-beside-an-unread-option-decides-nothing",
+      "rationale": "swanstation_CDROM_LoadImagePatches carries a value the core does not declare, so it may load patches, and the .ppf of the launched path's name is there. A patch SwanStation cannot apply makes it reopen the image unpatched (system.cpp:566-580 at 4d309c0), so the patch decides nothing: launchable, with the patch listed as present.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.cue": "FILE \"Game (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
+            "size": 2352
+          },
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "swanstation_CDROM_LoadImagePatches = \"maybe\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf": {
+            "size": 64
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/swanstation_libretro.so": {
+            "library_name": "SwanStation",
+            "valid_extensions": "exe|psexe|cue|bin|img|iso|chd|pbp|ecm|mds|psf|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_libretro.so": {
+            "library_name": "Beetle PSX",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_hw_libretro.so": {
+            "library_name": "Beetle PSX HW",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/pcsx_rearmed_libretro.so": {
+            "library_name": "PCSX-ReARMed",
+            "valid_extensions": "bin|cue|img|mdf|pbp|toc|cbn|m3u|ccd|chd|iso|exe"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_saturn_libretro.so": {
+            "library_name": "Beetle Saturn",
+            "valid_extensions": "ccd|chd|cue|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_libretro.so": {
+            "library_name": "Beetle PCE",
+            "valid_extensions": "pce|sgx|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_fast_libretro.so": {
+            "library_name": "Beetle PCE Fast",
+            "valid_extensions": "pce|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pcfx_libretro.so": {
+            "library_name": "Beetle PC-FX",
+            "valid_extensions": "cue|ccd|toc|chd"
+          }
+        },
+        "launchable_query": {
+          "system": "psx",
+          "content_path": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".cue",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".ccd",
+            ".CCD",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".m3u",
+            ".M3U",
+            ".mds",
+            ".MDS"
+          ],
+          "entry": {
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "label": "SwanStation",
+            "kind": "libretro",
+            "core_so": "swanstation_libretro.so",
+            "emulator": "swanstation_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.sbi",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+              "present": true
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-setting-unread",
+              "data": {
+                "entry": "SwanStation",
+                "setting": "swanstation_CDROM_LoadImagePatches"
+              }
+            }
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
+        }
+      }
+    },
+    {
+      "name": "opens-swanstation-an-untold-patch-beside-an-unread-option-decides-nothing",
+      "rationale": "swanstation_CDROM_LoadImagePatches carries a value the core does not declare, so it may load patches, and whether a .ppf of the launched path's name is there cannot be told (a directory stands at its path). A patch SwanStation cannot apply makes it reopen the image unpatched (system.cpp:566-580 at 4d309c0), so the patch decides nothing: launchable, with the patch listed as untold.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.cue": "FILE \"Game (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
+            "size": 2352
+          },
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "swanstation_CDROM_LoadImagePatches = \"maybe\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf",
+          "/mnt/sd/retrodeck/saves"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/swanstation_libretro.so": {
+            "library_name": "SwanStation",
+            "valid_extensions": "exe|psexe|cue|bin|img|iso|chd|pbp|ecm|mds|psf|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_libretro.so": {
+            "library_name": "Beetle PSX",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_hw_libretro.so": {
+            "library_name": "Beetle PSX HW",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/pcsx_rearmed_libretro.so": {
+            "library_name": "PCSX-ReARMed",
+            "valid_extensions": "bin|cue|img|mdf|pbp|toc|cbn|m3u|ccd|chd|iso|exe"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_saturn_libretro.so": {
+            "library_name": "Beetle Saturn",
+            "valid_extensions": "ccd|chd|cue|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_libretro.so": {
+            "library_name": "Beetle PCE",
+            "valid_extensions": "pce|sgx|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_fast_libretro.so": {
+            "library_name": "Beetle PCE Fast",
+            "valid_extensions": "pce|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pcfx_libretro.so": {
+            "library_name": "Beetle PC-FX",
+            "valid_extensions": "cue|ccd|toc|chd"
+          }
+        },
+        "launchable_query": {
+          "system": "psx",
+          "content_path": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".cue",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".ccd",
+            ".CCD",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".m3u",
+            ".M3U",
+            ".mds",
+            ".MDS"
+          ],
+          "entry": {
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -2888,7 +4262,17 @@
                 "setting": "swanstation_CDROM_LoadImagePatches"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2907,7 +4291,8 @@
           },
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -2967,7 +4352,7 @@
           }
         ],
         "launchable": {
-          "verdict": "launchable",
+          "verdict": "unestablished",
           "extension": ".cue",
           "accepted": [
             ".bin",
@@ -2984,7 +4369,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "DuckStation (Fullscreen)",
             "kind": "standalone",
             "core_so": null,
@@ -3015,7 +4403,17 @@
                 "extension": ".cue"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3028,7 +4426,8 @@
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
-          "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn.cue\n"
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn.cue\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -3104,7 +4503,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -3140,7 +4542,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3159,7 +4571,8 @@
           },
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -3236,7 +4649,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "PCSX ReARMed",
             "kind": "libretro",
             "core_so": "pcsx_rearmed_libretro.so",
@@ -3259,7 +4675,17 @@
           "installers": null,
           "boots": null,
           "opens": null,
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3275,7 +4701,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game.cue": "FILE \"game.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n",
           "/mnt/sd/retrodeck/roms/psx/Game/Game.bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -3352,7 +4779,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "Beetle PSX",
             "kind": "libretro",
             "core_so": "mednafen_psx_libretro.so",
@@ -3395,7 +4825,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3411,7 +4851,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game.cue": "FILE \"game.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n",
           "/mnt/sd/retrodeck/roms/psx/Game/Game.bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -3487,7 +4928,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -3529,7 +4973,17 @@
               "present": false
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3549,7 +5003,8 @@
           },
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Disc 2).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -3625,7 +5080,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -3682,7 +5140,17 @@
                 "effect": "goes-on"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3694,7 +5162,8 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n"
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -3753,7 +5222,7 @@
           }
         ],
         "launchable": {
-          "verdict": "launchable",
+          "verdict": "unestablished",
           "extension": ".cue",
           "accepted": [
             ".bin",
@@ -3770,7 +5239,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -3801,7 +5273,17 @@
                 "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3817,7 +5299,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game.cue": "FILE \"Game (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n",
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 1).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -3893,7 +5376,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -3929,7 +5415,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3945,7 +5441,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u": "Game.chd\n",
           "/mnt/sd/retrodeck/roms/psx/Game/Game.chd": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -4004,7 +5501,7 @@
           }
         ],
         "launchable": {
-          "verdict": "launchable",
+          "verdict": "unestablished",
           "extension": ".m3u",
           "accepted": [
             ".bin",
@@ -4021,7 +5518,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -4059,7 +5559,17 @@
                 "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.chd"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4073,7 +5583,8 @@
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u": "Game.txt\n",
-          "/mnt/sd/retrodeck/roms/psx/Game/Game.txt": "x"
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.txt": "x",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -4149,7 +5660,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -4190,7 +5704,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4205,7 +5729,8 @@
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/psx/Game/Game.cue": {
             "status": "unreadable"
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -4264,7 +5789,7 @@
           }
         ],
         "launchable": {
-          "verdict": "launchable",
+          "verdict": "unestablished",
           "extension": ".cue",
           "accepted": [
             ".bin",
@@ -4281,7 +5806,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -4312,7 +5840,17 @@
                 "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4342,7 +5880,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Level 14.m3u": "Level 15.m3u\n",
           "/mnt/sd/retrodeck/roms/psx/Game/Level 15.m3u": "Level 16.m3u\n",
           "/mnt/sd/retrodeck/roms/psx/Game/Level 16.m3u": "Level 17.m3u\n",
-          "/mnt/sd/retrodeck/roms/psx/Game/Level 17.m3u": "Level 18.m3u\n"
+          "/mnt/sd/retrodeck/roms/psx/Game/Level 17.m3u": "Level 18.m3u\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -4401,7 +5940,7 @@
           }
         ],
         "launchable": {
-          "verdict": "launchable",
+          "verdict": "unestablished",
           "extension": ".m3u",
           "accepted": [
             ".bin",
@@ -4418,7 +5957,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -4546,7 +6088,17 @@
                 "file": "/mnt/sd/retrodeck/roms/psx/Game/Level 16.m3u"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4564,7 +6116,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Disc 1).bin": {
             "size": 2352
           },
-          "/mnt/sd/retrodeck/roms/psx/Game/Game (Disc 2).cue": "FILE \"Game (Disc 2).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n"
+          "/mnt/sd/retrodeck/roms/psx/Game/Game (Disc 2).cue": "FILE \"Game (Disc 2).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -4641,7 +6194,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "Beetle PSX HW",
             "kind": "libretro",
             "core_so": "mednafen_psx_hw_libretro.so",
@@ -4704,7 +6260,17 @@
                 "effect": "goes-on"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4718,7 +6284,8 @@
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u": "Missing.m3u\nLoop.m3u\n",
-          "/mnt/sd/retrodeck/roms/psx/Game/Loop.m3u": "Game.m3u\n"
+          "/mnt/sd/retrodeck/roms/psx/Game/Loop.m3u": "Game.m3u\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -4795,7 +6362,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "Beetle PSX HW",
             "kind": "libretro",
             "core_so": "mednafen_psx_hw_libretro.so",
@@ -4856,7 +6426,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4876,7 +6456,8 @@
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
             "size": 2352
           },
-          "/mnt/sd/retrodeck/roms/psx/Game/Game.toc": "CD_ROM_XA\n"
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.toc": "CD_ROM_XA\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -4936,7 +6517,7 @@
           }
         ],
         "launchable": {
-          "verdict": "launchable",
+          "verdict": "unestablished",
           "extension": ".cue",
           "accepted": [
             ".bin",
@@ -4953,7 +6534,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "Beetle PSX",
             "kind": "libretro",
             "core_so": "mednafen_psx_libretro.so",
@@ -4991,7 +6575,17 @@
                 "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.toc"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5007,7 +6601,8 @@
           "/mnt/sd/retrodeck/roms/pcfx/Game/Game.cue": "FILE \"Game (Track 1).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n",
           "/mnt/sd/retrodeck/roms/pcfx/Game/Game (Track 1).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -5079,7 +6674,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "pcfx",
+            "system": {
+              "source": "esde",
+              "key": "pcfx"
+            },
             "label": "Beetle PC-FX",
             "kind": "libretro",
             "core_so": "mednafen_pcfx_libretro.so",
@@ -5115,7 +6713,17 @@
               "present": false
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "pcfx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5132,7 +6740,8 @@
           "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game.cue": "FILE \"Game.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n",
           "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game.bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -5205,7 +6814,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "pcenginecd",
+            "system": {
+              "source": "esde",
+              "key": "pcenginecd"
+            },
             "label": "Beetle PCE FAST",
             "kind": "libretro",
             "core_so": "mednafen_pce_fast_libretro.so",
@@ -5256,7 +6868,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "pcenginecd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5273,7 +6895,8 @@
           "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game.cue": "FILE \"Game.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n",
           "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game.bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -5345,7 +6968,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "pcenginecd",
+            "system": {
+              "source": "esde",
+              "key": "pcenginecd"
+            },
             "label": "Beetle PCE",
             "kind": "libretro",
             "core_so": "mednafen_pce_libretro.so",
@@ -5396,7 +7022,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "pcenginecd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5413,7 +7049,8 @@
           "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game (Disc 1).cue": "FILE \"Game (Disc 1).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n",
           "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game (Disc 1).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -5485,7 +7122,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "pcenginecd",
+            "system": {
+              "source": "esde",
+              "key": "pcenginecd"
+            },
             "label": "Beetle PCE",
             "kind": "libretro",
             "core_so": "mednafen_pce_libretro.so",
@@ -5550,7 +7190,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "pcenginecd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5569,7 +7219,8 @@
           },
           "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -5624,7 +7275,7 @@
           }
         ],
         "launchable": {
-          "verdict": "launchable",
+          "verdict": "unestablished",
           "extension": ".cue",
           "accepted": [
             ".bin",
@@ -5641,7 +7292,10 @@
             ".MDS"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -5686,7 +7340,7 @@
               "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.ppf",
               "how": "name-derived",
               "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
-              "present": null
+              "present": false
             }
           ],
           "caveats": [
@@ -5704,7 +7358,17 @@
                 "extension": ".cue"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5762,7 +7426,7 @@
           }
         ],
         "launchable": {
-          "verdict": "launchable",
+          "verdict": "unestablished",
           "extension": ".cue",
           "accepted": [
             ".bin",
@@ -5773,7 +7437,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "DuckStation (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -5831,7 +7498,8 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "psx"
+                "source": "esde",
+                "key": "psx"
               }
             },
             {
@@ -5841,7 +7509,17 @@
                 "file": "/home/deck/Emulation/roms/psx/Game/Game.ppf"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5910,7 +7588,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -5962,10 +7643,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "psx"
+                "source": "esde",
+                "key": "psx"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5987,7 +7679,8 @@
           },
           "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -6041,7 +7734,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "dreamcast",
+            "system": {
+              "source": "esde",
+              "key": "dreamcast"
+            },
             "label": "Flycast",
             "kind": "libretro",
             "core_so": "flycast_libretro.so",
@@ -6083,7 +7779,175 @@
               "present": true
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "dreamcast"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
+        }
+      }
+    },
+    {
+      "name": "a-directory-on-a-core-that-takes-its-content-by-path-is-not-established",
+      "rationale": "Flycast takes its content by path (need_fullpath true), so RetroArch hands it the directory and the core's own loader decides, which atlas has not read: unestablished, with the reason as data, and the files inside the core would take named beside it (#776 D5, D9).",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi": "3\n1 0 4 2352 \"Game (Track 1).bin\" 0\n2 756 0 2352 \"Game (Track 2).bin\" 0\n3 45000 4 2352 \"Game (Track 3).bin\" 0\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 2).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin": {
+            "size": 2352
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u",
+            "need_fullpath": true
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "dreamcast",
+          "content_path": "/mnt/sd/retrodeck/roms/dreamcast/Game"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "unestablished",
+          "extension": ".",
+          "accepted": [
+            ".cdi",
+            ".CDI",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".gdi",
+            ".GDI",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": {
+              "source": "esde",
+              "key": "dreamcast"
+            },
+            "label": "Flycast",
+            "kind": "libretro",
+            "core_so": "flycast_libretro.so",
+            "emulator": "flycast_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": null,
+          "caveats": [
+            {
+              "code": "entry-directory-unread",
+              "data": {
+                "entry": "Flycast",
+                "path": "/mnt/sd/retrodeck/roms/dreamcast/Game",
+                "reason": "own-loader"
+              }
+            },
+            {
+              "code": "entry-directory-holds",
+              "data": {
+                "entry": "Flycast",
+                "path": "/mnt/sd/retrodeck/roms/dreamcast/Game",
+                "files": [
+                  "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 1).bin",
+                  "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 2).bin",
+                  "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin",
+                  "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi"
+                ]
+              }
+            },
+            {
+              "code": "frontend-name-unscanned",
+              "data": {
+                "source": "esde",
+                "key": "dreamcast",
+                "kind": "directory",
+                "extension": ".",
+                "names": [
+                  ".cdi",
+                  ".CDI",
+                  ".chd",
+                  ".CHD",
+                  ".cue",
+                  ".CUE",
+                  ".gdi",
+                  ".GDI",
+                  ".m3u",
+                  ".M3U"
+                ],
+                "reason": "directory-without-token"
+              }
+            }
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "dreamcast"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -6102,7 +7966,8 @@
           },
           "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -6156,7 +8021,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "dreamcast",
+            "system": {
+              "source": "esde",
+              "key": "dreamcast"
+            },
             "label": "Flycast",
             "kind": "libretro",
             "core_so": "flycast_libretro.so",
@@ -6201,7 +8069,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "dreamcast"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -6220,7 +8098,8 @@
           },
           "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -6274,7 +8153,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "dreamcast",
+            "system": {
+              "source": "esde",
+              "key": "dreamcast"
+            },
             "label": "Flycast",
             "kind": "libretro",
             "core_so": "flycast_libretro.so",
@@ -6310,7 +8192,17 @@
               "present": true
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "dreamcast"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -6332,7 +8224,8 @@
           },
           "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -6386,7 +8279,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "dreamcast",
+            "system": {
+              "source": "esde",
+              "key": "dreamcast"
+            },
             "label": "Flycast",
             "kind": "libretro",
             "core_so": "flycast_libretro.so",
@@ -6428,7 +8324,17 @@
               "present": true
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "dreamcast"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -6461,7 +8367,8 @@
           },
           "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 2 Track 3).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -6515,7 +8422,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "dreamcast",
+            "system": {
+              "source": "esde",
+              "key": "dreamcast"
+            },
             "label": "Flycast",
             "kind": "libretro",
             "core_so": "flycast_libretro.so",
@@ -6587,7 +8497,17 @@
               "present": true
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "dreamcast"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -6606,7 +8526,8 @@
           },
           "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -6660,7 +8581,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "segacd",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
             "label": "Genesis Plus GX",
             "kind": "libretro",
             "core_so": "genesis_plus_gx_libretro.so",
@@ -6702,7 +8626,17 @@
               "present": false
             }
           ],
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -6718,7 +8652,8 @@
           "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue": "FILE \"Game (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
           "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -6772,7 +8707,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "segacd",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
             "label": "Genesis Plus GX",
             "kind": "libretro",
             "core_so": "genesis_plus_gx_libretro.so",
@@ -6813,7 +8751,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -6832,7 +8780,8 @@
           },
           "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -6886,7 +8835,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "segacd",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
             "label": "Genesis Plus GX",
             "kind": "libretro",
             "core_so": "genesis_plus_gx_libretro.so",
@@ -6920,7 +8872,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -6939,7 +8901,8 @@
           },
           "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -6978,7 +8941,7 @@
           }
         ],
         "launchable": {
-          "verdict": "launchable",
+          "verdict": "unestablished",
           "extension": ".bin",
           "accepted": [
             ".bin",
@@ -6993,7 +8956,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "segacd",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
             "label": "Genesis Plus GX",
             "kind": "libretro",
             "core_so": "genesis_plus_gx_libretro.so",
@@ -7031,7 +8997,17 @@
                 "file": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -7046,7 +9022,8 @@
           "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
           "/mnt/sd/retrodeck/roms/segacd/Game/Game.bin": {
             "size": 1048576
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -7100,7 +9077,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "segacd",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
             "label": "Genesis Plus GX",
             "kind": "libretro",
             "core_so": "genesis_plus_gx_libretro.so",
@@ -7138,13 +9118,23 @@
                 "file": "/mnt/sd/retrodeck/roms/segacd/Game/Game.bin"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
     {
       "name": "opens-genesis-plus-gx-a-playlist-past-four-discs-ignores-the-rest",
-      "rationale": "The M3U reader stops at four discs (MAX_DISKS, libretro.c:2762, :3571), so the fifth line is never read. The first disc is loaded at launch and the others only on a disc switch.",
+      "rationale": "The M3U reader stops at four discs (MAX_DISKS, libretro.c:2762, :3571), so the fifth line is never read, and the caveat states that number as its limit. The first disc is loaded at launch and the others only on a disc switch.",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -7186,7 +9176,8 @@
           },
           "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 5) (Track 02).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -7240,7 +9231,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "segacd",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
             "label": "Genesis Plus GX",
             "kind": "libretro",
             "core_so": "genesis_plus_gx_libretro.so",
@@ -7365,10 +9359,21 @@
               "code": "opens-entry-ignored",
               "data": {
                 "entry": "Genesis Plus GX",
-                "file": "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u"
+                "file": "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u",
+                "limit": "4"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -7388,7 +9393,8 @@
           },
           "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -7442,7 +9448,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "segacd",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
             "label": "Genesis Plus GX",
             "kind": "libretro",
             "core_so": "genesis_plus_gx_libretro.so",
@@ -7504,7 +9513,17 @@
                 "file": "/mnt/sd/retrodeck/roms/segacd/Game/"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -7520,7 +9539,8 @@
           "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game.cue": "FILE \"Game (Track 01) xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
           "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game (Track 01) xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -7574,7 +9594,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "segacd",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
             "label": "Genesis Plus GX",
             "kind": "libretro",
             "core_so": "genesis_plus_gx_libretro.so",
@@ -7615,7 +9638,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -7631,7 +9664,8 @@
           "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game.cue": "FILE \"Game (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n",
           "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game (Track 01).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -7670,7 +9704,7 @@
           }
         ],
         "launchable": {
-          "verdict": "launchable",
+          "verdict": "unestablished",
           "extension": ".cue",
           "accepted": [
             ".bin",
@@ -7685,7 +9719,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "segacd",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
             "label": "Genesis Plus GX",
             "kind": "libretro",
             "core_so": "genesis_plus_gx_libretro.so",
@@ -7717,7 +9754,17 @@
                 "effect": "unestablished"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -7737,7 +9784,8 @@
           },
           "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -7791,7 +9839,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "segacd",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
             "label": "Genesis Plus GX",
             "kind": "libretro",
             "core_so": "genesis_plus_gx_libretro.so",
@@ -7838,7 +9889,17 @@
                 "effect": "stops"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -7857,7 +9918,8 @@
           },
           "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
             "size": 2352
-          }
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -7912,7 +9974,10 @@
             ".M3U"
           ],
           "entry": {
-            "system": "segacd",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
             "label": "PicoDrive",
             "kind": "libretro",
             "core_so": "picodrive_libretro.so",
@@ -7935,7 +10000,17 @@
           "installers": null,
           "boots": null,
           "opens": null,
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "segacd"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     }

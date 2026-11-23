@@ -155,7 +155,7 @@ const NOT_THE_RESOLVERS_WHEN_WRITTEN: ByFile = {
   "src/utils/updateDot.ts": ["card"],
 };
 
-const PANEL_GENERIC_WHEN_WRITTEN = ["background", "disabled", "tag"];
+const PANEL_GENERIC_WHEN_WRITTEN = ["background", "disabled", "keys", "known", "tag"];
 
 /** The `file: token` entries of `configured` that `whenWritten` did not hold. */
 function addedTo(configured: ByFile, whenWritten: ByFile): string[] {

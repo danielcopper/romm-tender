@@ -1,9 +1,8 @@
 """The files a launched disc file opens — each emulator's own open, read step for step (issue #716).
 
-ES-DE accepts a file by its extension alone, so a disc's ``.cue`` and its
-``.bin`` tracks, and an ``.m3u`` listing several discs, all answer
-``launchable``. What tells them apart is what the emulator does with each,
-and that is what this module reads: the files the emulator opens through the
+A disc's ``.cue`` and its ``.bin`` tracks, and an ``.m3u`` listing several
+discs, are all files an entry may be handed. What tells them apart is what
+the emulator does with each, and that is what this module reads: the files the emulator opens through the
 launched file, in the order it opens them, each either **named** by the text
 of another file (a cue sheet's ``FILE``, a playlist's line) or **derived from a
 name** (a ``.sbi`` beside the image, the ``<cue stem>.bin`` a cue's missing
@@ -234,7 +233,7 @@ class Opened:
     """The file that names it, or whose own name it is derived from."""
     present: bool | None
     """Whether a file is there: ``true`` or ``false``, and ``null`` where that cannot be told — a path whose ``stat``
-    fails, a directory where a file is named, or a patch whose setting could not be read.
+    fails, or a directory where a file is named.
     """
 
     def __post_init__(self) -> None:
@@ -315,15 +314,25 @@ class PatchSetting:
 
 @dataclass(frozen=True, slots=True)
 class DuckProfile:
-    """DuckStation's or SwanStation's open: the shared one, and the two places they part."""
+    """DuckStation's or SwanStation's open: the shared one, and the three places they part.
+
+    ``patch_failure_fails_open`` is what a ``.ppf`` it cannot apply does:
+    DuckStation's open fails (``cd_image.cpp:120-135``), SwanStation reopens
+    the image unpatched (``system.cpp:566-580`` at 4d309c0).
+    """
 
     name: str
     looks_for_lsd: bool
     patches_every_image: bool
+    patch_failure_fails_open: bool
 
 
-DUCKSTATION: Final = DuckProfile("DuckStation 1f6de046b", looks_for_lsd=True, patches_every_image=True)
-SWANSTATION: Final = DuckProfile("SwanStation 4d309c0", looks_for_lsd=False, patches_every_image=False)
+DUCKSTATION: Final = DuckProfile(
+    "DuckStation 1f6de046b", looks_for_lsd=True, patches_every_image=True, patch_failure_fails_open=True
+)
+SWANSTATION: Final = DuckProfile(
+    "SwanStation 4d309c0", looks_for_lsd=False, patches_every_image=False, patch_failure_fails_open=False
+)
 
 # What a mednafen core does with an ``.m3u`` it is launched with.
 PlaylistStance = Literal["read", "refused", "unread"]
@@ -605,6 +614,7 @@ class _Walk:
         free: bool = False,
         key: str | None = None,
         effect: OpensEffect | None = None,
+        limit: int | None = None,
     ) -> None:
         """One caveat about *path*, once per code, file and effect; *kind* is the track type a refusal names (``type``).
 
@@ -614,7 +624,9 @@ class _Walk:
         walk stopped at a bound (*free*). A reading remembers which it stated
         by the path's :func:`_said_key`, or by *key* where only that is kept,
         and by its *effect*, so a stop is stated even where the same file went
-        on under the same code before it (D2 of #750).
+        on under the same code before it (D2 of #750). *limit* is the number
+        of entries the emulator reads from the file, stated in decimal
+        (``limit``, D1 of #754).
         """
         said = (code, key or _said_key(path))
         effects = self._said.setdefault(said, set())
@@ -622,15 +634,18 @@ class _Walk:
             return
         shown = _shown(path)
         message = message.replace("{file}", shown)
+        stated = "" if limit is None else str(limit)
         if not free:
             size = len(message) + len(shown) + len(self.label) + len(kind or "") + len(said[1]) + len(effect or "")
-            self.charge(path, size)
+            self.charge(path, size + len(stated))
         effects.add(effect)
         data: dict[str, str] = {"entry": self.label, "file": shown}
         if kind is not None:
             data["type"] = kind
         if effect is not None:
             data["effect"] = effect
+        if limit is not None:
+            data["limit"] = stated
         self.caveats.append(Caveat(code, message, data))
 
     def fail(
@@ -1013,16 +1028,30 @@ class _DuckReader:
         return present
 
     def _ppf(self, image: str, mode: _Mode) -> None:
-        """The ``.ppf`` of the image's file name beside it, where the setting loads patches."""
+        """The ``.ppf`` of the image's file name beside it, where the setting loads patches or could not be read.
+
+        A setting nobody read may load them, so the patch is looked for either
+        way (#776 D9). Where a patch the emulator cannot apply fails the open,
+        one that is there, or one whose presence cannot be told, leaves the
+        open not established; where it reopens the image unpatched, nothing
+        about the patch decides the open.
+        """
         setting = self._patch_setting()
         if setting.loads is False:
             return
         slash = image.rfind("/") + 1
         ppf = image[:slash] + _replace_extension(image[slash:], "ppf")
-        if setting.loads is None:
-            self.walk.list(ppf, HOW_NAME_DERIVED, image, None, known=True)
+        present = self.walk.list(ppf, HOW_NAME_DERIVED, image)
+        if not self.profile.patch_failure_fails_open:
             return
-        if self.walk.list(ppf, HOW_NAME_DERIVED, image) and self.profile.patches_every_image:
+        if present is None:
+            self.walk.unsure(
+                mode,
+                CAVEAT_OPENS_FILE_UNREAD,
+                ppf,
+                f"{_UNTOLD_THERE}, and a patch it cannot apply fails the open",
+            )
+        elif present:
             self.walk.unsure(
                 mode,
                 CAVEAT_OPENS_CONTENT_UNREAD,
@@ -2225,6 +2254,7 @@ class _GpgxReader:
                 path,
                 f"{self.profile.name} reads no more than four discs from {{file}} (MAX_DISKS, libretro.c:2762, "
                 ":3571), so its lines past the fourth disc are never read",
+                limit=_GPGX_DISCS,
             )
         if not entries:
             self.walk.fail(_AT_LAUNCH, CAVEAT_OPENS_SHEET_REFUSED, path,

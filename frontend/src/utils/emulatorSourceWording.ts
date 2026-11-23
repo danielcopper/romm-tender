@@ -17,6 +17,8 @@ import type {
   EmulatorSource,
   EmulatorSourcesListing,
   PlatformSystemAnswer,
+  PlatformSystemReason,
+  UnlistedSystem,
   SourceHealthFinding,
 } from "../types/emulatorSources";
 import type { RommErrorReason } from "../types/reasons";
@@ -227,30 +229,87 @@ export function withFindingSentence<T>(answer: T): T {
   return sentence === null ? answer : { ...answer, message: sentence };
 }
 
-/** The two reasons a press is refused with for a platform that has no switched-on system in its source. */
-const PLATFORM_SYSTEM_REASONS: ReadonlySet<string> = new Set(["no_platform_system", "platform_system_off"]);
+// The sentence for each reason a platform has no system to use, worded from
+// the platform's answer: a `Record` so that a reason added to
+// {@link PlatformSystemReason} must be worded here.
+const PLATFORM_SYSTEM_SENTENCES: Record<PlatformSystemReason, (answer: PlatformSystemAnswer) => string | null> = {
+  platform_unmatched: (answer) => unmatchedPlatformSentence(answer.platform),
+  platform_pairs_contradict: (answer) =>
+    contradictedPlatformSentence(answer.platform, answer.slug, answer.folder ?? ""),
+  no_platform_system: (answer) => noPlatformSystemSentence(answer.source, answer.platform),
+  platform_system_not_here: (answer) => platformSystemNotHereSentence(answer.source, answer.platform, answer.systems),
+  platform_system_off: (answer) =>
+    answer.systems.length === 0 ? null : platformSystemOffSentence(answer.source, answer.systems.join(", ")),
+  platform_systems_several: (answer) =>
+    severalPlatformSystemsDownloadSentence(answer.source, answer.platform, answer.systems),
+};
 
-function isPlatformSystemRefusal(answer: object): answer is { reason: EmulatorDataReason } & PlatformSystemAnswer {
-  const { reason, source, platform, system } = answer as Record<string, unknown>;
+/** Whether `reason` is one a platform with no system to use answers with. */
+export function isPlatformSystemReason(reason: string): reason is PlatformSystemReason {
+  return PLATFORM_SYSTEM_REASONS.has(reason);
+}
+
+// The reasons the record above words, as its own keys: a lookup that never reaches the prototype.
+const PLATFORM_SYSTEM_REASONS: ReadonlySet<string> = new Set(Object.keys(PLATFORM_SYSTEM_SENTENCES));
+
+function isPlatformSystemRefusal(answer: object): answer is { reason: PlatformSystemReason } & PlatformSystemAnswer {
+  const { reason, source, platform, systems, slug, folder } = answer as Record<string, unknown>;
   return (
     typeof reason === "string" &&
-    PLATFORM_SYSTEM_REASONS.has(reason) &&
+    isPlatformSystemReason(reason) &&
     typeof source === "string" &&
     typeof platform === "string" &&
-    (system === null || typeof system === "string")
+    Array.isArray(systems) &&
+    typeof slug === "string" &&
+    (folder === null || typeof folder === "string")
   );
 }
 
 /**
  * An endpoint's answer, with the message of a refusal for a platform that has
- * no switched-on system replaced by the sentence the platform's pages show for
- * it, so a refused download and the page say the same thing. Every other
+ * no system to use replaced by the sentence the platform's pages show for it,
+ * so a refused download and the page say the same thing. Every other
  * answer comes back as it is.
  */
 export function withPlatformSystemSentence<T>(answer: T): T {
-  if (typeof answer !== "object" || answer === null || !isPlatformSystemRefusal(answer)) return answer;
+  if (typeof answer !== "object" || answer === null) return answer;
+  const unasked = unaskedCatalogueSentence(answer);
+  if (unasked !== null) return { ...answer, message: unasked };
+  if (!isPlatformSystemRefusal(answer)) return answer;
   const sentence = platformSystemSentence(answer.reason, { ...answer, state: "no_system" });
   return sentence === null ? answer : { ...answer, message: sentence };
+}
+
+/** The catalogue refusals a platform's download is refused for before any source is asked about it. */
+export type UnaskedCatalogueReason = Extract<EmulatorDataReason, "catalogue_invalid" | "not_set_up" | "sealed">;
+
+// The fact each catalogue refusal states, naming the source by its kind — the clause the emulator list's sentence
+// and a refused download's both begin with. A `Record` so that a reason added to {@link UnaskedCatalogueReason} must
+// be worded here.
+const CATALOGUE_REFUSAL_FACTS: Record<UnaskedCatalogueReason, (kind: string) => string> = {
+  not_set_up: (kind) => `${sourceName(kind)} has not been set up yet`,
+  catalogue_invalid: (kind) => `${sourceName(kind)}: ES-DE's systems file is broken`,
+  sealed: (kind) => `${sourceName(kind)}'s emulator list cannot be read yet`,
+};
+
+/** Whether `reason` is one a platform's download is refused for when its source's catalogue was refused. */
+function isUnaskedCatalogueReason(reason: string): reason is UnaskedCatalogueReason {
+  return UNASKED_CATALOGUE_REASONS.has(reason);
+}
+
+// The catalogue refusals the record above words, as its own keys.
+const UNASKED_CATALOGUE_REASONS: ReadonlySet<string> = new Set(Object.keys(CATALOGUE_REFUSAL_FACTS));
+
+/**
+ * The sentence for a press refused because the catalogue of the source that would answer was refused
+ * (`platform_system_unasked`), or `null` for any other answer.
+ */
+function unaskedCatalogueSentence(answer: object): string | null {
+  const { reason, source, unasked } = answer as Record<string, unknown>;
+  if (reason !== "platform_system_unasked" || typeof source !== "string" || typeof unasked !== "string") return null;
+  return isUnaskedCatalogueReason(unasked)
+    ? `${CATALOGUE_REFUSAL_FACTS[unasked](source)}, so Tender cannot download its games.`
+    : null;
 }
 
 /** Main's notice, and the settings section's line, while no emulator source is detected. */
@@ -304,14 +363,15 @@ export const UNCHECKED_START_SOURCE_QUESTION =
 
 /** A source whose emulator list the resolver cannot read yet (EmuDeck's sealed catalogue). */
 export function sealedCatalogueSentence(kind: string): string {
-  return `${sourceName(kind)}'s emulator list cannot be read yet.`;
+  return `${CATALOGUE_REFUSAL_FACTS.sealed(kind)}.`;
 }
 
-/** Why a platform has no system yet: its ids are not kept, and RomM, which gives them, cannot be reached. */
+/** Why a platform has no system yet: nothing is kept for it, and RomM, whose list of platforms gives it, cannot be reached. */
 const ROMM_UNREACHABLE_SENTENCE = "RomM cannot be reached, so Tender does not know this platform's system yet.";
 
-/** Why a platform has no system yet: its ids are not kept, and the RomM read that gives them failed. */
-const ROMM_REFUSED_SENTENCE = "RomM did not give this platform's ids, so Tender does not know its system yet.";
+/** Why a platform has no system yet: nothing is kept for it, and the read of RomM's list of platforms failed. */
+const ROMM_REFUSED_SENTENCE =
+  "RomM did not give its list of platforms, so Tender does not know this platform's system yet.";
 
 /** Every reason a RomM read can fail with: a `Record` so that a reason added to {@link RommErrorReason} must be added here. */
 const ROMM_READ_FAILURES: Record<RommErrorReason, true> = {
@@ -328,24 +388,89 @@ const ROMM_READ_FAILURES: Record<RommErrorReason, true> = {
 };
 const ROMM_READ_FAILURE_CODES: ReadonlySet<string> = new Set(Object.keys(ROMM_READ_FAILURES));
 
+/**
+ * The fact each reason a platform has no system to use states, worded from the platform's answer — the clause the
+ * pages' sentence and the BIOS store-only line both begin with (#2751 D2, #2225 D8); `null` for a switched-off
+ * system the answer does not name.
+ */
+export const PLATFORM_SYSTEM_FACTS: Record<PlatformSystemReason, (answer: PlatformSystemAnswer) => string | null> = {
+  platform_unmatched: (answer) => `Tender cannot match ${answer.platform} to a system yet`,
+  platform_pairs_contradict: (answer) =>
+    `RomM's slug "${answer.slug}" and folder "${answer.folder ?? ""}" point to different systems`,
+  no_platform_system: (answer) => `${sourceName(answer.source)} has no system for ${answer.platform}`,
+  platform_system_not_here: (answer) =>
+    `${sourceName(answer.source)} has a system for ${answer.platform} (${answer.systems.join(", ")}), but it is not set up on this machine`,
+  platform_system_off: (answer) =>
+    answer.systems.length === 0
+      ? null
+      : `System ${answer.systems.join(", ")} is switched off in ${sourceName(answer.source)}`,
+  platform_systems_several: (answer) =>
+    `${sourceName(answer.source)} has several systems for ${answer.platform} (${answer.systems.join(", ")})`,
+};
+
+/** An answer naming a platform with no system to use, for the sentences below that are worded from its parts. */
+function answerOf(source: string, platform: string, systems: readonly string[] = []): PlatformSystemAnswer {
+  return { state: "no_system", source, systems: [...systems], platform, slug: "", folder: null };
+}
+
+/** Why a platform's games cannot be downloaded: the resolver cannot match the platform to a system (#2751 D2). */
+export function unmatchedPlatformSentence(platform: string): string {
+  return `${PLATFORM_SYSTEM_FACTS.platform_unmatched(answerOf("", platform))}, so it cannot download its games.`;
+}
+
+/** Why a platform has no system: RomM's slug and its folder name different systems (#2751 D2). */
+export function contradictedPlatformSentence(platform: string, slug: string, folder: string): string {
+  const fact = PLATFORM_SYSTEM_FACTS.platform_pairs_contradict({ ...answerOf("", platform), slug, folder });
+  return `${fact}, so Tender cannot match ${platform} to a system.`;
+}
+
 /** Why a platform's games cannot be downloaded: the source asked has no system for it. */
 export function noPlatformSystemSentence(kind: string, platform: string): string {
-  return `${sourceName(kind)} has no system for ${platform}, so Tender cannot download its games.`;
+  return `${PLATFORM_SYSTEM_FACTS.no_platform_system(answerOf(kind, platform))}, so Tender cannot download its games.`;
+}
+
+/** Why a platform's games cannot be downloaded: the source has systems for it that this machine has not set up. */
+export function platformSystemNotHereSentence(kind: string, platform: string, systems: readonly string[]): string {
+  const fact = PLATFORM_SYSTEM_FACTS.platform_system_not_here(answerOf(kind, platform, systems));
+  return `${fact}, so Tender cannot download its games.`;
 }
 
 /** Why a platform's games cannot be downloaded: every system it has in the source asked is switched off there. */
 export function platformSystemOffSentence(kind: string, system: string): string {
-  return `System ${system} is switched off in ${sourceName(kind)}.`;
+  return `${PLATFORM_SYSTEM_FACTS.platform_system_off(answerOf(kind, "", [system]))}.`;
 }
 
-/** The sentence for a platform with no switched-on system, or `null` for any other answer. */
+/** Why a game is linked into no frontend folder: several of the source's systems answer its platform (#2225 D8). */
+export function severalPlatformSystemsSentence(kind: string, platform: string, systems: readonly string[]): string {
+  const fact = PLATFORM_SYSTEM_FACTS.platform_systems_several(answerOf(kind, platform, systems));
+  return `${fact}, and Tender links its games into none of them.`;
+}
+
+/** Why a platform's games cannot be downloaded: several of the source's systems answer it (#2225 D8). */
+export function severalPlatformSystemsDownloadSentence(
+  kind: string,
+  platform: string,
+  systems: readonly string[],
+): string {
+  const fact = PLATFORM_SYSTEM_FACTS.platform_systems_several(answerOf(kind, platform, systems));
+  return `${fact}, so Tender cannot download its games yet.`;
+}
+
+/** The sentence for a platform with no system to use, or `null` for any other answer. */
 function platformSystemSentence(reason: EmulatorDataReason | null, answer: PlatformSystemAnswer | null): string | null {
-  if (answer === null) return null;
-  if (reason === "no_platform_system") return noPlatformSystemSentence(answer.source, answer.platform);
-  if (reason === "platform_system_off" && answer.system !== null) {
-    return platformSystemOffSentence(answer.source, answer.system);
-  }
-  return null;
+  if (answer === null || reason === null || !isPlatformSystemReason(reason)) return null;
+  return PLATFORM_SYSTEM_SENTENCES[reason](answer);
+}
+
+/**
+ * What a game's page says of its platform's system under Play where nothing
+ * refuses the start: that several of the source's systems answer it, so the
+ * game is linked into no frontend folder (#2225 D8). Empty for every other
+ * state.
+ */
+export function platformSystemNotes(platformSystem: PlatformSystemAnswer | null): string[] {
+  if (platformSystem?.state !== "several") return [];
+  return [severalPlatformSystemsSentence(platformSystem.source, platformSystem.platform, platformSystem.systems)];
 }
 
 /**
@@ -354,12 +479,13 @@ function platformSystemSentence(reason: EmulatorDataReason | null, answer: Platf
  * there. Never "no emulator": every one of these is a list that could not be
  * established. An answer with no source is one no source answered, whatever
  * its reason says, so it reads as no source found — except a failed read of
- * RomM for the platform's ids, which stands whether or not a source answers.
+ * RomM's listing for the platform, which stands whether or not a source answers.
  */
 export function emulatorDataReasonSentence(
   reason: EmulatorDataReason | null,
   source: AnsweringSource | null,
   platformSystem: PlatformSystemAnswer | null = null,
+  system: UnlistedSystem | null = null,
 ): string {
   if (reason === "switched_off") return "Every emulator source is switched off in Settings › Emulator sources.";
   if (reason === "server_unreachable") return ROMM_UNREACHABLE_SENTENCE;
@@ -367,13 +493,15 @@ export function emulatorDataReasonSentence(
   if (reason === "no_source" || source === null) {
     return "No emulator source was found, so Tender cannot tell which emulators this platform offers.";
   }
+  if (reason === "system_unknown" && system !== null) {
+    return system.installed
+      ? `${sourceName(source.kind)} does not list the system ${system.system_keys.join(", ")} this game was installed under, so its emulators are not established.`
+      : `${sourceName(source.kind)} does not list the system ${system.system_keys.join(", ")}, so its emulators are not established.`;
+  }
   const noSystem = platformSystemSentence(reason, platformSystem);
   if (noSystem !== null) return noSystem;
-  if (reason === "catalogue_invalid") {
-    return `${sourceName(source.kind)}: ES-DE's systems file is broken, so its emulators are not established.`;
-  }
-  if (reason === "not_set_up") {
-    return `${sourceName(source.kind)} has not been set up yet, so its emulators are not established.`;
+  if (reason === "catalogue_invalid" || reason === "not_set_up") {
+    return `${CATALOGUE_REFUSAL_FACTS[reason](source.kind)}, so its emulators are not established.`;
   }
   if (reason === "sealed") return sealedCatalogueSentence(source.kind);
   return `${sourceName(source.kind)}'s emulator list is not established.`;

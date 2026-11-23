@@ -654,6 +654,12 @@ class CoreInfo:
     core an archive raw instead of picking a matching file out of it
     (task_content.c:742, :1735 @ a79435a). ``None`` is a fixture or record
     that never captured it — unknown, never "false".
+
+    ``need_fullpath`` is the struct's statement of how the core takes its
+    content (``retro_system_info.need_fullpath``): true means RetroArch hands
+    it the path and its own loader opens it, false means RetroArch reads the
+    content into memory first (task_content.c:744-745, :1465-1484 @ a79435a).
+    ``None`` is unknown, the same way.
     """
 
     library_name: str
@@ -661,6 +667,7 @@ class CoreInfo:
     valid_extensions: str | None
     options: Mapping[str, CoreOption] | None = None
     block_extract: bool | None = None
+    need_fullpath: bool | None = None
 
     def __post_init__(self) -> None:
         if self.options is not None:
@@ -2059,18 +2066,22 @@ def _parse_probe_output(stdout: bytes | None, ended: CoreUnansweredStatus) -> Co
         if isinstance(unloadable, str) and unloadable:
             return CoreReading(CORE_READ_UNLOADABLE, unloadable=unloadable)
         return CoreReading(ended)
+    return CoreReading(CORE_READ_ANSWERED, _core_info(name, data))
+
+
+def _core_info(name: str, data: Mapping[str, object]) -> CoreInfo:
+    """A named core's answer, every other field kept only where it has the type the probe states it in."""
     version = data.get("library_version")
     extensions = data.get("valid_extensions")
     block_extract = data.get("block_extract")
-    return CoreReading(
-        CORE_READ_ANSWERED,
-        CoreInfo(
-            library_name=name,
-            library_version=version if isinstance(version, str) else None,
-            valid_extensions=extensions if isinstance(extensions, str) else None,
-            options=_parse_core_options(data.get("options")),
-            block_extract=block_extract if isinstance(block_extract, bool) else None,
-        )
+    need_fullpath = data.get("need_fullpath")
+    return CoreInfo(
+        library_name=name,
+        library_version=version if isinstance(version, str) else None,
+        valid_extensions=extensions if isinstance(extensions, str) else None,
+        options=_parse_core_options(data.get("options")),
+        block_extract=block_extract if isinstance(block_extract, bool) else None,
+        need_fullpath=need_fullpath if isinstance(need_fullpath, bool) else None,
     )
 
 
@@ -2530,19 +2541,7 @@ def _fixture_core_reading(spec: "dict[str, object] | str | None") -> CoreReading
     name = spec.get("library_name")
     if not isinstance(name, str) or not name:
         return CoreReading(CORE_READ_UNUSABLE)
-    version = spec.get("library_version")
-    extensions = spec.get("valid_extensions")
-    block_extract = spec.get("block_extract")
-    return CoreReading(
-        CORE_READ_ANSWERED,
-        CoreInfo(
-            library_name=name,
-            library_version=version if isinstance(version, str) else None,
-            valid_extensions=extensions if isinstance(extensions, str) else None,
-            options=_parse_core_options(spec.get("options")),
-            block_extract=block_extract if isinstance(block_extract, bool) else None,
-        ),
-    )
+    return CoreReading(CORE_READ_ANSWERED, _core_info(name, spec))
 
 
 def _validate_fixture_appimages(
@@ -2704,7 +2703,7 @@ def _fixture_ps2_bios_header(path: str, spec: Mapping[str, object]) -> ps2_bios.
     return ps2_bios.Ps2BiosHeader.from_strings(strings["romver"], strings["serial"])
 
 
-_FIXTURE_PS3_FILE_FIELDS = ("magic", "iso", "category")
+_FIXTURE_PS3_FILE_FIELDS = ("magic", "iso", "category", "savestate")
 _FIXTURE_PS3_ISO_FIELDS = ("regions", "watermark")
 _FIXTURE_PS3_ISO_OPTIONAL = ("blocks",)
 
@@ -2719,7 +2718,8 @@ def _validate_fixture_ps3_files(
     whose bytes can be read, as for ``ps2_bios_headers``. ``magic`` is the
     leading bytes, one character each; ``iso`` the header facts or ``null``;
     ``category`` what the PARAM.SFO loader keeps, empty where it keeps none —
-    and the facts type refuses a category beside any magic but a PARAM.SFO's.
+    and the facts type refuses a category beside any magic but a PARAM.SFO's;
+    ``savestate`` whether the file opens with ``RPCS3SAV``, false where omitted.
     """
     validated: dict[str, ps3_file.Ps3FileFacts] = {}
     for path, spec in declared.items():
@@ -2731,17 +2731,22 @@ def _validate_fixture_ps3_files(
             )
         if not isinstance(spec, Mapping) or "magic" not in spec or not set(spec) <= set(_FIXTURE_PS3_FILE_FIELDS):
             raise ValueError(
-                f"ps3 file {path!r}: expected an object with magic and optionally iso and category, got {spec!r}"
+                f"ps3 file {path!r}: expected an object with magic and optionally iso, category and savestate, "
+                f"got {spec!r}"
             )
         fields = cast("Mapping[str, object]", spec)
-        magic, category = fields["magic"], fields.get("category", "")
+        magic, category, savestate = fields["magic"], fields.get("category", ""), fields.get("savestate", False)
         if not isinstance(magic, str) or not isinstance(category, str):
             raise ValueError(f"ps3 file {path!r}: magic and category must be strings, got {spec!r}")
+        if not isinstance(savestate, bool):
+            raise ValueError(f"ps3 file {path!r}: savestate must be true or false, got {spec!r}")
         try:
             magic.encode("latin-1")
         except UnicodeEncodeError as error:
             raise ValueError(f"ps3 file {path!r}: magic must be one byte per character (latin-1)") from error
-        validated[path] = ps3_file.Ps3FileFacts(magic, _fixture_ps3_iso(path, fields.get("iso")), category)
+        validated[path] = ps3_file.Ps3FileFacts(
+            magic, _fixture_ps3_iso(path, fields.get("iso")), category, savestate
+        )
     return validated
 
 

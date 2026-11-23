@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
+from domain.platform_system import SystemArgument, system_key
 from domain.retrodeck_folders import FolderRefused, MoveRoots, no_rom_folder, no_rom_root
 
 if TYPE_CHECKING:
@@ -49,12 +50,16 @@ class FakeRetroDeckFolders:
         self.refusal = refusal
         self.download_refusal = download_refusal
         self.system_refusals = system_refusals if system_refusals is not None else {}
+        # Every system a download's folder was asked for, as the caller named it.
+        self.download_asked: list[SystemArgument] = []
 
-    def download_folder(self, system: str) -> str | FolderRefused:
-        refused = self.refusal or self.download_refusal or self.system_refusals.get(system)
+    def download_folder(self, system: SystemArgument) -> str | FolderRefused:
+        self.download_asked.append(system)
+        key = system_key(system) or ""
+        refused = self.refusal or self.download_refusal or self.system_refusals.get(key)
         if refused is not None:
             return refused
-        return self._system_dir(system) or no_rom_folder(system)
+        return self._system_dir(key) or no_rom_folder(key)
 
     def _system_dir(self, system: str) -> str:
         # A name that is no single path component is no system ES-DE declares,

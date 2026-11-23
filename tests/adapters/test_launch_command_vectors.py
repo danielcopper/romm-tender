@@ -21,8 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from _atlas_machines import fixture_machine, select, vectors_asking
-from _vendor import atlas
+from _atlas_machines import asked_launch_command, vectors_asking
 from _vendor.atlas import VARIANT_FLATPAK
 
 from adapters.atlas_launch import read_start
@@ -43,13 +42,6 @@ def _recorded_complete(command: dict[str, Any] | None) -> bool:
 
 # The vectors whose recorded command is complete: the ones that start.
 _STARTING = [(stem, v) for stem, v in _VECTORS if _recorded_complete(v["expected"]["launch_command"]["command"])]
-
-
-def _asked(vector: dict[str, Any]) -> Any:
-    inp = vector["input"]
-    query = inp["launch_command_query"]
-    installation = select(atlas.detect(inp["home"], fixture_machine(inp)), query.get("installation"))
-    return installation.launch_command(query["system"], query["content_path"], label=query.get("label"))
 
 
 def _complete(command: Any) -> bool:
@@ -75,7 +67,7 @@ def test_the_sweep_reaches_a_start_and_a_refusal_of_every_kind():
         else:
             shapes.add(f"starts as {command['program']['variant']}")
 
-    assert len(_VECTORS) == 89
+    assert len(_VECTORS) == 125
     assert len(_STARTING) == 26
     assert shapes == {
         "refused",
@@ -90,12 +82,12 @@ def test_the_sweep_reaches_a_start_and_a_refusal_of_every_kind():
 @pytest.mark.parametrize("vector", [pytest.param(v, id=f"{stem}:{v['name']}") for stem, v in _VECTORS])
 class TestTendersStartIsTheResolversCommand:
     def test_the_live_answer_is_the_recorded_one(self, vector):
-        answer = _asked(vector)
+        answer = asked_launch_command(vector)
 
         assert (answer.command is None) == (vector["expected"]["launch_command"]["command"] is None)
 
     def test_it_starts_exactly_where_the_command_is_complete(self, vector):
-        answer = _asked(vector)
+        answer = asked_launch_command(vector)
 
         result = read_start(answer, writable=("/games",), read_only=("/store",))
 
@@ -108,7 +100,7 @@ class TestTendersStartIsTheResolversCommand:
 @pytest.mark.parametrize("vector", [pytest.param(v, id=f"{stem}:{v['name']}") for stem, v in _STARTING])
 class TestAStartRunsTheResolversCommand:
     def test_it_runs_the_program_with_its_arguments_in_order_and_every_variable_it_states(self, vector):
-        answer = _asked(vector)
+        answer = asked_launch_command(vector)
         command = answer.command
 
         result = read_start(answer)

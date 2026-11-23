@@ -100,6 +100,7 @@ const GBA_CORE_INFO: CoreInfo = coreInfoFixture({
   emulators: [MGBA],
   emulator_data_available: true,
   emulator_data_reason: null,
+  emulator_data_system: null,
   emulator_source: { kind: "retrodeck", starts_games: true },
   platform_system: null,
   active_core: MGBA.emulator,
@@ -113,6 +114,7 @@ function coreInfo(overrides: Partial<SystemCoreInfo> = {}): SystemCoreInfo {
     emulators: [MGBA, VBA],
     emulator_data_available: true,
     emulator_data_reason: null,
+    emulator_data_system: null,
     emulator_source: { kind: "retrodeck", starts_games: true },
     platform_system: null,
     active_core_label: "mGBA",
@@ -170,6 +172,7 @@ function firmwarePlatform(
     ratio_local_count: 0,
     deletable_count: 0,
     emulator_data_reason: null,
+    emulator_data_system: null,
     emulator_source: { kind: "retrodeck", starts_games: true },
     platform_system: null,
     locating: "by-name",
@@ -1277,7 +1280,16 @@ describe("Library › Platforms", () => {
 
     it("keeps every part of that line on one line, so it wraps only between parts", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
-        coreInfo({ platform_system: { state: "found", source: "retrodeck", system: "gba", platform: "GBA" } }),
+        coreInfo({
+          platform_system: {
+            state: "found",
+            source: "retrodeck",
+            systems: ["gba"],
+            platform: "GBA",
+            slug: "gba",
+            folder: "gba",
+          },
+        }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -1341,7 +1353,16 @@ describe("Library › Platforms", () => {
 
     it("names no system while one is found", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
-        coreInfo({ platform_system: { state: "found", source: "retrodeck", system: "gba", platform: "GBA" } }),
+        coreInfo({
+          platform_system: {
+            state: "found",
+            source: "retrodeck",
+            systems: ["gba"],
+            platform: "GBA",
+            slug: "gba",
+            folder: "gba",
+          },
+        }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -1357,7 +1378,15 @@ describe("Library › Platforms", () => {
           emulators: [],
           emulator_data_available: false,
           emulator_data_reason: "no_platform_system",
-          platform_system: { state: "no_system", source: "retrodeck", system: null, platform: "Game Boy Advance" },
+          emulator_data_system: null,
+          platform_system: {
+            state: "no_system",
+            source: "retrodeck",
+            systems: [],
+            platform: "Game Boy Advance",
+            slug: "gba",
+            folder: "gba",
+          },
           active_core_label: null,
         }),
       );
@@ -1376,6 +1405,7 @@ describe("Library › Platforms", () => {
           emulators: [],
           emulator_data_available: false,
           emulator_data_reason: "server_unreachable",
+          emulator_data_system: null,
           platform_system: null,
           active_core_label: null,
         }),
@@ -1388,12 +1418,13 @@ describe("Library › Platforms", () => {
       );
     });
 
-    it("says RomM did not give the platform's ids where it refused them", async () => {
+    it("says RomM did not give its list of platforms where it refused it", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
           emulators: [],
           emulator_data_available: false,
           emulator_data_reason: "auth_failed",
+          emulator_data_system: null,
           platform_system: null,
           active_core_label: null,
         }),
@@ -1402,7 +1433,7 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(container.textContent).toContain(
-        "RomM did not give this platform's ids, so Tender does not know its system yet.",
+        "RomM did not give its list of platforms, so Tender does not know this platform's system yet.",
       );
       expect(container.textContent).not.toContain("emulator list is not established");
     });
@@ -1413,7 +1444,15 @@ describe("Library › Platforms", () => {
           emulators: [],
           emulator_data_available: false,
           emulator_data_reason: "platform_system_off",
-          platform_system: { state: "switched_off", source: "retrodeck", system: "gbaoff", platform: "GBA" },
+          emulator_data_system: null,
+          platform_system: {
+            state: "switched_off",
+            source: "retrodeck",
+            systems: ["gbaoff"],
+            platform: "GBA",
+            slug: "gba",
+            folder: "gba",
+          },
           active_core_label: null,
         }),
       );
@@ -1903,6 +1942,7 @@ describe("Library › Platforms", () => {
           emulators: [],
           emulator_data_available: false,
           emulator_data_reason: "no_source",
+          emulator_data_system: null,
           emulator_source: null,
           platform_system: null,
           active_core_label: null,
@@ -1930,6 +1970,7 @@ describe("Library › Platforms", () => {
           emulators: [],
           emulator_data_available: false,
           emulator_data_reason: "not_set_up",
+          emulator_data_system: null,
           emulator_source: { kind: "retrodeck", starts_games: true },
           platform_system: null,
           active_core_label: null,
@@ -1999,7 +2040,15 @@ describe("Library › Platforms", () => {
       await flushAsync();
       const gamePage = render(
         <BiosTabWithState
-          biosStatus={{ needs_bios: true, locating: "by-name", required_count: 1, required_downloaded: 0, ...counts }}
+          biosStatus={{
+            platform_system: null,
+            emulator_source: null,
+            needs_bios: true,
+            locating: "by-name",
+            required_count: 1,
+            required_downloaded: 0,
+            ...counts,
+          }}
           biosLevel="missing"
           coreInfo={GBA_CORE_INFO}
         />,
@@ -2023,7 +2072,15 @@ describe("Library › Platforms", () => {
       await flushAsync();
       const gamePage = render(
         <BiosTabWithState
-          biosStatus={{ needs_bios: true, locating: "by-name", required_count: 1, required_downloaded: 0, ...counts }}
+          biosStatus={{
+            platform_system: null,
+            emulator_source: null,
+            needs_bios: true,
+            locating: "by-name",
+            required_count: 1,
+            required_downloaded: 0,
+            ...counts,
+          }}
           biosLevel="missing"
           coreInfo={GBA_CORE_INFO}
         />,
@@ -2638,6 +2695,29 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain("Contents");
       expect(container.textContent).toContain("gba_bios.bin");
       expect(contentsCells(container)).toContain("—");
+    });
+
+    it("says above the BIOS table why downloads stay in the store for a platform of several systems", async () => {
+      mockFirmware([
+        firmwarePlatform({
+          store_only: "platform_systems_several",
+          emulator_source: { kind: "retrodeck", starts_games: true },
+          platform_system: {
+            state: "several",
+            source: "retrodeck",
+            systems: ["gba", "gbah"],
+            platform: "Game Boy Advance",
+            slug: "gba",
+            folder: "gba",
+          },
+        }),
+      ]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "RetroDECK has several systems for Game Boy Advance (gba, gbah). Downloads are kept in Tender's firmware store and linked into none of them.",
+      );
     });
 
     it("says no BIOS is chosen for PCSX2 (Standalone) on the answer it really sends", async () => {

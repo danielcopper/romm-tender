@@ -52,8 +52,8 @@ The [emu-atlas](https://github.com/danielcopper/emu-atlas) resolver — the conf
 extracted from this plugin.
 
 - **Upstream:** <https://github.com/danielcopper/emu-atlas>
-- **Version:** 0.34.0 — tag `v0.34.0`, from the release's `emu_atlas-0.34.0-py3-none-any.whl`
-  (`sha256:39af2b5be2ba11ceffbc01154123e488c38d4546fbf7ad00d7f368ebc28c9405`)
+- **Version:** 0.36.0 — tag `v0.36.0`, from the release's `emu_atlas-0.36.0-py3-none-any.whl`, whose digest is
+  upstream's own manifest's, [`atlas.SHA256SUMS`](atlas.SHA256SUMS)
 - **License:** MIT — see [`atlas.LICENSE`](atlas.LICENSE)
 - **Local patches:** none. Upstream made the package relocatable in
   [emu-atlas#327](https://github.com/danielcopper/emu-atlas/issues/327) — no absolute self-imports, no `files("atlas")`
@@ -280,11 +280,12 @@ apply to a path handed over explicitly. That is how a formatter reaches a vendor
   puts every future vendored package back in the same position, silently. It also stops the hook formatting and linting
   `./scripts`, which the same `extend-exclude` already asked for and CI already did; the hook was the last thing
   checking those files.
-- **Markdown — still open, and nothing needs it yet.** `deno fmt` (`deno.json` includes `**/*.md`), `markdownlint-cli2`
-  (the `lint:md` mise task) and `scripts/check_markdown_links.py` (which walks `git ls-files '*.md'`) all reach tracked
-  markdown under `_vendor/`, and the hook reformats staged `.md` too. The emu-atlas wheel ships no markdown, so there is
-  nothing to exclude today — but the next vendored package may, and reformatted prose breaks byte-identity exactly like
-  reformatted code.
+- **Markdown.** `deno fmt` (`deno.json` includes `**/*.md`), `markdownlint-cli2` (the `lint:md` mise task and its CI
+  job) and the hook, which reformats staged `.md` through `deno fmt`, would all reach tracked markdown under `_vendor/`,
+  and reformatted prose breaks byte-identity exactly like reformatted code. The emu-atlas wheel ships one such file
+  (`atlas/data/SOURCES.md`), so `backend/_vendor/atlas/` is excluded in `deno.json`, in `lint:md` and in the CI job; a
+  package vendored later with markdown of its own joins it there. This README beside the trees stays checked.
+  `scripts/check_markdown_links.py` still reads the tree's markdown, which links nowhere local.
 
 **The trap is not limited to vendored trees.** Any directory a _different_ formatter owns is exposed the same way, and
 there it costs a whole tree rather than one file: the markdown formatter is configured for `**/*.md`, but handed `src/`

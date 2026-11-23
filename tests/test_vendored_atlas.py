@@ -15,8 +15,16 @@ from __future__ import annotations
 
 from _vendor import atlas
 
-VENDORED_VERSION = "0.34.0"
+VENDORED_VERSION = "0.36.0"
+
+# The platform table's own version, which the resolver promises stability for
+# apart from its release (#2223 D16): a release that moves it fails here.
+VENDORED_TABLE_VERSION = 1
 
 
 def test_vendored_atlas_is_the_pinned_release() -> None:
     assert atlas.__version__ == VENDORED_VERSION
+
+
+def test_the_vendored_platform_table_is_the_pinned_version() -> None:
+    assert atlas.translate((("romm", "snes"),)).table_version == VENDORED_TABLE_VERSION

@@ -1,7 +1,7 @@
 """Whether one game's file starts, read in the catalogue's reading module (#2195 D2, D3, D11, D13).
 
-The first class drives the REAL resolver over a fabricated RetroDECK deploy
-under ``tmp_path``: what is under test is that each verdict the resolver states
+The first class drives the REAL resolver over a RetroDECK the resolver's own
+machine stands in for: what is under test is that each verdict the resolver states
 arrives as its own state, with what that state's sentence names. The second
 builds answers from real atlas value objects for the shapes a seeded tree does
 not reach cheaply.
@@ -15,7 +15,7 @@ import os
 from typing import Any
 
 import pytest
-from _atlas_machines import fixture_machine, vectors_asking
+from _atlas_machines import asked_system, fixture_machine, vector_named
 from _vendor import atlas
 from _vendor.atlas import (
     CAVEAT_ARCHIVE_CONTENTS_UNREAD,
@@ -38,10 +38,15 @@ from _vendor.atlas import (
     CAVEAT_BOOT_REGISTRY_UNREAD,
     CAVEAT_BOOT_SAVESTATE_UNREAD,
     CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
+    CAVEAT_ENTRY_DIRECTORY_HOLDS,
+    CAVEAT_ENTRY_DIRECTORY_UNREAD,
     CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT,
     CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD,
+    CAVEAT_ENTRY_FORMAT_UNCLAIMED,
     CAVEAT_ENTRY_FORMAT_UNESTABLISHED,
     CAVEAT_ENTRY_TAKES_NO_DIRECTORY,
+    CAVEAT_FRONTEND_NAME_UNSCANNED,
+    CAVEAT_LAUNCH_PATH_UNESTABLISHED,
     CAVEAT_OPENS_BOUND_EXCEEDED,
     CAVEAT_OPENS_CONTENT_UNREAD,
     CAVEAT_OPENS_ENTRY_IGNORED,
@@ -60,12 +65,20 @@ from _vendor.atlas import (
     EFFECT_STOPS,
     EFFECT_UNESTABLISHED,
     OPENS_EFFECTS,
+    RESOLUTION_AMBIGUOUS,
+    RESOLUTION_UNANIMOUS,
+    RESOLUTION_UNKNOWN,
     VERDICT_ENTRY_NOT_ACCEPTED,
     VERDICT_LAUNCHABLE,
     VERDICT_NEEDS_INSTALLATION,
+    VERDICT_UNESTABLISHED,
     VERDICT_UNKNOWN,
+    SystemCandidate,
+    SystemResolution,
+    translate,
 )
 from _vendor.atlas.installations import Installer, LaunchabilityAnswer
+from _vendor.atlas.machine import FixtureMachine
 from _vendor.atlas.opens_codes import OPENS_FAILURE_CODES
 from _vendor.atlas.placement import Caveat
 
@@ -84,8 +97,12 @@ from domain.launchability import (
     EMULATOR_DRIVE_UNKNOWN,
     ENCRYPTION_UNREAD,
     ENTRY_UNKNOWN,
+    FOLDER_HOLDS_GAMES,
+    FOLDER_ROUTE_UNREAD,
     FORMAT_REFUSED,
+    FORMAT_UNCLAIMED,
     FORMAT_UNESTABLISHED,
+    FRONTEND_WOULD_NOT_LIST,
     GAME_KIND_UNFOLLOWED,
     GAME_LIST_UNREAD,
     GOES_ON_FILE_MISSING,
@@ -100,7 +117,6 @@ from domain.launchability import (
     NEEDS_INSTALLING,
     NO_SOURCE,
     NOT_A_GAME_FILE,
-    NOT_A_LAUNCH_FILE,
     NOT_ESTABLISHED,
     NOT_THIS_EMULATOR,
     NOTHING_TO_START,
@@ -114,10 +130,12 @@ from domain.launchability import (
     PATH_TOO_LONG_UNCHECKED,
     PLAYLIST_DISCS_PAST_LIMIT,
     PLAYLIST_REFUSED,
+    SANDBOX_PATH_UNESTABLISHED,
     SAVESTATE_UNREAD,
     SHEET_REFUSED,
     STARTS,
     SYSTEM_UNKNOWN,
+    SYSTEMS_SEVERAL,
     TAKES_NO_FOLDER,
     TRACK_REFUSED,
     VERSION_DEPENDENT,
@@ -156,16 +174,13 @@ _CATALOGUE = """\
 """
 
 
-def _seed_retrodeck(tmp_path) -> str:
-    home = tmp_path / "home"
-    marker = home / ".var" / "app" / "net.retrodeck.retrodeck" / "config" / "retrodeck" / "retrodeck.json"
-    marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text(json.dumps({"paths": {"rd_home_path": str(home / "retrodeck")}}), encoding="utf-8")
-    deploy = home / ".local" / "share" / "flatpak" / "app" / "net.retrodeck.retrodeck" / "current" / "active" / "files"
-    bundled = deploy / _LINUX_SYSTEMS_SUFFIX
-    bundled.parent.mkdir(parents=True, exist_ok=True)
-    bundled.write_text(_CATALOGUE, encoding="utf-8")
-    return str(home)
+_HOME = "/home/deck"
+_ROMS = f"{_HOME}/retrodeck/roms"
+_DEPLOY = f"{_HOME}/.local/share/flatpak/app/net.retrodeck.retrodeck/current/active"
+
+# RetroDECK's Flatpak reads the host's folders (``filesystems=host``), as the
+# resolver's own recorded RetroDECK machines state it.
+_METADATA = "[Application]\nname=net.retrodeck.retrodeck\n\n[Context]\nfilesystems=host;\n"
 
 
 @pytest.fixture(autouse=True)
@@ -181,91 +196,100 @@ def traces() -> list[str]:
     return []
 
 
-def _real(home: str, traces: list[str]) -> AtlasCatalogueAdapter:
+def _retrodeck(traces: list[str], *content: str, home: str = _HOME) -> AtlasCatalogueAdapter:
+    """The adapter over a RetroDECK the resolver's own machine stands in for, holding each file in *content*.
+
+    A machine rather than a tree under ``tmp_path``: the resolver reads a
+    game's path as RetroDECK's sandbox sees it, and ``tmp_path`` lies under
+    ``/tmp``, which the sandbox keeps as its own, so nothing of a seeded tree
+    would be seen there.
+    """
+    files = {
+        f"{_HOME}/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": json.dumps(
+            {"paths": {"rd_home_path": f"{_HOME}/retrodeck"}}
+        ),
+        f"{_DEPLOY}/files/{_LINUX_SYSTEMS_SUFFIX}": _CATALOGUE,
+        f"{_DEPLOY}/metadata": _METADATA,
+        **dict.fromkeys(content, ""),
+    }
     return AtlasCatalogueAdapter(
-        sources=EmulatorSourcesAdapter(user_home=home, settings={}, log_debug=traces.append),
+        sources=EmulatorSourcesAdapter(
+            user_home=home, settings={}, log_debug=traces.append, machine=FixtureMachine(files)
+        ),
         log_debug=traces.append,
     )
 
 
-def _roms(tmp_path) -> str:
-    return os.path.join(str(tmp_path), "home", "retrodeck", "roms")
+class TestTheRealResolverOverAMachine:
+    def test_a_ps3_pkg_has_to_be_installed_in_the_emulator_the_resolver_names(self, traces):
+        path = f"{_ROMS}/ps3/Puppeteer/Puppeteer.pkg"
 
-
-class TestTheRealResolverOverARealTree:
-    def test_a_ps3_pkg_has_to_be_installed_in_the_emulator_the_resolver_names(self, tmp_path, traces):
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
-        path = f"{_roms(tmp_path)}/ps3/Puppeteer/Puppeteer.pkg"
-
-        answer = adapter.launchability("ps3", path, label="RPCS3 Directory (Standalone)")
+        answer = _retrodeck(traces, path).launchability("ps3", path, label="RPCS3 Directory (Standalone)")
 
         assert answer.state == NEEDS_INSTALLING
         assert answer.install_in == ("RPCS3 Directory (Standalone)",)
         assert (answer.file, answer.extension) == ("Puppeteer.pkg", ".pkg")
 
-    def test_an_installer_the_system_has_no_entry_for_is_left_out(self, tmp_path, traces):
+    def test_an_installer_the_system_has_no_entry_for_is_left_out(self, traces):
         # The resolver names Azahar and Azahar Plus as installing a .cia, which
         # this system's list does not take; it has an entry for Azahar alone
         # (#2195 D35).
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
+        path = f"{_ROMS}/n3ds/Game.cia"
 
-        answer = adapter.launchability("n3ds", f"{_roms(tmp_path)}/n3ds/Game.cia", label="Azahar (Standalone)")
+        answer = _retrodeck(traces, path).launchability("n3ds", path, label="Azahar (Standalone)")
 
         assert answer.state == NEEDS_INSTALLING
         assert answer.install_in == ("Azahar (Standalone)",)
 
-    def test_a_single_dreamcast_track_is_not_the_file_the_system_starts_from(self, tmp_path, traces):
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
+    def test_a_single_dreamcast_track_is_not_established_and_says_the_frontend_would_not_list_it(self, traces):
+        """#2195 D2 (changed): the file is judged by what the emulator starts; the frontend's list is a note."""
+        path = f"{_ROMS}/dreamcast/Game/track03.bin"
 
-        answer = adapter.launchability("dreamcast", f"{_roms(tmp_path)}/dreamcast/Game/track03.bin", label="Flycast")
+        answer = _retrodeck(traces, path).launchability("dreamcast", path, label="Flycast")
 
-        assert answer.state == NOT_A_LAUNCH_FILE
+        assert answer.state == NOT_ESTABLISHED
+        assert answer.statements == (LaunchStatement(FORMAT_UNESTABLISHED), LaunchStatement(FRONTEND_WOULD_NOT_LIST))
         assert answer.starts_from == (".chd", ".CHD", ".cue", ".CUE", ".gdi", ".GDI")
         assert answer.install_in is None
 
-    def test_a_file_the_system_takes_starts(self, tmp_path, traces):
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
+    def test_a_file_whose_reading_ended_without_a_take_is_not_established_never_starts(self, traces):
+        """#2195 D40 (changed): an entry reading that ended without a take is not established, Play stays on."""
+        path = f"{_ROMS}/gba/Game.gba"
 
-        answer = adapter.launchability("gba", f"{_roms(tmp_path)}/gba/Game.gba", label="mGBA")
+        answer = _retrodeck(traces, path).launchability("gba", path, label="mGBA")
 
-        assert answer.state == STARTS
-        assert answer.entry == "mGBA"
+        assert (answer.state, answer.entry) == (NOT_ESTABLISHED, "mGBA")
+        assert answer.statements == (LaunchStatement(FORMAT_UNESTABLISHED),)
 
-    def test_an_extension_is_compared_case_exactly(self, tmp_path, traces):
+    def test_an_extension_the_frontend_lists_in_another_case_is_noted_case_exactly(self, traces):
         # The system lists ``.gba`` alone, and ES-DE compares exactly (#2195 D3).
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
+        path = f"{_ROMS}/gba/Game.GBA"
 
-        answer = adapter.launchability("gba", f"{_roms(tmp_path)}/gba/Game.GBA", label="mGBA")
+        answer = _retrodeck(traces, path).launchability("gba", path, label="mGBA")
 
-        assert (answer.state, answer.extension) == (NOT_A_LAUNCH_FILE, ".GBA")
+        assert (answer.state, answer.extension) == (NOT_ESTABLISHED, ".GBA")
+        assert LaunchStatement(FRONTEND_WOULD_NOT_LIST) in answer.statements
 
-    def test_a_ps3_folder_the_resolver_cannot_find_starts_with_a_note_saying_so(self, tmp_path, traces):
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
+    def test_a_ps3_folder_the_resolver_cannot_find_is_not_established_and_says_why(self, traces):
+        answer = _retrodeck(traces).launchability("ps3", f"{_ROMS}/ps3/Game.ps3", label="RPCS3 Directory (Standalone)")
 
-        answer = adapter.launchability("ps3", f"{_roms(tmp_path)}/ps3/Game.ps3", label="RPCS3 Directory (Standalone)")
+        assert (answer.state, answer.format_unestablished) == (NOT_ESTABLISHED, False)
+        assert answer.statements == (LaunchStatement(CONTENT_MISSING),)
 
-        # The resolver looks as RetroDECK's sandbox sees the path: a folder
-        # under /tmp, the sandbox's own, cannot be read, and one under /var is
-        # missing — and where tmp_path lies is the machine's choice.
-        assert (answer.state, answer.format_unestablished) == (STARTS, False)
-        assert answer.reason in (CONTENT_MISSING, CONTENT_UNREADABLE)
+    def test_a_label_the_system_does_not_carry_is_not_established_for_that_reason(self, traces):
+        path = f"{_ROMS}/gba/Game.gba"
 
-    def test_a_label_the_system_does_not_carry_is_not_established_for_that_reason(self, tmp_path, traces):
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
-
-        answer = adapter.launchability("gba", f"{_roms(tmp_path)}/gba/Game.gba", label="Snes9x")
+        answer = _retrodeck(traces, path).launchability("gba", path, label="Snes9x")
 
         assert (answer.state, answer.reason) == (NOT_ESTABLISHED, ENTRY_UNKNOWN)
 
-    def test_a_system_the_catalogue_does_not_declare_is_not_established_for_that_reason(self, tmp_path, traces):
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
-
-        answer = adapter.launchability("snes", f"{_roms(tmp_path)}/snes/Game.sfc", label="Snes9x")
+    def test_a_system_the_catalogue_does_not_declare_is_not_established_for_that_reason(self, traces):
+        answer = _retrodeck(traces).launchability("snes", f"{_ROMS}/snes/Game.sfc", label="Snes9x")
 
         assert (answer.state, answer.reason) == (NOT_ESTABLISHED, SYSTEM_UNKNOWN)
 
-    def test_nothing_detected_is_not_established_because_no_source_answers(self, tmp_path, traces):
-        adapter = _real(str(tmp_path / "empty-home"), traces)
+    def test_nothing_detected_is_not_established_because_no_source_answers(self, traces):
+        adapter = _retrodeck(traces, home="/home/nobody")
 
         answer = adapter.launchability("gba", "/roms/gba/Game.gba", label="mGBA")
 
@@ -309,6 +333,160 @@ def _ask(answer: LaunchabilityAnswer | Exception, traces: list[str], *, label: s
     installation = _Installation(answer)
     result = _stand_in(installation, traces).launchability("n64", "/roms/n64/Game.z64", label=label)
     return result, installation
+
+
+class TestTheNewStatementsOfALaunch:
+    """The resolver's launch statements of emu-atlas 0.35.0, each read into a word of Tender's own (#2195 D2, D40)."""
+
+    def test_an_unestablished_verdict_is_not_established_with_what_stopped_short(self, traces):
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=VERDICT_UNESTABLISHED,
+                extension=".z64",
+                caveats=(_caveat(CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD),),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason) == (NOT_ESTABLISHED, None)
+        assert result.statements == (LaunchStatement(CONTENT_UNCHECKED),)
+
+    def test_a_name_the_frontend_would_not_list_is_said_beside_a_start(self, traces):
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=VERDICT_LAUNCHABLE,
+                extension=".Z64",
+                accepted=(".z64",),
+                caveats=(_caveat(CAVEAT_FRONTEND_NAME_UNSCANNED, kind="file", names=[".z64"]),),
+            ),
+            traces,
+        )
+
+        assert result.state == STARTS
+        assert result.statements == (LaunchStatement(FRONTEND_WOULD_NOT_LIST),)
+        assert result.starts_from == (".z64",)
+
+    def test_an_extension_the_core_does_not_claim_is_said_beside_a_verdict_not_established(self, traces):
+        """Vector a-file-the-core-does-not-claim-and-the-list-leaves-out-is-attempted."""
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=VERDICT_UNESTABLISHED,
+                extension=".txt",
+                accepted=(".gb",),
+                caveats=(
+                    _caveat(CAVEAT_ENTRY_FORMAT_UNCLAIMED, entry="Gambatte", extension=".txt"),
+                    _caveat(CAVEAT_FRONTEND_NAME_UNSCANNED, kind="file", names=[".gb"]),
+                ),
+            ),
+            traces,
+        )
+
+        assert result.state == NOT_ESTABLISHED
+        assert result.statements == (LaunchStatement(FORMAT_UNCLAIMED), LaunchStatement(FRONTEND_WOULD_NOT_LIST))
+
+    def test_a_path_the_sandbox_cannot_be_told_about_is_said_beside_a_verdict_not_established(self, traces):
+        """Vector a-path-the-sandbox-cannot-be-told-about-is-not-established."""
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=VERDICT_UNESTABLISHED,
+                extension=".sgb",
+                caveats=(_caveat(CAVEAT_LAUNCH_PATH_UNESTABLISHED, path="/mnt/sd/retrodeck/roms/gb/Game.sgb"),),
+            ),
+            traces,
+        )
+
+        assert result.state == NOT_ESTABLISHED
+        assert result.statements == (LaunchStatement(SANDBOX_PATH_UNESTABLISHED),)
+
+    def test_a_folder_route_not_followed_is_not_established(self, traces):
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=VERDICT_UNESTABLISHED,
+                extension=".z64",
+                caveats=(_caveat(CAVEAT_ENTRY_DIRECTORY_UNREAD, reason="own-loader"),),
+            ),
+            traces,
+        )
+
+        assert result.statements == (LaunchStatement(FOLDER_ROUTE_UNREAD),)
+
+    def test_the_files_a_folder_holds_are_named(self, traces):
+        holds = _caveat(CAVEAT_ENTRY_DIRECTORY_HOLDS, files=["/roms/n64/Game/Game.z64", "/roms/n64/Game/Other.z64"])
+        result, _ = _ask(
+            LaunchabilityAnswer(verdict=VERDICT_ENTRY_NOT_ACCEPTED, extension="", caveats=(holds,)),
+            traces,
+        )
+
+        assert result.statements == (LaunchStatement(FOLDER_HOLDS_GAMES, "Game.z64, Other.z64"),)
+
+    @pytest.mark.parametrize(
+        ("resolution", "reason"),
+        [
+            (SystemResolution(RESOLUTION_UNKNOWN, None, None), SYSTEM_UNKNOWN),
+            (
+                SystemResolution(
+                    RESOLUTION_AMBIGUOUS,
+                    None,
+                    None,
+                    candidates=(
+                        SystemCandidate(("esde", "mark3"), "declared"),
+                        SystemCandidate(("esde", "mastersystem"), "declared"),
+                    ),
+                    translation=translate((("romm", "sms"),)),
+                ),
+                SYSTEMS_SEVERAL,
+            ),
+        ],
+        ids=["unknown", "ambiguous"],
+    )
+    def test_a_system_that_resolved_to_no_one_system_is_not_established_for_that_reason(
+        self, traces, resolution, reason
+    ):
+        result, _ = _ask(LaunchabilityAnswer(verdict=VERDICT_UNKNOWN, extension=".sms", resolution=resolution), traces)
+
+        assert (result.state, result.reason) == (NOT_ESTABLISHED, reason)
+
+
+class TestAVerdictBesideASystemResolvedToNone:
+    """An answer that does not hold for the platform is not established, whatever its verdict (#2195 D40)."""
+
+    @pytest.mark.parametrize("verdict", [VERDICT_LAUNCHABLE, VERDICT_NEEDS_INSTALLATION, VERDICT_ENTRY_NOT_ACCEPTED])
+    def test_the_verdict_is_not_read(self, traces, verdict):
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=verdict,
+                extension=".sms",
+                caveats=(_caveat(CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD),),
+                installers=() if verdict == VERDICT_NEEDS_INSTALLATION else None,
+                resolution=SystemResolution(RESOLUTION_UNKNOWN, None, None),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason) == (NOT_ESTABLISHED, SYSTEM_UNKNOWN)
+
+    def test_beside_systems_that_answer_alike_the_verdict_is_read(self, traces):
+        """#2225 D8, #2751 D3: a shared answer holds for the platform, so its verdict stands."""
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED,
+                extension=".sms",
+                alternatives=("Genesis Plus GX",),
+                resolution=SystemResolution(
+                    RESOLUTION_UNANIMOUS,
+                    None,
+                    None,
+                    candidates=(
+                        SystemCandidate(("esde", "mark3"), "declared"),
+                        SystemCandidate(("esde", "mastersystem"), "declared"),
+                    ),
+                    translation=translate((("romm", "sms"),)),
+                ),
+            ),
+            traces,
+        )
+
+        assert result.state == NOT_THIS_EMULATOR
 
 
 class TestEachVerdictInTendersWords:
@@ -720,9 +898,7 @@ class TestWhatADiscFileOpensInTendersWords:
 
 
 def _disc_opens_vector(name: str) -> dict[str, Any]:
-    return next(
-        vector for stem, vector in vectors_asking("launchable") if stem == "disc-opens" and vector["name"] == name
-    )
+    return vector_named("launchable", "disc-opens", name)
 
 
 def _through_tender(inp: dict[str, Any], traces: list[str], label: str = "Genesis Plus GX"):
@@ -734,7 +910,7 @@ def _through_tender(inp: dict[str, Any], traces: list[str], label: str = "Genesi
         log_debug=traces.append,
     )
     query = inp["launchable_query"]
-    return adapter.launchability(query["system"], query["content_path"], label=label)
+    return adapter.launchability(asked_system(query["system"]), query["content_path"], label=label)
 
 
 class TestGenesisPlusGxNotesOnlyWhereTheyHold:
@@ -767,7 +943,9 @@ class TestGenesisPlusGxNotesOnlyWhereTheyHold:
 
         result = _through_tender(inp, traces)
 
-        assert (result.state, result.reason, result.reason_file) == (STARTS, PATH_TOO_LONG_UNCHECKED, "Game.cue")
+        # #2195 D40 (changed): a reading that stops short is not established, and says where it stopped.
+        assert result.state == NOT_ESTABLISHED
+        assert LaunchStatement(PATH_TOO_LONG_UNCHECKED, "Game.cue") in result.statements
 
     def test_a_sheet_path_under_255_bytes_says_nothing(self, traces):
         inp = copy.deepcopy(
@@ -914,3 +1092,21 @@ class TestEveryStatementIsSaid:
             {"reason": GOES_ON_FILE_MISSING, "file": "Game (Track 2).bin"},
             {"reason": FORMAT_UNESTABLISHED, "file": None},
         ]
+
+
+class TestSystemsThatAnswerAlike:
+    """#2225 D8, #2751 D3: the launch reading takes the shared answer of several systems named alike."""
+
+    _NAME = "retrodeck-siblings-whose-first-entry-names-a-foreign-core-refuse-it-alike"
+
+    @pytest.fixture(autouse=True)
+    def _no_host_deploy(self):
+        """A recorded machine answers for its own ``/var/lib/flatpak`` deploy; nothing on this host is read."""
+
+    def test_twins_that_refuse_a_file_alike_refuse_it_through_the_shared_answer(self, traces):
+        vector = vector_named("launchable", "several-named-systems", self._NAME)
+
+        result = _through_tender(vector["input"], traces, label="Gambatte (Windows)")
+
+        assert vector["expected"]["launchable"]["resolution"]["status"] == RESOLUTION_UNANIMOUS
+        assert result.state == NOT_THIS_EMULATOR
