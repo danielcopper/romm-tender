@@ -246,8 +246,11 @@ const PLATFORM_SYSTEM_SENTENCES: Record<PlatformSystemReason, (answer: PlatformS
 
 /** Whether `reason` is one a platform with no system to use answers with. */
 export function isPlatformSystemReason(reason: string): reason is PlatformSystemReason {
-  return Object.prototype.hasOwnProperty.call(PLATFORM_SYSTEM_SENTENCES, reason);
+  return PLATFORM_SYSTEM_REASONS.has(reason);
 }
+
+// The reasons the record above words, as its own keys: a lookup that never reaches the prototype.
+const PLATFORM_SYSTEM_REASONS: ReadonlySet<string> = new Set(Object.keys(PLATFORM_SYSTEM_SENTENCES));
 
 function isPlatformSystemRefusal(answer: object): answer is { reason: PlatformSystemReason } & PlatformSystemAnswer {
   const { reason, source, platform, systems, slug, folder } = answer as Record<string, unknown>;
@@ -291,8 +294,11 @@ const CATALOGUE_REFUSAL_FACTS: Record<UnaskedCatalogueReason, (kind: string) => 
 
 /** Whether `reason` is one a platform's download is refused for when its source's catalogue was refused. */
 function isUnaskedCatalogueReason(reason: string): reason is UnaskedCatalogueReason {
-  return Object.prototype.hasOwnProperty.call(CATALOGUE_REFUSAL_FACTS, reason);
+  return UNASKED_CATALOGUE_REASONS.has(reason);
 }
+
+// The catalogue refusals the record above words, as its own keys.
+const UNASKED_CATALOGUE_REASONS: ReadonlySet<string> = new Set(Object.keys(CATALOGUE_REFUSAL_FACTS));
 
 /**
  * The sentence for a press refused because the catalogue of the source that would answer was refused
@@ -462,7 +468,7 @@ function platformSystemSentence(reason: EmulatorDataReason | null, answer: Platf
  * linked into no frontend folder (#2225 D8). Empty for every other state.
  */
 export function platformSystemNotes(platformSystem: PlatformSystemAnswer | null): string[] {
-  if (platformSystem === null || platformSystem.state !== "several") return [];
+  if (platformSystem?.state !== "several") return [];
   return [severalPlatformSystemsSentence(platformSystem.source, platformSystem.platform, platformSystem.systems)];
 }
 

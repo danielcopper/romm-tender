@@ -113,9 +113,9 @@ class TestTheTranslations:
     def test_tender_matches_a_platform_exactly_where_the_table_agrees(self, vector):
         answer = PlatformSystemsAnswer(translate(_pairs(vector["input"]["pairs"])))
 
-        state, named = read_platform_answer(answer)
+        reading = read_platform_answer(answer)
 
-        assert (state, named) == _expected_reading(vector["expected"], [])
+        assert reading == _expected_reading(vector["expected"], [])
 
 
 @pytest.mark.parametrize("vector", [pytest.param(v, id=f"{stem}:{v['name']}") for stem, v in _PLATFORM_VECTORS])

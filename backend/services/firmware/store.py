@@ -390,22 +390,9 @@ class FirmwareStore:
         """
         if not unwanted:
             return frozenset()
-        listed = self._platform_systems.listed_platforms()
-        if listed is None:
+        systems = self._other_systems(platform_folder, system, records)
+        if systems is None:
             return frozenset(unwanted)
-        stored = {PlatformKeys.of(each.platform_slug, each.platform_folder) for each in records.stored}
-        others = sorted(
-            (keys for keys in listed | stored if keys.kept_as != platform_folder),
-            key=lambda keys: (keys.slug, keys.folder or ""),
-        )
-        systems: list[SystemArgument] = []
-        for other in others:
-            answer = self._platform_systems.platform_system(other)
-            if answer.state == UNASKED:
-                return frozenset(unwanted)
-            for named in answer.wanting_systems():
-                if named != system and named not in systems:
-                    systems.append(named)
         copies = {copy.file_name: copy for copy in self.do_copies(records, platform_folder)}
         kept: set[tuple[str, str]] = set()
         for other_system in systems:
@@ -421,6 +408,32 @@ class FirmwareStore:
             if len(kept) == len(unwanted):
                 break
         return frozenset(kept)
+
+    def _other_systems(
+        self, platform_folder: str, system: SystemArgument | None, records: StoreRecords
+    ) -> list[SystemArgument] | None:
+        """Every system the other platforms name, each once and not this platform's own, for :meth:`_kept_for_others`.
+
+        ``None`` where they cannot all be named: no listing was ever kept, or a
+        platform's system could not be asked.
+        """
+        listed = self._platform_systems.listed_platforms()
+        if listed is None:
+            return None
+        stored = {PlatformKeys.of(each.platform_slug, each.platform_folder) for each in records.stored}
+        others = sorted(
+            (keys for keys in listed | stored if keys.kept_as != platform_folder),
+            key=lambda keys: (keys.slug, keys.folder or ""),
+        )
+        systems: list[SystemArgument] = []
+        for other in others:
+            answer = self._platform_systems.platform_system(other)
+            if answer.state == UNASKED:
+                return None
+            for named in answer.wanting_systems():
+                if named != system and named not in systems:
+                    systems.append(named)
+        return systems
 
     def _carry_out(self, plan: LinkUpdatePlan) -> LinkOutcome:
         outcome = LinkOutcome(left_in_place=plan.left_in_place)
