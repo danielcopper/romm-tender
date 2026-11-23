@@ -813,7 +813,7 @@ so you'll never be offered a disc image the emulator can't open.
 The selected disc is **saved**, and it survives the things that would otherwise reset it:
 
 - **A library re-sync** never changes your pick.
-- **Uninstalling and re-downloading** the game restores it — the choice is remembered against the game, not the
+- **Uninstalling and re-downloading** the game restores it — the choice is remembered against the version, not the
   downloaded files, so a reinstall re-applies it automatically.
 - A **RetroDECK path migration** (moving your RetroDECK home) keeps it too.
 
