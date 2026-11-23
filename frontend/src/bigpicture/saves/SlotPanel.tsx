@@ -163,6 +163,9 @@ export const SlotPanel: FC<SlotPanelProps> = ({
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const switchErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Only the newest slot read lands: expanding again while one is under way
+  // starts another, and the older answer must not overwrite it.
+  const slotReadSeqRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -179,21 +182,23 @@ export const SlotPanel: FC<SlotPanelProps> = ({
     // An inactive slot's saves are read on the first expand that finds them
     // unread; a read that failed leaves them unread, so the next expand asks again.
     if (willExpand && !isActive && slotFiles === null) {
+      const seq = ++slotReadSeqRef.current;
+      const isLatest = () => seq === slotReadSeqRef.current;
       setLoadingSlot(true);
       setSlotLoadError(null);
       try {
         const result = await getSlotSaves(romId, slotName);
         if (result.success) {
-          setSlotFiles(result.saves);
+          if (isLatest()) setSlotFiles(result.saves);
         } else {
           logWarn(`SavesTab: slot '${slotName}' saves could not be read: ${result.message}`);
-          setSlotLoadError(slotSavesUnreadMessage(result.message));
+          if (isLatest()) setSlotLoadError(slotSavesUnreadMessage(result.message));
         }
       } catch (e) {
         logWarn(`SavesTab: slot '${slotName}' saves could not be read: ${e}`);
-        setSlotLoadError(slotSavesUnreadMessage());
+        if (isLatest()) setSlotLoadError(slotSavesUnreadMessage());
       } finally {
-        setLoadingSlot(false);
+        if (isLatest()) setLoadingSlot(false);
       }
     }
   };
