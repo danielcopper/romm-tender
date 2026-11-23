@@ -379,3 +379,208 @@ describe("DiscSelector — event-driven re-fetch + cleanup", () => {
     expect(hostEventListenerCount("download_complete")).toBe(0);
   });
 });
+
+function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+const dataChanged = (detail: unknown) =>
+  act(async () => {
+    globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail }));
+    await Promise.resolve();
+  });
+
+const downloadComplete = (romId: number) =>
+  act(async () => {
+    emitHostEvent<DownloadCompleteEvent>("download_complete", {
+      rom_id: romId,
+      rom_name: "Final Fantasy VII",
+      platform_name: "PSX",
+      file_path: "/roms/ff7.m3u",
+    });
+    await Promise.resolve();
+  });
+
+// The version a switch binds to appId 100 in place of rom 42: its own discs, no pin.
+const newVersionSelection: DiscSelection = {
+  multi_disc: true,
+  discs: [
+    { filename: "ff7-jp (Disc 1).chd", label: "Disc 1", index: 1 },
+    { filename: "ff7-jp (Disc 2).chd", label: "Disc 2", index: 2 },
+    { filename: "ff7-jp (Disc 3).chd", label: "Disc 3", index: 3 },
+    { filename: "ff7-jp (Disc 4).chd", label: "Disc 4", index: 4 },
+  ],
+  selected: null,
+  default: { kind: "disc", label: "Disc 1", filename: "ff7-jp (Disc 1).chd" },
+};
+
+/** Answers each ROM's disc read from *byRom*; a ROM missing there gets a read that never lands. */
+function discsByRom(byRom: Record<number, DiscSelection | Promise<DiscSelection>>): void {
+  vi.mocked(backend.getDiscSelection).mockImplementation((romId: number) =>
+    Promise.resolve(byRom[romId] ?? new Promise<DiscSelection>(() => undefined)),
+  );
+}
+
+function openMenu(r: ReturnType<typeof render>) {
+  fireEvent.click(r.getByTestId("disc-btn"));
+  return render(<>{captured.menu}</>);
+}
+
+describe("DiscSelector — a version switch", () => {
+  beforeEach(() => {
+    captured.menu = null;
+    vi.mocked(getCachedGameDetail).mockReset();
+    vi.mocked(backend.getDiscSelection).mockReset();
+    vi.mocked(backend.selectDisc).mockReset();
+  });
+
+  it("drops the old version's discs and pin at the switch, and shows the new version's once its read lands", async () => {
+    mockCachedDetail();
+    const newRead = deferred<DiscSelection>();
+    discsByRom({ 42: discDefaultSelection, 43: newRead.promise });
+    const r = render(<DiscSelector appId={100} />);
+    expect((await r.findByTestId("disc-btn")).textContent).toBe("2");
+
+    mockCachedDetail({ rom_id: 43 });
+    await dataChanged({ type: "version_switched", app_id: 100, rom_id: 43 });
+
+    expect(r.queryByTestId("disc-btn")).toBeNull();
+
+    await act(async () => {
+      newRead.resolve(newVersionSelection);
+      await Promise.resolve();
+    });
+
+    expect((await r.findByTestId("disc-btn")).textContent).toBe("1");
+    const menu = openMenu(r);
+    const items = within(menu.container).getAllByRole("menuitem");
+    expect(items.map((i) => i.textContent.replace("✓", ""))).toEqual(["Disc 1", "Disc 2", "Disc 3", "Disc 4"]);
+  });
+
+  it("pins a disc picked after the switch on the new version", async () => {
+    mockCachedDetail();
+    discsByRom({ 42: discDefaultSelection, 43: newVersionSelection });
+    vi.mocked(backend.selectDisc).mockResolvedValue({ success: true, selected: "ff7-jp (Disc 4).chd" });
+    const r = render(<DiscSelector appId={100} />);
+    await r.findByTestId("disc-btn");
+
+    mockCachedDetail({ rom_id: 43 });
+    await dataChanged({ type: "version_switched", app_id: 100, rom_id: 43 });
+    await waitFor(() => expect(r.getByTestId("disc-btn").textContent).toBe("1"));
+
+    const menu = openMenu(r);
+    await act(async () => {
+      fireEvent.click(within(menu.container).getByText("Disc 4"));
+      await Promise.resolve();
+    });
+
+    expect(backend.selectDisc).toHaveBeenCalledExactlyOnceWith(43, "ff7-jp (Disc 4).chd");
+    expect(r.getByTestId("disc-btn").textContent).toBe("4");
+  });
+
+  it("keeps its discs for another game's switch and for a change that is no switch", async () => {
+    mockCachedDetail();
+    discsByRom({ 42: discDefaultSelection });
+    const r = render(<DiscSelector appId={100} />);
+    await r.findByTestId("disc-btn");
+
+    mockCachedDetail({ rom_id: 43 });
+    await dataChanged({ type: "version_switched", app_id: 200, rom_id: 43 });
+    await dataChanged({ type: "rom_pruned", app_ids: [100], rom_ids: [42] });
+
+    expect(r.getByTestId("disc-btn").textContent).toBe("2");
+    expect(getCachedGameDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the selector as the new version's read set it when the old version's disc read lands late", async () => {
+    mockCachedDetail();
+    const oldRead = deferred<DiscSelection>();
+    discsByRom({ 42: oldRead.promise, 43: newVersionSelection });
+    const r = render(<DiscSelector appId={100} />);
+    await waitFor(() => expect(backend.getDiscSelection).toHaveBeenCalledWith(42));
+
+    mockCachedDetail({ rom_id: 43 });
+    await dataChanged({ type: "version_switched", app_id: 100, rom_id: 43 });
+    await waitFor(() => expect(r.getByTestId("disc-btn").textContent).toBe("1"));
+
+    await act(async () => {
+      oldRead.resolve(discDefaultSelection);
+      await Promise.resolve();
+    });
+
+    expect(r.getByTestId("disc-btn").textContent).toBe("1");
+    const items = within(openMenu(r).container).getAllByRole("menuitem");
+    expect(items).toHaveLength(4);
+  });
+
+  it("binds the newest detail read when an older one lands after it", async () => {
+    const firstDetail = deferred<CachedGameDetail>();
+    vi.mocked(getCachedGameDetail).mockReturnValueOnce(firstDetail.promise);
+    discsByRom({ 42: discDefaultSelection, 43: newVersionSelection });
+    const r = render(<DiscSelector appId={100} />);
+    await waitFor(() => expect(getCachedGameDetail).toHaveBeenCalledTimes(1));
+
+    mockCachedDetail({ rom_id: 43 });
+    await dataChanged({ type: "version_switched", app_id: 100, rom_id: 43 });
+    await waitFor(() => expect(r.getByTestId("disc-btn").textContent).toBe("1"));
+
+    await act(async () => {
+      firstDetail.resolve({ found: true, rom_id: 42, rom_name: "Final Fantasy VII", installed: true });
+      await Promise.resolve();
+    });
+    await flushAsync();
+
+    expect(backend.getDiscSelection).not.toHaveBeenCalledWith(42);
+    expect(r.getByTestId("disc-btn").textContent).toBe("1");
+  });
+
+  it("reads the discs again on the new version's download_complete, and not on the old version's", async () => {
+    mockCachedDetail();
+    discsByRom({ 42: discDefaultSelection, 43: newVersionSelection });
+    const r = render(<DiscSelector appId={100} />);
+    await r.findByTestId("disc-btn");
+    mockCachedDetail({ rom_id: 43 });
+    await dataChanged({ type: "version_switched", app_id: 100, rom_id: 43 });
+    await waitFor(() => expect(r.getByTestId("disc-btn").textContent).toBe("1"));
+    vi.mocked(backend.getDiscSelection).mockClear();
+
+    await downloadComplete(42);
+    expect(backend.getDiscSelection).not.toHaveBeenCalled();
+
+    await downloadComplete(43);
+    expect(backend.getDiscSelection).toHaveBeenCalledExactlyOnceWith(43);
+  });
+
+  it("stops listening for switches once unmounted", async () => {
+    mockCachedDetail();
+    discsByRom({ 42: discDefaultSelection });
+    const r = render(<DiscSelector appId={100} />);
+    await r.findByTestId("disc-btn");
+    r.unmount();
+
+    await dataChanged({ type: "version_switched", app_id: 100, rom_id: 43 });
+
+    expect(getCachedGameDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a disc read for the previous game that lands after the page moved to another game", async () => {
+    mockCachedDetail();
+    const oldRead = deferred<DiscSelection>();
+    discsByRom({ 42: oldRead.promise });
+    const r = render(<DiscSelector appId={100} />);
+    await waitFor(() => expect(backend.getDiscSelection).toHaveBeenCalledWith(42));
+
+    vi.mocked(getCachedGameDetail).mockReturnValue(new Promise<CachedGameDetail>(() => undefined));
+    r.rerender(<DiscSelector appId={200} />);
+    await act(async () => {
+      oldRead.resolve(discDefaultSelection);
+      await Promise.resolve();
+    });
+
+    expect(r.queryByTestId("disc-btn")).toBeNull();
+  });
+});

@@ -11,7 +11,8 @@
  *
  * Single-disc / unknown / not-installed ROMs render nothing (zero footprint).
  * The picker re-fetches on `download_complete` (a newly installed ROM may now
- * be multi-disc) and hides on `romm_rom_uninstalled`.
+ * be multi-disc), hides on `romm_rom_uninstalled`, and reads the bound ROM and
+ * its discs again on this game's `version_switched`.
  */
 
 import { useState, useEffect, useRef, type FC } from "react";
@@ -23,6 +24,7 @@ import type { DiscSelection } from "../api/backend";
 import { getEventTarget } from "../utils/events";
 import { detach } from "../utils/detach";
 import type { DownloadCompleteEvent } from "../types";
+import type { RommDataChangedDetail, RommRomUninstalledDetail } from "../types/events";
 import { mountPruneLeaseOwner, releasePruneLeasesByOwner } from "../utils/pruneLease";
 import {
   type DiscOptionData,
@@ -44,63 +46,65 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId }) => {
   const [selected, setSelected] = useState<DiscOptionData>(null);
   const romIdRef = useRef<number | null>(null);
 
-  // Resolve rom_id from the cached detail and fetch the disc selection.
-  const fetchSelection = async (rid: number): Promise<void> => {
-    const result = await fetchDiscSelection(rid, "DiscSelector");
-    if (result) {
-      setSelection(result);
-      setSelected(result.selected ?? null);
-    }
-  };
-
-  // Initial load: resolve rom_id from cache (instant), then fetch selection.
+  // The bound version's discs, asked again when a download of it completes (it
+  // may now be multi-disc) and when a switch binds another version.
   useEffect(() => {
     mountPruneLeaseOwner(leaseOwner);
     let cancelled = false;
 
-    async function init() {
+    const fetchSelection = async (rid: number): Promise<void> => {
+      const result = await fetchDiscSelection(rid, "DiscSelector");
+      // A switch while it was asked binds another ROM, whose discs these are not.
+      if (cancelled || !result || rid !== romIdRef.current) return;
+      setSelection(result);
+      setSelected(result.selected ?? null);
+    };
+
+    // Only the newest detail read binds: an older one landing late names the
+    // version a switch has since left.
+    let initSeq = 0;
+    const init = async (): Promise<void> => {
+      const seq = ++initSeq;
       try {
         const cached = await getCachedGameDetail(appId);
-        if (cancelled || !cached.found || cached.rom_id == null) return;
+        if (cancelled || seq !== initSeq || !cached.found || cached.rom_id == null) return;
         romIdRef.current = cached.rom_id;
         if (!cached.installed) return;
         await fetchSelection(cached.rom_id);
       } catch (e) {
         logError(`DiscSelector init error: ${e}`);
       }
-    }
-
-    detach(init());
-    return () => {
-      cancelled = true;
-      detach(releasePruneLeasesByOwner(leaseOwner));
     };
-  }, [appId, leaseOwner]);
+    detach(init());
 
-  // Re-fetch on download_complete (a newly installed ROM may now be multi-disc);
-  // hide on uninstall.
-  useEffect(() => {
-    const completeListener = addEventListener<DownloadCompleteEvent>(
-      "download_complete",
-      (evt: DownloadCompleteEvent) => {
-        if (evt.rom_id !== romIdRef.current) return;
-        detach(fetchSelection(evt.rom_id));
-      },
-    );
-
+    const completeListener = addEventListener<DownloadCompleteEvent>("download_complete", (evt) => {
+      if (evt.rom_id === romIdRef.current) detach(fetchSelection(evt.rom_id));
+    });
     const onUninstall = (e: Event) => {
-      const rid = (e as CustomEvent).detail?.rom_id;
-      if (rid !== romIdRef.current) return;
+      if ((e as CustomEvent<RommRomUninstalledDetail>).detail.rom_id !== romIdRef.current) return;
       setSelection(null);
       setSelected(null);
     };
     globalThis.addEventListener("romm_rom_uninstalled", onUninstall);
+    const onSwitched = (e: Event) => {
+      const detail = (e as CustomEvent<RommDataChangedDetail>).detail;
+      if (detail.type !== "version_switched" || detail.app_id !== appId) return;
+      // The old version's discs are not the new one's, also where the read below fails.
+      romIdRef.current = null;
+      setSelection(null);
+      setSelected(null);
+      detach(init());
+    };
+    globalThis.addEventListener("romm_data_changed", onSwitched);
 
     return () => {
+      cancelled = true;
+      detach(releasePruneLeasesByOwner(leaseOwner));
       removeEventListener("download_complete", completeListener);
       globalThis.removeEventListener("romm_rom_uninstalled", onUninstall);
+      globalThis.removeEventListener("romm_data_changed", onSwitched);
     };
-  }, []);
+  }, [appId, leaseOwner]);
 
   const handleChange = async (data: DiscOptionData): Promise<void> => {
     const rid = romIdRef.current;
