@@ -15,7 +15,7 @@ import os
 from typing import Any
 
 import pytest
-from _atlas_machines import asked_system, fixture_machine, select, vectors_asking
+from _atlas_machines import asked_system, fixture_machine, vectors_asking
 from _vendor import atlas
 from _vendor.atlas import (
     CAVEAT_ARCHIVE_CONTENTS_UNREAD,
@@ -897,10 +897,13 @@ class TestWhatADiscFileOpensInTendersWords:
         assert result.payload(platform_name="PlayStation")["reason_file"] == "Game (Track 2).bin"
 
 
+def _launch_vector(stem: str, name: str) -> dict[str, Any]:
+    """The recorded launch question *name* of ``machines/<stem>.json``."""
+    return next(vector for each, vector in vectors_asking("launchable") if each == stem and vector["name"] == name)
+
+
 def _disc_opens_vector(name: str) -> dict[str, Any]:
-    return next(
-        vector for stem, vector in vectors_asking("launchable") if stem == "disc-opens" and vector["name"] == name
-    )
+    return _launch_vector("disc-opens", name)
 
 
 def _through_tender(inp: dict[str, Any], traces: list[str], label: str = "Genesis Plus GX"):
@@ -912,7 +915,7 @@ def _through_tender(inp: dict[str, Any], traces: list[str], label: str = "Genesi
         log_debug=traces.append,
     )
     query = inp["launchable_query"]
-    return adapter.launchability(query["system"], query["content_path"], label=label)
+    return adapter.launchability(asked_system(query["system"]), query["content_path"], label=label)
 
 
 class TestGenesisPlusGxNotesOnlyWhereTheyHold:
@@ -1106,25 +1109,9 @@ class TestSystemsThatAnswerAlike:
         """A recorded machine answers for its own ``/var/lib/flatpak`` deploy; nothing on this host is read."""
 
     def test_twins_that_refuse_a_file_alike_refuse_it_through_the_shared_answer(self, traces):
-        [(_stem, vector)] = [each for each in vectors_asking("launchable") if each[1]["name"] == self._NAME]
-        inp = vector["input"]
-        query = inp["launchable_query"]
-        installation = select(atlas.detect(inp["home"], fixture_machine(inp)), query.get("installation"))
-        system = asked_system(query["system"])
-        answer = installation.launchable(system, query["content_path"], label=query.get("label"))
-        label = query.get("label") or answer.entry.label
-        adapter = AtlasCatalogueAdapter(
-            sources=EmulatorSourcesAdapter(
-                user_home=inp["home"],
-                settings={},
-                log_debug=traces.append,
-                detect_installations=lambda home, _machine: atlas.detect(home, fixture_machine(inp)),
-                machine=object(),
-            ),
-            log_debug=traces.append,
-        )
+        vector = _launch_vector("several-named-systems", self._NAME)
 
-        result = adapter.launchability(system, query["content_path"], label=label)
+        result = _through_tender(vector["input"], traces, label="Gambatte (Windows)")
 
-        assert answer.resolution.status == RESOLUTION_UNANIMOUS
+        assert vector["expected"]["launchable"]["resolution"]["status"] == RESOLUTION_UNANIMOUS
         assert result.state == NOT_THIS_EMULATOR

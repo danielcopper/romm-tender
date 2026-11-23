@@ -791,7 +791,7 @@ class TestKnownSystem:
         assert _adapter(installation, traces).is_known_system(pairs) is None
 
     def test_several_systems_answering_alike_answer_neither_yes_nor_no(self, traces):
-        """Whether the catalogue holds a system is one system's question; a shared answer names none (#2751 D4)."""
+        """Whether the catalogue holds a system is one system's question; a shared answer names none (#2751 D3)."""
         alike = SystemResolution(
             RESOLUTION_UNANIMOUS,
             None,

@@ -12,6 +12,8 @@ from dataclasses import replace
 from typing import Any, cast
 
 import pytest
+from _atlas_machines import asked_system, fixture_machine, select, vectors_asking
+from _vendor import atlas
 from _vendor.atlas import (
     AVAILABILITY_NOT_INSTALLED,
     AVAILABILITY_STARTABLE,
@@ -52,7 +54,6 @@ from _vendor.atlas import (
     WorkingFolder,
     translate,
 )
-from _vendor.atlas._shared_answer import SharedEntry
 from _vendor.atlas.esde import EmulatorSpec
 from _vendor.atlas.installations import EmulatorEntry, LaunchCommandAnswer
 from _vendor.atlas.launch import Launcher, LaunchResolution
@@ -60,7 +61,7 @@ from _vendor.atlas.placement import Caveat
 
 from adapters.atlas_launch import AtlasLaunchAdapter, read_start
 from adapters.emulator_sources import EmulatorSourcesAdapter
-from domain.emulator_commands import NOT_ESTABLISHED_NO_FIND_RULE, NOT_INSTALLED
+from domain.emulator_commands import NOT_ESTABLISHED_FIND_RULES_UNREAD, NOT_ESTABLISHED_NO_FIND_RULE, NOT_INSTALLED
 from domain.start_command import (
     COMMAND_TOO_LONG,
     COMMAND_UNREAD,
@@ -117,9 +118,7 @@ def _caveat(code: str, data: dict[str, Any] | None = None) -> Caveat:
     return Caveat(code=code, message="stated by the resolver", data=data or {})
 
 
-def _entry(
-    availability: str = AVAILABILITY_STARTABLE, caveats: tuple[Caveat, ...] = (), system: str = "gc"
-) -> EmulatorEntry:
+def _entry(availability: str = AVAILABILITY_STARTABLE, caveats: tuple[Caveat, ...] = ()) -> EmulatorEntry:
     launcher = (
         Launcher(path=_DOLPHIN, replacement_command=None, app_id=_APP, rule="staticpath", entry=_DOLPHIN)
         if availability == AVAILABILITY_STARTABLE
@@ -128,7 +127,7 @@ def _entry(
     return EmulatorEntry(
         cast("Any", None),
         EmulatorSpec(
-            system=system,
+            system="gc",
             label="Dolphin (Standalone)",
             kind=KIND_STANDALONE,
             core_so=None,
@@ -331,23 +330,25 @@ class TestARefusedCommand:
         assert read_start(answer) == StartRefused(reason)
 
     def test_beside_systems_that_answer_alike_the_entrys_own_refusal_is_read(self):
-        """#2225 D8, #2751 D3: a shared answer holds for the platform, so its entry's installation is said."""
-        alike = SystemResolution(
-            RESOLUTION_UNANIMOUS,
-            None,
-            None,
-            candidates=(
-                SystemCandidate(("esde", "mark3"), "declared"),
-                SystemCandidate(("esde", "mastersystem"), "declared"),
-            ),
-            translation=translate((("romm", "sms"),)),
-        )
-        # The resolver's entry of a shared answer: one entry of each candidate, naming neither.
-        twins = [_entry(AVAILABILITY_NOT_INSTALLED, system=key) for key in ("mark3", "mastersystem")]
-        entry = SharedEntry(twins, (), (("esde", "mark3"), ("esde", "mastersystem")))
-        answer = LaunchCommandAnswer(entry=entry, command=None, sources=(), caveats=(), resolution=alike)
+        """#2225 D8, #2751 D3: a shared answer holds for the platform, so its entry's installation is said.
 
-        assert read_start(answer) == StartRefused(NOT_INSTALLED)
+        Asked of a recorded machine whose EmuDeck twins answer alike, so the
+        entry is the resolver's own entry of a shared answer.
+        """
+        [(_stem, vector)] = [
+            each
+            for each in vectors_asking("launch_command")
+            if each[1]["name"] == "emudeck-siblings-declared-alike-answer-every-question-alike"
+        ]
+        inp = vector["input"]
+        query = inp["launch_command_query"]
+        installation = select(atlas.detect(inp["home"], fixture_machine(inp)), query.get("installation"))
+        answer = installation.launch_command(
+            asked_system(query["system"]), query["content_path"], label=query.get("label")
+        )
+
+        assert answer.resolution.status == RESOLUTION_UNANIMOUS
+        assert read_start(answer) == StartRefused(NOT_ESTABLISHED_FIND_RULES_UNREAD)
 
     def test_a_refusal_tender_has_no_word_for_reads_as_a_command_that_could_not_be_read(self):
         assert read_start(_answer(None, _caveat("a-code-of-a-later-release"))) == StartRefused(COMMAND_UNREAD)
