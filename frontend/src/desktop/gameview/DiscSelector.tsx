@@ -6,19 +6,14 @@
 import { useState, useEffect, useRef, useCallback, type CSSProperties, type FC, type ReactNode } from "react";
 import { addEventListener, removeEventListener } from "../../api/host";
 import { FaCompactDisc, FaChevronDown, FaLayerGroup } from "react-icons/fa";
-import { getCachedGameDetail, logError, logWarn } from "../../api/backend";
-import type { DiscSelection, VersionList, VersionInfo } from "../../api/backend";
+import { logError, logWarn } from "../../api/backend";
+import type { VersionList, VersionInfo } from "../../api/backend";
 import { detach } from "../../utils/detach";
 import { useOutsideClick } from "../../utils/useOutsideClick";
 import { mountPruneLeaseOwner, releasePruneLeasesByOwner } from "../../utils/pruneLease";
 import { executeVersionSwitch, fetchVersionCovers, isSelectable, loadVersionList } from "../../utils/versionSwitch";
-import {
-  type DiscOptionData,
-  type DiscDisplayState,
-  computeDiscDisplayState,
-  fetchDiscSelection,
-  executeDiscSelection,
-} from "../../utils/discSelection";
+import { type DiscOptionData, type DiscDisplayState, computeDiscDisplayState } from "../../utils/discSelection";
+import { useDiscSelection } from "../../utils/useDiscSelection";
 import { isTerminalStage } from "../../utils/syncProgress";
 import { DEFAULT_BADGE, DOWNLOADED_BADGE, NOT_SYNCED_BADGE, versionRowHint } from "../../utils/versionPickerWording";
 import { DISC_GREY, DISC_ACCENT, DiscStack, DiscWithNumber, buildDiscOptions } from "../../shared/DiscGlyphs";
@@ -101,10 +96,11 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
   const discLeaseOwner = `desktop-disc-selector:${appId}`;
   const versionLeaseOwner = `desktop-version-picker:${appId}`;
 
-  const [selection, setSelection] = useState<DiscSelection | null>(null);
-  // The pinned disc, as read and as a pick echoed it; `null` follows the default.
-  const [selected, setSelected] = useState<DiscOptionData>(null);
-  const romIdRef = useRef<number | null>(null);
+  const { selection, selected, pickDisc } = useDiscSelection({
+    appId,
+    leaseOwner: discLeaseOwner,
+    logTag: LOG_TAG,
+  });
 
   const [versionList, setVersionList] = useState<VersionList | null>(null);
   // Set while a switch is under way. One refused, failed or declined at its
@@ -139,66 +135,6 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
   const menuRef = useRef<HTMLDivElement>(null);
   const closeMenu = useCallback(() => setShowMenu(false), []);
   useOutsideClick(menuRef, closeMenu, showMenu);
-
-  // The bound version's discs, asked again when a download of it completes and
-  // when a switch binds another version.
-  useEffect(() => {
-    mountPruneLeaseOwner(discLeaseOwner);
-    let cancelled = false;
-
-    const fetchSelection = async (rid: number): Promise<void> => {
-      const result = await fetchDiscSelection(rid, LOG_TAG);
-      // A switch while it was asked binds another ROM, whose discs these are not.
-      if (cancelled || !result || rid !== romIdRef.current) return;
-      setSelection(result);
-      setSelected(result.selected ?? null);
-    };
-
-    // Only the newest detail read binds: an older one landing late names the
-    // version a switch has since left.
-    let initSeq = 0;
-    const init = async (): Promise<void> => {
-      const seq = ++initSeq;
-      try {
-        const cached = await getCachedGameDetail(appId);
-        if (cancelled || seq !== initSeq || !cached.found || cached.rom_id == null) return;
-        romIdRef.current = cached.rom_id;
-        if (!cached.installed) return;
-        await fetchSelection(cached.rom_id);
-      } catch (e) {
-        logError(`${LOG_TAG}: init error: ${e}`);
-      }
-    };
-    detach(init());
-
-    const completeListener = addEventListener<DownloadCompleteEvent>("download_complete", (evt) => {
-      if (evt.rom_id === romIdRef.current) detach(fetchSelection(evt.rom_id));
-    });
-    const onUninstall = (e: Event) => {
-      if ((e as CustomEvent<RommRomUninstalledDetail>).detail.rom_id !== romIdRef.current) return;
-      setSelection(null);
-      setSelected(null);
-    };
-    globalThis.addEventListener("romm_rom_uninstalled", onUninstall);
-    const onSwitched = (e: Event) => {
-      const detail = (e as CustomEvent<RommDataChangedDetail>).detail;
-      if (detail.type !== "version_switched" || detail.app_id !== appId) return;
-      // The old version's discs are not the new one's, also where the read below fails.
-      romIdRef.current = null;
-      setSelection(null);
-      setSelected(null);
-      detach(init());
-    };
-    globalThis.addEventListener("romm_data_changed", onSwitched);
-
-    return () => {
-      cancelled = true;
-      detach(releasePruneLeasesByOwner(discLeaseOwner));
-      removeEventListener("download_complete", completeListener);
-      globalThis.removeEventListener("romm_rom_uninstalled", onUninstall);
-      globalThis.removeEventListener("romm_data_changed", onSwitched);
-    };
-  }, [appId, discLeaseOwner]);
 
   // The group's versions, asked again when Big Picture's VersionPicker asks, and
   // for its reasons: a switch, a prune, a member's download completing or
@@ -294,18 +230,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
 
   const handleDiscChange = async (data: DiscOptionData): Promise<void> => {
     setShowMenu(false);
-    const rid = romIdRef.current;
-    if (rid == null) return;
-    await executeDiscSelection({
-      romId: rid,
-      data,
-      leaseOwner: discLeaseOwner,
-      // A switch while the pick was asked binds another ROM, whose pin this is not.
-      onSelected: (pin) => {
-        if (romIdRef.current === rid) setSelected(pin);
-      },
-      logTag: LOG_TAG,
-    });
+    await pickDisc(data);
   };
 
   const handleSwitch = async (target: VersionInfo): Promise<void> => {
