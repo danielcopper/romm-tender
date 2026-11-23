@@ -129,6 +129,32 @@ const CONFIRM_FAILED_DESKTOP_TOAST_BODY = "Couldn't configure save sync — open
 
 export type SaveSetupSurface = "bigpicture" | "desktop";
 
+const SURFACE_TOAST_COPY: Record<
+  SaveSetupSurface,
+  {
+    serverUnreachable: string;
+    notFound: string;
+    deviceNotRegistered: string;
+    confirmFailed: string;
+    needsUserChoice: string;
+  }
+> = {
+  bigpicture: {
+    serverUnreachable: SERVER_UNREACHABLE_TOAST_BODY,
+    notFound: NOT_FOUND_TOAST_BODY,
+    deviceNotRegistered: DEVICE_NOT_REGISTERED_TOAST_BODY,
+    confirmFailed: CONFIRM_FAILED_TOAST_BODY,
+    needsUserChoice: NEEDS_USER_CHOICE_TOAST_BODY,
+  },
+  desktop: {
+    serverUnreachable: SERVER_UNREACHABLE_DESKTOP_TOAST_BODY,
+    notFound: NOT_FOUND_DESKTOP_TOAST_BODY,
+    deviceNotRegistered: DEVICE_NOT_REGISTERED_DESKTOP_TOAST_BODY,
+    confirmFailed: CONFIRM_FAILED_DESKTOP_TOAST_BODY,
+    needsUserChoice: NEEDS_USER_CHOICE_DESKTOP_TOAST_BODY,
+  },
+};
+
 /** Side-effect bundle for the launch-gate handler. The component supplies
  *  Tender's `showToast` and the global event dispatch; tests pass spies. */
 export interface LaunchGateSetupDeps {
@@ -168,43 +194,37 @@ export async function applyLaunchGateSetupOutcome(
   outcome: SaveSetupOutcome,
   deps: LaunchGateSetupDeps,
 ): Promise<"proceed" | "abort"> {
-  const isDesktop = deps.surface === "desktop";
-  // No slot is set up for a game whose saves no sync carries, and nothing is
-  // asked of the user: the start goes on (#2153 D1).
-  if (outcome.kind === "sync_unavailable") return "proceed";
-  if (outcome.kind === "server_unreachable") {
-    return abortLaunchToSaves(deps, isDesktop ? SERVER_UNREACHABLE_DESKTOP_TOAST_BODY : SERVER_UNREACHABLE_TOAST_BODY);
-  }
-  // Same abort, honest cause — a 404 must not let the launch proceed with save
-  // tracking unconfigured.
-  if (outcome.kind === "not_found") {
-    return abortLaunchToSaves(deps, isDesktop ? NOT_FOUND_DESKTOP_TOAST_BODY : NOT_FOUND_TOAST_BODY);
-  }
-  if (outcome.kind === "romm_refused") {
-    return abortLaunchToSaves(deps, rommRefusedToastBody(outcome.message));
-  }
-  if (outcome.kind === "device_not_registered") {
-    return abortLaunchToSaves(
-      deps,
-      isDesktop ? DEVICE_NOT_REGISTERED_DESKTOP_TOAST_BODY : DEVICE_NOT_REGISTERED_TOAST_BODY,
-    );
-  }
-  if (outcome.kind === "auto_confirm") {
-    // Auto-confirm of a named/default slot — never migrate (so no conflict).
-    const result = await deps.confirmSlotChoice(deps.rid, outcome.slot, false, null, false);
-    if (result?.success === false) {
-      // A resolved failure (not a throw) must not let the launch proceed with
-      // save tracking unconfigured — route to Saves like the other
-      // abort branches (#1009).
-      return abortLaunchToSaves(
-        deps,
-        result.message || (isDesktop ? CONFIRM_FAILED_DESKTOP_TOAST_BODY : CONFIRM_FAILED_TOAST_BODY),
-      );
+  const copy = SURFACE_TOAST_COPY[deps.surface ?? "bigpicture"];
+  switch (outcome.kind) {
+    // No slot is set up for a game whose saves no sync carries, and nothing is
+    // asked of the user: the start goes on (#2153 D1).
+    case "sync_unavailable":
+      return "proceed";
+    case "server_unreachable":
+      return abortLaunchToSaves(deps, copy.serverUnreachable);
+    // Same abort, honest cause — a 404 must not let the launch proceed with save
+    // tracking unconfigured.
+    case "not_found":
+      return abortLaunchToSaves(deps, copy.notFound);
+    case "romm_refused":
+      return abortLaunchToSaves(deps, rommRefusedToastBody(outcome.message));
+    case "device_not_registered":
+      return abortLaunchToSaves(deps, copy.deviceNotRegistered);
+    case "auto_confirm": {
+      // Auto-confirm of a named/default slot — never migrate (so no conflict).
+      const result = await deps.confirmSlotChoice(deps.rid, outcome.slot, false, null, false);
+      if (result?.success === false) {
+        // A resolved failure (not a throw) must not let the launch proceed with
+        // save tracking unconfigured — route to Saves like the other
+        // abort branches (#1009).
+        return abortLaunchToSaves(deps, result.message || copy.confirmFailed);
+      }
+      return "proceed";
     }
-    return "proceed";
+    // Server has saves — user must configure in Saves.
+    case "needs_user_choice":
+      return abortLaunchToSaves(deps, copy.needsUserChoice);
   }
-  // Server has saves — user must configure in Saves.
-  return abortLaunchToSaves(deps, isDesktop ? NEEDS_USER_CHOICE_DESKTOP_TOAST_BODY : NEEDS_USER_CHOICE_TOAST_BODY);
 }
 
 /** Side-effect bundle for the wizard's initial-fetch and retry handlers. The
