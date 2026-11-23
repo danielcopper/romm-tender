@@ -97,7 +97,9 @@ function renderActiveSlotBody(
             </div>
           ) : null}
           <VersionHistoryPanel
-            key={`vhp-${f.filename}`}
+            // Keyed by the ROM as well: a list read for one ROM never stands under
+            // another, nor does a Restore from it.
+            key={`vhp-${romId}-${f.filename}`}
             romId={romId}
             slot={slot}
             filename={f.filename}

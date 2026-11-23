@@ -3,10 +3,11 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, waitFor, act } from "@testing-library/react";
 import { createElement } from "react";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
+import { SlotPanel } from "./SlotPanel";
 import * as backend from "../../api/backend";
 import { toaster } from "../../api/host";
 import { showSyncConflictModal } from "../../shared/SyncConflictModal";
-import type { SaveVersionEntry, RollbackStatus } from "../../types";
+import type { SaveVersionEntry, RollbackStatus, SaveFileStatus, SaveStatus } from "../../types";
 import { lineWithText, throbberIn } from "../../test-utils/throbber";
 
 // Override the global DialogButton stub so it forwards `disabled` and we can
@@ -658,5 +659,128 @@ describe("VersionHistoryPanel — self-refresh on romm_data_changed", () => {
 
     // Cleanup ran: the post-unmount event reached no listener, so no refetch.
     expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("VersionHistoryPanel — a change of ROM in its slot panel", () => {
+  // The panel's key is given where its slot panel renders it, so these render it there.
+  const file: SaveFileStatus = {
+    filename: "save.srm",
+    local_path: "/data/save.srm",
+    local_hash: "h",
+    local_mtime: "2025-06-15T10:00:00Z",
+    local_size: 100,
+    server_save_id: 5,
+    server_file_name: null,
+    server_emulator: null,
+    server_updated_at: null,
+    server_size: null,
+    last_sync_at: null,
+    status: "synced",
+  };
+
+  function activeSlot(romId: number) {
+    const saveStatus: SaveStatus = {
+      rom_id: romId,
+      files: [file],
+      playtime: {
+        total_seconds: 0,
+        session_count: 0,
+        last_session_start: null,
+        last_session_duration_sec: null,
+        last_played: null,
+      },
+      device_id: "dev",
+      last_sync_check_at: null,
+    };
+    return (
+      <SlotPanel
+        romId={romId}
+        slot={{ slot: "default", source: "server", count: 1, latest_updated_at: null }}
+        isActive={true}
+        defaultExpanded={true}
+        saveStatus={saveStatus}
+        conflicts={[]}
+        noSaveLine="No save yet."
+        isOffline={false}
+        onSlotSwitched={vi.fn()}
+        onVersionRestored={vi.fn()}
+        onSlotDeleted={vi.fn()}
+        onCopy={vi.fn()}
+      />
+    );
+  }
+
+  const listFor: Record<number, SaveVersionEntry[]> = {
+    1: [makeVersion({ id: 11, file_name: "rom1-v1.srm" })],
+    2: [makeVersion({ id: 21, file_name: "rom2-v1.srm" })],
+  };
+
+  function buttonWithText(root: HTMLElement, text: string): HTMLElement {
+    const found = Array.from(root.querySelectorAll<HTMLElement>("button")).find((b) => b.textContent.includes(text));
+    if (!found) throw new Error(`no button reading ${text}`);
+    return found;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(backend.savesListFileVersions).mockImplementation((romId) =>
+      Promise.resolve({ status: "ok", versions: listFor[romId] ?? [] }),
+    );
+  });
+
+  it("closes the list, and reads it again for the new ROM when it is opened", async () => {
+    const { container, rerender } = render(activeSlot(1));
+    fireEvent.click(buttonWithText(container, "Previous Versions"));
+    await waitFor(() => expect(container.textContent).toContain("rom1-v1.srm"));
+
+    rerender(activeSlot(2));
+    await flushAsync();
+    expect(container.textContent).not.toContain("rom1-v1.srm");
+
+    fireEvent.click(buttonWithText(container, "Previous Versions"));
+    await waitFor(() => expect(container.textContent).toContain("rom2-v1.srm"));
+    expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenLastCalledWith(2, "default", "save.srm");
+  });
+
+  it("never sends a version id from the previous ROM's list with a Restore", async () => {
+    vi.mocked(backend.savesRollbackToVersion).mockResolvedValue({ status: "ok" });
+    const { container, rerender } = render(activeSlot(1));
+    fireEvent.click(buttonWithText(container, "Previous Versions"));
+    await waitFor(() => expect(container.textContent).toContain("rom1-v1.srm"));
+
+    rerender(activeSlot(2));
+    await flushAsync();
+    expect(container.textContent).not.toContain("#11");
+    fireEvent.click(buttonWithText(container, "Previous Versions"));
+    await waitFor(() => expect(container.textContent).toContain("rom2-v1.srm"));
+    fireEvent.click(buttonWithText(container, "Restore"));
+    await flushAsync();
+
+    expect(vi.mocked(backend.savesRollbackToVersion)).toHaveBeenCalledExactlyOnceWith(2, "default", 21);
+  });
+
+  it("does not show a list read for the previous ROM that lands after the change", async () => {
+    let answerOldRead: (versions: SaveVersionEntry[]) => void = () => undefined;
+    vi.mocked(backend.savesListFileVersions).mockImplementationOnce(
+      () =>
+        new Promise((res) => {
+          answerOldRead = (versions) => res({ status: "ok", versions });
+        }),
+    );
+    const { container, rerender } = render(activeSlot(1));
+    fireEvent.click(buttonWithText(container, "Previous Versions"));
+    await flushAsync();
+
+    rerender(activeSlot(2));
+    await act(async () => {
+      answerOldRead(listFor[1] ?? []);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(container.textContent).not.toContain("rom1-v1.srm");
+
+    fireEvent.click(buttonWithText(container, "Previous Versions"));
+    await waitFor(() => expect(container.textContent).toContain("rom2-v1.srm"));
+    expect(container.textContent).not.toContain("rom1-v1.srm");
   });
 });
