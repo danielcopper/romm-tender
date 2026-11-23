@@ -2328,6 +2328,62 @@ describe("BiosTab", () => {
       expect(backend.deletePlatformBios).toHaveBeenCalledWith("psx", "ps");
     });
 
+    it("ignores a second press on Replace…, Delete, or Delete downloads while its confirmed work is running", async () => {
+      let finishReplace!: (v: Awaited<ReturnType<typeof backend.replaceBiosFile>>) => void;
+      vi.mocked(backend.replaceBiosFile).mockReturnValueOnce(new Promise((r) => (finishReplace = r)));
+      let finishDeleteFile!: (v: Awaited<ReturnType<typeof backend.deleteBiosFile>>) => void;
+      vi.mocked(backend.deleteBiosFile).mockReturnValueOnce(new Promise((r) => (finishDeleteFile = r)));
+      let finishDeletePlatform!: (v: Awaited<ReturnType<typeof backend.deletePlatformBios>>) => void;
+      vi.mocked(backend.deletePlatformBios).mockReturnValueOnce(new Promise((r) => (finishDeletePlatform = r)));
+
+      const { container } = renderPsx();
+
+      vi.mocked(showModal).mockClear();
+      fireEvent.click(button(container, "Replace…") as HTMLElement);
+      expect(showModal).toHaveBeenCalledTimes(1);
+      await confirm();
+      vi.mocked(showModal).mockClear();
+      fireEvent.click(button(container, "Replace…") as HTMLElement);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(showModal).not.toHaveBeenCalled();
+      await act(async () => {
+        finishReplace({
+          success: true,
+          placed: 1,
+          left_in_place: 0,
+          removed: 0,
+          link_failures: [],
+          backup_path: "/data/backups/bios/x/scph5500.bin",
+        });
+      });
+
+      fireEvent.click(button(container, "Delete") as HTMLElement);
+      expect(showModal).toHaveBeenCalledTimes(1);
+      await confirm();
+      vi.mocked(showModal).mockClear();
+      fireEvent.click(button(container, "Delete") as HTMLElement);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(showModal).not.toHaveBeenCalled();
+      await act(async () => {
+        finishDeleteFile({ success: true, deleted_count: 1, message: "Deleted" });
+      });
+
+      fireEvent.click(button(container, "Delete downloads (2)") as HTMLElement);
+      expect(showModal).toHaveBeenCalledTimes(1);
+      await confirm();
+      vi.mocked(showModal).mockClear();
+      fireEvent.click(button(container, "Delete downloads (2)") as HTMLElement);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(showModal).not.toHaveBeenCalled();
+      await act(async () => {
+        finishDeletePlatform({
+          success: true,
+          message: "Deleted 2 BIOS files",
+          deleted_count: 2,
+        } as Awaited<ReturnType<typeof backend.deletePlatformBios>>);
+      });
+    });
+
     it("withdraws the downloads while RomM's listing could not be read, and keeps the deletes", () => {
       const { container } = renderPsx(psx({ server_offline: true }));
       expect(button(container, "Download")).toBeUndefined();
@@ -2469,6 +2525,121 @@ describe("BiosTab", () => {
       dialogButton.mockRestore();
       expect(Object.keys(bulk).sort()).toEqual(["Delete downloads", "Download all", "Download required"]);
       for (const style of Object.values(bulk)) expect(style).toMatchObject({ width: "auto", flex: "0 1 auto" });
+    });
+
+    it("mutes the Failed label on a disabled sibling row or an offline bulk button while the notice lasts", async () => {
+      vi.useFakeTimers();
+      try {
+        const sharedLib: NonNullable<BiosFileStatus["library"]> = {
+          file_name: "psx-bios.bin",
+          firmware_id: 7,
+          platform_slug: "psx",
+          matched: "content",
+          md5: "aaa",
+          size: 512,
+          no_checksum: false,
+        };
+        const twoRows = psx({
+          files: [
+            psxFile("scph5501.bin", { fetch_for_required: true, library: sharedLib }),
+            psxFile("scph5501_alt.bin", {
+              declared_path: "sub/scph5501_alt.bin",
+              required_by_active: false,
+              wanted: "optional",
+              library: sharedLib,
+            }),
+          ],
+        });
+        vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValueOnce({
+          success: false,
+          reason: "bios_download_failed",
+          message: "boom",
+        });
+        vi.mocked(backend.downloadRequiredFirmware).mockResolvedValueOnce({
+          success: false,
+          reason: "bios_download_failed",
+          message: "boom",
+        });
+        vi.mocked(backend.downloadAllFirmware).mockResolvedValueOnce({
+          success: false,
+          reason: "bios_download_failed",
+          message: "boom",
+        });
+
+        const { container, rerender } = render(
+          <BiosTabWithState
+            biosStatus={twoRows}
+            biosLevel="missing"
+            coreInfo={coreInfo}
+            platformName="PlayStation"
+            platformSlug="psx"
+            platformFolder="psx"
+            romId={42}
+          />,
+        );
+        const rows = [...container.querySelectorAll<HTMLElement>('[data-testid="bios-file-row"]')];
+        await act(async () => {
+          fireEvent.click(rows[0]!.querySelector("button")!);
+        });
+        expect(rows[0]!.querySelector("button span")?.textContent).toBe("Failed");
+        expect(rows[1]!.querySelector("button")?.textContent).toBe("Failed");
+        expect(rows[1]!.querySelector("button span")).toBeNull();
+
+        act(() => {
+          vi.advanceTimersByTime(2000);
+        });
+
+        await act(async () => {
+          fireEvent.click(button(container, "Download required for DuckStation (1)")!);
+        });
+        expect(button(container, "Failed")?.querySelector("span")?.textContent).toBe("Failed");
+        rerender(
+          <BiosTabWithState
+            biosStatus={{ ...twoRows, server_offline: true }}
+            biosLevel="missing"
+            coreInfo={coreInfo}
+            platformName="PlayStation"
+            platformSlug="psx"
+            platformFolder="psx"
+            romId={42}
+          />,
+        );
+        expect(button(container, "Failed")?.querySelector("span")).toBeNull();
+
+        act(() => {
+          vi.advanceTimersByTime(2000);
+        });
+        rerender(
+          <BiosTabWithState
+            biosStatus={twoRows}
+            biosLevel="missing"
+            coreInfo={coreInfo}
+            platformName="PlayStation"
+            platformSlug="psx"
+            platformFolder="psx"
+            romId={42}
+          />,
+        );
+
+        await act(async () => {
+          fireEvent.click(button(container, "Download all")!);
+        });
+        expect(button(container, "Failed")?.querySelector("span")?.textContent).toBe("Failed");
+        rerender(
+          <BiosTabWithState
+            biosStatus={{ ...twoRows, server_offline: true }}
+            biosLevel="missing"
+            coreInfo={coreInfo}
+            platformName="PlayStation"
+            platformSlug="psx"
+            platformFolder="psx"
+            romId={42}
+          />,
+        );
+        expect(button(container, "Failed")?.querySelector("span")).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

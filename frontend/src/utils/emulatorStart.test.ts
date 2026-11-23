@@ -14,8 +14,9 @@ import {
   emulatorStartRefusal,
   frontendChoiceLines,
   frontendChoiceSentence,
-  gameCanPickAnother,
+  gameStartRefusal,
   isChoosable,
+  pickPointerFor,
   startRefusal,
   startRefused,
   startRemarkSentences,
@@ -52,14 +53,13 @@ describe("why a start is refused", () => {
     expect(emulatorStartRefusal(start({ state: "no_entry", entry: null }), "this game", true)).toBeNull();
   });
 
-  it("names an emulator that is not installed and points at the menu", () => {
-    const words = emulatorStartRefusal(
-      start({ state: "cannot_start", reason: "not_installed", entry: "Ryubing (Standalone)" }),
-      "this game",
-      true,
-    );
-    expect(words).toBe(
+  it("names an emulator that is not installed and points at the menu or the page", () => {
+    const ryubing = start({ state: "cannot_start", reason: "not_installed", entry: "Ryubing (Standalone)" });
+    expect(emulatorStartRefusal(ryubing, "this game", true)).toBe(
       "Ryubing (Standalone) is not installed, so this game cannot start. Choose another emulator in the emulator menu.",
+    );
+    expect(emulatorStartRefusal(ryubing, "this game", "page")).toBe(
+      "Ryubing (Standalone) is not installed, so this game cannot start. Choose another emulator.",
     );
   });
 
@@ -67,6 +67,9 @@ describe("why a start is refused", () => {
     const answer = start({ state: "choose", reason: "no_find_rule", entry: "BlastEm" });
     expect(emulatorStartRefusal(answer, "this game", true)).toBe(
       "No emulator is the default, because whether BlastEm is installed could not be established (ES-DE has no rule for finding it). Choose an emulator in the emulator menu.",
+    );
+    expect(emulatorStartRefusal(answer, "this game", "page")).toBe(
+      "No emulator is the default, because whether BlastEm is installed could not be established (ES-DE has no rule for finding it). Choose an emulator.",
     );
     expect(startRefused(answer)).toBe(true);
   });
@@ -102,9 +105,16 @@ describe("whether another entry can be pinned", () => {
     expect(canPickAnother([row("A"), row("B", { reason: "not_installed" })], "A")).toBe(false);
   });
 
-  it("is never so on a game's page with one emulator, where the page offers no menu", () => {
-    expect(gameCanPickAnother([row("A")], null)).toBe(false);
-    expect(gameCanPickAnother([row("A"), row("B")], "A")).toBe(true);
+  it("is never so in the emulator menu with one emulator, which the game page opens only when more than one is listed", () => {
+    expect(pickPointerFor("menu", [row("A")], null)).toBe(false);
+    expect(pickPointerFor("menu", [row("A"), row("B")], "A")).toBe(true);
+  });
+
+  it("points at the page itself, which lists every emulator, whenever another entry is choosable", () => {
+    expect(pickPointerFor("page", [row("A")], null)).toBe("page");
+    expect(pickPointerFor("page", [row("A")], "A")).toBe(false);
+    expect(pickPointerFor("page", [row("A"), row("B")], "A")).toBe("page");
+    expect(pickPointerFor("page", [row("A"), row("B", { reason: "not_installed" })], "A")).toBe(false);
   });
 });
 
@@ -133,6 +143,9 @@ describe("the choice made in ES-DE", () => {
     const emulators = [row("Gearsystem", { chosen_in_frontend: true }), row("Genesis Plus GX", { is_default: true })];
     expect(frontendChoiceSentence(emulators, "Genesis Plus GX")).toBe(
       "Gearsystem is chosen in ES-DE; Tender starts this game with the emulator chosen in its emulator menu.",
+    );
+    expect(frontendChoiceSentence(emulators, "Genesis Plus GX", "page")).toBe(
+      "Gearsystem is chosen in ES-DE; Tender starts this game with the emulator chosen here.",
     );
   });
 
@@ -193,6 +206,17 @@ describe("a start's own read of the emulator", () => {
     } as Awaited<ReturnType<typeof getPlatformCoreInfo>>);
     expect(await emulatorRefusalForRom(7, "test")).toBe(
       "Ryubing (Standalone) is not installed, so this game cannot start.",
+    );
+  });
+
+  it("points at no menu with one emulator and no default, which the game page opens only when more than one is listed", async () => {
+    vi.mocked(getPlatformCoreInfo).mockResolvedValue({
+      start: start({ state: "choose", reason: "no_find_rule", entry: "BlastEm" }),
+      emulators: [row("BlastEm", { reason: "no_find_rule" })],
+      active_core_label: null,
+    } as Awaited<ReturnType<typeof getPlatformCoreInfo>>);
+    expect(await emulatorRefusalForRom(7, "test")).toBe(
+      "No emulator is the default, because whether BlastEm is installed could not be established (ES-DE has no rule for finding it).",
     );
   });
 
@@ -436,5 +460,17 @@ describe("which refusal a game's page says (#2221 D20, #2698 D8)", () => {
     expect(await emulatorRefusalForRom(7, "test")).toBe(
       "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. Tender cannot start RPCS3 Shortcut (Standalone) yet: it starts through a .desktop file.",
     );
+  });
+
+  it("excludes the active emulator when deciding whether another entry can be chosen by default", () => {
+    expect(
+      gameStartRefusal(
+        coreInfo({
+          start: start({ state: "cannot_start", reason: "no_find_rule", entry: "PCSX2" }),
+          emulators: [row("PCSX2", { reason: "no_find_rule" }), row("LRPS2", { reason: "not_installed" })],
+          active_core_label: "PCSX2",
+        }),
+      ),
+    ).toBe("Whether PCSX2 is installed could not be established: ES-DE has no rule for finding it.");
   });
 });

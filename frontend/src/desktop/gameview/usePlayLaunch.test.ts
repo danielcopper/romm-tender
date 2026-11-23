@@ -478,15 +478,18 @@ describe("usePlayLaunch", () => {
   describe("after the page's check of whether the game can start went wrong", () => {
     const REFUSED = "Snes9x cannot start smw.zip: it is neither a disc image nor a game program.";
 
-    it("asks again before the launch check, and starts nothing where the answer refuses, saying why", async () => {
-      vi.mocked(gameDetailStore.recheckStart).mockResolvedValueOnce(REFUSED);
+    const pressAfterRecheck = async (recheckResult: string | null) => {
+      vi.mocked(gameDetailStore.recheckStart).mockResolvedValueOnce(recheckResult);
       const result = renderLaunch({ startCheckFailed: true });
-
       await act(async () => {
         await result.current.handlePlayClick();
       });
+      expect(gameDetailStore.recheckStart).toHaveBeenCalledWith(12345, 100, "page");
+    };
 
-      expect(gameDetailStore.recheckStart).toHaveBeenCalledWith(12345, 100, false);
+    it("asks again before the launch check, and starts nothing where the answer refuses, saying why", async () => {
+      await pressAfterRecheck(REFUSED);
+
       expect(toast.showToast).toHaveBeenCalledWith(REFUSED);
       expect(backend.probeReachability).not.toHaveBeenCalled();
       expect(runGame).not.toHaveBeenCalled();
@@ -494,14 +497,8 @@ describe("usePlayLaunch", () => {
     });
 
     it("asks again and starts the game where nothing stands in its way", async () => {
-      vi.mocked(gameDetailStore.recheckStart).mockResolvedValueOnce(null);
-      const result = renderLaunch({ startCheckFailed: true });
+      await pressAfterRecheck(null);
 
-      await act(async () => {
-        await result.current.handlePlayClick();
-      });
-
-      expect(gameDetailStore.recheckStart).toHaveBeenCalledWith(12345, 100, false);
       expect(runGame).toHaveBeenCalledWith("12345", "", -1, 100);
       expect(toast.showToast).not.toHaveBeenCalled();
     });

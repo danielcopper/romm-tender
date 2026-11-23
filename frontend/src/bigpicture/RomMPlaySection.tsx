@@ -70,7 +70,7 @@ import {
 import { executeGameCoreChange } from "../utils/coreOverride";
 import {
   frontendChoiceSentence,
-  gameCanPickAnother,
+  pickPointerFor,
   startRefusal,
   startRemarkSentences,
   vanishedPickSentence,
@@ -960,7 +960,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // with Play left on.
   // Where the page's check itself went wrong, nothing is said below Play: the
   // notification said what went wrong, and a press asks again (#2195 D33).
-  const canPick = gameCanPickAnother(detail.emulators, detail.activeCoreLabel);
+  const canPick = pickPointerFor("menu", detail.emulators, detail.activeCoreLabel);
   const gameLaunch = detail.gameLaunch ?? null;
   const startCheckFailed = !stranded && !fileMissing && detail.startCheck?.state === "failed";
   const emulatorRefusal =

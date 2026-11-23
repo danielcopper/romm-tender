@@ -20,12 +20,10 @@ import type {
   VanishedPick,
 } from "../types";
 import { installationSentence, isNotEstablished, notEstablishedCause } from "./emulatorInstallation";
-import { launchRefusal } from "./gameLaunch";
+import { chooseAnotherPointer, launchRefusal, type PickPointer } from "./gameLaunch";
 import { cannotStartSentence, sourceName } from "./emulatorSourceWording";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import { withTimeout } from "./withTimeout";
-
-const CHOOSE_ANOTHER = " Choose another emulator in the emulator menu.";
 
 /**
  * Whether the emulator menu offers *entry* as a pick: every entry but one the
@@ -36,16 +34,32 @@ export function isChoosable(entry: EmulatorOption): boolean {
 }
 
 /**
- * Whether the emulator menu offers an entry to pick other than the one in
- * effect — what a sentence may point the reader at.
+ * Whether an entry can be picked other than the one in effect — what a
+ * sentence may point the reader at.
  */
 export function canPickAnother(emulators: readonly EmulatorOption[], activeLabel: string | null): boolean {
   return emulators.some((entry) => isChoosable(entry) && entry.label !== activeLabel);
 }
 
-/** {@link canPickAnother} for a game's page, whose emulator menu is offered only with more than one emulator. */
-export function gameCanPickAnother(emulators: readonly EmulatorOption[], activeLabel: string | null): boolean {
+/**
+ * {@link canPickAnother} for the emulator menu, which opens on a game's page
+ * only when more than one emulator is listed.
+ */
+function gameCanPickAnother(emulators: readonly EmulatorOption[], activeLabel: string | null): boolean {
   return emulators.length > 1 && canPickAnother(emulators, activeLabel);
+}
+
+/** Which surface asks how a start refusal points at choosing another emulator. */
+export type PickSurface = "menu" | "page";
+
+/** Whether and how a start refusal on *surface* points at choosing another emulator ({@link PickPointer}). */
+export function pickPointerFor(
+  surface: PickSurface,
+  emulators: readonly EmulatorOption[],
+  activeLabel: string | null,
+): PickPointer {
+  if (surface === "page") return canPickAnother(emulators, activeLabel) ? "page" : false;
+  return gameCanPickAnother(emulators, activeLabel);
 }
 
 /**
@@ -122,7 +136,7 @@ export function startVerdictLine(
 }
 
 /** Why the resolver gives no complete command for `entry`, as one sentence (#2221 D2). */
-export function commandRefusalSentence(reason: string, entry: string, context: StartContext = NO_CONTEXT): string {
+function commandRefusalSentence(reason: string, entry: string, context: StartContext = NO_CONTEXT): string {
   if (reason === "entry_unknown") return `Your choice '${entry}' no longer exists in its emulator source.`;
   return `Tender cannot start ${entry} yet: ${commandRefusedBecause(reason, context)}.`;
 }
@@ -143,20 +157,20 @@ export function startRemarkSentences(remarks: readonly StartRemark[] | undefined
 }
 
 /**
- * Why a start with this answer is refused, as one sentence about `subject`
- * ("this game", "these games"), or `null` where nothing stands in its way.
- * `canPick` says the emulator menu offers another entry; only then does the
- * sentence point at it.
+ * Why a `cannot_start` or `choose` answer refuses a start (`subject` is "this
+ * game" or "these games" where the reason names it), or `null` for `starts`
+ * and `no_entry` (handled by {@link startRefusal}). `canPick`
+ * ({@link PickPointer}) appends the pointer when another entry is choosable.
  */
 export function emulatorStartRefusal(
   start: EmulatorStart,
   subject: string,
-  canPick: boolean,
+  canPick: PickPointer,
   context: StartContext = NO_CONTEXT,
 ): string | null {
   const entry = start.entry ?? "The emulator";
   if (start.state === "cannot_start") {
-    return cannotStartRefusal(start, entry, subject, canPick ? CHOOSE_ANOTHER : "", context);
+    return cannotStartRefusal(start, entry, subject, chooseAnotherPointer(canPick), context);
   }
   if (start.state === "choose") return noDefaultRefusal(start.reason, entry, canPick);
   return null;
@@ -178,12 +192,17 @@ function cannotStartRefusal(
   return `${entry} cannot start ${subject}.${pointer}`;
 }
 
+function chooseAnEmulatorPointer(canPick: PickPointer): string {
+  if (!canPick) return "";
+  if (canPick === "page") return " Choose an emulator.";
+  return " Choose an emulator in the emulator menu.";
+}
+
 /** {@link emulatorStartRefusal} for a `choose` answer: no default, the shipped entry's installation not established. */
-function noDefaultRefusal(reason: string | null, entry: string, canPick: boolean): string {
+function noDefaultRefusal(reason: string | null, entry: string, canPick: PickPointer): string {
   const cause = notEstablishedCause(reason);
   const why = cause === null ? "" : ` (${cause})`;
-  const choose = canPick ? " Choose an emulator in the emulator menu." : "";
-  return `No emulator is the default, because whether ${entry} is installed could not be established${why}.${choose}`;
+  return `No emulator is the default, because whether ${entry} is installed could not be established${why}.${chooseAnEmulatorPointer(canPick)}`;
 }
 
 /** Whether this answer refuses a start. */
@@ -218,15 +237,18 @@ export function frontendChoiceLines(sources: readonly SourceDefault[]): string[]
 /**
  * The game page's line where the user chose an emulator for the game inside
  * ES-DE that is not the one Tender starts it with, or `null`. What is set in
- * ES-DE is ES-DE's; Tender's own choice is made in its emulator menu (#2195 D7).
+ * ES-DE is ES-DE's; Tender's own choice is made in its emulator menu (`"menu"`)
+ * or on the page itself (`"page"`, #2195 D7).
  */
 export function frontendChoiceSentence(
   emulators: readonly EmulatorOption[],
   activeLabel: string | null,
+  surface: "menu" | "page" = "menu",
 ): string | null {
   const chosen = emulators.find((entry) => entry.chosen_in_frontend);
   if (chosen === undefined || chosen.label === activeLabel) return null;
-  return `${chosen.label} is chosen in ES-DE; Tender starts this game with the emulator chosen in its emulator menu.`;
+  const where = surface === "page" ? "here" : "in its emulator menu";
+  return `${chosen.label} is chosen in ES-DE; Tender starts this game with the emulator chosen ${where}.`;
 }
 
 /** The sentence for a game no emulator starts: no entry is in effect, or its system lists none (#2221 D20). */
@@ -242,7 +264,7 @@ export const NO_EMULATOR_STARTS = "No emulator starts this game.";
 export function startRefusal(
   start: EmulatorStart,
   launch: GameLaunch | null,
-  canPick: boolean,
+  canPick: PickPointer,
   source: AnsweringSource | null = null,
 ): string | null {
   if (start.state === "no_entry") return NO_EMULATOR_STARTS;
@@ -255,11 +277,13 @@ export function startRefusal(
 
 /**
  * Why a game cannot start, from its core read ({@link startRefusal}), or `null`.
- * `canPick` says the page offers an emulator menu for the sentence to point at; absent, it is read off the entries.
+ * `canPick` says whether and how the sentence points at choosing another
+ * emulator; absent, it defaults to the emulator menu when another entry is
+ * choosable.
  */
 export function gameStartRefusal(
   info: CoreInfo,
-  canPick = gameCanPickAnother(info.emulators, info.active_core_label),
+  canPick: PickPointer = pickPointerFor("menu", info.emulators, info.active_core_label),
 ): string | null {
   return startRefusal(info.start, info.launch ?? null, canPick, info.emulator_source);
 }

@@ -42,7 +42,7 @@ import type { CoreInfo, DownloadCompleteEvent, SaveStatus, SaveSyncDisplay } fro
 import type { RommDataChangedDetail } from "../types/events";
 import { coreChangeIsFor } from "./coreChangedEvent";
 import { detach } from "./detach";
-import { gameStartRefusal } from "./emulatorStart";
+import { gameStartRefusal, pickPointerFor, type PickSurface } from "./emulatorStart";
 import { startCheckFailureSentence } from "./gameLaunch";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import { showToast } from "./toast";
@@ -574,14 +574,15 @@ async function updateLinksOnOpen(appId: number, entry: Entry): Promise<void> {
   }
 }
 
-/** Re-read the BIOS answer after a press on the BIOS tab that went through — a
- *  download, a delete, a Replace… — and after a link update that changed
- *  something. Leaves
- *  what is shown alone when the read fails, when it reports no BIOS need, or
- *  when a version switch re-keyed the entry while the read was open. Nothing
- *  done to firmware removes a requirement, which is the emulator's own demand —
- *  it fills one, empties one, or reveals one the cache had not seen — so this
- *  path adopts a refreshed answer and never clears one. */
+/** Re-read the BIOS answer after a firmware action that went through — a
+ *  download, a delete, or a Replace… on a BIOS view — and after a link update
+ *  that changed something. Leaves what is shown alone when the read fails, when
+ *  `bios_status_unknown` is true, when it reports no BIOS need, or when a
+ *  version switch re-keys the entry while the read is open. Nothing done to
+ *  firmware removes a requirement, which is the emulator's own demand — it
+ *  fills one, empties one, or reveals one the cache had not seen — so this
+ *  path adopts a refreshed answer and never clears one.
+ */
 export async function refreshBiosStatus(appId: number): Promise<void> {
   const entry = _entries.get(appId);
   const romId = entry?.state.romId;
@@ -669,16 +670,20 @@ export async function refreshCoreAndBios(appId: number): Promise<void> {
 
 /**
  * Ask again, at a press on Play, whether the ROM `romId` on the page for
- * `appId` can start, after the page's own check went wrong (#2195 D33).
+ * `appId` can start, after the page's own check went wrong.
  *
  * An answer IS the page's check succeeding: it is folded into the entry showing
  * that ROM as answered — so the page shows what stands in the way, or lets the
  * game start — and the reason it cannot start is returned, `null` where nothing
  * stands in its way. A read that fails or gets no answer in time writes
- * nothing, and answers `null`: the press goes ahead. `canPick` is
- * {@link gameStartRefusal}'s.
+ * nothing, and answers `null`: the press goes ahead. `surface` selects how a
+ * choosable alternative is worded ({@link pickPointerFor}).
  */
-export async function recheckStart(appId: number, romId: number, canPick?: boolean): Promise<string | null> {
+export async function recheckStart(
+  appId: number,
+  romId: number,
+  surface: PickSurface = "menu",
+): Promise<string | null> {
   let info: CoreInfo;
   try {
     info = await withTimeout(getPlatformCoreInfo(romId), LOCAL_CALL_LIMIT_MS);
@@ -688,7 +693,7 @@ export async function recheckStart(appId: number, romId: number, canPick?: boole
   }
   const entry = _entries.get(appId);
   if (entry) writerForRom(entry, entry.generation, romId)((prev) => ({ ...prev, ...extractCoreInfo(info) }));
-  return gameStartRefusal(info, canPick);
+  return gameStartRefusal(info, pickPointerFor(surface, info.emulators, info.active_core_label));
 }
 
 /** Re-read the cached detail after something invalidated it. A re-read is a new

@@ -81,6 +81,14 @@ export const BUTTON_STYLE: CSSProperties = {
 /** Height of the badges' row and of the wrapper Steam's Play button stands in (client 1792618285). */
 export const PLAY_BAR_ROW_HEIGHT = "46px";
 
+export const DOT_STYLE: CSSProperties = {
+  display: "inline-block",
+  width: "8px",
+  height: "8px",
+  borderRadius: "50%",
+  flexShrink: 0,
+};
+
 export const CONTAINER_STYLE: CSSProperties = {
   display: "inline-flex",
   flexDirection: "row",

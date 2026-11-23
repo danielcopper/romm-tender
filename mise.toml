@@ -11,7 +11,11 @@ _.python.venv = { path = ".venv", create = true }
 
 [tasks.setup]
 description = "Install JS and Python dependencies"
-run = ["pnpm -C frontend install", "uv pip install -r requirements-dev.lock", "git config core.hooksPath .githooks"]
+run = [
+  "pnpm -C frontend install",
+  "uv pip install -r requirements-dev.lock -r docs/requirements.lock",
+  "git config core.hooksPath .githooks",
+]
 
 [tasks.lock-update]
 description = "Recompile the pinned Python dependency locks from their sources (run after editing a source or bumping a pin)"

@@ -113,7 +113,7 @@ describe("extractBiosInfo", () => {
   it("a payload with neither a status nor the flag is no answer, whatever level and label ride along", () => {
     // What `get_bios_status` sends for a ROM that is gone or has no platform:
     // nothing was asked, so nothing is written — the split
-    // `panelState.biosFieldsFromCache` draws off the same payload.
+    // `biosReadState.biosFieldsFromCache` draws off the same payload.
     expect(extractBiosInfo({ bios_level: "missing", bios_label: "0/3" })).toBeNull();
   });
 
@@ -135,7 +135,7 @@ describe("extractBiosInfo", () => {
   it("reads an 'unknown' LEVEL as the answer it is, clearing the warning (#1660)", () => {
     // A check that RAN and could not establish the requirement. It rides the
     // same flag as a read that never happened, and the level is what tells them
-    // apart — the split `panelState.biosFieldsFromCache` draws off the same
+    // apart — the split `biosReadState.biosFieldsFromCache` draws off the same
     // payload. Keeping the previous warning standing here would assert
     // something nothing can establish any more. The level is read to make that
     // call and is not carried into the fields.

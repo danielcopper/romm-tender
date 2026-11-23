@@ -421,7 +421,7 @@ describe("PlayButton", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
-    it("is disabled with the emulator's refusal as its title, pointing at no emulator menu", () => {
+    it("is disabled with the emulator's refusal as its title, pointing at choosing another emulator without naming the emulator menu", () => {
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
         detailState({
           emulatorStart: { state: "cannot_start", reason: "not_installed", entry: "DuckStation" },
@@ -429,12 +429,38 @@ describe("PlayButton", () => {
           activeCoreLabel: "DuckStation",
         }),
       );
-      render(<PlayButton appId={APP_ID} />);
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
 
       const play = screen.getByRole("button", { name: /^PLAY/ });
       expect(play).toBeDisabled();
-      expect(play).toHaveAttribute("title", "DuckStation is not installed, so this game cannot start.");
+      expect(play).toHaveAttribute(
+        "title",
+        "DuckStation is not installed, so this game cannot start. Choose another emulator.",
+      );
       expect(play).toHaveStyle({ opacity: "0.5" });
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
+        detailState({
+          emulatorStart: { state: "cannot_start", reason: "not_installed", entry: "DuckStation" },
+          emulators: [{ label: "DuckStation" }] as never,
+          activeCoreLabel: "DuckStation",
+        }),
+      );
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(play).toHaveAttribute("title", "DuckStation is not installed, so this game cannot start.");
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
+        detailState({
+          emulatorStart: { state: "choose", reason: "no_find_rule", entry: "BlastEm" },
+          emulators: [{ label: "BlastEm", reason: "no_find_rule" }] as never,
+          activeCoreLabel: null,
+        }),
+      );
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(play).toHaveAttribute(
+        "title",
+        "No emulator is the default, because whether BlastEm is installed could not be established (ES-DE has no rule for finding it). Choose an emulator.",
+      );
     });
 
     it("is disabled with the file's refusal as its title where the file does not start with its emulator", () => {
@@ -473,16 +499,70 @@ describe("PlayButton", () => {
       );
     });
 
-    it("words the file's refusal for a page with no emulator menu to point at", () => {
+    it("points at choosing another emulator without naming the emulator menu only when another entry is choosable", () => {
       const launch = refusedFile({ extension: ".sfc", other_entries: ["bsnes"] });
+      const snes9x = {
+        label: "Snes9x",
+        emulator: "snes9x_libretro.so",
+        core_so: "snes9x_libretro",
+        kind: "core" as const,
+        is_default: true,
+        reason: null,
+        declared_index: null,
+        chosen_in_frontend: false,
+      };
+      const bsnes = {
+        label: "bsnes",
+        emulator: "bsnes_libretro.so",
+        core_so: "bsnes_libretro",
+        kind: "core" as const,
+        is_default: false,
+        reason: null,
+        declared_index: null,
+        chosen_in_frontend: false,
+      };
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
         detailState({
           emulatorStart: { state: "starts", reason: null, entry: "Snes9x" },
+          emulators: [snes9x, bsnes],
+          activeCoreLabel: "Snes9x",
           gameLaunch: launch,
           startCheck: { state: "answered" },
         }),
       );
-      render(<PlayButton appId={APP_ID} />);
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+
+      expect(screen.getByRole("button", { name: /^PLAY/ })).toHaveAttribute(
+        "title",
+        "Snes9x does not start .sfc; other emulators of this system do. Choose another emulator.",
+      );
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
+        detailState({
+          emulatorStart: { state: "starts", reason: null, entry: "Snes9x" },
+          emulators: [snes9x],
+          activeCoreLabel: "Snes9x",
+          gameLaunch: launch,
+          startCheck: { state: "answered" },
+        }),
+      );
+      rerender(<PlayButton appId={APP_ID} />);
+
+      expect(screen.getByRole("button", { name: /^PLAY/ })).toHaveAttribute(
+        "title",
+        "Snes9x does not start .sfc; other emulators of this system do.",
+      );
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
+        detailState({
+          emulatorStart: { state: "starts", reason: null, entry: "Snes9x" },
+          emulators: [snes9x, { ...bsnes, reason: "not_installed" }],
+          activeCoreLabel: "Snes9x",
+          gameLaunch: launch,
+          startCheck: { state: "answered" },
+        }),
+      );
+      rerender(<PlayButton appId={APP_ID} />);
 
       expect(screen.getByRole("button", { name: /^PLAY/ })).toHaveAttribute(
         "title",
@@ -554,7 +634,7 @@ describe("PlayButton", () => {
       pressPlay();
 
       await waitFor(() => expect(mockRunGame).toHaveBeenCalledWith("123", "", -1, 100));
-      expect(gameDetailStore.recheckStart).toHaveBeenCalledWith(APP_ID, 100, false);
+      expect(gameDetailStore.recheckStart).toHaveBeenCalledWith(APP_ID, 100, "page");
     });
 
     it("is enabled, without a title or the refused look, when nothing stands in the start's way", () => {

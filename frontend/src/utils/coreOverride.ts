@@ -1,7 +1,7 @@
-import { clearGameCore, debugLog, setGameCore } from "../api/backend";
+import { clearGameCore, debugLog, logWarn, setGameCore } from "../api/backend";
 import { showToast } from "./toast";
 import { detach } from "./detach";
-import { capturePruneLeaseAdmission, isPruneLeaseCancellation } from "./pruneLease";
+import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent, isPruneLeaseCancellation } from "./pruneLease";
 
 export interface GameCoreChangeParams {
   romId: number;
@@ -13,6 +13,8 @@ export interface GameCoreChangeParams {
   logTag?: string;
 }
 
+type GameCoreChangeResult = { status: "applied" } | { status: "cancelled" } | { status: "failed"; message: string };
+
 /** Pin *coreLabel* as the game's core, or follow the system core again when it is
  *  `null`. Nothing is written to the Steam shortcut: its launch options are its
  *  appId, and the next start asks with the new pin. */
@@ -23,9 +25,10 @@ export async function executeGameCoreChange({
   leaseOwner,
   onSuccess,
   logTag = "Core selection",
-}: GameCoreChangeParams): Promise<void> {
+}: GameCoreChangeParams): Promise<GameCoreChangeResult> {
   const isClear = coreLabel === null;
   const failureMessage = isClear ? "Failed to reset core" : "Failed to set core";
+  const target = isClear ? "clear" : `coreLabel=${coreLabel}`;
   detach(debugLog(isClear ? `${logTag}: romId=${romId}` : `${logTag}: romId=${romId} coreLabel=${coreLabel}`));
   const admission = capturePruneLeaseAdmission(leaseOwner);
 
@@ -33,18 +36,33 @@ export async function executeGameCoreChange({
     const result = isClear ? await clearGameCore(romId) : await setGameCore(romId, coreLabel);
     detach(debugLog(`${logTag}: result success=${result.success}`));
     if (!result.success) {
-      showToast(result.message || "Failed to set core");
-      return;
+      const message = result.message || failureMessage;
+      logWarn(`${logTag}: refused for romId=${romId} (${target}): reason=${result.reason} message=${message}`);
+      showToast(message);
+      return { status: "failed", message };
     }
-    showToast(isClear ? "Now following the system core" : `Core set to ${coreName ?? coreLabel}`);
+  } catch (e) {
+    // `setGameCore` / `clearGameCore` run under no prune lease, so leaving the
+    // page cancels nothing: an error that lands after it is a real failure the
+    // page can no longer show.
+    if (!isPruneLeaseAdmissionCurrent(admission)) {
+      logWarn(`${logTag}: failed after the page was left for romId=${romId} (${target}): ${e}`);
+      return { status: "cancelled" };
+    }
+    logWarn(`${logTag}: unexpected error: ${e}`);
+    showToast(failureMessage);
+    return { status: "failed", message: failureMessage };
+  }
+
+  showToast(isClear ? "Now following the system core" : `Core set to ${coreName ?? coreLabel}`);
+  try {
     await onSuccess?.();
   } catch (e) {
-    // Leaving the page cancels the change; the pin may already be persisted, so
-    // that teardown is not a "failed to set core" the user must see.
     if (isPruneLeaseCancellation(e, admission)) {
       detach(debugLog(`${logTag}: continuation was cancelled: ${e}`));
-      return;
+      return { status: "cancelled" };
     }
-    showToast(failureMessage);
+    logWarn(`${logTag}: post-change refresh error: ${e}`);
   }
+  return { status: "applied" };
 }

@@ -1,9 +1,9 @@
 /**
  * The desktop dialogs in the shapes their callers ask for: the adoption flow's
  * {@link AdoptionDialogs}, a launch's {@link LaunchPrompts}, the Play button's
- * Resolve Conflict walk and Stop confirm, and a version switch's
- * {@link UnsyncedSavesPrompt}. Every one of them settles with its cancel exit
- * when dismissed.
+ * Resolve Conflict walk and Stop confirm, the Emulation card's BIOS confirm, and
+ * a version switch's {@link UnsyncedSavesPrompt}. Every one of them settles with
+ * its cancel exit when dismissed.
  */
 
 import type {
@@ -17,6 +17,7 @@ import type {
 import { resolveConflictsSequentially, type SyncConflictResolution } from "../../../utils/saveConflictFlow";
 import type { LaunchPrompts } from "../../../utils/launchVerdict";
 import type { SyncFinish, SyncWaitChoice, SyncWaitReason } from "../../../utils/launchGate";
+import type { BiosConfirmCopy } from "../../../utils/biosConfirmWording";
 import type { UnsyncedSavesChoice, UnsyncedSavesPrompt } from "../../../utils/versionSwitch";
 import type { SyncConflict } from "../../../types";
 import type { AskDialog } from "./askDialog";
@@ -25,6 +26,7 @@ import { DesktopAdoptCollisionsDialog } from "./DesktopAdoptCollisionsDialog";
 import { DesktopAdoptExistingDialog } from "./DesktopAdoptExistingDialog";
 import { DesktopAdoptUnusableDialog } from "./DesktopAdoptUnusableDialog";
 import { DesktopAdoptVanishedDialog } from "./DesktopAdoptVanishedDialog";
+import { DesktopBiosConfirmDialog } from "./DesktopBiosConfirmDialog";
 import { DesktopSaveConflictDialog } from "./DesktopSaveConflictDialog";
 import { DesktopOfflineDriftDialog } from "./DesktopOfflineDriftDialog";
 import { DesktopFallbackLaunchDialog } from "./DesktopFallbackLaunchDialog";
@@ -112,6 +114,13 @@ export function desktopStopGameDialog(ask: AskDialog): () => Promise<boolean> {
 export function desktopUnsyncedSavesDialog(ask: AskDialog): UnsyncedSavesPrompt {
   return (args) =>
     ask<UnsyncedSavesChoice>("cancel", (resolve) => <DesktopUnsyncedSavesDialog {...args} onChoice={resolve} />);
+}
+
+export function desktopBiosConfirmDialog(
+  ask: AskDialog,
+): (copy: BiosConfirmCopy, tone: "primary" | "danger") => Promise<boolean> {
+  return (copy, tone) =>
+    ask<boolean>(false, (resolve) => <DesktopBiosConfirmDialog copy={copy} tone={tone} onChoice={resolve} />);
 }
 
 export function desktopLaunchPrompts(ask: AskDialog): LaunchPrompts {

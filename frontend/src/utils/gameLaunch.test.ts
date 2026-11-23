@@ -101,6 +101,9 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
     expect(launchRefusal(NOT_THIS_EMULATOR, true)).toBe(
       "Mupen64Plus-Next does not start .n64; other emulators of this system do. Choose another emulator in the emulator menu.",
     );
+    expect(launchRefusal(NOT_THIS_EMULATOR, "page")).toBe(
+      "Mupen64Plus-Next does not start .n64; other emulators of this system do. Choose another emulator.",
+    );
   });
 
   it("points at the emulator menu only where it offers another entry", () => {
@@ -258,6 +261,12 @@ describe("the resolver's own reasons (#2195 D21, D40)", () => {
   it("names every entry the resolver says starts it", () => {
     expect(launchRefusal(refused("takes_no_folder", { other_entries: [DIRECTORY, ISO] }), true)).toBe(
       "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) or RPCS3 ISO (Standalone) can — choose one in the emulator menu.",
+    );
+    expect(launchRefusal(refused("takes_no_folder", { other_entries: [DIRECTORY] }), "page")).toBe(
+      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) can — choose it.",
+    );
+    expect(launchRefusal(refused("takes_no_folder", { other_entries: [DIRECTORY, ISO] }), "page")).toBe(
+      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) or RPCS3 ISO (Standalone) can — choose one.",
     );
   });
 

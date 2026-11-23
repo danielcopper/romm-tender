@@ -646,8 +646,9 @@ export interface SourceDefault {
 /**
  * Response shape of the `get_platform_core_info` endpoint — the dedicated
  * single-platform emulator-info path, decoupled from the per-game BIOS payload
- * (#923). The per-game detail page (`RomMPlaySection` / `RomMGameInfoPanel`)
- * reads emulator data from here; the platform-keyed twin for a caller with no
+ * (#923). Per-game callers (`gameDetailStore`, `RomMPlaySection`,
+ * `RomMGameInfoPanel`, and the desktop game page) read emulator data from here;
+ * the platform-keyed twin for a caller with no
  * ROM to layer is {@link SystemCoreInfo}. `emulator_data_available` is false
  * where the answering emulator source gives no emulator list, and
  * `emulator_data_reason` says why, so the picker can say so instead of showing

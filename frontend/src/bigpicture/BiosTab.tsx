@@ -26,10 +26,9 @@
 import { FC, useMemo, useState, type FocusEvent, type ReactElement } from "react";
 import { Focusable } from "@decky/ui";
 import type { BiosLevel, BiosStatus, CoreInfo } from "../types";
-import { biosColorForLevel } from "../utils/biosColor";
-import { type GroupLineTone } from "../utils/biosGroup";
+import { GROUP_TONE_COLOR, biosColorForLevel } from "../utils/biosColor";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
-import { biosAnswerStale, biosReadState } from "../utils/biosReadState";
+import { biosAnswerStale, biosReadState, GAME_BIOS_READ_FAILED, GAME_BIOS_REREAD_FAILED } from "../utils/biosReadState";
 import { storeOnlySentence } from "../utils/biosPlaceWords";
 import { biosSummary, groupBlocks } from "../utils/biosSummary";
 import { emulatorDataReasonSentence } from "../utils/emulatorSourceWording";
@@ -43,7 +42,7 @@ import {
   useBiosFiles,
   type BiosPart,
 } from "./bios/BiosFiles";
-import { announceBiosChange, useBiosActions, type BiosStatusLine } from "./bios/useBiosActions";
+import { announceBiosChange, useBiosActions, type BiosStatusLine } from "../utils/useBiosActions";
 import { PANE_GUTTER } from "./layout/pane";
 import { section } from "./panelSection";
 import { WaitingLine } from "./WaitingLine";
@@ -240,7 +239,7 @@ function unansweredTab(failed: boolean): ReactElement {
     biosTitle(),
     failed ? (
       <div key="bios-read-failed" className="romm-panel-value" data-testid="bios-read-failed">
-        Could not read the BIOS state. Open the game page again to retry.
+        {GAME_BIOS_READ_FAILED}
       </div>
     ) : (
       <div key="bios-checking" className="romm-panel-value">
@@ -249,15 +248,6 @@ function unansweredTab(failed: boolean): ReactElement {
     ),
   );
 }
-
-/** The dot beside one line of the group block. */
-const GROUP_TONE_COLOR: Readonly<Record<GroupLineTone, string>> = {
-  here: "#5ba32b",
-  missing: "#d94126",
-  other: "#8f98a0",
-  // Not established is grey, never amber.
-  unchecked: "#8f98a0",
-};
 
 // A subheading under the BIOS heading: the section label's own class, which
 // upper-cases it, with room above to set it off from what precedes it.
@@ -343,7 +333,7 @@ export const BiosTab: FC<BiosTabProps> = ({
         data-testid="bios-stale"
         style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "12px", marginBottom: "4px" }}
       >
-        Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry.
+        {GAME_BIOS_REREAD_FAILED}
       </div>,
     );
   }

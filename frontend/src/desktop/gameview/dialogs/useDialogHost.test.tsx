@@ -2,7 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { Window as HappyWindow } from "happy-dom";
-import { useEffect, type FC } from "react";
+import { useEffect, useLayoutEffect, type FC } from "react";
 import type { AskDialog } from "./askDialog";
 import { useDialogHost } from "./useDialogHost";
 
@@ -115,5 +115,27 @@ describe("useDialogHost", () => {
     act(() => answerFirst("again"));
 
     expect(screen.getByRole("dialog", { name: "second" })).toBeInTheDocument();
+  });
+
+  it("opens a question asked at commit before passive effects flush", async () => {
+    let answer!: Promise<string>;
+    const ImmediateAsker: FC = () => {
+      const { ask: askImmediate, element } = useDialogHost();
+      useLayoutEffect(() => {
+        answer = askImmediate("dismissed", (resolve) => <Question label="immediate" onAnswer={resolve} />);
+      }, [askImmediate]);
+      return (
+        <div>
+          <span>page</span>
+          {element}
+        </div>
+      );
+    };
+
+    render(<ImmediateAsker />);
+
+    expect(screen.getByRole("dialog", { name: "immediate" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Yes" }));
+    await expect(answer).resolves.toBe("immediate:yes");
   });
 });
