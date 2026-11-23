@@ -1613,6 +1613,50 @@ describe("EmulationSettings", () => {
       );
     });
 
+    it("words the store-only line from the core read's platform system where the BIOS answer carries none", async () => {
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(
+        makeBiosAnswer({ store_only: "platform_systems_several", emulator_source: null, platform_system: null }),
+      );
+
+      render(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({
+            emulatorSource: { kind: "retrodeck", starts_games: true },
+            emulatorPlatformSystem: {
+              state: "several",
+              source: "retrodeck",
+              platform: "Master System",
+              systems: ["mark3", "mastersystem"],
+              slug: "sms",
+              folder: "sms",
+            },
+          })}
+        />,
+      );
+
+      expect(await screen.findByTestId("bios-store-only")).toHaveTextContent(
+        "RetroDECK has several systems for Master System (mark3, mastersystem). Downloads are kept in Tender's firmware store and linked into none of them.",
+      );
+    });
+
+    it("words the store-only line from the core read's answering source where the BIOS answer carries none", async () => {
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(
+        makeBiosAnswer({ store_only: "not_set_up", emulator_source: null, platform_system: null }),
+      );
+
+      render(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({ emulatorSource: { kind: "retrodeck", starts_games: true } })}
+        />,
+      );
+
+      expect(await screen.findByTestId("bios-store-only")).toHaveTextContent(
+        "RetroDECK has not been set up yet, so its emulators are not established. Downloads are kept in Tender's firmware store and linked once the platform's system is known.",
+      );
+    });
+
     it("names the system a game was installed under that the source no longer lists", async () => {
       render(
         <EmulationSettings
