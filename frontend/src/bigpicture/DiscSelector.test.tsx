@@ -16,7 +16,7 @@ import { toaster } from "../api/host";
 import { DiscSelector } from "./DiscSelector";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
 import * as backend from "../api/backend";
-import type { CachedGameDetail, DiscSelection } from "../api/backend";
+import type { CachedGameDetail, DiscSelection, SelectDiscResult } from "../api/backend";
 import type { DownloadCompleteEvent } from "../types";
 
 // --- Local @decky/ui mock: render the trigger, capture the context menu ------
@@ -553,6 +553,33 @@ describe("DiscSelector — a version switch", () => {
 
     await downloadComplete(43);
     expect(backend.getDiscSelection).toHaveBeenCalledExactlyOnceWith(43);
+  });
+
+  it("ignores a pick's answer for the old version that lands after a switch", async () => {
+    mockCachedDetail();
+    discsByRom({ 42: discDefaultSelection, 43: newVersionSelection });
+    const pick = deferred<SelectDiscResult>();
+    vi.mocked(backend.selectDisc).mockReturnValue(pick.promise);
+    const r = render(<DiscSelector appId={100} />);
+    expect((await r.findByTestId("disc-btn")).textContent).toBe("2");
+    const menu = openMenu(r);
+    await act(async () => {
+      fireEvent.click(within(menu.container).getByText("Disc 1"));
+      await Promise.resolve();
+    });
+    expect(backend.selectDisc).toHaveBeenCalledWith(42, "game (Disc 1).chd");
+
+    mockCachedDetail({ rom_id: 43 });
+    await dataChanged({ type: "version_switched", app_id: 100, rom_id: 43 });
+    await waitFor(() => expect(r.getByTestId("disc-btn").textContent).toBe("1"));
+
+    await act(async () => {
+      pick.resolve({ success: true, selected: "game (Disc 1).chd" });
+      await Promise.resolve();
+    });
+    await flushAsync();
+
+    expect(r.getByTestId("disc-btn").textContent).toBe("1");
   });
 
   it("stops listening for switches once unmounted", async () => {

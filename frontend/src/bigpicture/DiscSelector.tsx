@@ -113,7 +113,10 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId }) => {
       romId: rid,
       data,
       leaseOwner,
-      onSelected: setSelected,
+      // A switch while the pick was asked binds another ROM, whose pin this is not.
+      onSelected: (pin) => {
+        if (romIdRef.current === rid) setSelected(pin);
+      },
       logTag: "DiscSelector",
     });
   };
