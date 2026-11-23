@@ -27,6 +27,7 @@ import {
   IDENTIFYING,
   biosPlaceLines,
   libraryRowLines,
+  storeOnlyAnswerOf,
   storeOnlySentence,
 } from "../../utils/biosPlaceWords";
 import {
@@ -1071,11 +1072,7 @@ const DesktopBiosAnsweredContent: FC<{
     biosStatus.store_only,
     biosStatus.active_core_label ?? detail.activeCoreLabel,
     platformDisplayName,
-    // The BIOS answer carries what its own line is worded from; the core read stands in where it does not.
-    {
-      source: biosStatus.emulator_source ?? detail.emulatorSource ?? null,
-      platformSystem: biosStatus.platform_system ?? detail.emulatorPlatformSystem ?? null,
-    },
+    storeOnlyAnswerOf(biosStatus, { source: detail.emulatorSource, platformSystem: detail.emulatorPlatformSystem }),
   );
   const serverOffline = biosStatus.server_offline ?? false;
   const legendEntries = biosLegendEntries([...shownRows, ...libraryRows]);

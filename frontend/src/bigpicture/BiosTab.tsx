@@ -29,7 +29,7 @@ import type { BiosLevel, BiosStatus, CoreInfo } from "../types";
 import { GROUP_TONE_COLOR, biosColorForLevel } from "../utils/biosColor";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
 import { biosAnswerStale, biosReadState, GAME_BIOS_READ_FAILED, GAME_BIOS_REREAD_FAILED } from "../utils/biosReadState";
-import { storeOnlySentence } from "../utils/biosPlaceWords";
+import { storeOnlyAnswerOf, storeOnlySentence } from "../utils/biosPlaceWords";
 import { biosSummary, groupBlocks } from "../utils/biosSummary";
 import { emulatorDataReasonSentence } from "../utils/emulatorSourceWording";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
@@ -169,11 +169,10 @@ function buildBiosHeader(
     bios.store_only,
     bios.active_core_label ?? coreInfo?.active_core_label ?? null,
     platformName ?? "this platform",
-    // The BIOS answer carries what its own line is worded from; the core read stands in where it does not.
-    {
-      source: bios.emulator_source ?? coreInfo?.emulator_source ?? null,
-      platformSystem: bios.platform_system ?? coreInfo?.platform_system ?? null,
-    },
+    storeOnlyAnswerOf(bios, {
+      source: coreInfo?.emulator_source ?? null,
+      platformSystem: coreInfo?.platform_system ?? null,
+    }),
   );
 
   const biosColor = biosColorForLevel(biosLevel);

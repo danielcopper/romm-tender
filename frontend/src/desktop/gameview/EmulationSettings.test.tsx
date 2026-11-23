@@ -1589,6 +1589,51 @@ describe("EmulationSettings", () => {
     });
   });
 
+  describe("what the platform's system says on the desktop card", () => {
+    it("words the store-only line from the BIOS answer's own platform system", async () => {
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(
+        makeBiosAnswer({
+          store_only: "platform_system_off",
+          emulator_source: { kind: "retrodeck", starts_games: true },
+          platform_system: {
+            state: "switched_off",
+            source: "retrodeck",
+            platform: "PlayStation",
+            systems: ["psx"],
+            slug: "psx",
+            folder: "psx",
+          },
+        }),
+      );
+
+      render(<EmulationSettings appId={APP_ID} detail={makeDetail()} />);
+
+      expect(await screen.findByTestId("bios-store-only")).toHaveTextContent(
+        "System psx is switched off in RetroDECK. Downloads are kept in Tender's firmware store and linked once it is switched on.",
+      );
+    });
+
+    it("names the system a game was installed under that the source no longer lists", async () => {
+      render(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({
+            emulatorDataAvailable: false,
+            emulatorDataReason: "system_unknown",
+            emulatorDataSystem: { system_keys: ["psxretired"], installed: true },
+            emulatorSource: { kind: "retrodeck", starts_games: true },
+            emulators: [],
+          })}
+        />,
+      );
+
+      await screen.findByTestId("bios-table-header");
+      expect(screen.getByTestId("desktop-emulator-unavailable")).toHaveTextContent(
+        "RetroDECK does not list the system psxretired this game was installed under, so its emulators are not established.",
+      );
+    });
+  });
+
   describe("picker and lifecycle edge cases", () => {
     it("renders platform_system_off reason, picker button styles, and ignores core picks when platformSlug is empty", async () => {
       const { rerender } = render(

@@ -16,6 +16,7 @@
 import type {
   AnsweringSource,
   BiosFileStatus,
+  BiosStatus,
   BiosKeptLink,
   PlatformSystemAnswer,
   PlatformSystemReason,
@@ -138,6 +139,20 @@ const KEPT = "Downloads are kept in Tender's firmware store and linked";
 // The answer a caller that knows neither the source nor the platform system hands over.
 const NO_ANSWER: StoreOnlyAnswer = { source: null, platformSystem: null };
 
+/**
+ * What a game's store-only line is worded from: the BIOS answer's own platform system and answering source, the core
+ * read's standing in where the BIOS answer carries neither.
+ */
+export function storeOnlyAnswerOf(
+  bios: Pick<BiosStatus, "emulator_source" | "platform_system">,
+  core: StoreOnlyAnswer,
+): StoreOnlyAnswer {
+  return {
+    source: bios.emulator_source ?? core.source,
+    platformSystem: bios.platform_system ?? core.platformSystem,
+  };
+}
+
 // When each reason's files are linked, after the fact it states (PLATFORM_SYSTEM_FACTS): a `Record` so that a reason
 // added to {@link PlatformSystemReason} must be worded here.
 const LINKED_ONCE: Record<PlatformSystemReason, string> = {
@@ -160,9 +175,8 @@ export function storeOnlySentence(
   storeOnly: StoreOnly | null | undefined,
   emulator: string | null,
   platform: string,
-  given?: StoreOnlyAnswer,
+  answer: StoreOnlyAnswer = NO_ANSWER,
 ): string | null {
-  const answer = given ?? NO_ANSWER;
   if (storeOnly === "unsupported") {
     return `${emulator ?? "This emulator"} is not supported yet. ${KEPT} once it is.`;
   }
