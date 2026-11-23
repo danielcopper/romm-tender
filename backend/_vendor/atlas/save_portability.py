@@ -48,7 +48,7 @@ from .placement import (
     Unresolved,
 )
 from .firmware import spelled
-from .platforms import ESDE_SOURCE, SystemPair
+from .platforms import ESDE_SOURCE, SystemPair, parallel_lists
 from .portability_codes import (
     CAVEAT_ENTRY_LABEL_UNKNOWN,
     CAVEAT_SAVE_ANSWER_UNRESOLVED,
@@ -413,8 +413,9 @@ def _system_unrecorded(side: str, identity: _Identity, asked: tuple[SystemPair, 
         data["source"] = asked[0][0]
         data["key"] = asked[0][1]
     else:
-        data["sources"] = tuple(source for source, _ in asked)
-        data["keys"] = tuple(key for _, key in asked)
+        sources, keys = parallel_lists(asked)
+        data["sources"] = sources
+        data["keys"] = keys
     return Caveat(
         CAVEAT_SAVE_RECORD_UNRECORDED,
         f"the system asked ({', '.join(spelled(pair) for pair in asked)}) is none the {side} entry's "

@@ -1320,7 +1320,7 @@ SYSTEM_TIERS: tuple[SystemTier, ...] = ("exactMatch", "broadMatch", "narrowMatch
 # resolution names (#784 D43).
 EXACT_TIER: SystemTier = "exactMatch"
 
-SystemResolutionStatus = Literal["resolved", "unknown", "ambiguous", "conflict"]
+SystemResolutionStatus = Literal["resolved", "unknown", "ambiguous", "unanimous", "conflict"]
 
 RESOLUTION_RESOLVED: SystemResolutionStatus = "resolved"
 """The asked pairs named one system this installation holds, read live or reached through the table, and the question
@@ -1331,8 +1331,14 @@ RESOLUTION_UNKNOWN: SystemResolutionStatus = "unknown"
 that its catalogue does not declare or, for a system atlas names by a cited pair, that no installed core it is cited
 for files under (#784 D53); ``system-unknown`` names each such pair or system."""
 RESOLUTION_AMBIGUOUS: SystemResolutionStatus = "ambiguous"
-"""The asked pairs named several systems alike, listed as candidates; ``system-ambiguous`` names them, and
-atlas picks none.
+"""The asked pairs named several systems alike, listed as candidates, and either the candidates answer the question
+differently or the question (``platform_ids``) answers about the asked name's standing and asks none of them;
+``system-ambiguous`` names them, the answer is the question's empty form, and atlas picks none (#784 D62, D65 c).
+"""
+RESOLUTION_UNANIMOUS: SystemResolutionStatus = "unanimous"
+"""The asked pairs named several systems alike, listed as candidates, and every candidate gives the same answer
+to the question asked; ``system-unanimous`` names them, the answer is that shared answer and names no system, and
+atlas picks none (#784 D62, D65).
 """
 RESOLUTION_CONFLICT: SystemResolutionStatus = "conflict"
 """The asked pairs named different systems, or one the other pairs do not reach; ``system-pairs-conflict``
@@ -1342,7 +1348,13 @@ names the pairs, and atlas picks none.
 # How the system a question named was resolved (#784 D52), the statuses in the
 # order a client meets them; every one but resolved stands beside the caveat
 # stating its reason.
-SYSTEM_RESOLUTION_STATUSES = (RESOLUTION_RESOLVED, RESOLUTION_UNKNOWN, RESOLUTION_AMBIGUOUS, RESOLUTION_CONFLICT)
+SYSTEM_RESOLUTION_STATUSES = (
+    RESOLUTION_RESOLVED,
+    RESOLUTION_UNKNOWN,
+    RESOLUTION_AMBIGUOUS,
+    RESOLUTION_UNANIMOUS,
+    RESOLUTION_CONFLICT,
+)
 
 PlatformSystemStatus = Literal["declared", "disabled", "absent"]
 
@@ -1512,6 +1524,15 @@ def check_system_pair(owner: str, value: object) -> None:
         raise ValueError(f"{owner}: system must be a (source, key) pair of non-empty strings, got {value!r}")
 
 
+def parallel_lists(systems: Sequence[SystemPair]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """*systems* as statement data names several: the parallel lists of their sources and of their keys (#784 D47).
+
+    A statement writes them as ``{"sources": sources, "keys": keys}``, a
+    literal the tripwire over caveat data reads whole.
+    """
+    return tuple(source for source, _ in systems), tuple(key for _, key in systems)
+
+
 @dataclass(frozen=True, slots=True)
 class SystemCandidate:
     """One of several systems the asked pairs name alike — one pair can name several — and how firmly it is here.
@@ -1543,13 +1564,17 @@ class SystemResolution:
     then the systems the pairs are a part of, then the systems they are wider
     than. ``status`` says how it ended (#784 D52): ``system`` is the one system
     that resolution named and the question answered for, ``None`` where it
-    named several (``candidates`` lists them), none, or different ones.
+    named several (``candidates`` lists them), none, or different ones. Where
+    it named several, a question that answers for a resolved system decides
+    between ``ambiguous`` and ``unanimous`` by asking every candidate (#784
+    D62); ``platform_ids``, which answers about the asked name's standing,
+    asks none and stays ``ambiguous`` (D65 c).
     """
 
     status: SystemResolutionStatus
-    """How the resolution ended — ``resolved`` exactly when ``system`` is named, ``ambiguous`` exactly when
-    candidates are listed, ``unknown`` or ``conflict`` with neither; one of :data:`SYSTEM_RESOLUTION_STATUSES`.
-    The answer's caveats state the reason of every status but ``resolved``.
+    """How the resolution ended — ``resolved`` exactly when ``system`` is named, ``ambiguous`` or ``unanimous``
+    exactly when candidates are listed, ``unknown`` or ``conflict`` with neither; one of
+    :data:`SYSTEM_RESOLUTION_STATUSES`. The answer's caveats state the reason of every status but ``resolved``.
     """
     system: SystemPair | None
     """The system the question answered for, as a (source, key) pair: a name read live as spelled, or the
@@ -1564,7 +1589,8 @@ class SystemResolution:
     """
     candidates: tuple[SystemCandidate, ...] = ()
     """The systems the asked pairs name alike where they name several (one pair can), in the first tier that
-    names any, each with its catalogue status — atlas picks none; empty otherwise.
+    names any, each with its catalogue status — atlas picks none, whether they answer alike or not; empty
+    otherwise.
     """
     translation: PlatformTranslation | None = None
     """The platform table's answer for the asked pairs that went through it — each pair as asked, with
@@ -1579,9 +1605,14 @@ class SystemResolution:
             raise ValueError("SystemResolution: a system is named exactly when the status is resolved")
         if self.system is not None:
             check_system_pair("SystemResolution", self.system)
-        if (status == RESOLUTION_AMBIGUOUS) != (len(self.candidates) >= 2):
-            raise ValueError("SystemResolution: two or more candidates are listed exactly when the status is ambiguous")
-        if self.candidates and status != RESOLUTION_AMBIGUOUS:
+        # The systems the asked pairs named alike are listed exactly where
+        # several answer, alike or not (#784 D65 b).
+        several = status in (RESOLUTION_AMBIGUOUS, RESOLUTION_UNANIMOUS)
+        if several != (len(self.candidates) >= 2):
+            raise ValueError(
+                "SystemResolution: two or more candidates are listed exactly when the status is ambiguous or unanimous"
+            )
+        if self.candidates and not several:
             raise ValueError("SystemResolution: candidates are listed only where several systems answer")
         if len({candidate.system for candidate in self.candidates}) != len(self.candidates):
             raise ValueError("SystemResolution: each candidate is a different system")

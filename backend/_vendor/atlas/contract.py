@@ -9,9 +9,13 @@ data. The rule for what serializes:
   caveat codes and caveat data, installation identity, and health findings —
   which are caveats and serialize as caveats, code and data alike. Vectors
   assert them with exact equality; ports must reproduce them.
-- **Prose is not**: ``sources``, caveat ``message``, ``option_provenance``,
-  ``FileSet.provenance`` and ``EmulatorSpec.provenance`` are human-readable
-  explanations and may change freely — they are deliberately absent here. Two
+- **Prose is not**: ``sources``, a caveat's or a refusal's ``message``, the
+  ``provenance`` of a file set, a granularity, an option reading or a catalogue
+  entry (``EmulatorSpec.provenance``) and a save redirect's ``citation`` are
+  human-readable explanations and may change freely, so they are deliberately
+  absent here. In the answers a system question compares, the prose is the
+  fields :data:`atlas._shared_answer.JOINED` lists and an entry's provenance,
+  which a shared entry joins itself. Two
   words, two scopes: ``sources`` is what a whole answer was read from,
   ``*provenance`` is where one field's own value came from.
   ``FirmwareRequirement.system_source`` is neither and keeps its name: it is a
@@ -718,7 +722,9 @@ def emulator_contract(entry: EmulatorEntry) -> dict[str, Any]:
     ``system`` is here because an entry is only an answer *for* a system: the
     catalogue question carries it in the call, but an entry that travels — into
     a client's own list, into a serialized answer read later — otherwise names
-    the emulator without naming what it launches.
+    the emulator without naming what it launches. It is ``null`` exactly on an
+    entry of a shared answer, the one several named systems give alike, whose
+    resolution is ``unanimous`` and lists them (#784 D62, D65 e).
 
     ``emulator`` is the entry's identity and ``label`` its presentation, and
     the two are never interchangeable: a client that joins this answer to a
@@ -756,7 +762,7 @@ def emulator_contract(entry: EmulatorEntry) -> dict[str, Any]:
     thing a client acts on.
     """
     return {
-        "system": system_contract(entry.system),
+        "system": None if entry.system is None else system_contract(entry.system),
         "label": entry.label,
         "kind": entry.kind,
         "core_so": entry.core_so,

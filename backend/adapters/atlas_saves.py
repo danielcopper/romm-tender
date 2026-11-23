@@ -50,6 +50,7 @@ from _vendor.atlas import (
     CAVEAT_REDIRECT_OUTRANKED,
     CAVEAT_SAVE_FILES_SHARED_WITH_CORE,
     HEALTH_ISSUE_NOT_SET_UP,
+    UNRESOLVED_SYSTEM_AMBIGUOUS,
     SavestateAbsence,
     SavestatePlacement,
     Unresolved,
@@ -205,7 +206,7 @@ class AtlasSaveLocationAdapter:
         if placement is None or isinstance(placement, Unresolved):
             declined: tuple[SourceFinding, ...] = ()
             if isinstance(placement, Unresolved):
-                self._log_debug(f"[saves] {subject}: declined with code={placement.code!r}")
+                self._log_debug(f"[saves] {subject}: declined with code={placement.code!r}{_why_declined(placement)}")
                 declined = _findings((placement,))
             return unestablished_answer(emulator=emulator_label, content_installed=content_installed), declined
 
@@ -242,7 +243,7 @@ class AtlasSaveLocationAdapter:
             return NoSavestates()
         if not isinstance(placement, SavestatePlacement):
             if isinstance(placement, Unresolved):
-                self._log_debug(f"[saves] {subject}: declined with code={placement.code!r}")
+                self._log_debug(f"[saves] {subject}: declined with code={placement.code!r}{_why_declined(placement)}")
             return None
         if placement.needs:
             # A template such as ``<cwd>/states`` is no folder to carry states into.
@@ -392,3 +393,15 @@ def describe_core_probe_interpreter() -> str:
     if derived is None:
         return "atlas core probe: no interpreter to run under — every core answers unknown"
     return f"atlas core probe: {derived.path} (atlas's own, from the running program)"
+
+
+def _why_declined(refusal: Any) -> str:
+    """What a refusal of an entry's own place adds to its log line: for ``system-ambiguous``, not established.
+
+    An entry of a shared answer — several systems named alike — refuses a
+    question its candidates answer differently with ``system-ambiguous``; the
+    place is then not established, as for any other refusal.
+    """
+    if refusal.code == UNRESOLVED_SYSTEM_AMBIGUOUS:
+        return " (the systems the entry is shared by answer it differently; not established)"
+    return ""

@@ -75,7 +75,7 @@ def test_the_sweep_reaches_a_start_and_a_refusal_of_every_kind():
         else:
             shapes.add(f"starts as {command['program']['variant']}")
 
-    assert len(_VECTORS) == 114
+    assert len(_VECTORS) == 125
     assert len(_STARTING) == 26
     assert shapes == {
         "refused",

@@ -2337,7 +2337,7 @@
     },
     {
       "name": "a-pair-naming-several-systems-lists-them-as-candidates",
-      "rationale": "libretro's Super Nintendo database name covers ES-DE's snes, sfc and snesna alike, so the pair names several systems of this installation in one tier (#784 D44): atlas picks none, the catalogue answers empty with system-ambiguous, and the resolution lists the candidates with their status — snes and sfc, both declared here; snesna, which this catalogue does not declare, is no candidate (#784 D53).",
+      "rationale": "libretro's Super Nintendo database name covers ES-DE's snes, sfc and snesna alike, so the pair names several systems of this installation in one tier (#784 D44): atlas picks none, and the resolution lists the candidates with their status — snes and sfc, both declared here; snesna, which this catalogue does not declare, is no candidate (#784 D53). Asked as if named alone, snes and sfc declare the same entry, so the catalogue answers that shared entry, naming no system, with resolution unanimous and system-unanimous (#784 D62, D65).",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -2370,10 +2370,31 @@
           }
         ],
         "catalogue": {
-          "entries": [],
+          "entries": [
+            {
+              "system": null,
+              "label": "Snes9x - Current",
+              "kind": "libretro",
+              "core_so": "snes9x_libretro.so",
+              "emulator": "snes9x_libretro.so",
+              "declared_index": 0,
+              "selection": null,
+              "availability": "unestablished",
+              "launcher": null,
+              "core_path": null,
+              "caveats": [
+                {
+                  "code": "find-rules-unreadable",
+                  "data": {
+                    "layer": "bundled"
+                  }
+                }
+              ]
+            }
+          ],
           "caveats": [
             {
-              "code": "system-ambiguous",
+              "code": "system-unanimous",
               "data": {
                 "sources": [
                   "esde",
@@ -2387,7 +2408,7 @@
             }
           ],
           "resolution": {
-            "status": "ambiguous",
+            "status": "unanimous",
             "system": null,
             "relation": null,
             "candidates": [
@@ -7149,7 +7170,7 @@
     },
     {
       "name": "a-save-question-asked-pairs-naming-several-systems-says-so",
-      "rationale": "libretro's Super Nintendo database name names ES-DE's snes, sfc and snesna alike, and this catalogue declares snes and sfc (#784 D44, D53): the save question keys no record by either, states system-ambiguous naming the two, and answers the file set unknown.",
+      "rationale": "libretro's Super Nintendo database name names ES-DE's snes, sfc and snesna alike, and this catalogue declares snes and sfc (#784 D44, D53): keyed by either, the core's record gives the same placement, so the save question answers that placement and states system-unanimous naming the two (#784 D62); the core cannot be queried here, so its file set stays unknown.",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -7199,7 +7220,7 @@
           },
           "caveats": [
             {
-              "code": "system-ambiguous",
+              "code": "system-unanimous",
               "data": {
                 "sources": [
                   "esde",
@@ -7219,6 +7240,12 @@
             },
             {
               "code": "core-unaudited",
+              "data": {
+                "core": "snes9x"
+              }
+            },
+            {
+              "code": "core-generation-unestablished",
               "data": {
                 "core": "snes9x"
               }

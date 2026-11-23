@@ -65,7 +65,7 @@ from __future__ import annotations
 # tests/test_version.py holds it equal to pyproject — CI's package job holds
 # dist-info to pyproject in a clean venv — so drift is a red test, not a
 # silent fork.
-__version__ = "0.35.0"  # x-release-please-version
+__version__ = "0.36.0"  # x-release-please-version
 
 # --- The two entry points, and the aggregate over them -----------------------
 from .detect import detect
@@ -124,6 +124,7 @@ from .platforms import (
     RESOLUTION_AMBIGUOUS,
     RESOLUTION_CONFLICT,
     RESOLUTION_RESOLVED,
+    RESOLUTION_UNANIMOUS,
     RESOLUTION_UNKNOWN,
     SYSTEM_RESOLUTION_STATUSES,
     PlatformKey,
@@ -381,7 +382,9 @@ from .installations import (
     SystemRomPlacement,
     SystemsAnswer,
     CAVEAT_SYSTEM_AMBIGUOUS,
+    CAVEAT_SYSTEM_UNANIMOUS,
     CAVEAT_SYSTEM_PAIRS_CONFLICT,
+    UNRESOLVED_SYSTEM_AMBIGUOUS,
 )
 from .launch_formats import (
     InstallFirstFormat,
@@ -1022,6 +1025,7 @@ __all__ = [
     "RESOLUTION_RESOLVED",
     "RESOLUTION_UNKNOWN",
     "RESOLUTION_AMBIGUOUS",
+    "RESOLUTION_UNANIMOUS",
     "RESOLUTION_CONFLICT",
     "LIBRETRO_SOURCE",
     "PlatformPairAnswer",
@@ -1684,6 +1688,7 @@ __all__ = [
     "UNRESOLVED_MOD_WIRING_UNESTABLISHED",
     "UNRESOLVED_SLOT_DEVICE_UNINTERPRETED",
     "UNRESOLVED_NOT_SET_UP",
+    "UNRESOLVED_SYSTEM_AMBIGUOUS",
     # Caveat codes
     "CAVEAT_APP_RELATIVE_PATH_UNEXPANDED",
     "CAVEAT_ARRANGEMENT_UNVERIFIED",
@@ -1845,6 +1850,7 @@ __all__ = [
     "CAVEAT_SYSTEM_ASSIGNMENT_DERIVED",
     "CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE",
     "CAVEAT_SYSTEM_AMBIGUOUS",
+    "CAVEAT_SYSTEM_UNANIMOUS",
     "CAVEAT_SYSTEM_PAIRS_CONFLICT",
     "CAVEAT_SYSTEM_ASSIGNMENT_MAY_HIDE_CORES",
     "CAVEAT_SYSTEM_DIRECTORY_CLEARED",

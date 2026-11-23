@@ -113,6 +113,7 @@ from _vendor.atlas import (
     CAVEAT_RUN_GAME_DIFFERS,
     CAVEAT_SYSTEM_AMBIGUOUS,
     CAVEAT_SYSTEM_PAIRS_CONFLICT,
+    CAVEAT_SYSTEM_UNANIMOUS,
     CAVEAT_SYSTEM_UNKNOWN,
     EFFECT_GOES_ON,
     EFFECT_STOPS,
@@ -124,6 +125,7 @@ from _vendor.atlas import (
     KIND_STANDALONE,
     RESOLUTION_AMBIGUOUS,
     RESOLUTION_RESOLVED,
+    RESOLUTION_UNANIMOUS,
     RESOLUTION_UNKNOWN,
     VERDICT_ENTRY_NOT_ACCEPTED,
     VERDICT_LAUNCHABLE,
@@ -317,7 +319,7 @@ _LAUNCH_STATES = {
 # resolution: the status is what is read ("Branch on the status, not on the
 # caveat codes", atlas docs/how-to-use.md, "Naming a system"), and the code is
 # only traced (:func:`resolution_trace`).
-_RESOLUTION_STATED_BECAUSE = frozenset({CAVEAT_SYSTEM_AMBIGUOUS, CAVEAT_SYSTEM_PAIRS_CONFLICT})
+_RESOLUTION_STATED_BECAUSE = frozenset({CAVEAT_SYSTEM_AMBIGUOUS, CAVEAT_SYSTEM_PAIRS_CONFLICT, CAVEAT_SYSTEM_UNANIMOUS})
 
 # Why a verdict could not be established, in Tender's word, the first code
 # found winning. A label the system's entries do not carry is the caller's own
@@ -721,7 +723,8 @@ def _installed_in(installers: Any) -> tuple[str, ...]:
 
 def _launchability(answer: Any, *, system: SystemArgument, content_path: str, label: str) -> Launchability:
     """*answer* in Tender's words; a system that resolved to none is not established, whatever else it says."""
-    state = _LAUNCH_STATES.get(answer.verdict, LAUNCH_NOT_ESTABLISHED) if resolved(answer) else LAUNCH_NOT_ESTABLISHED
+    holds = answer_holds(answer)
+    state = _LAUNCH_STATES.get(answer.verdict, LAUNCH_NOT_ESTABLISHED) if holds else LAUNCH_NOT_ESTABLISHED
     codes = set(_caveat_codes(answer))
     reason, reason_file = _launch_reason(answer, state)
     return Launchability(
@@ -771,15 +774,32 @@ def resolved(answer: Any) -> bool:
     return resolution_status(answer) == RESOLUTION_RESOLVED
 
 
+def answer_holds(answer: Any) -> bool:
+    """Whether *answer* holds for the platform whose system it was asked about.
+
+    It does where the system resolved to one, and where the pairs named several
+    systems that all answer the question alike (``unanimous``): the answer is
+    then their shared answer and names no system, so a game of the platform
+    starts with it and Tender links it into no frontend folder (#2225 D8,
+    #2751 D3). Read by the four questions a game starts through —
+    ``emulators_for``, ``firmware_for_system``, ``launchable`` and
+    ``launch_command``; a question that needs one system's place reads
+    :func:`resolved` instead.
+    """
+    return resolution_status(answer) in (RESOLUTION_RESOLVED, RESOLUTION_UNANIMOUS)
+
+
 def unresolved_reason(answer: Any) -> str | None:
-    """Why the system *answer* was asked about resolved to no one system, in Tender's word; ``None`` where it did.
+    """Why *answer* does not hold for the platform (:func:`answer_holds`), in Tender's word; ``None`` where it does.
 
     :data:`~domain.launchability.SYSTEMS_SEVERAL` where several of the
-    source's systems answer and the resolver names none of them, else
-    :data:`~domain.launchability.SYSTEM_UNKNOWN`: the source has no system the
-    question names, or the pairs asked with name different ones. The one place
-    that splits the two.
+    source's systems answer differently and the resolver names none of them,
+    else :data:`~domain.launchability.SYSTEM_UNKNOWN`: the source has no system
+    the question names, or the pairs asked with name different ones. The one
+    place that splits the two.
     """
+    if answer_holds(answer):
+        return None
     status = resolution_status(answer)
     if status == RESOLUTION_RESOLVED:
         return None
@@ -845,7 +865,7 @@ class AtlasCatalogueAdapter:
         platform about".
         """
         answer = self._catalogue_answer(system, self._reading(reading))
-        if answer is None or catalogue_refused(answer) or not resolved(answer):
+        if answer is None or catalogue_refused(answer) or not answer_holds(answer):
             return (None, None)
         cores = [
             entry
@@ -870,15 +890,16 @@ class AtlasCatalogueAdapter:
         six catalogue refusals, or when the resolver could not be asked at all —
         the caller surfaces that as "emulator list unavailable" rather than
         seeing an empty list it cannot distinguish from a system the frontend
-        knows no emulator for — and when *system* resolved to no one system
-        the source holds, which is no list either. ``reason`` says which, and
-        is ``None`` where the list is available: ``no_source`` /
-        ``switched_off`` where no source answers, ``not_set_up`` /
-        ``catalogue_invalid`` / ``sealed`` / ``unavailable`` for a refusal,
+        knows no emulator for — and when the answer does not hold for the
+        platform (:func:`answer_holds`), which is no list either. Where several
+        of the source's systems answer alike the list is their shared one.
+        ``reason`` says which, and is ``None`` where the list is available:
+        ``no_source`` / ``switched_off`` where no source answers, ``not_set_up``
+        / ``catalogue_invalid`` / ``sealed`` / ``unavailable`` for a refusal,
         ``platform_systems_several`` where several of the source's systems
-        answer and the resolver names none, and ``unavailable`` where it names
-        none here. ``source`` is the answering source's ``{"kind",
-        "starts_games"}``, ``None`` where none answers.
+        answer differently and the resolver names none, and ``system_unknown``
+        where the source does not list the system. ``source`` is the answering
+        source's ``{"kind", "starts_games"}``, ``None`` where none answers.
 
         ``options`` is in the order the resolver gives: a choice the user made
         inside ES-DE first, marked ``chosen_in_frontend``, the rest as declared.

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from _vendor import atlas
 
-VENDORED_VERSION = "0.35.0"
+VENDORED_VERSION = "0.36.0"
 
 # The platform table's own version, which the resolver promises stability for
 # apart from its release (#2223 D16): a release that moves it fails here.

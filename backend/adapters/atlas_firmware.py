@@ -101,7 +101,7 @@ from _vendor.atlas import (
 # start-up.
 from _vendor.atlas.firmware import core_short_name, declared_directory_of, load_hashes
 
-from adapters.atlas_catalogue import resolved
+from adapters.atlas_catalogue import answer_holds
 from adapters.atlas_identity import emulator_identity
 from adapters.emulator_sources import source_roots
 from domain.firmware_wants import (
@@ -395,13 +395,15 @@ def _unresolved() -> FirmwareCatalogue:
 def _established(answer: Any) -> bool:
     """Whether *answer* states the system's demand at all.
 
-    Not where the system resolved to none or several of the source's systems,
-    nor where it lists no emulator beside ``firmware-declaration-unknown`` —
-    the rule is ``docs/architecture/invariants/resolver.md``'s. Beside
-    emulators the same code speaks only of the empty requirement list; each
-    emulator's own verdict stands.
+    Not where the answer does not hold for the platform
+    (:func:`~adapters.atlas_catalogue.answer_holds`: the system resolved to
+    none, or to several that answer differently), nor where it lists no
+    emulator beside ``firmware-declaration-unknown`` — the rule is
+    ``docs/architecture/invariants/resolver.md``'s. Beside emulators the same
+    code speaks only of the empty requirement list; each emulator's own
+    verdict stands.
     """
-    if not resolved(answer):
+    if not answer_holds(answer):
         return False
     return bool(answer.cores) or all(caveat.code != CAVEAT_FIRMWARE_DECLARATION_UNKNOWN for caveat in answer.caveats)
 

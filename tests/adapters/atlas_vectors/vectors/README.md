@@ -373,18 +373,23 @@ in `installations[].health` alone. They keep their own codes in both places — 
 Every answer about a system carries `resolution` — `catalogue`, `launchable`, `launch_command`, `save_portability`,
 `rom_location` (and each `rom_locations` placement), `platform_ids`, and `firmware`, where it is `null` unless the
 query's `kind` is `system`, and never `null` elsewhere. It is `{status, system, relation, candidates, translation}`:
-`status` how the resolution ended — `resolved`, `unknown`, `ambiguous` or `conflict`; `system` the `{source, key}` the
-answer is about, set exactly where the status is `resolved`; `relation` the tier that named it (`exactMatch`,
-`broadMatch` or `narrowMatch`), `null` exactly when `system` is; `candidates` the systems the asked pairs named alike —
-one pair can name several — each `{system, status}` and each system once, two or more exactly where the status is
-`ambiguous`; `translation` the platform table's answer for the asked pairs that went through it, in the projection
-below, or `null` where every pair was read live — and then a relation, where there is one, is `exactMatch` and there are
-no candidates, since only the table names those, and a translation whose intersection is a `conflict` names no system.
+`status` how the resolution ended — `resolved`, `unknown`, `ambiguous`, `unanimous` or `conflict`; `system` the
+`{source, key}` the answer is about, set exactly where the status is `resolved`; `relation` the tier that named it
+(`exactMatch`, `broadMatch` or `narrowMatch`), `null` exactly when `system` is; `candidates` the systems the asked pairs
+named alike — one pair can name several — each `{system, status}` and each system once, two or more exactly where the
+status is `ambiguous` (the candidates answer the question differently, or the question is `platform_ids`, which asks
+none of them, and the answer is its empty form) or `unanimous` (every candidate gives the same answer, which the answer
+is); `translation` the platform table's answer for the asked pairs that went through it, in the projection below, or
+`null` where every pair was read live — and then a relation, where there is one, is `exactMatch` and there are no
+candidates, since only the table names those, and a translation whose intersection is a `conflict` names no system.
 Every status but `resolved` stands beside the caveat that states its reason in the answer's own caveats:
-`system-unknown`, `system-ambiguous` or `system-pairs-conflict`. A `savefile_query` that names a `system` answers a
-placement, which carries no `resolution`: the caveats resolving it stated lead the placement's own. Every other field
-that names a system is a `{source, key}` object, a firmware requirement's `system` may instead be `_unknown`, and caveat
-data names a system flat as `source` and `key`, or several as the parallel lists `sources` and `keys`.
+`system-unknown`, `system-ambiguous`, `system-unanimous` or `system-pairs-conflict`. An entry's `system` is `null`
+exactly in an answer whose status is `unanimous`, which names no system, and a refusal an entry of such an answer states
+for every candidate names them as `sources` and `keys` where it would name one system as `source` and `key` (#784 D69).
+A `savefile_query` that names a `system` answers a placement, which carries no `resolution`: the caveats resolving it
+stated lead the placement's own. Every other field that names a system is a `{source, key}` object, a firmware
+requirement's `system` may instead be `_unknown`, and caveat data names a system flat as `source` and `key`, or several
+as the parallel lists `sources` and `keys`.
 
 The two platform answers carry a `translation`, and so does every `resolution`; both are asserted in the **projection**
 the platform-table family uses: the serialized translation with every key's `citations` and the `source_versions` list

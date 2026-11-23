@@ -106,6 +106,7 @@ from .platforms import (
     RESOLUTION_AMBIGUOUS,
     RESOLUTION_CONFLICT,
     RESOLUTION_RESOLVED,
+    RESOLUTION_UNANIMOUS,
     RESOLUTION_UNKNOWN,
     RETRODECK_SOURCE,
     PlatformSystemStatus,
@@ -124,6 +125,7 @@ from .platforms import (
     EXACT_TIER,
     AskedPair,
     SystemTier,
+    parallel_lists,
     check_system_pair,
     systems_by_tier,
     systems_reached,
@@ -2165,10 +2167,13 @@ class _SaveQuery:
     # "no system".
     system_asked: bool = False
     # The pairs the asked system was named by, version aside, where they
-    # resolved to one system of the installation: what an answer keying no
-    # record names as the system it holds none for (#784 D55). Empty where
-    # nothing was asked, and where the pairs named no single system — the
-    # resolution states why then, and no record was ever in question.
+    # resolved to one system of the installation or to several: what an
+    # answer keying no record names as the system it holds none for (#784
+    # D55). Where they name several, each candidate's placement is keyed and
+    # asked with them, and the placements are compared (#784 D62). Empty
+    # where nothing was asked, and on the placement answered where no single
+    # system was named — unknown, conflict, or several that place apart — whose
+    # resolution states why.
     asked: tuple[SystemPair, ...] = ()
     extra_sources: tuple[str, ...] = ()
     extra_caveats: tuple[Caveat, ...] = ()
@@ -6097,8 +6102,9 @@ def _record_unkeyed(record: SaveMemoryRecord, query: _SaveQuery, agreed: Agreeme
     Only an asked system stands for names whose disagreement or absence is
     worth stating (#784 D50, D55); a question naming none falls to the
     record's own systems, and their disagreement is the record's shape, not a
-    refusal. Pairs that named no single system say nothing here: the
-    resolution states why, and no record was ever in question.
+    refusal. Pairs that named several systems key the record once per
+    candidate (#784 D62); where the candidates' placements differ, nothing is
+    keyed and the resolution states why.
     """
     if not query.system_asked:
         return None
@@ -6119,10 +6125,11 @@ def _record_unrecorded(record: SaveMemoryRecord, asked: tuple[SystemPair, ...]) 
             message,
             {"core": record.key, "source": asked[0][0], "key": asked[0][1]},
         )
+    sources, keys = parallel_lists(asked)
     return Caveat(
         CAVEAT_SAVE_RECORD_UNRECORDED,
         message,
-        {"core": record.key, "sources": tuple(source for source, _ in asked), "keys": tuple(key for _, key in asked)},
+        {"core": record.key, "sources": sources, "keys": keys},
     )
 
 
@@ -19681,6 +19688,20 @@ class _CatalogueHost(Protocol):
         ...
 
 
+def _check_entries_name_systems(
+    owner: str, entries: Iterable["EmulatorEntry | None"], resolution: SystemResolution | None
+) -> None:
+    """An entry names no system exactly in an answer several named systems give alike (#784 D65 e).
+
+    The shared answer's entries stand for one entry of each candidate, so they
+    name none; every other answer's entries name the system they launch.
+    """
+    shared = resolution is not None and resolution.status == RESOLUTION_UNANIMOUS
+    for entry in entries:
+        if entry is not None and (entry.system is None) != shared:
+            raise ValueError(f"{owner}: an entry names no system exactly where the resolution is unanimous")
+
+
 @dataclass(frozen=True, slots=True)
 class CatalogueAnswer:
     """Which emulators a frontend catalogue declares for one system.
@@ -19707,6 +19728,9 @@ class CatalogueAnswer:
     answered for, the relation, and the table's translation of the asked pairs — or the candidates where
     several answer.
     """
+
+    def __post_init__(self) -> None:
+        _check_entries_name_systems("CatalogueAnswer", self.entries, self.resolution)
 
 
 @dataclass(frozen=True, slots=True)
@@ -19905,7 +19929,16 @@ class SystemPlatformsAnswer:
 # each with its catalogue status. "pairs-conflict": the asked pairs share no
 # system — a table conflict, two own-source names, or an own-source name the
 # other pairs do not reach — and data names the asked pairs the same way.
+# "unanimous": the asked pairs name several systems alike and every one of them
+# gives the question the same answer, which the answer then is (#784 D62, D65)
+# — data names them as "ambiguous" does, and atlas still picks none.
 CAVEAT_SYSTEM_AMBIGUOUS = "system-ambiguous"
+CAVEAT_SYSTEM_UNANIMOUS = "system-unanimous"
+# The same word as a refusal, the two-route sharing core-not-installed has: an
+# entry of a shared answer whose candidates' entries answer one of its own
+# questions differently refuses it, naming the candidates as the caveat does
+# (#784 D66, D67 a).
+UNRESOLVED_SYSTEM_AMBIGUOUS = CAVEAT_SYSTEM_AMBIGUOUS
 CAVEAT_SYSTEM_PAIRS_CONFLICT = "system-pairs-conflict"
 
 
@@ -20124,6 +20157,8 @@ class LaunchabilityAnswer:
         # that names one may carry it, a refusal included, and no other.
         if self.opens is not None and (self.verdict not in _ENTRY_VERDICTS or self.entry is None):
             raise ValueError("LaunchabilityAnswer: opens stand only on a verdict about an entry")
+        installed = (installer.entry for installer in self.installers or ())
+        _check_entries_name_systems("LaunchabilityAnswer", (self.entry, *installed), self.resolution)
 
 
 @dataclass(frozen=True, slots=True)
@@ -20159,6 +20194,7 @@ class SavePortabilityAnswer:
             raise ValueError(
                 f"SavePortabilityAnswer: verdict must be one of {PORTABILITY_VERDICTS}, got {self.verdict!r}"
             )
+        _check_entries_name_systems("SavePortabilityAnswer", (self.source, self.target), self.resolution)
 
 
 @dataclass(frozen=True, slots=True)
@@ -20188,6 +20224,9 @@ class LaunchCommandAnswer:
     answered for, the relation, and the table's translation of the asked pairs — or the candidates where
     several answer.
     """
+
+    def __post_init__(self) -> None:
+        _check_entries_name_systems("LaunchCommandAnswer", (self.entry,), self.resolution)
 
 
 # Flatpak's per-app overrides are GKeyFile INI, and only the environment they
@@ -21861,10 +21900,11 @@ class EmulatorEntry:
         self._launch = launch
 
     @property
-    def system(self) -> SystemPair:
+    def system(self) -> SystemPair | None:
         """The system this entry launches, as the (source, key) pair the installation names it by
         (#784 D47) — the catalogue's own name in its own source, or, on an entry derived from the
-        installed cores, the system it was asked under.
+        installed cores, the system it was asked under; ``None`` exactly on an entry of a shared
+        answer, which several systems give alike and which names none of them (#784 D65 e).
         """
         return _spec_system(self._spec)
 
@@ -22400,6 +22440,7 @@ def _launch_target(content_path: str, view: CommandView) -> _LaunchTarget:
 
 def _entry_reading(
     entry: EmulatorEntry,
+    system: SystemPair,
     *,
     target: _LaunchTarget,
     core_info_for: "Callable[[EmulatorEntry], CoreInfo | None]",
@@ -22431,11 +22472,12 @@ def _entry_reading(
     reading instead of a card (*boot_reader*, issue #618), which follows a
     directory itself. An entry of either kind whose emulator's open of a file
     atlas reads (*opens_reader*, issue #716) is judged by that reading instead
-    of its claims or its card, and states what it opens.
+    of its claims or its card, and states what it opens. *system* is the
+    system the entry is judged for, which the third kind's refusal names.
     """
     foreign = _foreign_core_of(entry.kind, entry.command) if entry.kind != KIND_LIBRETRO else None
     if foreign is not None:
-        return (*_foreign_core_entry_reading(entry, foreign), None, None)
+        return (*_foreign_core_entry_reading(entry, system, foreign), None, None)
     opened = opens_reader(entry) if opens_reader is not None and target.kind == _TARGET_FILE else None
     if opened is not None:
         return _opens_stance(entry, opened, extension=target.extension, core_info_for=core_info_for)
@@ -22678,7 +22720,7 @@ def _opens_stance(
 
 
 def _foreign_core_entry_reading(
-    entry: EmulatorEntry, core_file: str
+    entry: EmulatorEntry, system: SystemPair, core_file: str
 ) -> tuple[str, tuple[str, ...], tuple[Caveat, ...]]:
     """The third branch of :func:`_entry_reading` — nothing loads, so no file is taken.
 
@@ -22693,7 +22735,7 @@ def _foreign_core_entry_reading(
             "host cannot load — its name carries another platform's suffix, so RetroArch loads "
             "no core and the entry takes no file at all",
         ),
-        (_foreign_core_caveat(entry.label, entry.system, core_file),),
+        (_foreign_core_caveat(entry.label, system, core_file),),
     )
 
 
@@ -23145,6 +23187,7 @@ def _launchability_verdict(
     def judged(candidate: EmulatorEntry) -> _Stance:
         return _entry_reading(
             candidate,
+            system,
             target=target,
             core_info_for=core_info_for,
             boot_reader=boot_reader,
@@ -23599,7 +23642,8 @@ def _keyed(
     One name is the record's key; several key it where the entries the record
     holds for them agree (:func:`_record_agreement`); none keys no record.
     *system_asked* says whether a system was named at all, and *asked* is the
-    pairs that named it where they resolved to one.
+    pairs that named it where they resolved to one system or to several each
+    candidate is keyed for (#784 D62).
     """
     return cast(_SaveQuery, _dc_replace(query, record_keys=keys, system_asked=system_asked, asked=asked))
 
@@ -23627,26 +23671,51 @@ def _with_system_notes(
     return cast(SavefilePlacement, _dc_replace(placement, caveats=(*notes, *placement.caveats)))
 
 
+def _shared[A](answers: Sequence[A], systems: tuple[SystemPair, ...], resolution: SystemResolution) -> A | None:
+    """The answer every candidate gives, in its shared form, or ``None`` (:func:`atlas._shared_answer.shared`).
+
+    The one place this module reaches the comparison, and at call time: the
+    comparison owns the dependency on the serializers, and :mod:`atlas.contract`
+    imports this module's answer types.
+    """
+    from ._shared_answer import shared
+
+    return shared(answers, systems, resolution)
+
+
 def _system_ambiguous(named: tuple[SystemPair, ...]) -> Caveat:
     """The asked pairs name several systems of this installation, and atlas picks none (#784 D8, D9, D44)."""
+    sources, keys = parallel_lists(named)
     return Caveat(
         CAVEAT_SYSTEM_AMBIGUOUS,
         f"the asked system names {len(named)} systems of this installation alike "
         f"({', '.join(spelled(system) for system in named)}) — atlas picks none; ask with the one meant, "
         "or with a further pair that narrows it",
-        {"sources": tuple(source for source, _ in named), "keys": tuple(key for _, key in named)},
+        {"sources": sources, "keys": keys},
+    )
+
+
+def _system_unanimous(named: tuple[SystemPair, ...]) -> Caveat:
+    """The asked pairs name several systems of this installation, and every one answers alike (#784 D62, D65)."""
+    sources, keys = parallel_lists(named)
+    return Caveat(
+        CAVEAT_SYSTEM_UNANIMOUS,
+        f"the asked system names {len(named)} systems of this installation alike "
+        f"({', '.join(spelled(system) for system in named)}) and every one of them gives this question the same "
+        "answer, which this is — atlas picks none, and the answer names no system",
+        {"sources": sources, "keys": keys},
     )
 
 
 def _pairs_conflict(pairs: tuple[AskedPair, ...]) -> Caveat:
     """The asked pairs share no system — atlas picks none of them (#784 D9, D44)."""
-    asked = tuple((source, key) for source, key, _ in pairs)
+    sources, keys = parallel_lists(tuple((source, key) for source, key, _ in pairs))
     return Caveat(
         CAVEAT_SYSTEM_PAIRS_CONFLICT,
         "the asked pairs share no system of this installation — two names this catalogue reads live, "
         "a conflict in the platform table, or a name the other pairs do not reach — so the question "
         "answers for none",
-        {"sources": tuple(source for source, _ in asked), "keys": tuple(key for _, key in asked)},
+        {"sources": sources, "keys": keys},
     )
 
 
@@ -23913,7 +23982,9 @@ class _CatalogueQueries:
         """:meth:`_resolve` for the systems the table names in the first tier that names any, no own name asked.
 
         A target the installation does not hold is no candidate (#784 D53):
-        one held target is the system, several are ambiguous, and none leaves
+        one held target is the system, several are ambiguous — until the
+        question asks each of them and finds they answer alike
+        (:meth:`_answered`) — and none leaves
         the resolution unknown with ``system-unknown`` naming each target —
         where some are held, the translation already names the others. The
         first tier that names any target decides, held or not; a later tier is
@@ -23997,6 +24068,46 @@ class _CatalogueQueries:
             *arrangement_caveats(self.kind, observed_version=version),
         )
 
+    def _answered[A](
+        self,
+        resolved: _Resolved,
+        answer_for: Callable[[SystemPair, tuple[Caveat, ...], SystemResolution], A],
+        empty: Callable[[SystemResolution, tuple[Caveat, ...]], A],
+    ) -> A:
+        """A system question's answer for what *resolved* named: one system's, the shared one, or the empty form.
+
+        The one rule every question that answers for a resolved system goes
+        through (#784 D62, D64, D65 c). One system named: *answer_for* it.
+        Several, listed as candidates: each is asked as if it had been named
+        alone, with the statements of the resolution beside it —
+        ``system-unanimous`` where ``system-ambiguous`` stood — and where every
+        candidate gives the same answer that shared answer is the answer, under
+        the ``unanimous`` resolution (:func:`atlas._shared_answer.shared`);
+        where two answer differently, and where no single system was named, the
+        question's *empty* form.
+        """
+        resolution, notes, _ = resolved
+        if resolution.system is not None:
+            return answer_for(resolution.system, notes, resolution)
+        if resolution.status != RESOLUTION_AMBIGUOUS:
+            return empty(resolution, notes)
+        systems = tuple(candidate.system for candidate in resolution.candidates)
+        # Each candidate's answer is built with the statements the shared
+        # answer makes, system-unanimous among them, beside the ambiguous
+        # resolution it is asked under: the candidates' answers are compared
+        # and merged, never returned, and the merge swaps in the unanimous
+        # resolution — so the one set of notes is the shared answer's, and an
+        # answer that differs is answered by *empty* with the original notes.
+        stated = tuple(
+            _system_unanimous(systems) if note.code == CAVEAT_SYSTEM_AMBIGUOUS else note for note in notes
+        )
+        answers = [answer_for(system, stated, resolution) for system in systems]
+        unanimous = SystemResolution(
+            RESOLUTION_UNANIMOUS, None, None, resolution.candidates, resolution.translation
+        )
+        shared = _shared(answers, systems, unanimous)
+        return empty(resolution, notes) if shared is None else shared
+
     def _catalogue_statements(self) -> tuple[Caveat, ...]:
         """What every catalogue-informed answer of this installation states about its catalogue, system aside.
 
@@ -24033,28 +24144,42 @@ class _CatalogueQueries:
             ) or tuple(key for _, key in systems_reached(translate([system]), (ESDE_SOURCE,))[1])
         return keys
 
-    def _save_record(
-        self, system: SystemArgument | None
-    ) -> tuple[tuple[str, ...], tuple[SystemPair, ...], tuple[Caveat, ...]]:
-        """The names a save question's *system* keys a core's recorded file set by, and what the answer states.
+    def _save_placement(
+        self,
+        system: SystemArgument | None,
+        place: Callable[[tuple[str, ...], tuple[SystemPair, ...]], SavefilePlacement | Unresolved],
+    ) -> SavefilePlacement | Unresolved:
+        """A save question's placement, *place* keyed by the names its *system* keys a core's recorded file set by.
 
         The system is resolved as every system question resolves it (#784
-        D44) and keyed by :meth:`_record_keys`; the resolution's statements —
-        the platform codes it lifts and why no single system was named — ride
-        on the placement, so a system the asked pairs do not name is said
-        rather than answered as if none had been asked. The placement carries
-        no resolution block (#784 D56), so what the translation says about a
-        stated version — that the table holds another, or that a folder pair's
-        was not applied — which every other question states only there, is
-        lifted onto it too.
+        D44), keyed by :meth:`_record_keys` and answered through the one rule
+        for several named systems (:meth:`_answered`); *place* takes the keys
+        and the systems the asked pairs name. The resolution's statements —
+        the platform codes it lifts and why no single system was named, or that
+        several answer alike — ride on the placement, so a system the asked
+        pairs do not name is said rather than answered as if none had been
+        asked. The placement carries no resolution (#784 D56), so what the
+        translation says about a stated version — that the table holds
+        another, or that a folder pair's was not applied — which every other
+        question states only there, is lifted onto it too.
         """
         if system is None:
-            return (), (), ()
-        resolution, notes, pairs = self._resolve(system)
-        notes = (*notes, *_lifted(resolution.translation, _VERSION_CODES))
-        if resolution.system is None:
-            return (), (), notes
-        return self._record_keys(resolution.system, pairs), _asked_systems(pairs), notes
+            return place((), ())
+        resolved = self._resolve(system)
+        lifted = _lifted(resolved.resolution.translation, _VERSION_CODES)
+        asked = _asked_systems(resolved.pairs)
+
+        def answer_for(
+            pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution
+        ) -> SavefilePlacement | Unresolved:
+            del resolution
+            return _with_system_notes(place(self._record_keys(pair, resolved.pairs), asked), (*notes, *lifted))
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> SavefilePlacement | Unresolved:
+            del resolution
+            return _with_system_notes(place((), ()), (*notes, *lifted))
+
+        return self._answered(resolved, answer_for, empty)
 
     @one_question
     def standalone_firmware_token(self, command: str) -> str | None:
@@ -24144,9 +24269,12 @@ class _CatalogueQueries:
         frontend, a system atlas names by a cited pair (the TI-83 as RomM's
         ``ti-83``, the Elektronika BK as libretro's ``BK-0010/BK-0011``)
         answers from the installed cores' own declarations, as every system
-        does on a bare RetroArch, where libretro's names are its own. Asked pairs
-        that name no single system answer no emulators, with ``resolution``
-        saying why.
+        does on a bare RetroArch, where libretro's names are its own. Asked
+        pairs that name several systems answer what every one of them gives
+        alike, its emulators compared as a set and listed by core file name,
+        with ``resolution`` ``unanimous`` (#784 D62, D63); asked pairs that
+        name no single system otherwise answer no emulators, with
+        ``resolution`` saying why.
 
         ``cwd`` is the working folder the launch will use, an absolute host
         path: it completes a standalone emulator's relative configured path
@@ -24156,8 +24284,14 @@ class _CatalogueQueries:
         """
         checked_cwd(cwd)
         checked_content_path(content_path)
-        resolution, notes, _ = self._resolve(system)
-        if resolution.system is None:
+
+        def answer_for(pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution) -> FirmwareAnswer:
+            answer = self._firmware_for_system(pair, verify=verify, cwd=cwd, content_path=content_path)
+            return cast(
+                FirmwareAnswer, _dc_replace(answer, caveats=_noted(notes, answer.caveats), resolution=resolution)
+            )
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> FirmwareAnswer:
             context = self._firmware_context(cwd=cwd)
             return FirmwareAnswer(
                 root=context.root,
@@ -24168,8 +24302,8 @@ class _CatalogueQueries:
                 caveats=stated_once((*context.caveats, *self._catalogue_statements(), *notes)),
                 resolution=resolution,
             )
-        answer = self._firmware_for_system(resolution.system, verify=verify, cwd=cwd, content_path=content_path)
-        return cast(FirmwareAnswer, _dc_replace(answer, caveats=_noted(notes, answer.caveats), resolution=resolution))
+
+        return self._answered(self._resolve(system), answer_for, empty)
 
     @one_question
     def systems(self) -> SystemsAnswer:
@@ -24344,17 +24478,23 @@ class _CatalogueQueries:
         has one atlas has not established, its catalogue could not be read, the
         readable part of it declares nothing while the rest is sealed away, or
         the catalogue was read and this is what it says — no such system, or a
-        ``%ROMPATH%`` nothing here resolves. Asked pairs that name no single
-        system answer no directory, with ``resolution`` saying why (#784 D44).
+        ``%ROMPATH%`` nothing here resolves. Asked pairs that name several
+        systems answer the directory every one of them gives alike, with
+        ``resolution`` ``unanimous`` (#784 D62); asked pairs that name no single
+        system otherwise answer no directory, with ``resolution`` saying why
+        (#784 D44).
         """
-        resolution, notes, _ = self._resolve(system)
-        if resolution.system is None:
+        def answer_for(pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution) -> RomPlacement:
+            answer, version = self._rom_location_answer(pair)
+            return _rom_placement_with_caveats(
+                answer, (*notes, *answer.caveats, *arrangement_caveats(self.kind, observed_version=version)), resolution
+            )
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> RomPlacement:
             sources, caveats = self._unresolved_caveats(notes)
             return RomPlacement(sources=sources, caveats=caveats, resolution=resolution)
-        answer, version = self._rom_location_answer(resolution.system)
-        return _rom_placement_with_caveats(
-            answer, (*notes, *answer.caveats, *arrangement_caveats(self.kind, observed_version=version)), resolution
-        )
+
+        return self._answered(self._resolve(system), answer_for, empty)
 
     @one_question
     def rom_locations(self) -> RomLocationsAnswer:
@@ -24407,18 +24547,23 @@ class _CatalogueQueries:
         nothing" looks like there.
 
         *system* is a name of this installation's catalogue, one pair, or
-        several pairs, resolved to one system first (#784 D44); asked pairs
-        that name no single system answer no entries, with ``resolution``
-        saying why.
+        several pairs, resolved to one system first (#784 D44). Asked pairs
+        that name several systems answer the entries every one of them gives
+        alike, in the same order, with ``resolution`` ``unanimous`` and no
+        system on an entry (#784 D62, D63); asked pairs that name no single
+        system otherwise answer no entries, with ``resolution`` saying why.
         """
-        resolution, notes, _ = self._resolve(system)
-        if resolution.system is None:
+        def answer_for(pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution) -> CatalogueAnswer:
+            answer, version = self._catalogue_answer(pair, content_path=content_path)
+            return _catalogue_with_caveats(
+                answer, (*notes, *answer.caveats, *arrangement_caveats(self.kind, observed_version=version)), resolution
+            )
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> CatalogueAnswer:
             sources, caveats = self._unresolved_caveats(notes)
             return CatalogueAnswer(sources=sources, caveats=caveats, resolution=resolution)
-        answer, version = self._catalogue_answer(resolution.system, content_path=content_path)
-        return _catalogue_with_caveats(
-            answer, (*notes, *answer.caveats, *arrangement_caveats(self.kind, observed_version=version)), resolution
-        )
+
+        return self._answered(self._resolve(system), answer_for, empty)
 
     @one_question
     def launch_command(
@@ -24458,19 +24603,31 @@ class _CatalogueQueries:
         RetroDECK's through the reading pinned for its component launcher,
         ``null`` beside ``launch-environment-unpinned`` where none is, and
         EmuDeck's empty.
+
+        *system* is resolved as every system question resolves it (#784 D44).
+        Asked pairs that name several systems answer the command every one of
+        them gives alike for the same entry, its declared position included,
+        with ``resolution`` ``unanimous`` (#784 D62, D63); asked pairs that
+        name no single system otherwise answer no entry and no command, with
+        ``resolution`` saying why.
         """
         if not os.path.isabs(content_path):
             raise ValueError(f"content_path must be an absolute path, got {content_path!r}")
-        resolution, notes, _ = self._resolve(system)
-        if resolution.system is None:
+        def answer_for(
+            pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution
+        ) -> LaunchCommandAnswer:
+            answer, version = self._launch_command_answer(pair, content_path, label)
+            return _launch_command_with_caveats(
+                answer,
+                _noted(notes, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))),
+                resolution,
+            )
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> LaunchCommandAnswer:
             sources, caveats = self._unresolved_caveats(notes)
             return LaunchCommandAnswer(sources=sources, caveats=caveats, resolution=resolution)
-        answer, version = self._launch_command_answer(resolution.system, content_path, label)
-        return _launch_command_with_caveats(
-            answer,
-            _noted(notes, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))),
-            resolution,
-        )
+
+        return self._answered(self._resolve(system), answer_for, empty)
 
     @one_question
     def launchable(
@@ -24523,12 +24680,24 @@ class _CatalogueQueries:
         system only the cores declare while EmuDeck's bundled layer is
         sealed, and those of a system an ES-DE frontend names by a cited pair
         (#784 D57) — the verdict stays ``unknown`` (D8), and a label none of
-        them carries is refused the same way beside it. Asked pairs that name no
-        single system answer ``unknown``, with ``resolution`` saying why
-        (#784 D44).
+        them carries is refused the same way beside it. Asked pairs that name
+        several systems answer the verdict every one of them gives alike — the
+        same entry, its declared position included, and the same accepted
+        tokens, alternatives and installers — with ``resolution`` ``unanimous``
+        (#784 D62, D63); asked pairs that name no single system otherwise
+        answer ``unknown``, with ``resolution`` saying why (#784 D44).
         """
-        resolution, notes, _ = self._resolve(system)
-        if resolution.system is None:
+        def answer_for(
+            pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution
+        ) -> LaunchabilityAnswer:
+            answer, version = self._launchable_answer(pair, content_path, label)
+            return _launchable_with_caveats(
+                answer,
+                _noted(notes, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))),
+                resolution,
+            )
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> LaunchabilityAnswer:
             sources, caveats = self._unresolved_caveats(notes)
             return LaunchabilityAnswer(
                 verdict=VERDICT_UNKNOWN,
@@ -24537,12 +24706,8 @@ class _CatalogueQueries:
                 caveats=caveats,
                 resolution=resolution,
             )
-        answer, version = self._launchable_answer(resolution.system, content_path, label)
-        return _launchable_with_caveats(
-            answer,
-            _noted(notes, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))),
-            resolution,
-        )
+
+        return self._answered(self._resolve(system), answer_for, empty)
 
     @one_question
     def save_portability(
@@ -24567,32 +24732,41 @@ class _CatalogueQueries:
         carries answers ``unestablished`` with ``entry-label-unknown``; naming
         one entry twice is not a question and raises ``ValueError``. *source*
         and *target* are catalogue labels; *system* is resolved to one system
-        first (#784 D44), and asked pairs that name no single system answer
+        first (#784 D44). Asked pairs that name several systems answer what
+        every one of them gives alike, with ``resolution`` ``unanimous``
+        (#784 D62); asked pairs that name no single system otherwise answer
         ``unestablished``, with ``resolution`` saying why.
         """
         checked_cwd(cwd)
         files = checked_appendconfig(appendconfig)
         if source == target:
             raise ValueError(f"source and target name the same entry ({source!r}) — a save is not moved to itself")
-        resolution, notes, pairs = self._resolve(system)
-        if resolution.system is None:
+        resolved = self._resolve(system)
+
+        def answer_for(
+            pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution
+        ) -> SavePortabilityAnswer:
+            answer, version = self._save_portability_answer(
+                pair,
+                asked=resolved.pairs,
+                record_systems=self._record_keys(pair, resolved.pairs),
+                source=source,
+                target=target,
+                content_path=content_path,
+                cwd=cwd,
+                appendconfig=files,
+            )
+            return _portability_with_caveats(
+                answer, (*notes, *answer.caveats, *arrangement_caveats(self.kind, observed_version=version)), resolution
+            )
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> SavePortabilityAnswer:
             sources, caveats = self._unresolved_caveats(notes)
             return SavePortabilityAnswer(
                 verdict=PORTABILITY_UNESTABLISHED, sources=sources, caveats=caveats, resolution=resolution
             )
-        answer, version = self._save_portability_answer(
-            resolution.system,
-            asked=pairs,
-            record_systems=self._record_keys(resolution.system, pairs),
-            source=source,
-            target=target,
-            content_path=content_path,
-            cwd=cwd,
-            appendconfig=files,
-        )
-        return _portability_with_caveats(
-            answer, (*notes, *answer.caveats, *arrangement_caveats(self.kind, observed_version=version)), resolution
-        )
+
+        return self._answered(resolved, answer_for, empty)
 
     def _save_portability_answer(
         self,
@@ -26494,7 +26668,12 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         what keys a core's recorded file set; what resolving it says leads the
         placement's caveats, a version the table does not hold included, since
         the placement carries no resolution block (#784 D56), and a refusal
-        keeps only its own reason. All three
+        keeps only its own reason. Pairs that name several systems answer the
+        placement every one of them keys alike, the resolution's statements,
+        ``system-unanimous`` among them, leading its caveats, and otherwise the
+        placement keyed by none, beside ``system-ambiguous`` (#784 D62); where
+        every candidate refuses alike, that refusal, which carries no
+        resolution statement (#784 D71). All three
         are optional — missing ones leave holes and stated caveats, never
         guesses. ``cwd`` is the working folder the launch will use, an absolute
         host path: it fills the ``cwd`` hole of a core that saves relative to
@@ -26510,19 +26689,20 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         config, marker_issues = self._read_marker()
         if _not_set_up(marker_issues) is not None:
             return self._not_set_up_refusal()
-        keys, asked, notes = self._save_record(system)
-        placement = self._savefile_location_from(
-            config,
-            marker_issues,
-            content_path=content_path,
-            core_so=core_so,
-            record_keys=keys,
-            system_asked=system is not None,
-            asked=asked,
-            cwd=cwd,
-            appendconfig=files,
+        return self._save_placement(
+            system,
+            lambda keys, asked: self._savefile_location_from(
+                config,
+                marker_issues,
+                content_path=content_path,
+                core_so=core_so,
+                record_keys=keys,
+                system_asked=system is not None,
+                asked=asked,
+                cwd=cwd,
+                appendconfig=files,
+            ),
         )
-        return _with_system_notes(placement, notes)
 
     @one_question
     def savestate_location(
@@ -29650,7 +29830,12 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         question resolves it (#784 D44), and what resolving it says leads the
         placement's caveats, a version the table does not hold included, since
         the placement carries no resolution block (#784 D56); a refusal keeps
-        only its own reason. It is what
+        only its own reason. Pairs that name several systems answer the
+        placement every one of them keys alike, the resolution's statements,
+        ``system-unanimous`` among them, leading its caveats, and otherwise the
+        placement keyed by none, beside ``system-ambiguous`` (#784 D62); where
+        every candidate refuses alike, that refusal, which carries no
+        resolution statement (#784 D71). It is what
         keys a core's recorded file set: one core is not one behaviour, so
         without it the names stay unstated unless every system the record
         covers agrees, and asked but keying no record they stay unstated and
@@ -29667,11 +29852,13 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         """
         checked_cwd(cwd)
         files = checked_appendconfig(appendconfig)
-        keys, asked, notes = self._save_record(system)
         query = self._query(content_path=content_path, core_so=core_so, cwd=cwd, appendconfig=files)
-        keyed = _keyed(query, keys, system_asked=system is not None, asked=asked)
-        placement = _retroarch_savefile_location(self._machine, keyed)
-        return _with_system_notes(placement, notes)
+        return self._save_placement(
+            system,
+            lambda keys, asked: _retroarch_savefile_location(
+                self._machine, _keyed(query, keys, system_asked=system is not None, asked=asked)
+            ),
+        )
 
     @one_question
     def savestate_location(
@@ -30172,7 +30359,12 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         question resolves it (#784 D44), and what resolving it says leads the
         placement's caveats, a version the table does not hold included, since
         the placement carries no resolution block (#784 D56); a refusal keeps
-        only its own reason. It is what
+        only its own reason. Pairs that name several systems answer the
+        placement every one of them keys alike, the resolution's statements,
+        ``system-unanimous`` among them, leading its caveats, and otherwise the
+        placement keyed by none, beside ``system-ambiguous`` (#784 D62); where
+        every candidate refuses alike, that refusal, which carries no
+        resolution statement (#784 D71). It is what
         keys a core's recorded file set: one core is not one behaviour, so
         without it the names stay unstated unless every system the record
         covers agrees, and asked but keying no record they stay unstated and
@@ -30189,11 +30381,13 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         """
         checked_cwd(cwd)
         files = checked_appendconfig(appendconfig)
-        keys, asked, notes = self._save_record(system)
         query = self._query(content_path=content_path, core_so=core_so, cwd=cwd, appendconfig=files)
-        keyed = _keyed(query, keys, system_asked=system is not None, asked=asked)
-        placement = _retroarch_savefile_location(self._machine, keyed)
-        return _with_system_notes(placement, notes)
+        return self._save_placement(
+            system,
+            lambda keys, asked: _retroarch_savefile_location(
+                self._machine, _keyed(query, keys, system_asked=system is not None, asked=asked)
+            ),
+        )
 
     @one_question
     def savestate_location(

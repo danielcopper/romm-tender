@@ -144,6 +144,7 @@ from .platforms import (
     SystemPair,
     SystemResolution,
     check_system_pair,
+    parallel_lists,
 )
 from .ps2_bios import Ps2BiosHeader
 from .oddities import SO_SUFFIX, SaveMode, load_oddities
@@ -6514,12 +6515,13 @@ def _substitute_caveats(
             {
                 "core": alternative,
                 "substitute": substitute,
-                "sources": tuple(source for source, _ in named),
-                "keys": tuple(key for _, key in named),
+                "sources": sources,
+                "keys": keys,
             },
         )
         for substitute, systems in stated
         for named in (_esde_systems(systems, naming),)
+        for sources, keys in (parallel_lists(named),)
     )
 
 
