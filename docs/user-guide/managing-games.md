@@ -399,12 +399,12 @@ download its games."**
 Where the platform's slug and folder leave several systems of the source — RetroDECK keeps `mark3` and `mastersystem`
 for the Master System — Tender picks none of them: until downloads land in Tender's own library, **Download** is
 refused, and the pages say **"_Source_ has several systems for _platform_ (_systems_), so Tender cannot download its
-games yet."** Where those systems answer the game alike — the same emulators, the same way to start it — the game starts
-with them; such a game is linked into no frontend folder, and its page says under **Play**: **"_Source_ has several
-systems for _platform_ (_systems_), and Tender links its games into none of them."** A platform's BIOS downloads are not
-refused: they land in Tender's firmware store and are linked into none of its systems, and the BIOS table says so
-([Where downloads go](bios-management.md#where-downloads-go)). A game you already installed keeps the system it was
-downloaded under, and the buttons on its **BIOS** tab fetch and link the files for that system.
+games yet."** Where those systems answer alike — the same emulators, the same BIOS files — the pages show their shared
+emulator list and BIOS table. The platform's games are linked into no frontend folder, and a game's page says under
+**Play**: **"_Source_ has several systems for _platform_ (_systems_), and Tender links its games into none of them."** A
+platform's BIOS downloads are not refused: they land in Tender's firmware store and are linked into none of its systems,
+and the BIOS table says so ([Where downloads go](bios-management.md#where-downloads-go)). A game you already installed
+keeps the system it was downloaded under, and the buttons on its **BIOS** tab fetch and link the files for that system.
 
 **A download needs RetroDECK.** **Download** is refused, saying why, while RetroDECK is not installed (**Downloads need
 RetroDECK, which is not installed.**), while it is switched off in **Settings › Emulator sources** (**Downloads need
@@ -734,7 +734,7 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   it gives none, the sentence ends after "established". **Play** stays on.
 - **"Whether _emulator_ starts this game cannot be established: _Source_ has several systems for _platform_ and names
   none of them."** — several systems fit the game's platform and answer it differently, so the emulator source names
-  none of them for the question. **Play** stays on. Where they answer alike, the game starts with their shared answer.
+  none of them for the question. **Play** stays on.
 - **"Game.ps3 holds files RPCS3 Directory (Standalone) would take as games of their own: _files_."** — a game kept as a
   folder holds files the emulator would start on their own. **Play** stays on.
 - **"ES-DE would not list track03.bin under this name; it lists files ending in .cdi, .chd, .cue, …"** — whether the

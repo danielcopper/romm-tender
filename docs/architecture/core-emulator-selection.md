@@ -272,18 +272,19 @@ folder a download lands in. **Tender picks no system of its own**: where the two
 (on RetroDECK with emu-atlas 0.35.0 the Amiga CD32, the Atari 8-bit, MSX, the Master System and the TurboGrafx-16 keep
 two each), the platform has **several**, and every later question is asked with the two pairs, which the resolver
 answers for those systems alike or for none ([#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8). Where
-they answer alike (`unanimous`, since emu-atlas 0.36.0) the answer holds for the platform: the game gets the systems'
-shared emulator list, BIOS answer, launch verdict and start command, and **starts** (#2751 D3). Where they answer
-differently (`ambiguous`) there is no list and no start, and the page says so. Such a game is linked into no frontend
-folder, since the folder is where the systems differ, and its page says so under Play: **"_Source_ has several systems
-for _platform_ (_systems_), and Tender links its games into none of them."** A download into RetroDECK and an adoption,
-which land in one system's folder, are refused until downloads land in Tender's own library
+they answer alike (`unanimous`, since emu-atlas 0.36.0) the answer holds for the platform: its emulator list and BIOS
+answer are the systems' shared ones, and Tender's launch reading takes such an answer too (#2751 D3). No game reaches it
+yet: the download is refused, as below, and a game installed earlier is asked by the one system its install record holds
+(#2751 D4). Where they answer differently (`ambiguous`) there is no list, and the page says so. Such a game is linked
+into no frontend folder, since the folder is where the systems differ, and its page says so under Play: **"_Source_ has
+several systems for _platform_ (_systems_), and Tender links its games into none of them."** A download into RetroDECK
+and an adoption, which land in one system's folder, are refused until downloads land in Tender's own library
 ([#2223](https://github.com/danielcopper/romm-tender/issues/2223),
-[#2738](https://github.com/danielcopper/romm-tender/issues/2738)), and the refusal, the emulator list and the platform's
-pages say **"_Source_ has several systems for _platform_ (_systems_), so Tender cannot download its games yet."**
-(`platform_systems_several`). Its BIOS downloads land in Tender's firmware store and are linked nowhere, since a link
-lands in one system's place, and the platform's BIOS answer says why (`store_only`). Choosing the system for the link is
-the user's, in a view that comes later.
+[#2738](https://github.com/danielcopper/romm-tender/issues/2738)), and the refusal and the platform's pages — and the
+emulator list where the systems answer differently — say **"_Source_ has several systems for _platform_ (_systems_), so
+Tender cannot download its games yet."** (`platform_systems_several`). Its BIOS downloads land in Tender's firmware
+store and are linked nowhere, since a link lands in one system's place, and the platform's BIOS answer says why
+(`store_only`). Choosing the system for the link is the user's, in a view that comes later.
 
 **Where there is none.** A platform with no system to use says which of five cases holds, each in a sentence of its own
 ([#2751](https://github.com/danielcopper/romm-tender/issues/2751) D2):
@@ -501,12 +502,12 @@ _reason_", after the file's statements and counted among them
 established says nothing there beyond its row's own note, and where the answering source is one Tender starts no game
 through yet, every row says so in that source's sentence (D21). The menu's answer never moves the pick; a pick of an
 entry that cannot start the game is the user's, and Play is then off with the verdict's sentence — the resolver's
-refusal of the file where it states one, then "Tender cannot start _entry_ yet: _reason_." — for a system that resolved
-to no one system, "_Source_ has several systems for _platform_ and names none of them" (`systems_several`) or "the
-source does not list this game's system" (`system_unknown`), never that the command could not be read — or, for an entry
-whose installation could not be established, the sentence a page says under such an emulator
-(`frontend/src/utils/emulatorStart.ts::startRefusal`). What a game's own entry answers, and what each answer does to a
-start, is [Launch-target validation](backend-architecture.md#launch-target-validation).
+refusal of the file where it states one, then "Tender cannot start _entry_ yet: _reason_." — for an answer that does not
+hold for the platform, "_Source_ has several systems for _platform_ and names none of them" (`systems_several`, several
+systems that answer differently) or "the source does not list this game's system" (`system_unknown`), never that the
+command could not be read — or, for an entry whose installation could not be established, the sentence a page says under
+such an emulator (`frontend/src/utils/emulatorStart.ts::startRefusal`). What a game's own entry answers, and what each
+answer does to a start, is [Launch-target validation](backend-architecture.md#launch-target-validation).
 
 ## Starting a game: the resolver's command
 

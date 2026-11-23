@@ -141,18 +141,22 @@ differently, the resolver names none) or `conflict`. A `unanimous` answer is the
 system: a catalogue entry's `system` is `null` in it, and an entry's own placement questions may refuse with
 `system-ambiguous`. The four questions a game starts through — the catalogue (`emulators_for`), the firmware answer, the
 launch and the launch command — take a `unanimous` answer as holding for the platform
-(`adapters/atlas_catalogue.py::answer_holds`), and a game of such a platform starts with it and is linked into no
-frontend folder ([#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8,
-[#2751](https://github.com/danielcopper/romm-tender/issues/2751) D3); a question that needs one system's place — the ROM
-location, a save's place — takes only `resolved`. Any other status is the question's own empty or unknown form, so a
-reading module reads the status before the answer and reads it as not established, never as "nothing" — an empty
-emulator list under `ambiguous` is no list ([#2751](https://github.com/danielcopper/romm-tender/issues/2751)). An answer
-to a question that names no system states no resolution and reads as resolved
-(`adapters/atlas_catalogue.py::resolution_status`). The platform question itself carries none: whether the resolver can
-match a platform is its translation's `intersection_status`, and a match's `status` says how firmly the system is here
-(`adapters/atlas_platforms.py::read_platform_answer`). An answer names a system as a `(source, key)` pair; Tender
-forwards that pair to the next question and compares no system name of its own. A firmware answer listing no emulator
-beside `firmware-declaration-unknown` is a look that found nothing to read, not "nothing needed".
+(`adapters/atlas_catalogue.py::answer_holds`): the platform's emulator list and BIOS answer are then the systems' shared
+ones, and its games are linked into no frontend folder ([#2225](https://github.com/danielcopper/romm-tender/issues/2225)
+D8, [#2751](https://github.com/danielcopper/romm-tender/issues/2751) D3). No game is started through a shared answer
+yet: its download is refused until downloads land in Tender's own library
+([#2223](https://github.com/danielcopper/romm-tender/issues/2223),
+[#2738](https://github.com/danielcopper/romm-tender/issues/2738)), and a game installed earlier is asked by the one
+system its install record holds (#2751 D4). A question that needs one system's place — the ROM location, a save's place
+— takes only `resolved`. Any other status is the question's own empty or unknown form, so a reading module reads the
+status before the answer and reads it as not established, never as "nothing" — an empty emulator list under `ambiguous`
+is no list ([#2751](https://github.com/danielcopper/romm-tender/issues/2751)). An answer to a question that names no
+system states no resolution and reads as resolved (`adapters/atlas_catalogue.py::resolution_status`). The platform
+question itself carries none: whether the resolver can match a platform is its translation's `intersection_status`, and
+a match's `status` says how firmly the system is here (`adapters/atlas_platforms.py::read_platform_answer`). An answer
+names a system as a `(source, key)` pair; Tender forwards that pair to the next question and compares no system name of
+its own. A firmware answer listing no emulator beside `firmware-declaration-unknown` is a look that found nothing to
+read, not "nothing needed".
 
 **The answer is entry-shaped**, and `answer.requirements` is a flattening that has already discarded `declaration`,
 `requirements_met`, `caveats`, `unread` and `refused` — so an entry-level question answered from it is answered from

@@ -55,8 +55,8 @@ export type EmulatorSourceDirection = "up" | "down";
  *  RomM's slug and folder naming different systems (`platform_pairs_contradict`),
  *  none the source's frontend has (`no_platform_system`), one this machine has
  *  not set up (`platform_system_not_here`), a switched-off one
- *  (`platform_system_off`), or several the resolver names none of
- *  (`platform_systems_several`) — or RomM could not be read for the platform
+ *  (`platform_system_off`), or several that answer differently, of which the
+ *  resolver names none (`platform_systems_several`) — or RomM could not be read for the platform
  *  (one of {@link RommErrorReason}, `server_unreachable` while it is offline). */
 export type EmulatorDataReason =
   | RommErrorReason

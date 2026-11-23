@@ -463,9 +463,10 @@ function platformSystemSentence(reason: EmulatorDataReason | null, answer: Platf
 }
 
 /**
- * What a game's page says of its platform's system where the game can start
- * all the same: that several of the source's systems answer it, so the game is
- * linked into no frontend folder (#2225 D8). Empty for every other state.
+ * What a game's page says of its platform's system under Play where nothing
+ * refuses the start: that several of the source's systems answer it, so the
+ * game is linked into no frontend folder (#2225 D8). Empty for every other
+ * state.
  */
 export function platformSystemNotes(platformSystem: PlatformSystemAnswer | null): string[] {
   if (platformSystem?.state !== "several") return [];

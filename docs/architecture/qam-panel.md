@@ -990,8 +990,8 @@ no source detected, every source switched off, a broken ES-DE systems file, a Re
 EmuDeck's list that cannot be read yet, a platform with no system to use there, each case in a sentence of its own
 ([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)) — a platform whose system is not known
 because RomM, which lists it, cannot be reached (`server_unreachable`) or refused the read (any other of RomM's failure
-reasons, worded as one), or any other refusal — and never "no emulator". Where the game can start all the same although
-several systems answer its platform, its page says under Play that it is linked into none of them, a sentence of its own
+reasons, worded as one), or any other refusal — and never "no emulator". Where several systems answer a game's platform
+and nothing refuses its start, its page says under Play that it is linked into none of them, a sentence of its own
 beside the one a refused download of it says ([#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8).
 **_Source_ is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.** stands on Main
 once for every switched-on source Tender cannot start games through, whether or not it is the one that answers, and is

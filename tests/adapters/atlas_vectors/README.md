@@ -7,12 +7,11 @@ vendored at `backend/_vendor/atlas/`, and upstream's release manifest, vendored 
 `backend/_vendor/atlas.SHA256SUMS`, lists that digest for that asset.
 
 Each vector is a whole machine the resolver is run against — files, folders, links and what each core answers — and the
-answer it must give there. `tests/services/test_firmware_vectors.py` runs every firmware question among them
-(`machines/firmware.json`, `machines/disc-region.json`, `machines/named-cases.json` and, since 0.36.0, the shared
-answers of `machines/several-named-systems.json`) through Tender's BIOS reading and compares the level with the
-resolver's verdict, and `tests/adapters/test_launch_vectors.py` runs every launch question among them through Tender's
-launch reading; each docstring says what it compares and what it leaves out.
-`tests/adapters/test_atlas_launchability.py` asks a few of the launch machines (`machines/disc-opens.json`) one by one.
+answer it must give there. `tests/services/test_firmware_vectors.py` runs every firmware question among them (every file
+under `machines/` that asks one) through Tender's BIOS reading and compares the level with the resolver's verdict, and
+`tests/adapters/test_launch_vectors.py` runs every launch question among them through Tender's launch reading; each
+docstring says what it compares and what it leaves out. `tests/adapters/test_atlas_launchability.py` asks a few of the
+launch machines (`machines/disc-opens.json`, and one of `machines/several-named-systems.json`) one by one.
 `tests/adapters/test_platform_table_vectors.py` runs the platform table's translations
 (`platform-table/translations.json`) and every recorded platform question, by one pair (`platform_systems_query`, in
 `machines/system-pairs.json` and `machines/named-cases.json`) and by several pairs (`platform_pairs_query`, in
