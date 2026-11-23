@@ -97,10 +97,10 @@ class PlatformSystemService:
         false nothing is read. A read that fails answers
         :data:`~domain.platform_system.UNASKED` with the reason every RomM read
         is classified by, the source that would have been asked, and — where
-        there is none — why none would be (``unanswered``), and keeps nothing. It is logged here, at the level the
-        entrypoint logs a RomM error at, because what it becomes reaches the
-        entrypoint as a refusal, or as an answer that something is unavailable,
-        and neither is logged.
+        there is none — why none would be (``unanswered``), and keeps nothing.
+        It is logged here, at the level the entrypoint logs a RomM error at,
+        because what it becomes reaches the entrypoint as a refusal, or as an
+        answer that something is unavailable, and neither is logged.
         """
         try:
             name = self._name(keys, ask_romm=ask_romm)

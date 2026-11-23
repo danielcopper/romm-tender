@@ -9,7 +9,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from domain.emulator_sources import ArrangedSource
+from domain.emulator_sources import (
+    ALL_SOURCES_SWITCHED_OFF,
+    CATALOGUE_UNAVAILABLE,
+    NO_SOURCE_DETECTED,
+    ArrangedSource,
+)
 from domain.platform_system import FOUND, SEVERAL, UNASKED, PlatformKeys, PlatformSystem, SystemPair
 
 if TYPE_CHECKING:
@@ -20,6 +25,9 @@ if TYPE_CHECKING:
     from domain.rom_install import RomInstall
 
 RETRODECK_SOURCE = ArrangedSource(kind="retrodeck", enabled=True, starts_games=True)
+
+# The reasons the adapter gives an answer no source was asked for, which it carries as ``unanswered`` too.
+_NO_SOURCE_REASONS = frozenset({NO_SOURCE_DETECTED, ALL_SOURCES_SWITCHED_OFF, CATALOGUE_UNAVAILABLE})
 
 
 def platform_answer(
@@ -36,11 +44,12 @@ def platform_answer(
 
     One key stands for a system a source names by its key alone; several pairs
     are the systems the answer named, asked with as they are. An answer no
-    source was asked for, with no source, carries its ``unasked`` reason as
-    ``unanswered`` too, as the adapter's does, unless the test names another.
+    source was asked for, with no source and a no-source reason, carries that
+    reason as ``unanswered`` too, as the adapter's does, unless the test names
+    another; a RomM failure reason is no such reason.
     """
     keys = PlatformKeys(keys) if isinstance(keys, str) else keys
-    if state == UNASKED and source is None and unanswered is None:
+    if state == UNASKED and source is None and unanswered is None and unasked in _NO_SOURCE_REASONS:
         unanswered = unasked
     platform_name = name if name is not None else keys.kept_as
     if system is None:

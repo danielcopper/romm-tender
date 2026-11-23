@@ -172,16 +172,10 @@ class AtlasPlatformSystemsAdapter:
         self._log_debug(f"[platforms] {pairs} in {arranged.kind}: {state} {[tuple(n) for n in named]}")
         return PlatformSystem(state, keys, platform_name, source=arranged, named=named, asked=pairs)
 
-    def asked_source(
-        self, *, source: str | None = None, reading: SourcesReading | None = None
-    ) -> ArrangedSource | None:
-        """The source :meth:`platform_system` would ask for *source*, or ``None`` where there is none."""
-        return self._arranged(reading if reading is not None else self._sources.read(), source)
-
     def asked_or_why(
         self, *, source: str | None = None, reading: SourcesReading | None = None
     ) -> tuple[ArrangedSource | None, str | None]:
-        """:meth:`asked_source`, and — where it names none — why, as :meth:`platform_system` says it; one reading."""
+        """The source :meth:`platform_system` would ask for *source*, and — where there is none — why; one reading."""
         reading = reading if reading is not None else self._sources.read()
         arranged = self._arranged(reading, source)
         return arranged, None if arranged is not None else self._why_unasked(reading, source, arranged)

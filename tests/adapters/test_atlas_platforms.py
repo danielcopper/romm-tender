@@ -372,11 +372,11 @@ class TestTheSourceAQuestionGoesTo:
         retrodeck, emudeck = _Installation("retrodeck", {}), _Installation("emudeck", {})
         adapter, _ = _adapter([retrodeck, emudeck], traces, settings={SWITCHED_OFF_SETTING: ["retrodeck"]})
 
-        answering = adapter.asked_source()
-        named = adapter.asked_source(source="retrodeck")
+        answering = adapter.asked_or_why()[0]
+        named = adapter.asked_or_why(source="retrodeck")[0]
 
         assert (answering.kind if answering else None, named.kind if named else None) == ("emudeck", "retrodeck")
-        assert adapter.asked_source(source="bare_retroarch_native") is None
+        assert adapter.asked_or_why(source="bare_retroarch_native")[0] is None
         assert retrodeck.asked == emudeck.asked == []
 
 

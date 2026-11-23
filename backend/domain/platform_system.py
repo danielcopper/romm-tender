@@ -355,8 +355,8 @@ class PlatformSystem:
     :mod:`domain.emulator_sources` — or, where RomM's listing could not be read,
     the reason that read failed with, and ``unasked_message`` its message.
     ``unanswered`` is why no source is, or would have been, asked — no source
-    detected, every one switched off, detection failed — on every answer that
-    names no source, else ``None``.
+    detected, every one switched off, detection failed — on every unasked
+    answer that names no source, else ``None``.
     """
 
     state: PlatformState

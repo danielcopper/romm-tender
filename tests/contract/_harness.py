@@ -30,8 +30,8 @@ a pytest ``tmp_path`` and wires the **real** services via the real
   the real resolver's answer over its tree sets the fake's ``real`` to
   ``real_platform_systems``; the real resolver answers only the systems a
   test's seeded ``es_systems.xml`` holds, and with none seeded it answers
-  none. The kept platforms and their
-  live read in ``PlatformSystemService`` stay real.
+  none. The kept platforms and their live read in ``PlatformSystemService``
+  stay real.
 * ``emit`` → an ``AsyncMock`` so tests assert emissions.
 
 The SQLite database, the file stores, and the settings file all write

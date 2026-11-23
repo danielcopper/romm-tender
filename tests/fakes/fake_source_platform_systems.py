@@ -51,13 +51,6 @@ class FakeSourcePlatformSystems:
         state, system = self.answers.get(keys.folder or "", None) or self.answers.get(keys.slug, (FOUND, keys.slug))
         return platform_answer(state, keys, system, name=platform_name)
 
-    def asked_source(
-        self, *, source: str | None = None, reading: SourcesReading | None = None
-    ) -> ArrangedSource | None:
-        if self.real is not None:
-            return self.real.asked_source(source=source, reading=reading)
-        return self.source
-
     def asked_or_why(
         self, *, source: str | None = None, reading: SourcesReading | None = None
     ) -> tuple[ArrangedSource | None, str | None]:

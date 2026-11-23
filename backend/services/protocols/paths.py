@@ -45,12 +45,6 @@ class SourcePlatformSystems(Protocol):
         """The system in *source*, the answering source where it is ``None``."""
         ...
 
-    def asked_source(
-        self, *, source: str | None = None, reading: SourcesReading | None = None
-    ) -> ArrangedSource | None:
-        """The source a question for *source* goes to, or ``None`` where there is none."""
-        ...
-
     def asked_or_why(
         self, *, source: str | None = None, reading: SourcesReading | None = None
     ) -> tuple[ArrangedSource | None, str | None]:
