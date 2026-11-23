@@ -362,10 +362,17 @@ describe("SaveManagementCard", () => {
       };
       const { rerender } = render(<SaveManagementCard appId={100} detail={emptyClean} />);
 
+      const defaultPanel = await screen.findByTestId("desktop-slot-panel-default");
       await waitFor(() => {
-        expect(screen.getByText("default")).toBeInTheDocument();
-        expect(screen.getByText(/No save yet — mGBA's saves for this game sync with RomM/)).toBeInTheDocument();
+        expect(within(defaultPanel).getByTestId("desktop-slot-sync-summary")).toHaveTextContent(
+          /No save yet — mGBA's saves for this game sync with RomM/,
+        );
       });
+      // Summary line sits below the slot header toggle button (never inside the single-row header)
+      // and an empty confirmed active slot omits the expanded body frame instead of rendering a blank strip.
+      const headerButton = within(defaultPanel).getByRole("button", { name: /default/ });
+      expect(within(headerButton).queryByTestId("desktop-slot-sync-summary")).toBeNull();
+      expect(within(defaultPanel).queryByTestId("desktop-slot-body")).toBeNull();
       expect(screen.queryByText(NO_SAVE_ON_DEVICE)).not.toBeInTheDocument();
 
       rerender(
@@ -375,7 +382,49 @@ describe("SaveManagementCard", () => {
         />,
       );
 
+      expect(within(defaultPanel).getByTestId("desktop-slot-body")).toBeInTheDocument();
       expect(screen.getByText(NO_SAVE_ON_DEVICE)).toBeInTheDocument();
+    });
+
+    it("removes the expanded body frame after confirming an empty active slot while keeping the summary below the header", async () => {
+      vi.mocked(backend.isSaveTrackingConfigured)
+        .mockResolvedValueOnce({ configured: false, active_slot: "autosave", setup_needed: true })
+        .mockResolvedValue({ configured: true, active_slot: "autosave", setup_needed: false });
+      vi.mocked(backend.getSaveSlots).mockResolvedValue({
+        success: true,
+        slots: [
+          { slot: "autosave", source: "local", count: 0, latest_updated_at: null },
+          { slot: "test1", source: "server", count: 1, latest_updated_at: "2026-06-15T19:00:00Z" },
+        ],
+        active_slot: "autosave",
+      });
+      vi.mocked(backend.confirmSlotChoice).mockResolvedValue({
+        success: true,
+        needs_conflict_resolution: false,
+        message: "ok",
+      });
+
+      const emptyDetail: GameDetailState = {
+        ...baseDetail,
+        saveStatus: { ...mockSaveStatus, files: [], server_query_failed: false },
+      };
+      render(<SaveManagementCard appId={100} detail={emptyDetail} />);
+
+      const activePanel = await screen.findByTestId("desktop-slot-panel-autosave");
+      expect(await within(activePanel).findByTestId("active-slot-unconfirmed-box")).toBeInTheDocument();
+      expect(within(activePanel).getByTestId("desktop-slot-body")).toBeInTheDocument();
+
+      // Confirm via the card banner (autosave has 0 files, test1 has 1 server save).
+      fireEvent.click(screen.getByRole("button", { name: "Confirm 'autosave'" }));
+
+      await waitFor(() => {
+        expect(within(activePanel).queryByTestId("active-slot-unconfirmed-box")).toBeNull();
+        expect(within(activePanel).queryByTestId("desktop-slot-body")).toBeNull();
+      });
+      const summary = within(activePanel).getByTestId("desktop-slot-sync-summary");
+      expect(summary).toHaveTextContent(/No save yet — mGBA's saves for this game sync with RomM/);
+      const activeHeaderButton = within(activePanel).getByRole("button", { name: /autosave/ });
+      expect(within(activeHeaderButton).queryByTestId("desktop-slot-sync-summary")).toBeNull();
     });
   });
 
@@ -3116,13 +3165,13 @@ describe("SaveManagementCard", () => {
       expect(screen.queryByText("stale.srm")).not.toBeInTheDocument();
     });
 
-    it("omits empty sync summary span on active slot header when saveStatus is null", async () => {
+    it("omits sync summary row on active slot when saveStatus is null", async () => {
       render(<SaveManagementCard appId={100} detail={{ ...baseDetail, saveStatus: null }} />);
-      const activeBadge = await screen.findByText("ACTIVE");
-      const headerButton = activeBadge.closest("button");
-      expect(headerButton).not.toBeNull();
-      const countSpan = within(headerButton!).getByText("1 save");
-      expect(countSpan.parentElement?.children).toHaveLength(1);
+      const activePanel = await screen.findByTestId("desktop-slot-panel-default");
+      const headerButton = within(activePanel).getByRole("button", { name: /default/ });
+      expect(within(headerButton).getByText("1 save")).toBeInTheDocument();
+      expect(within(activePanel).queryByTestId("desktop-slot-sync-summary")).toBeNull();
+      expect(within(activePanel).queryByTestId("desktop-slot-body")).toBeNull();
     });
 
     it("clears Connecting indicator when going offline mid-load, logs slot load failures with exact message, and reloads on reconnect", async () => {

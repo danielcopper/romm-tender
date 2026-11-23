@@ -212,16 +212,20 @@ export function renderDesktopSaveFileRow(
   );
 }
 
+const SLOT_BODY_STYLE: CSSProperties = {
+  padding: "12px 16px 16px 34px",
+  borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+  fontSize: "13px",
+};
+
 const SlotPanelHeader: FC<{
   slotName: string;
   slotSource: SaveSlotSummary["source"];
   isActive: boolean;
   expanded: boolean;
-  syncSummaryText: string | null;
-  syncSummaryColor: string;
   fileCount: number;
   onToggle: () => void;
-}> = ({ slotName, slotSource, isActive, expanded, syncSummaryText, syncSummaryColor, fileCount, onToggle }) => (
+}> = ({ slotName, slotSource, isActive, expanded, fileCount, onToggle }) => (
   <button
     type="button"
     aria-expanded={expanded}
@@ -232,6 +236,7 @@ const SlotPanelHeader: FC<{
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
+      gap: "12px",
       padding: "10px 14px",
       cursor: "pointer",
       userSelect: "none",
@@ -240,23 +245,29 @@ const SlotPanelHeader: FC<{
     }}
     onClick={onToggle}
   >
-    <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
-      <span aria-hidden="true" style={{ fontSize: "12px", color: MUTED_COLOR, width: "12px" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: "1 1 auto", minWidth: 0 }}>
+      <span aria-hidden="true" style={{ fontSize: "12px", color: MUTED_COLOR, width: "12px", flexShrink: 0 }}>
         {expanded ? "▾" : "▸"}
       </span>
-      <span style={{ fontSize: "14px", fontWeight: 600, color: isActive ? "#ffffff" : BODY_TEXT_COLOR }}>
+      <span
+        style={{
+          fontSize: "14px",
+          fontWeight: 600,
+          color: isActive ? "#ffffff" : BODY_TEXT_COLOR,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
         {displaySlot(slotName)}
       </span>
-      {isActive ? <span style={ACTIVE_PILL_BADGE_STYLE}>ACTIVE</span> : null}
-      <span style={MUTED_PILL_BADGE_STYLE}>{slotSource === "local" ? "LOCAL" : "SERVER"}</span>
+      {isActive ? <span style={{ ...ACTIVE_PILL_BADGE_STYLE, flexShrink: 0 }}>ACTIVE</span> : null}
+      <span style={{ ...MUTED_PILL_BADGE_STYLE, flexShrink: 0 }}>{slotSource === "local" ? "LOCAL" : "SERVER"}</span>
     </div>
 
-    <div style={{ display: "flex", alignItems: "center", gap: "16px", fontSize: "12px", flexShrink: 0 }}>
-      {isActive && syncSummaryText ? (
-        <span style={{ color: syncSummaryColor, fontWeight: 500 }}>{syncSummaryText}</span>
-      ) : null}
-      <span style={{ color: MUTED_COLOR }}>{`${fileCount} save${fileCount === 1 ? "" : "s"}`}</span>
-    </div>
+    <span style={{ color: MUTED_COLOR, fontSize: "12px", flexShrink: 0, whiteSpace: "nowrap" }}>
+      {`${fileCount} save${fileCount === 1 ? "" : "s"}`}
+    </span>
   </button>
 );
 
@@ -344,9 +355,13 @@ const ActiveSlotBody: FC<ActiveSlotBodyProps> = ({
     );
   };
 
+  const filesSection = renderFilesSection();
+  const showUnconfirmed = slotConfirmed === false;
+  if (!showUnconfirmed && filesSection === null) return null;
+
   return (
-    <div>
-      {slotConfirmed === false ? (
+    <div data-testid="desktop-slot-body" style={SLOT_BODY_STYLE}>
+      {showUnconfirmed ? (
         <div
           data-testid="active-slot-unconfirmed-box"
           style={{
@@ -383,7 +398,7 @@ const ActiveSlotBody: FC<ActiveSlotBodyProps> = ({
         </div>
       ) : null}
 
-      {renderFilesSection()}
+      {filesSection}
     </div>
   );
 };
@@ -485,7 +500,7 @@ const InactiveSlotSection: FC<InactiveSlotSectionProps> = ({
   const activateDisabled = panel.switching || panel.deleting || isOffline;
   const deleteDisabled = panel.deleting || panel.switching;
   return (
-    <div>
+    <div data-testid="desktop-slot-body" style={SLOT_BODY_STYLE}>
       <InactiveSlotFilesList
         slotName={slotName}
         slotFiles={panel.slotFiles}
@@ -531,17 +546,7 @@ const SlotExpandedFrame: FC<{
   inactiveProps: InactiveSlotSectionProps;
 }> = ({ expanded, isActive, activeProps, inactiveProps }) => {
   if (!expanded) return null;
-  return (
-    <div
-      style={{
-        padding: "12px 16px 16px 34px",
-        borderTop: "1px solid rgba(255, 255, 255, 0.06)",
-        fontSize: "13px",
-      }}
-    >
-      {isActive ? <ActiveSlotBody {...activeProps} /> : <InactiveSlotSection {...inactiveProps} />}
-    </div>
-  );
+  return isActive ? <ActiveSlotBody {...activeProps} /> : <InactiveSlotSection {...inactiveProps} />;
 };
 
 export const DesktopSlotPanel: FC<DesktopSlotPanelProps> = ({
@@ -602,11 +607,24 @@ export const DesktopSlotPanel: FC<DesktopSlotPanelProps> = ({
         slotSource={slot.source}
         isActive={isActive}
         expanded={panel.expanded}
-        syncSummaryText={syncSummaryText}
-        syncSummaryColor={syncSummaryColor}
         fileCount={fileCount}
         onToggle={panel.handleToggle}
       />
+
+      {isActive && syncSummaryText ? (
+        <div
+          data-testid="desktop-slot-sync-summary"
+          style={{
+            padding: "0 14px 10px 34px",
+            fontSize: "12px",
+            fontWeight: 500,
+            color: syncSummaryColor,
+            lineHeight: 1.4,
+          }}
+        >
+          {syncSummaryText}
+        </div>
+      ) : null}
 
       {isLegacy ? (
         <div
