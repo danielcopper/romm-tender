@@ -42,13 +42,14 @@ the whole file, so re-adding one staged in part with `git add -p` would commit t
 on stdout and its index entry is left as staged, so the commit can carry unformatted content — loudly, since CI says so,
 where the other direction was silent.
 
-Python dependencies are installed from `requirements-dev.lock` — fully-pinned versions compiled from
-`requirements-dev.txt` by uv. After changing a source (`requirements-dev.txt` / `docs/requirements.txt`) or bumping a
-pin, run `mise run lock-update` to regenerate the locks.
+Python dependencies are installed from `requirements-dev.lock` and `docs/requirements.lock` — fully-pinned versions
+compiled by uv from `requirements-dev.txt` and `docs/requirements.txt`. After changing a source or bumping a pin, run
+`mise run lock-update` to regenerate the locks.
 
-MkDocs and its extensions are pinned in `docs/requirements.lock` (the lock `.github/workflows/docs.yml` installs), not
-in `requirements-dev.lock`, and `mise run setup` does not install it, so run `uv pip install -r docs/requirements.lock`
-before previewing the site with `mise run docs`.
+MkDocs and its extensions are pinned in `docs/requirements.lock`, the lock `.github/workflows/docs.yml` installs.
+`mise run setup` installs it beside `requirements-dev.lock`, so every checkout and worktree it prepared can preview the
+site with `mise run docs`. It installs both locks in one call, so a package the two pin at different versions stops it
+rather than leaving whichever came last.
 
 ### Automated dependency updates
 
