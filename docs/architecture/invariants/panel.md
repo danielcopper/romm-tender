@@ -143,25 +143,24 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   their React key, so a change of rom mounts them anew and an answer for the previous one lands in a panel that is gone.
   Two answers for the SAME rom are ordered by a sequence taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`,
   `EmulationSettings`'s `readSeqRef`). Ordered but unbound: the two identity writes (the store's `loadDetail`, the
-  panel's `loadData`) and the panel's lazy SAVES-tab slot load (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter,
-  `slots` ticket); neither bound nor ordered: the store's `cached.bios_status` fold. The panel's `rereadBiosAnswer`,
-  which `handleBiosChange` and a press on the BIOS tab both read through, is bound and ordered (`bios` ticket). The play
-  button is NOT covered
+  panel's `loadData`), the disc selectors' detail read that sets `romIdRef` (`initSeq`) and the panel's lazy SAVES-tab
+  slot load (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the
+  store's `cached.bios_status` fold. The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on the BIOS
+  tab both read through, is bound and ordered (`bios` ticket). The play button is NOT covered
 
   The panel component itself holds none of these writes. `RomBinding` is built by `bindRom` for a read a run of the
   `[appId]` effect issued and by `bindRomInState` for the active tab's panes, whose writer is built during render; the
   achievements load's tagging means its state cannot outlive the identity it was read for; `useRomMetadata` and
   `EmulationSettings` are the desktop game view's metadata and BIOS / launch-verdict reads. A version switch changes the
   rom without closing, so neither the store's generation counter nor the panel's `[appId]` effect sees this class.
-  Binding answers the wrong-rom question only; the ordering of two answers for the SAME rom is #1717. Four writes are
-  unbound. Three are ordered: the two identity writes install what a binding would compare against, so ordering is all
-  they can have. The fourth, the store's `cached.bios_status` fold, has neither — it runs in the same synchronous run as
-  its guard. The disc selectors' detail read stands outside that count for the identity writes' reason: it sets the ref
-  their binding compares against, so ordering is all it can have. The event lane's `rereadBiosAnswer` re-reads
-  `get_bios_status` for the rom it shows, whose emulator is resolved per ROM — a per-game pin over the platform's pick —
-  and takes the `bios` ticket the panel's other BIOS re-reads take (#1718). The play button's exclusion is #1714. The
-  panel's fourteen bound sites each carry a version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`),
-  `useRomMetadata`'s and `EmulationSettings`'s bindings are pinned by `frontend/src/utils/useRomMetadata.test.ts` and
+  Binding answers the wrong-rom question only; the ordering of two answers for the SAME rom is #1717. Five writes are
+  unbound. Four are ordered: the two identity writes and the disc selectors' detail read install what a binding would
+  compare against, so ordering is all they can have. The fifth, the store's `cached.bios_status` fold, has neither — it
+  runs in the same synchronous run as its guard. The event lane's `rereadBiosAnswer` re-reads `get_bios_status` for the
+  rom it shows, whose emulator is resolved per ROM — a per-game pin over the platform's pick — and takes the `bios`
+  ticket the panel's other BIOS re-reads take (#1718). The play button's exclusion is #1714. The panel's fourteen bound
+  sites each carry a version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`), `useRomMetadata`'s and
+  `EmulationSettings`'s bindings are pinned by `frontend/src/utils/useRomMetadata.test.ts` and
   `frontend/src/desktop/gameview/EmulationSettings.test.tsx`, the disc selectors' by the version-switch tests in
   `frontend/src/bigpicture/DiscSelector.test.tsx` and `frontend/src/desktop/gameview/DiscSelector.test.tsx`, and the
   Saves tab's keys by `frontend/src/bigpicture/SavesTab.panelState.test.tsx` and
