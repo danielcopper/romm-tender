@@ -118,9 +118,10 @@ _ENV = "env"
 def _refusal(answer: Any) -> StartRefused:
     """Why *answer* gives no command: the chosen entry's installation where it cannot start, else the refusal.
 
-    A system that resolved to no one system names no entry and no refusal of
-    its own: the refusal says which — several of the source's systems answer
-    and the resolver names none, or the source does not list it.
+    An answer that does not hold for the platform (:func:`~adapters.atlas_catalogue.answer_holds`)
+    names no entry and no refusal of its own: the refusal says which —
+    several of the source's systems answer differently and the resolver names
+    none, or the source does not list it.
     """
     unresolved = unresolved_reason(answer)
     if unresolved is not None:

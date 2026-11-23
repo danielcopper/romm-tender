@@ -263,6 +263,9 @@ _UNCLASSIFIED = frozenset(
         "UNRESOLVED_SLOT_DEVICE_UNINTERPRETED",
         "UNRESOLVED_STANDALONE",
         "UNRESOLVED_STANDALONE_VARIANT_UNESTABLISHED",
+        # An entry of a shared answer refuses its own place with it; saves ask no
+        # such entry (#2751 D4), so no reading module reaches it before #2738.
+        "UNRESOLVED_SYSTEM_AMBIGUOUS",
         "UNRESOLVED_TEXTURE_WIRING_UNESTABLISHED",
     }
 )

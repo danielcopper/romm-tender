@@ -15,9 +15,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-# The system the start was asked for resolved to no one system: several of the
-# source's systems answer and the resolver names none of them, or the source
-# does not list it — the launch verdict's own words for the same two cases.
+# The answer for the system the start was asked for does not hold: several of
+# the source's systems answer differently and the resolver names none of them,
+# or the source does not list it — the launch verdict's own words for the same two cases.
 from domain.launchability import SYSTEM_UNKNOWN as SYSTEM_UNKNOWN
 from domain.launchability import SYSTEMS_SEVERAL as SYSTEMS_SEVERAL
 

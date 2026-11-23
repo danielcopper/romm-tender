@@ -25,8 +25,8 @@ NOT_THIS_EMULATOR = "not_this_emulator"
 NOT_ESTABLISHED = "not_established"
 
 # Why no verdict could be given, in Tender's words: the system asked about is
-# none the source holds, several of its systems answer and the resolver names
-# none of them, the entry asked about is none the system lists, the source's
+# none the source holds, several of its systems answer differently and the
+# resolver names none of them, the entry asked about is none the system lists, the source's
 # list of emulators could not be read, or no source is installed and switched on.
 SYSTEM_UNKNOWN = "system_unknown"
 SYSTEMS_SEVERAL = "systems_several"

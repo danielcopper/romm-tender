@@ -679,9 +679,9 @@ def _first_said_beside_a_start(answer: Any) -> tuple[str | None, str | None]:
 def _not_established_reason(answer: Any) -> str | None:
     """Why the verdict could not be established, in Tender's word.
 
-    Where the system asked about resolved to none, its resolution says why:
-    several systems answer and the resolver names none of them, or none here
-    (#2751). An entry reading that ended without a take or a refusal names no
+    Where the answer does not hold for the platform (:func:`answer_holds`), its
+    resolution says why: several systems answer differently and the resolver
+    names none of them, or none here (#2751). An entry reading that ended without a take or a refusal names no
     reason of its own; what it could not establish is the answer's statements.
     """
     unresolved = unresolved_reason(answer)
@@ -722,7 +722,7 @@ def _installed_in(installers: Any) -> tuple[str, ...]:
 
 
 def _launchability(answer: Any, *, system: SystemArgument, content_path: str, label: str) -> Launchability:
-    """*answer* in Tender's words; a system that resolved to none is not established, whatever else it says."""
+    """*answer* in Tender's words; one that does not hold for the platform is not established, whatever it says."""
     holds = answer_holds(answer)
     state = _LAUNCH_STATES.get(answer.verdict, LAUNCH_NOT_ESTABLISHED) if holds else LAUNCH_NOT_ESTABLISHED
     codes = set(_caveat_codes(answer))
@@ -775,16 +775,10 @@ def resolved(answer: Any) -> bool:
 
 
 def answer_holds(answer: Any) -> bool:
-    """Whether *answer* holds for the platform whose system it was asked about.
+    """Whether *answer* holds for the platform whose system it was asked about: ``resolved`` or ``unanimous``.
 
-    It does where the system resolved to one, and where the pairs named several
-    systems that all answer the question alike (``unanimous``): the answer is
-    then their shared answer and names no system, so a game of the platform
-    starts with it and Tender links it into no frontend folder (#2225 D8,
-    #2751 D3). Read by the four questions a game starts through —
-    ``emulators_for``, ``firmware_for_system``, ``launchable`` and
-    ``launch_command``; a question that needs one system's place reads
-    :func:`resolved` instead.
+    The rule, and which questions read it, is ``docs/architecture/invariants/resolver.md``'s ("An answer about a
+    system says how it resolved it"); a question that needs one system's place reads :func:`resolved` instead.
     """
     return resolution_status(answer) in (RESOLUTION_RESOLVED, RESOLUTION_UNANIMOUS)
 
@@ -800,10 +794,7 @@ def unresolved_reason(answer: Any) -> str | None:
     """
     if answer_holds(answer):
         return None
-    status = resolution_status(answer)
-    if status == RESOLUTION_RESOLVED:
-        return None
-    return SYSTEMS_SEVERAL if status == RESOLUTION_AMBIGUOUS else SYSTEM_UNKNOWN
+    return SYSTEMS_SEVERAL if resolution_status(answer) == RESOLUTION_AMBIGUOUS else SYSTEM_UNKNOWN
 
 
 def resolution_trace(answer: Any) -> str:
