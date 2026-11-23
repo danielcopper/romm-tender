@@ -35,7 +35,6 @@ from adapters.atlas_catalogue import AtlasCatalogueAdapter
 from adapters.atlas_platforms import _STATUS_OF, AtlasPlatformSystemsAdapter, platform_pairs
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.emulator_sources import CATALOGUE_UNAVAILABLE, NO_SOURCE_DETECTED, SWITCHED_OFF_SETTING
-from domain.launchability import SYSTEMS_SEVERAL
 from domain.platform_system import (
     CONTRADICTED,
     FOUND,
@@ -488,7 +487,12 @@ class _Unread:
 
 
 class TestTwinsThePairsLeaveAnswerAlike:
-    """#2225 D8, #2751 D3: a platform of several systems starts where they answer alike, and names none of them."""
+    """#2225 D8, #2751 D3/D4: the emulator list of a platform of several systems is their shared one where they agree.
+
+    It asks both adapters over one real tree — the platform question for what a
+    later question takes, and the catalogue for the list it gets — so it lives
+    with the platform question's tests, where the seeded tree is.
+    """
 
     def _both(self, tmp_path, traces):
         sources = EmulatorSourcesAdapter(user_home=_seed_retrodeck(tmp_path), settings={}, log_debug=traces.append)
@@ -506,16 +510,3 @@ class TestTwinsThePairsLeaveAnswerAlike:
         assert platform.state == SEVERAL
         assert (shared["available"], shared["reason"]) == (True, None)
         assert [option.label for option in shared["options"]] == [option.label for option in one["options"]]
-
-    def test_a_game_asked_with_the_pairs_gets_the_twins_shared_verdict(self, tmp_path, traces):
-        platforms, catalogue = self._both(tmp_path, traces)
-        platform = _ask(platforms, "sms", "sms")
-        path = str(tmp_path / "home" / "retrodeck" / "roms" / "mastersystem" / "Game.bin")
-
-        assert platform.taken is not None
-        shared = catalogue.launchability(platform.taken, path, label="Core")
-        one = catalogue.launchability("mastersystem", path, label="Core")
-
-        assert shared.reason != SYSTEMS_SEVERAL
-        assert (shared.state, shared.reason) == (one.state, one.reason)
-        assert shared.system is None

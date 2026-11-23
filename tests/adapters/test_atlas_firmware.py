@@ -44,6 +44,7 @@ from _vendor.atlas import (
     CAVEAT_FIRMWARE_UNREADABLE,
     HEALTH_ISSUE_NOT_SET_UP,
     RESOLUTION_AMBIGUOUS,
+    RESOLUTION_UNANIMOUS,
     RESOLUTION_UNKNOWN,
     SystemCandidate,
     SystemResolution,
@@ -2136,6 +2137,25 @@ class TestPlatformAdapter:
 
         assert catalogue.resolved is False
         assert catalogue.placements == ()
+
+    def test_systems_that_answer_alike_give_their_shared_answer(self, platform_adapter, monkeypatch):
+        """#2225 D8, #2751 D3: a shared answer holds for the platform, so its BIOS reading stands."""
+        alike = SystemResolution(
+            RESOLUTION_UNANIMOUS,
+            None,
+            None,
+            candidates=(
+                SystemCandidate(("esde", "mark3"), "declared"),
+                SystemCandidate(("esde", "mastersystem"), "declared"),
+            ),
+            translation=translate((("romm", "sms"),)),
+        )
+        answer = replace(_answer(), resolution=alike)
+        _detect(monkeypatch, _detecting(_Installation(answer)))
+
+        catalogue = platform_adapter("sms")
+
+        assert catalogue.resolved is True
 
     def test_an_answer_listing_no_emulator_whose_declaration_is_unknown_answers_unresolved(
         self, platform_adapter, monkeypatch

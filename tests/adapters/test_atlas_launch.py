@@ -38,6 +38,7 @@ from _vendor.atlas import (
     KIND_STANDALONE,
     RESOLUTION_AMBIGUOUS,
     RESOLUTION_CONFLICT,
+    RESOLUTION_UNANIMOUS,
     RESOLUTION_UNKNOWN,
     VARIANT_APPIMAGE,
     VARIANT_FLATPAK,
@@ -51,6 +52,7 @@ from _vendor.atlas import (
     WorkingFolder,
     translate,
 )
+from _vendor.atlas._shared_answer import SharedEntry
 from _vendor.atlas.esde import EmulatorSpec
 from _vendor.atlas.installations import EmulatorEntry, LaunchCommandAnswer
 from _vendor.atlas.launch import Launcher, LaunchResolution
@@ -115,7 +117,9 @@ def _caveat(code: str, data: dict[str, Any] | None = None) -> Caveat:
     return Caveat(code=code, message="stated by the resolver", data=data or {})
 
 
-def _entry(availability: str = AVAILABILITY_STARTABLE, caveats: tuple[Caveat, ...] = ()) -> EmulatorEntry:
+def _entry(
+    availability: str = AVAILABILITY_STARTABLE, caveats: tuple[Caveat, ...] = (), system: str = "gc"
+) -> EmulatorEntry:
     launcher = (
         Launcher(path=_DOLPHIN, replacement_command=None, app_id=_APP, rule="staticpath", entry=_DOLPHIN)
         if availability == AVAILABILITY_STARTABLE
@@ -124,7 +128,7 @@ def _entry(availability: str = AVAILABILITY_STARTABLE, caveats: tuple[Caveat, ..
     return EmulatorEntry(
         cast("Any", None),
         EmulatorSpec(
-            system="gc",
+            system=system,
             label="Dolphin (Standalone)",
             kind=KIND_STANDALONE,
             core_so=None,
@@ -325,6 +329,25 @@ class TestARefusedCommand:
         answer = replace(_answer(None, entry=_entry(AVAILABILITY_NOT_INSTALLED)), resolution=resolution)
 
         assert read_start(answer) == StartRefused(reason)
+
+    def test_beside_systems_that_answer_alike_the_entrys_own_refusal_is_read(self):
+        """#2225 D8, #2751 D3: a shared answer holds for the platform, so its entry's installation is said."""
+        alike = SystemResolution(
+            RESOLUTION_UNANIMOUS,
+            None,
+            None,
+            candidates=(
+                SystemCandidate(("esde", "mark3"), "declared"),
+                SystemCandidate(("esde", "mastersystem"), "declared"),
+            ),
+            translation=translate((("romm", "sms"),)),
+        )
+        # The resolver's entry of a shared answer: one entry of each candidate, naming neither.
+        twins = [_entry(AVAILABILITY_NOT_INSTALLED, system=key) for key in ("mark3", "mastersystem")]
+        entry = SharedEntry(twins, (), (("esde", "mark3"), ("esde", "mastersystem")))
+        answer = LaunchCommandAnswer(entry=entry, command=None, sources=(), caveats=(), resolution=alike)
+
+        assert read_start(answer) == StartRefused(NOT_INSTALLED)
 
     def test_a_refusal_tender_has_no_word_for_reads_as_a_command_that_could_not_be_read(self):
         assert read_start(_answer(None, _caveat("a-code-of-a-later-release"))) == StartRefused(COMMAND_UNREAD)

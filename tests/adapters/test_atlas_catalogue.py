@@ -52,6 +52,7 @@ from _vendor.atlas import (
     KIND_STANDALONE,
     RESOLUTION_AMBIGUOUS,
     RESOLUTION_CONFLICT,
+    RESOLUTION_UNANIMOUS,
     RESOLUTION_UNKNOWN,
     SystemCandidate,
     SystemResolution,
@@ -789,6 +790,22 @@ class TestKnownSystem:
         pairs = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
         assert _adapter(installation, traces).is_known_system(pairs) is None
 
+    def test_several_systems_answering_alike_answer_neither_yes_nor_no(self, traces):
+        """Whether the catalogue holds a system is one system's question; a shared answer names none (#2751 D4)."""
+        alike = SystemResolution(
+            RESOLUTION_UNANIMOUS,
+            None,
+            None,
+            candidates=(
+                SystemCandidate(("esde", "mark3"), "declared"),
+                SystemCandidate(("esde", "mastersystem"), "declared"),
+            ),
+            translation=translate((("romm", "sms"),)),
+        )
+        installation = _Installation(placement=RomPlacement(resolution=alike))
+        pairs = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
+        assert _adapter(installation, traces).is_known_system(pairs) is None
+
     def test_pairs_that_name_different_systems_answer_neither_yes_nor_no(self, traces):
         """A contradiction says nothing about what the catalogue holds."""
         conflict = SystemResolution(RESOLUTION_CONFLICT, None, None, translation=translate((("romm", "snes"),)))
@@ -818,6 +835,29 @@ class TestASystemThatResolvedToNoOneSystem:
 
         assert (answer["available"], answer["options"], answer["reason"]) == (False, [], "platform_systems_several")
         assert installation.catalogue_calls == [pairs]
+
+    def test_several_systems_answering_alike_give_their_shared_list(self, traces):
+        """#2225 D8, #2751 D3: where they agree the list holds for the platform and names no system."""
+        alike = SystemResolution(
+            RESOLUTION_UNANIMOUS,
+            None,
+            None,
+            candidates=(
+                SystemCandidate(("esde", "mark3"), "declared"),
+                SystemCandidate(("esde", "mastersystem"), "declared"),
+            ),
+            translation=translate((("romm", "sms"),)),
+        )
+        installation = _Installation(catalogue=replace(_answer(), resolution=alike))
+        pairs = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
+
+        answer = _adapter(installation, traces).get_emulator_options(pairs)
+
+        assert (answer["available"], answer["reason"]) == (True, None)
+        assert (
+            answer["options"]
+            == _adapter(_Installation(catalogue=_answer()), traces).get_emulator_options("mastersystem")["options"]
+        )
 
     def test_a_system_the_source_does_not_hold_is_unavailable(self, traces):
         installation = _Installation(catalogue=replace(_answer(), resolution=_NOT_HELD))

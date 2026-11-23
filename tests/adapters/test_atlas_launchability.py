@@ -15,7 +15,7 @@ import os
 from typing import Any
 
 import pytest
-from _atlas_machines import fixture_machine, vectors_asking
+from _atlas_machines import asked_system, fixture_machine, select, vectors_asking
 from _vendor import atlas
 from _vendor.atlas import (
     CAVEAT_ARCHIVE_CONTENTS_UNREAD,
@@ -66,6 +66,7 @@ from _vendor.atlas import (
     EFFECT_UNESTABLISHED,
     OPENS_EFFECTS,
     RESOLUTION_AMBIGUOUS,
+    RESOLUTION_UNANIMOUS,
     RESOLUTION_UNKNOWN,
     VERDICT_ENTRY_NOT_ACCEPTED,
     VERDICT_LAUNCHABLE,
@@ -447,7 +448,7 @@ class TestTheNewStatementsOfALaunch:
 
 
 class TestAVerdictBesideASystemResolvedToNone:
-    """Whatever verdict stands beside it, a system that resolved to no one system is not established (#2195 D40)."""
+    """An answer that does not hold for the platform is not established, whatever its verdict (#2195 D40)."""
 
     @pytest.mark.parametrize("verdict", [VERDICT_LAUNCHABLE, VERDICT_NEEDS_INSTALLATION, VERDICT_ENTRY_NOT_ACCEPTED])
     def test_the_verdict_is_not_read(self, traces, verdict):
@@ -463,6 +464,29 @@ class TestAVerdictBesideASystemResolvedToNone:
         )
 
         assert (result.state, result.reason) == (NOT_ESTABLISHED, SYSTEM_UNKNOWN)
+
+    def test_beside_systems_that_answer_alike_the_verdict_is_read(self, traces):
+        """#2225 D8, #2751 D3: a shared answer holds for the platform, so its verdict stands."""
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED,
+                extension=".sms",
+                alternatives=("Genesis Plus GX",),
+                resolution=SystemResolution(
+                    RESOLUTION_UNANIMOUS,
+                    None,
+                    None,
+                    candidates=(
+                        SystemCandidate(("esde", "mark3"), "declared"),
+                        SystemCandidate(("esde", "mastersystem"), "declared"),
+                    ),
+                    translation=translate((("romm", "sms"),)),
+                ),
+            ),
+            traces,
+        )
+
+        assert result.state == NOT_THIS_EMULATOR
 
 
 class TestEachVerdictInTendersWords:
@@ -1070,3 +1094,37 @@ class TestEveryStatementIsSaid:
             {"reason": GOES_ON_FILE_MISSING, "file": "Game (Track 2).bin"},
             {"reason": FORMAT_UNESTABLISHED, "file": None},
         ]
+
+
+class TestSystemsThatAnswerAlike:
+    """#2225 D8, #2751 D3: the launch reading takes the shared answer of several systems named alike."""
+
+    _NAME = "retrodeck-siblings-whose-first-entry-names-a-foreign-core-refuse-it-alike"
+
+    @pytest.fixture(autouse=True)
+    def _no_host_deploy(self):
+        """A recorded machine answers for its own ``/var/lib/flatpak`` deploy; nothing on this host is read."""
+
+    def test_twins_that_refuse_a_file_alike_refuse_it_through_the_shared_answer(self, traces):
+        [(_stem, vector)] = [each for each in vectors_asking("launchable") if each[1]["name"] == self._NAME]
+        inp = vector["input"]
+        query = inp["launchable_query"]
+        installation = select(atlas.detect(inp["home"], fixture_machine(inp)), query.get("installation"))
+        system = asked_system(query["system"])
+        answer = installation.launchable(system, query["content_path"], label=query.get("label"))
+        label = query.get("label") or answer.entry.label
+        adapter = AtlasCatalogueAdapter(
+            sources=EmulatorSourcesAdapter(
+                user_home=inp["home"],
+                settings={},
+                log_debug=traces.append,
+                detect_installations=lambda home, _machine: atlas.detect(home, fixture_machine(inp)),
+                machine=object(),
+            ),
+            log_debug=traces.append,
+        )
+
+        result = adapter.launchability(system, query["content_path"], label=label)
+
+        assert answer.resolution.status == RESOLUTION_UNANIMOUS
+        assert result.state == NOT_THIS_EMULATOR
