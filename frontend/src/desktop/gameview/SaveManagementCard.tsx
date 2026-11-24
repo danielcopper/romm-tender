@@ -772,6 +772,30 @@ function useDesktopSlotState(
   return { slotState, setSlotState, rawSlotConfirmed, setRawSlotConfirmed };
 }
 
+function saveCardFlags(
+  detail: GameDetailState,
+  saveSyncAnswer: SaveSyncAvailability | null,
+  localSavesAnswer: LocalSaveFiles | null,
+) {
+  const syncOn = detail.saveSyncEnabled;
+  const syncRefused = syncOn && refusesDownloadedGame(saveSyncAnswer);
+  const syncOffRefused =
+    !syncOn && localSavesAnswer !== null && !localSavesAnswer.available && localSavesAnswer.installed;
+  const notDownloaded = syncOn && !detail.installed ? notDownloadedStatement(saveSyncAnswer) : null;
+  return {
+    syncRefused,
+    slotsShown: syncOn && !syncRefused,
+    syncOffRefused,
+    notDownloaded,
+    notDownloadedHint: notDownloaded?.refusal == null ? null : refusalHint(saveSyncAnswer?.reason),
+    showDeleteLocalSaves: detail.installed && !(syncOn ? syncRefused : syncOffRefused),
+  };
+}
+
+function holdsAnySave(saveStatus: SaveStatus | null, slots: SaveSlotSummary[]): boolean {
+  return (saveStatus?.files.length ?? 0) > 0 || slots.some((s) => s.count > 0);
+}
+
 /** Confirm *slotName* as the tracked slot without asking; a refusal or a throw is logged and answers false. */
 async function autoConfirmSlot(romId: number, slotName: string): Promise<boolean> {
   try {
@@ -814,8 +838,9 @@ const SaveManagementCardContent: FC<{
 
   const { localSavesAnswer, saveSyncAnswer } = useSaveSurfaceAnswers(romId, detail.saveSyncEnabled, detail.installed);
   const saveStatus = detail.saveStatus;
-  const syncRefused = detail.saveSyncEnabled && refusesDownloadedGame(saveSyncAnswer);
-  const strandedVersion = useStrandedCheck(appId, romId, detail.saveSyncEnabled && !syncRefused);
+  const flags = saveCardFlags(detail, saveSyncAnswer, localSavesAnswer);
+  const { syncRefused, slotsShown, syncOffRefused } = flags;
+  const strandedVersion = useStrandedCheck(appId, romId, slotsShown);
   const { slotState, setSlotState, rawSlotConfirmed, setRawSlotConfirmed } = useDesktopSlotState(
     appId,
     romId,
@@ -824,10 +849,7 @@ const SaveManagementCardContent: FC<{
     isOffline,
     mountedRef,
   );
-  const slotConfirmed = !detail.saveSyncEnabled || syncRefused ? true : rawSlotConfirmed;
-  const syncOffRefused =
-    !detail.saveSyncEnabled && localSavesAnswer !== null && !localSavesAnswer.available && localSavesAnswer.installed;
-  const hidesHeaderSlotControls = !detail.saveSyncEnabled || syncRefused;
+  const slotConfirmed = slotsShown ? rawSlotConfirmed : true;
 
   useTabSwitchScroll(cardRef);
 
@@ -964,11 +986,8 @@ const SaveManagementCardContent: FC<{
 
   const sortedSlots = sortSaveSlots(slotState.availableSlots, slotState.activeSlot, slotState.activeSlotKnown);
   const displaySlots: SaveSlotSummary[] = filterSaveSlotsForDisplay(sortedSlots, slotState.activeSlot);
-  const hasSaves = (saveStatus?.files.length ?? 0) > 0 || slotState.availableSlots.some((s) => s.count > 0);
+  const hasSaves = holdsAnySave(saveStatus, slotState.availableSlots);
   const noSaveText = noSaveLine(saveSyncAnswer);
-  const notDownloaded = detail.saveSyncEnabled && !detail.installed ? notDownloadedStatement(saveSyncAnswer) : null;
-  const notDownloadedHint = notDownloaded?.refusal == null ? null : refusalHint(saveSyncAnswer?.reason);
-  const showDeleteLocalSaves = detail.installed && !(detail.saveSyncEnabled ? syncRefused : syncOffRefused);
 
   return (
     <div
@@ -979,8 +998,8 @@ const SaveManagementCardContent: FC<{
     >
       <CardHeader
         subtitleText={cardSubtitle(detail.saveSyncEnabled, syncRefused, displaySlots.length)}
-        hidesHeaderSlotControls={hidesHeaderSlotControls}
-        showDeleteLocalSaves={showDeleteLocalSaves}
+        hidesHeaderSlotControls={!slotsShown}
+        showDeleteLocalSaves={flags.showDeleteLocalSaves}
         isSyncing={isSyncing}
         isOffline={isOffline}
         deletingLocalSaves={deletingLocalSaves}
@@ -999,11 +1018,11 @@ const SaveManagementCardContent: FC<{
         <SyncOffSection syncOffRefused={syncOffRefused} localSavesAnswer={localSavesAnswer} />
       ) : null}
 
-      {detail.saveSyncEnabled && syncRefused && saveSyncAnswer ? (
+      {syncRefused && saveSyncAnswer ? (
         <RefusalBox testId="desktop-saves-refusal" message={saveSyncAnswer.message} reason={saveSyncAnswer.reason} />
       ) : null}
 
-      {detail.saveSyncEnabled && !syncRefused ? (
+      {slotsShown ? (
         <SaveSyncNotices
           isOffline={isOffline}
           strandedVersion={strandedVersion}
@@ -1012,13 +1031,13 @@ const SaveManagementCardContent: FC<{
           slotsLoading={slotState.slotsLoading}
           hasSaves={hasSaves}
           confirmingSlot={confirmingSlot}
-          notDownloaded={notDownloaded}
-          notDownloadedHint={notDownloadedHint}
+          notDownloaded={flags.notDownloaded}
+          notDownloadedHint={flags.notDownloadedHint}
           onConfirmSlot={confirmSlot}
         />
       ) : null}
 
-      {detail.saveSyncEnabled && !syncRefused ? (
+      {slotsShown ? (
         <SaveSlotsSection
           romId={romId}
           isOffline={isOffline}
