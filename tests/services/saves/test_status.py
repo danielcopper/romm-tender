@@ -222,8 +222,8 @@ class TestSaveStatus:
 
 class TestSaveStatusContentDir:
     """get_save_status surfaces the additive ``savefiles_in_content_dir`` flag
-    and a "not supported" display when RetroArch writes saves next to the ROM,
-    while keeping playtime / device_id intact (#239)."""
+    when RetroArch writes saves next to the ROM, while keeping playtime /
+    device_id intact (#239)."""
 
     @pytest.mark.asyncio
     async def test_content_dir_sets_flag_and_skips_local_probing(self, tmp_path):
@@ -237,9 +237,8 @@ class TestSaveStatusContentDir:
         assert result["savefiles_in_content_dir"] is True
         # Local probing skipped → no files surfaced even though one exists on disk.
         assert result["files"] == []
-        # Display reads "not supported", not a misleading "No saves".
-        assert result["save_sync_display"]["status"] == "none"
-        assert "content dir" in result["save_sync_display"]["label"].lower()
+        # No surface reads the display here: the flag above answers first.
+        assert result["save_sync_display"] == {"status": "none", "label": "No saves", "last_sync_check_at": None}
         # Rollback is explicitly unsupported in content-dir mode (#239) — not
         # left to ``files == []`` to suppress the UI.
         assert result["rollback_supported"] is False

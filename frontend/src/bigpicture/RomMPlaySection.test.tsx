@@ -5578,7 +5578,7 @@ describe("RomMPlaySection", () => {
         },
         device_id: "d",
         last_sync_check_at: null,
-        save_sync_display: { status: "none", label: "Save sync off — saves in content dir", last_sync_check_at: null },
+        save_sync_display: { status: "none", label: "No saves", last_sync_check_at: null },
       });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
