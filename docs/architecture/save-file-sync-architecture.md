@@ -315,13 +315,15 @@ On both save surfaces — Big Picture's SAVES tab (`frontend/src/bigpicture/Save
 open. An inactive slot reads its server saves (`get_slot_saves`) the first time it is opened. Where that read fails or
 answers a failure, the panel says "Couldn't load this slot's saves: …" with the endpoint's message (or "Couldn't load
 this slot's saves." where the call threw) in place of the list, never "No saves in this slot", logs the failure as a
-warning, and reads again the next time it is opened. When the active slot changes — **Activate Slot**, **New Slot**, or
-a copy that makes its target active — the new active slot's panel opens and the old one's closes, reading its files
-again when it is reopened. Every other panel keeps its state. Activate Slot and New Slot both switch through
-`executeSlotSwitch` in `frontend/src/utils/saveSlotFlow.ts`, which answers the new save status or the sentence the
-surface shows. On either partial answer, `switch_incomplete` or `switch_stopped`, it also announces the ROM's save sync,
-so the surface reads back the slot and the files the backend saved, and the surface shows the sentence as a toast rather
-than inline.
+warning, and reads again the next time it is opened. The desktop card also reads an inactive slot again on the ROM's
+`save_sync`: a closed panel on its next opening, and an open one at once, keeping the saves it shows through the read
+and replacing them only with a successful answer, so a failed re-read leaves the list it had. When the active slot
+changes — **Activate Slot**, **New Slot**, or a copy that makes its target active — the new active slot's panel opens
+and the old one's closes, reading its files again when it is reopened. Every other panel keeps its state. Activate Slot
+and New Slot both switch through `executeSlotSwitch` in `frontend/src/utils/saveSlotFlow.ts`, which answers the new save
+status or the sentence the surface shows. On either partial answer, `switch_incomplete` or `switch_stopped`, it also
+announces the ROM's save sync, so the surface reads back the slot and the files the backend saved, and the surface shows
+the sentence as a toast rather than inline.
 
 #### Inside `.romm-backup` — naming and retention
 

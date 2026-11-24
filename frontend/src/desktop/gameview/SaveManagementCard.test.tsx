@@ -2716,6 +2716,40 @@ describe("SaveManagementCard", () => {
       expect(screen.queryByTestId("desktop-slot-panel-before-toggle")).not.toBeInTheDocument();
     });
 
+    it("keeps an open slot's loaded saves on screen through a save_sync re-read that fails", async () => {
+      let failReread: (e: Error) => void = () => {};
+      vi.mocked(backend.getSlotSaves)
+        .mockResolvedValueOnce({
+          success: true,
+          slot: "speedrun",
+          saves: [{ filename: "alt.srm", id: 700, size: 1024, updated_at: "2026-06-14T10:00:00Z", emulator: "mgba" }],
+        })
+        .mockReturnValueOnce(
+          new Promise((_, reject) => {
+            failReread = reject;
+          }),
+        );
+
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      fireEvent.click(await screen.findByRole("button", { name: /speedrun/ }));
+      await screen.findByText("alt.srm");
+
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+      });
+      await waitFor(() => expect(backend.getSlotSaves).toHaveBeenCalledTimes(2));
+      expect(screen.getByText("alt.srm")).toBeInTheDocument();
+      expect(screen.queryByText("Loading saves…")).not.toBeInTheDocument();
+
+      await act(async () => {
+        failReread(new Error("reread down"));
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText("alt.srm")).toBeInTheDocument();
+      expect(screen.queryByTestId("desktop-slot-load-error")).not.toBeInTheDocument();
+    });
+
     it("reads an inactive slot's saves again on the next expand after a failed read", async () => {
       vi.mocked(backend.getSlotSaves)
         .mockResolvedValueOnce({ success: false, reason: "server_error", message: "slot list denied" })

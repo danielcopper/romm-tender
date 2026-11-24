@@ -77,6 +77,11 @@ export function useSlotPanelState({
 
   const isMounted = useCallback(() => mountedRef.current, [mountedRef]);
 
+  const slotFilesRef = useRef(slotFiles);
+  useEffect(() => {
+    slotFilesRef.current = slotFiles;
+  }, [slotFiles]);
+
   // A failed read leaves the saves unread, so the next expand asks again.
   const loadInactiveSlotSaves = useCallback(async () => {
     const seq = ++slotSavesSeqRef.current;
@@ -89,7 +94,19 @@ export function useSlotPanelState({
     setLoadingSlot(false);
   }, [logPrefix, mountedRef, romId, slotName]);
 
+  // The list on screen stays through the re-read; a failed one keeps it.
+  const rereadShownSlotSaves = useCallback(async () => {
+    const seq = ++slotSavesSeqRef.current;
+    const answer = await readSlotSaves(romId, slotName, logPrefix);
+    if (!mountedRef.current || seq !== slotSavesSeqRef.current) return;
+    if ("files" in answer) setSlotFiles(answer.files);
+  }, [logPrefix, mountedRef, romId, slotName]);
+
   const onRomSaveSync = useCallback(() => {
+    if (expandedRef.current && slotFilesRef.current !== null) {
+      detach(rereadShownSlotSaves());
+      return;
+    }
     slotSavesSeqRef.current += 1;
     setSlotFiles(null);
     setSlotLoadError(null);
@@ -98,7 +115,7 @@ export function useSlotPanelState({
     } else {
       setLoadingSlot(false);
     }
-  }, [loadInactiveSlotSaves, expandedRef]);
+  }, [loadInactiveSlotSaves, rereadShownSlotSaves, expandedRef]);
   useRomSaveSyncListener(romId, refreshOnSaveSync && !isActive, onRomSaveSync);
 
   const handleToggle = () => {
