@@ -46,7 +46,9 @@ timeline per slot, newest wins.
 
 When a game has several [versions](managing-games.md#versions) — a `(USA)` dump and a `(Europe)` one, a `(Rev 1)`, and
 so on — each version has its **own** saves, on RomM and on disk. Automatic sync only ever touches the **active version**
-(the one currently bound to the shortcut). Switching versions never copies, moves, or deletes a save.
+(the one currently bound to the shortcut). Switching versions never copies, moves, or deletes a save. The **Saves** tab
+follows a switch: the active slot shows the saves of the version now bound, and any other slot or **Previous Versions**
+list you had open closes; opened again, it shows that version's saves.
 
 That means an inactive version's local saves simply wait: if you switch away from a downloaded version whose saves
 haven't been synced to RomM — saves that were never uploaded, or that changed since their last sync — those saves stay

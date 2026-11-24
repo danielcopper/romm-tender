@@ -16,6 +16,8 @@ import { ThrobberLabel } from "../../shared/Throbber";
 export interface InactiveSlotBodyProps {
   loadingSlot: boolean;
   slotFiles: SlotSaveFile[] | null;
+  /** Why the slot's saves could not be read, which stands in place of the list. */
+  loadError: string | null;
   switching: boolean;
   switchError: string | null;
   isOffline: boolean;
@@ -32,9 +34,40 @@ export interface InactiveSlotBodyProps {
   copy: CopyToSlotRowProps;
 }
 
+/** The slot's saves as read: Loading..., the line saying why they could not be read, the rows, or that there are none. */
+function renderSlotSaves(
+  loadingSlot: boolean,
+  loadError: string | null,
+  slotFiles: SlotSaveFile[] | null,
+  copy: CopyToSlotRowProps,
+): ReactElement[] {
+  if (loadingSlot) {
+    return [
+      <div key="loading" style={{ fontSize: "13px", color: MUTED_COLOR }}>
+        <ThrobberLabel busy>Loading...</ThrobberLabel>
+      </div>,
+    ];
+  }
+  if (loadError !== null) {
+    return [
+      <div key="load-error" style={{ fontSize: "11px", color: "#c46161", fontStyle: "italic" as const }}>
+        {loadError}
+      </div>,
+    ];
+  }
+  if (slotFiles === null) return [];
+  if (slotFiles.length > 0) return slotFiles.map((f) => renderServerSaveRow(f, copy));
+  return [
+    <div key="no-server-files" style={{ fontSize: "13px", color: MUTED_COLOR, fontStyle: "italic" }}>
+      No saves in this slot
+    </div>,
+  ];
+}
+
 export const InactiveSlotBody: FC<InactiveSlotBodyProps> = ({
   loadingSlot,
   slotFiles,
+  loadError,
   switching,
   switchError,
   isOffline,
@@ -44,25 +77,7 @@ export const InactiveSlotBody: FC<InactiveSlotBodyProps> = ({
   deleting,
   copy,
 }) => {
-  const children: (ReactElement | null)[] = [];
-
-  if (loadingSlot) {
-    children.push(
-      <div key="loading" style={{ fontSize: "13px", color: MUTED_COLOR }}>
-        <ThrobberLabel busy>Loading...</ThrobberLabel>
-      </div>,
-    );
-  } else if (slotFiles && slotFiles.length > 0) {
-    for (const f of slotFiles) {
-      children.push(renderServerSaveRow(f, copy));
-    }
-  } else if (slotFiles !== null) {
-    children.push(
-      <div key="no-server-files" style={{ fontSize: "13px", color: MUTED_COLOR, fontStyle: "italic" }}>
-        No saves in this slot
-      </div>,
-    );
-  }
+  const children: (ReactElement | null)[] = renderSlotSaves(loadingSlot, loadError, slotFiles, copy);
 
   // Slot-less legacy bucket: read-only — no Activate/Delete, no switch hints.
   if (!isLegacy) {

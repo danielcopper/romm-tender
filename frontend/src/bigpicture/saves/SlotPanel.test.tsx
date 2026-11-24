@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { createElement } from "react";
 import { SlotPanel } from "./SlotPanel";
@@ -160,7 +160,8 @@ describe("SlotPanel", () => {
       expect(vi.mocked(backend.getSlotSaves)).not.toHaveBeenCalled();
     });
 
-    it("falls back to an empty list when getSlotSaves returns success=false", async () => {
+    it("says the saves could not be read, not that the slot is empty, when getSlotSaves answers success=false", async () => {
+      const logWarn = vi.spyOn(backend, "logWarn");
       vi.mocked(backend.getSlotSaves).mockResolvedValue({
         success: false,
         reason: "server_unreachable",
@@ -169,15 +170,135 @@ describe("SlotPanel", () => {
       const { container } = render(<SlotPanel {...defaultProps()} />);
       fireEvent.click(container.querySelector("button")!);
       await flushAsync();
-      expect(container.textContent).toContain("No saves in this slot");
+      expect(container.textContent).toContain(
+        "Couldn't load this slot's saves: Server unreachable — check your URL and ensure RomM is running",
+      );
+      expect(container.textContent).not.toContain("No saves in this slot");
+      expect(logWarn).toHaveBeenCalledExactlyOnceWith(
+        "SavesTab: slot 'default' saves could not be read: Server unreachable — check your URL and ensure RomM is running",
+      );
+      logWarn.mockRestore();
     });
 
-    it("falls back to an empty list when getSlotSaves throws", async () => {
+    it("says the saves could not be read, not that the slot is empty, when getSlotSaves throws", async () => {
+      const logWarn = vi.spyOn(backend, "logWarn");
       vi.mocked(backend.getSlotSaves).mockRejectedValue(new Error("network"));
       const { container } = render(<SlotPanel {...defaultProps()} />);
       fireEvent.click(container.querySelector("button")!);
       await flushAsync();
-      expect(container.textContent).toContain("No saves in this slot");
+      expect(container.textContent).toContain("Couldn't load this slot's saves.");
+      expect(container.textContent).not.toContain("No saves in this slot");
+      expect(logWarn).toHaveBeenCalledExactlyOnceWith(
+        "SavesTab: slot 'default' saves could not be read: Error: network",
+      );
+      logWarn.mockRestore();
+    });
+
+    describe("two overlapping reads", () => {
+      type SlotSavesAnswer = Awaited<ReturnType<typeof backend.getSlotSaves>>;
+      const files = [{ filename: "zelda.srm", id: 90, size: 10, updated_at: "2025-06-14T10:00:00Z", emulator: "" }];
+
+      function deferredRead() {
+        let resolve!: (r: SlotSavesAnswer) => void;
+        let reject!: (e: unknown) => void;
+        const promise = new Promise<SlotSavesAnswer>((res, rej) => {
+          resolve = res;
+          reject = rej;
+        });
+        return { promise, resolve, reject };
+      }
+
+      // An answer queued for a read that never happened must not reach the next test.
+      afterEach(() => {
+        vi.mocked(backend.getSlotSaves).mockReset();
+      });
+
+      /** Expand, collapse and expand again while the first read is under way, so two reads overlap. */
+      async function overlap() {
+        const first = deferredRead();
+        const second = deferredRead();
+        vi.mocked(backend.getSlotSaves).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+        const { container } = render(<SlotPanel {...defaultProps()} />);
+        const header = container.querySelector("button");
+        if (!header) throw new Error("no header");
+        fireEvent.click(header);
+        fireEvent.click(header);
+        fireEvent.click(header);
+        await flushAsync();
+        expect(vi.mocked(backend.getSlotSaves)).toHaveBeenCalledTimes(2);
+        return { container, header, first, second };
+      }
+
+      it.each([
+        ["throws", (first: ReturnType<typeof deferredRead>) => first.reject(new Error("network"))],
+        [
+          "answers a failure",
+          (first: ReturnType<typeof deferredRead>) =>
+            first.resolve({ success: false, reason: "server_unreachable", message: "Server unreachable" }),
+        ],
+      ])("shows the newer read's files when the older read %s after it", async (_how, failOlder) => {
+        const { container, first, second } = await overlap();
+        second.resolve({ success: true, slot: "default", saves: files });
+        await flushAsync();
+        failOlder(first);
+        await flushAsync();
+
+        expect(container.textContent).toContain("zelda.srm");
+        expect(container.textContent).not.toContain("Couldn't load this slot's saves");
+      });
+
+      it("stays loading while the newer read is under way when the older one answers first", async () => {
+        const { container, first, second } = await overlap();
+        first.resolve({ success: true, slot: "default", saves: files });
+        await flushAsync();
+
+        expect(container.textContent).toContain("Loading...");
+        expect(container.textContent).not.toContain("zelda.srm");
+
+        second.resolve({ success: true, slot: "default", saves: files });
+        await flushAsync();
+        expect(container.textContent).toContain("zelda.srm");
+      });
+
+      it("shows the newer read's failure, and reads again on the next expand, when the older read succeeds after it", async () => {
+        const { container, header, first, second } = await overlap();
+        second.reject(new Error("network"));
+        await flushAsync();
+        first.resolve({ success: true, slot: "default", saves: files });
+        await flushAsync();
+
+        expect(container.textContent).toContain("Couldn't load this slot's saves.");
+        expect(container.textContent).not.toContain("zelda.srm");
+
+        vi.mocked(backend.getSlotSaves).mockResolvedValueOnce({ success: true, slot: "default", saves: files });
+        fireEvent.click(header); // collapse
+        fireEvent.click(header); // expand again
+        await flushAsync();
+        expect(vi.mocked(backend.getSlotSaves)).toHaveBeenCalledTimes(3);
+        expect(container.textContent).toContain("zelda.srm");
+      });
+    });
+
+    it("reads the saves again on the next expand after a read that failed, and shows them", async () => {
+      vi.mocked(backend.getSlotSaves)
+        .mockRejectedValueOnce(new Error("network"))
+        .mockResolvedValueOnce({
+          success: true,
+          slot: "default",
+          saves: [{ filename: "zelda.srm", id: 90, size: 10, updated_at: "2025-06-14T10:00:00Z", emulator: "" }],
+        });
+      const { container } = render(<SlotPanel {...defaultProps()} />);
+      const header = container.querySelector("button");
+      if (!header) throw new Error("no header");
+      fireEvent.click(header);
+      await flushAsync();
+      fireEvent.click(header); // collapse
+      fireEvent.click(header); // expand again
+      await flushAsync();
+
+      expect(vi.mocked(backend.getSlotSaves)).toHaveBeenCalledTimes(2);
+      expect(container.textContent).toContain("zelda.srm");
+      expect(container.textContent).not.toContain("Couldn't load this slot's saves");
     });
   });
 

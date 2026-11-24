@@ -126,6 +126,7 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   Stop Game in a menu opened before the strand says at once that it cannot stop the game; a Play press on a game already
   running passes the interceptor, whose running-game guard comes before the cancel. Detail:
   `docs/architecture/loading-the-panel.md` → What the stranded panel is told
+
 - **Every write into per-rom detail state that crosses an `await` is bound to a rom identity** — test + prompt-only
 
   The store (`frontend/src/utils/gameDetailStore.ts`) via `writerForRom`, or the answer's own `rom_id` in
@@ -134,30 +135,43 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   (`bindRom`, `bindRomInState`); `useAchievements` (`frontend/src/utils/achievements.ts`) by tagging each answer with
   the rom it was read for (`forRom`) and showing it only while that rom shows, and `useRomMetadata`
   (`frontend/src/utils/useRomMetadata.ts`) and `EmulationSettings`
-  (`frontend/src/desktop/gameview/EmulationSettings.tsx`, in the desktop dev build) the same way. Two answers for the
-  SAME rom are ordered by a sequence taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`, `EmulationSettings`'s
-  `readSeqRef`). Ordered but unbound: the two identity writes (the store's `loadDetail`, the panel's `loadData`) and the
-  panel's lazy SAVES-tab slot load (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither
-  bound nor ordered: the store's `cached.bios_status` fold. The panel's `rereadBiosAnswer`, which `handleBiosChange` and
-  a press on the BIOS tab both read through, is bound and ordered (`bios` ticket). The play button is NOT covered
+  (`frontend/src/desktop/gameview/EmulationSettings.tsx`, in the desktop dev build) the same way. Both disc selectors
+  (`frontend/src/bigpicture/DiscSelector.tsx`, `frontend/src/desktop/gameview/DiscSelector.tsx`) read and pick through
+  `useDiscSelection` (`frontend/src/utils/useDiscSelection.ts`), which compares the rom a disc read or a pick was issued
+  for with the rom it holds bound (`romIdRef`) and drops the answer where the two differ; the detail read that sets that
+  ref is ordered by `initSeq`, so only the newest binds. The Saves tab's slot panels and version lists
+  (`frontend/src/bigpicture/SavesTab.tsx`, `frontend/src/bigpicture/saves/SlotPanel.tsx`) carry the rom in their React
+  key, so a change of rom mounts them anew and an answer for the previous one lands in a panel that is gone. Two answers
+  for the SAME rom are ordered by a sequence taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`,
+  `EmulationSettings`'s `readSeqRef`). Ordered but unbound: the two identity writes (the store's `loadDetail`, the
+  panel's `loadData`), `useDiscSelection`'s detail read that sets `romIdRef` (`initSeq`) and the panel's lazy SAVES-tab
+  slot load (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the
+  store's `cached.bios_status` fold. The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on the BIOS
+  tab both read through, is bound and ordered (`bios` ticket). The play button is NOT covered
 
   The panel component itself holds none of these writes. `RomBinding` is built by `bindRom` for a read a run of the
   `[appId]` effect issued and by `bindRomInState` for the active tab's panes, whose writer is built during render; the
   achievements load's tagging means its state cannot outlive the identity it was read for; `useRomMetadata` and
   `EmulationSettings` are the desktop game view's metadata and BIOS / launch-verdict reads. A version switch changes the
   rom without closing, so neither the store's generation counter nor the panel's `[appId]` effect sees this class.
-  Binding answers the wrong-rom question only; the ordering of two answers for the SAME rom is #1717. Four writes are
-  unbound. Three are ordered: the two identity writes install what a binding would compare against, so ordering is all
-  they can have. The fourth, the store's `cached.bios_status` fold, has neither — it runs in the same synchronous run as
-  its guard. The event lane's `rereadBiosAnswer` re-reads `get_bios_status` for the rom it shows, whose emulator is
-  resolved per ROM — a per-game pin over the platform's pick — and takes the `bios` ticket the panel's other BIOS
-  re-reads take (#1718). The play button's exclusion is #1714. The panel's fourteen bound sites each carry a
-  version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`), and `useRomMetadata`'s and
-  `EmulationSettings`'s bindings are pinned by `frontend/src/utils/useRomMetadata.test.ts` and
-  `frontend/src/desktop/gameview/EmulationSettings.test.tsx`; the store side and every new write site on either are
+  Binding answers the wrong-rom question only; the ordering of two answers for the SAME rom is #1717. Five writes are
+  unbound. Four are ordered: the two identity writes and `useDiscSelection`'s detail read (one write, which both
+  selectors share) install what a binding would compare against, so ordering is all they can have, and the fourth is the
+  panel's lazy SAVES-tab slot load, ordered by the `slots` ticket. The fifth, the store's `cached.bios_status` fold, has
+  neither — it runs in the same synchronous run as its guard. The event lane's `rereadBiosAnswer` re-reads
+  `get_bios_status` for the rom it shows, whose emulator is resolved per ROM — a per-game pin over the platform's pick —
+  and takes the `bios` ticket the panel's other BIOS re-reads take (#1718). The play button's exclusion is #1714. The
+  panel's fourteen bound sites each carry a version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`),
+  `useRomMetadata`'s and `EmulationSettings`'s bindings are pinned by `frontend/src/utils/useRomMetadata.test.ts` and
+  `frontend/src/desktop/gameview/EmulationSettings.test.tsx`, `useDiscSelection`'s by the version-switch tests of both
+  selectors in `frontend/src/bigpicture/DiscSelector.test.tsx` and
+  `frontend/src/desktop/gameview/DiscSelector.test.tsx`, and the Saves tab's keys by
+  `frontend/src/bigpicture/SavesTab.panelState.test.tsx` and
+  `frontend/src/bigpicture/saves/VersionHistoryPanel.test.tsx`; the store side and every new write site on either are
   prompt-only, because a checker scoped to the store's own function bodies would be green on the case this rule was
   written for. The reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not restate
   them here
+
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` declaring a stop of its own, including a table row with no action of its own** — check + prompt-only
 
@@ -199,6 +213,7 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   that half either, and the suite is blind to it for the same reason — a page whose only control is a library's length
   below the point it opens at renders exactly like one whose control is a press away. Detail:
   `docs/architecture/qam-panel.md`, "Building blocks"
+
 - **A list-and-detail page opens on the row it was opened WITH, not on its first row** — test + prompt-only — On that
   layout focus selects, so entry focus landing anywhere selects what it lands on. `ListDetail.test.tsx` pins the mark
   and that it moves with the selection, `WidePage.test.tsx` pins that the frame asks for the declared stop, and both use

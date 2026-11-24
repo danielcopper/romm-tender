@@ -269,6 +269,11 @@ export const CREATE_SLOT_ERROR_MESSAGE = "An error occurred while creating the s
 
 export const SLOT_DELETE_INFO_ERROR_MESSAGE = "Failed to load slot info";
 
+/** What an inactive slot reads where its saves could not be read; *message* is the endpoint's answer, where it gave one. */
+export function slotSavesUnreadMessage(message?: string): string {
+  return message ? `Couldn't load this slot's saves: ${message}` : "Couldn't load this slot's saves.";
+}
+
 export const DELETE_SLOT_ERROR_MESSAGE = "An error occurred while deleting the slot";
 
 export function slotDeletedMessage(slot: string): string {

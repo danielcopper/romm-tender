@@ -7,7 +7,7 @@ import { useDialogHost } from "./dialogs/useDialogHost";
 import { DISC_ACCENT, DISC_GREY } from "../../shared/DiscGlyphs";
 import { toaster } from "../../api/host";
 import * as backend from "../../api/backend";
-import type { CachedGameDetail, DiscSelection, VersionInfo, VersionList } from "../../api/backend";
+import type { CachedGameDetail, DiscSelection, SelectDiscResult, VersionInfo, VersionList } from "../../api/backend";
 import { emitHostEvent, hostEventListenerCount } from "../../test-utils/host-event-bus";
 import { throbberIn } from "../../test-utils/throbber";
 import { flushMacrotask } from "../../test-utils/flush";
@@ -1524,6 +1524,45 @@ describe("Desktop DiscSelector — the discs across a switch", () => {
     await flushMacrotask();
 
     expect(r.getByTestId("disc-btn")).toHaveAttribute("aria-label", "Select Version");
+  });
+
+  it("ignores a pick's answer for the old version that lands after a switch", async () => {
+    mockCachedDetail();
+    const newVersion: DiscSelection = {
+      multi_disc: true,
+      discs: [
+        { filename: "ff7-jp (Disc 1).chd", label: "Disc 1", index: 1 },
+        { filename: "ff7-jp (Disc 2).chd", label: "Disc 2", index: 2 },
+      ],
+      selected: null,
+      default: { kind: "disc", label: "Disc 1", filename: "ff7-jp (Disc 1).chd" },
+    };
+    vi.mocked(backend.getDiscSelection).mockImplementation((romId: number) =>
+      Promise.resolve(romId === 42 ? discDefaultSelection : newVersion),
+    );
+    const pick = deferred<SelectDiscResult>();
+    vi.mocked(backend.selectDisc).mockReturnValue(pick.promise);
+    const r = await renderAndOpen();
+    expect(r.getByTestId("disc-btn").textContent).toBe("2");
+    await act(async () => {
+      fireEvent.click(within(r.getByTestId("disc-menu")).getByText("Disc 1"));
+      await Promise.resolve();
+    });
+    expect(backend.selectDisc).toHaveBeenCalledWith(42, "game (Disc 1).chd");
+
+    mockCachedDetail({ rom_id: 43 });
+    await dataChanged({ type: "version_switched", app_id: 100, rom_id: 43 });
+    await waitFor(() => expect(backend.getDiscSelection).toHaveBeenCalledWith(43));
+    await flushMacrotask();
+    expect(r.getByTestId("disc-btn").textContent).toBe("1");
+
+    await act(async () => {
+      pick.resolve({ success: true, selected: "game (Disc 1).chd" });
+      await Promise.resolve();
+    });
+    await flushMacrotask();
+
+    expect(r.getByTestId("disc-btn").textContent).toBe("1");
   });
 });
 

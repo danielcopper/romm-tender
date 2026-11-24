@@ -813,12 +813,16 @@ so you'll never be offered a disc image the emulator can't open.
 The selected disc is **saved**, and it survives the things that would otherwise reset it:
 
 - **A library re-sync** never changes your pick.
-- **Uninstalling and re-downloading** the game restores it — the choice is remembered against the game, not the
+- **Uninstalling and re-downloading** the game restores it — the choice is remembered against the version, not the
   downloaded files, so a reinstall re-applies it automatically.
 - A **RetroDECK path migration** (moving your RetroDECK home) keeps it too.
 
 If the specific disc you pinned ever goes missing (for example a partial re-download), the game quietly falls back to
 the default disc rather than failing to launch.
+
+Each [version](#versions) of a game keeps its own pick. After a version switch the dropdown shows the discs and the pick
+of the version now bound — or disappears, where that version has a single disc or is not downloaded — and a disc you
+pick from then on is the one that version starts with.
 
 ### Where it applies
 

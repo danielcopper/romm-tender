@@ -2420,11 +2420,13 @@ describe("RomMPlaySection", () => {
       const before = domListenerCount("romm_data_changed");
       const { unmount } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
-      // Three listeners: the game-detail store's, opened by this section's
+      // Four listeners: the game-detail store's, opened by this section's
       // subscription, + the child VersionPicker's (it also refreshes on
-      // version_switched, #1297) + this section's own, which announces the save
-      // verdict after an emulator source change. All are removed on unmount.
-      expect(domListenerCount("romm_data_changed")).toBe(before + 3);
+      // version_switched, #1297) + the child DiscSelector's (it reads the bound
+      // ROM's discs again on version_switched) + this section's own, which
+      // announces the save verdict after an emulator source change. All are
+      // removed on unmount.
+      expect(domListenerCount("romm_data_changed")).toBe(before + 4);
       unmount();
       expect(domListenerCount("romm_data_changed")).toBe(before);
     });
