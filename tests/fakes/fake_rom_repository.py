@@ -103,11 +103,6 @@ class FakeRomRepository:
             rom.emulator_override = label
             rom.emulator_override_source = source
 
-    def get_all_emulator_overrides(self) -> dict[int, str]:
-        return {
-            rom_id: rom.emulator_override for rom_id, rom in self._roms.items() if rom.emulator_override is not None
-        }
-
     def set_selected_disc(self, rom_id: int, filename: str | None) -> None:
         rom = self._roms.get(rom_id)
         if rom is not None:

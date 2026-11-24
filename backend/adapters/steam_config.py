@@ -1,9 +1,3 @@
-"""Adapter wrapping Steam VDF file access and shortcut ID generation.
-
-Mostly stateless helpers — the only external dependency is the user's
-Steam ``userdata`` directory (resolved from the user's home).
-"""
-
 from __future__ import annotations
 
 import contextlib
@@ -67,14 +61,7 @@ class SteamConfigAdapter:
         os.makedirs(grid, exist_ok=True)
         return grid
 
-    # -- VDF read/write (only read_shortcut_exes, read_shortcut_launch_options and read_shortcut_icons are live) --
-
-    def read_shortcuts(self) -> dict[str, Any]:
-        path = self.shortcuts_vdf_path()
-        if not path or not os.path.exists(path):
-            return {"shortcuts": {}}
-        with open(path, "rb") as f:
-            return vdf.binary_loads(f.read())
+    # -- shortcuts.vdf reads ----------------------------------------------------
 
     def read_shortcut_exes(self) -> dict[int, str] | None:
         """Every non-Steam shortcut's app ID and current ``exe``, read off ``shortcuts.vdf``.
@@ -178,16 +165,6 @@ class SteamConfigAdapter:
             for entry in entries.values()
             if isinstance(entry, dict)
         ]
-
-    def write_shortcuts(self, data: dict[str, Any]) -> None:
-        path = self.shortcuts_vdf_path()
-        if not path:
-            raise RuntimeError("Cannot find Steam shortcuts.vdf path")
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp_path = path + ".tmp"
-        with open(tmp_path, "wb") as f:
-            f.write(vdf.binary_dumps(data))
-        os.replace(tmp_path, path)
 
     # -- Grid files -------------------------------------------------------------
 

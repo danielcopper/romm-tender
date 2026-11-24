@@ -1,29 +1,12 @@
-"""Tests for the two roots Tender's data lives under, and the launcher's two paths."""
+"""Tests for the launcher's two paths."""
 
 from __future__ import annotations
 
 from domain.user_data_location import (
-    APP_DIR_NAME,
     LAUNCHER_EXE_SUFFIX,
-    config_root,
-    data_root,
     launcher_in_bin_dir,
     launcher_path,
 )
-
-
-class TestTheDirectoryName:
-    def test_both_roots_are_named_after_it(self):
-        assert config_root("/home/deck").endswith(f"/{APP_DIR_NAME}")
-        assert data_root("/home/deck").endswith(f"/{APP_DIR_NAME}")
-
-
-class TestRoots:
-    def test_config_root_is_under_the_users_own_home(self):
-        assert config_root("/home/deck") == "/home/deck/.config/romm-tender"
-
-    def test_data_root_is_under_the_users_own_home(self):
-        assert data_root("/home/deck") == "/home/deck/.local/share/romm-tender"
 
 
 class TestLauncherPath:

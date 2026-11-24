@@ -136,8 +136,7 @@ installed, and the bin root is shared with every other program the user installe
 name of ours. The bin root has no XDG variable either: the basedir spec names the path, so its ladder is
 `TENDER_BIN_DIR` and then the built-in default. Every reader takes the seven off the one `AppDirectories` the entry
 point resolved, which reaches `bootstrap()` as an argument and the services as `WiringConfig.directories`; apart from
-Tender's folder, nothing composes a directory of its own from a home or a folder name. `resolve_directories` has exactly
-one caller (`main.py`), and `config_root` / `data_root` have none left.
+Tender's folder, nothing composes a directory of its own from a home or a folder name.
 
 One folder named after the program is written outside the seven: [Tender's folder](#tenders-folder), `~/Tender` unless
 the user chose another place. It is not a root resolved from the environment, and it sits where it does because it is

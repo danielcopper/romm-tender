@@ -68,9 +68,10 @@ def _default_progress() -> dict[str, Any]:
 class CollectionMembership:
     """One enabled collection's full member rom_ids, tagged with its display name.
 
-    The value type of :attr:`LibrarySyncStateBox.pending_collection_memberships`,
-    whose key is a collision-free ``(collection_kind, collection_id)`` identity so
-    two collections that merely SHARE a display name never overwrite each other's
+    The value type of the run's collection-membership accumulator
+    (``collection_memberships`` in ``SyncOrchestrator``), whose key is a
+    collision-free ``(collection_kind, collection_id)`` identity so two
+    collections that merely SHARE a display name never overwrite each other's
     members in the finalize accumulator. The name rides here in the value because
     Steam's collection namespace is by-name: the run finalizer groups same-named
     memberships and UNIONs their resolved appIds into the one
@@ -169,14 +170,6 @@ class LibrarySyncStateBox:
     # The staged preview snapshot, between ``sync_preview`` and the apply that
     # consumes it. Written only through the preview-lifecycle verbs below.
     pending_delta: PreviewDelta | None = None
-    # Per-run collection-membership accumulator, keyed by a collision-free
-    # ``(collection_kind, collection_id)`` identity (never the display name), so
-    # two collections that share a name each keep their own members. The name
-    # travels in the :class:`CollectionMembership` value; the run finalizer unions
-    # same-named memberships when it builds the by-name Steam-collection map
-    # (#1503).
-    pending_collection_memberships: dict[tuple[str, str], CollectionMembership] = field(default_factory=dict)
-    pending_platform_rom_ids: set[int] | None = None
     # Per-unit pipeline coordination. ``unit_complete_event`` is set by
     # :meth:`SyncReporter.report_unit_results` when the frontend acks the
     # active chunk; ``ChunkDispatcher`` awaits it (with a heartbeat-based

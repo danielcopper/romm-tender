@@ -130,10 +130,6 @@ class RomRepository(Protocol):
         """
         ...
 
-    def get_all_emulator_overrides(self) -> dict[int, str]:
-        """Return ``rom_id`` -> pinned core label for every ROM with an override (NULL rows omitted)."""
-        ...
-
     def set_selected_disc(self, rom_id: int, filename: str | None) -> None:
         """Pin (or clear with ``None``) the per-game disc selection for *rom_id*.
 

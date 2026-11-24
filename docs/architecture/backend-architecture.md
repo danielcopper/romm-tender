@@ -1145,15 +1145,15 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
 per-`(name, user_id)`, so two enabled collections can share a display name — a standard collection and a smart/virtual
 collection, or (multi-user) another account's public collection the list endpoints return. Steam's collection namespace
 is **by-name** (`RomM: [<name>] (host)`), so both must resolve to the one Steam collection. The finalize accumulator
-(`_state.py` `pending_collection_memberships`) is therefore keyed by a collision-free `(collection_kind, collection_id)`
-identity — the same identity the #742 completion stamp uses — with the display name carried in the
-`CollectionMembership` value; the real-sync and preview write paths share one key builder so they cannot drift. The run
-finalizer (`_resolve_collection_memberships`) then groups the accumulator's entries by name and **unions** their
-resolved appId sets (order-preserving, de-duplicated across collections; each collection's own resolution already dedups
-within), emitting the unchanged by-name `romm_collection_app_ids: {name → [appId]}` contract — a single-collection name
-unions a set of one and is byte-for-byte the pre-#1503 output. The union runs **after** the owner scope (below): once a
-foreign collection is dropped from the work queue it never reaches the accumulator, so the `own` scope narrows what is
-unioned rather than changing how the union works.
+(`collection_memberships` in `sync_orchestrator.py`) is therefore keyed by a collision-free
+`(collection_kind, collection_id)` identity — the same identity the #742 completion stamp uses — with the display name
+carried in the `CollectionMembership` value; the real-sync and preview write paths share one key builder so they cannot
+drift. The run finalizer (`_resolve_collection_memberships`) then groups the accumulator's entries by name and
+**unions** their resolved appId sets (order-preserving, de-duplicated across collections; each collection's own
+resolution already dedups within), emitting the unchanged by-name `romm_collection_app_ids: {name → [appId]}` contract —
+a single-collection name unions a set of one and is byte-for-byte the pre-#1503 output. The union runs **after** the
+owner scope (below): once a foreign collection is dropped from the work queue it never reaches the accumulator, so the
+`own` scope narrows what is unioned rather than changing how the union works.
 
 **Collection kinds — one `virtual` kind covers RomM's browsable virtual types (#1538).** `get_collections` and
 `build_work_queue` group collections into three internal kinds: `standard`, `smart`, and `virtual`. RomM's own UI calls
