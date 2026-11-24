@@ -1,14 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AnsweringSource, GameLaunch } from "../types";
 import { HostTransportError } from "../api/host";
-import {
-  entryLaunchLine,
-  launchNote,
-  launchNotes,
-  launchRefusal,
-  launchRefused,
-  startCheckFailureSentence,
-} from "./gameLaunch";
+import { entryLaunchLine, launchNotes, launchRefusal, startCheckFailureSentence } from "./gameLaunch";
 import { TimeoutError } from "./withTimeout";
 
 function launch(overrides: Partial<GameLaunch> = {}): GameLaunch {
@@ -87,7 +80,6 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
 
   it("a single Dreamcast track refuses nothing: whether it starts is not established (#2195 D2, changed)", () => {
     expect(launchRefusal(DREAMCAST_TRACK, true)).toBeNull();
-    expect(launchRefused(DREAMCAST_TRACK)).toBe(false);
   });
 
   it("lists an extension ES-DE spells in both cases once, as the resolver spells it first", () => {
@@ -120,7 +112,7 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
 
   it("an unestablished file says why, and lets the game start", () => {
     expect(launchRefusal(NOT_ESTABLISHED, true)).toBeNull();
-    expect(launchNote(NOT_ESTABLISHED, RETRODECK)).toBe(
+    expect(launchNotes(NOT_ESTABLISHED, RETRODECK)[0]).toBe(
       "Whether Game.sfc starts cannot be established: RetroDECK does not list the system Sega Dreamcast.",
     );
   });
@@ -130,13 +122,13 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
     ["catalogue_unread", "RetroDECK's list of emulators could not be read"],
     ["no_source", "no emulator source is installed and switched on"],
   ] as const)("an unestablished verdict for %s names the source as the user knows it (D36)", (reason, words) => {
-    expect(launchNote(launch({ state: "not_established", reason }), RETRODECK)).toBe(
+    expect(launchNotes(launch({ state: "not_established", reason }), RETRODECK)[0]).toBe(
       `Whether Game.ps3 starts cannot be established: ${words}.`,
     );
   });
 
   it("an unestablished verdict the backend states no reason for says no more than that", () => {
-    expect(launchNote(launch({ state: "not_established", reason: null }), RETRODECK)).toBe(
+    expect(launchNotes(launch({ state: "not_established", reason: null }), RETRODECK)[0]).toBe(
       "Whether Game.ps3 starts cannot be established.",
     );
     expect(entryLaunchLine(launch({ state: "not_established", reason: null }), RETRODECK)).toBe(
@@ -145,13 +137,13 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
   });
 
   it("names the source that answered, whichever it is", () => {
-    expect(launchNote(launch({ state: "not_established", reason: "catalogue_unread" }), EMUDECK)).toBe(
+    expect(launchNotes(launch({ state: "not_established", reason: "catalogue_unread" }), EMUDECK)[0]).toBe(
       "Whether Game.ps3 starts cannot be established: EmuDeck's list of emulators could not be read.",
     );
   });
 
   it("with no source named, says the emulator source", () => {
-    expect(launchNote(NOT_ESTABLISHED, null)).toBe(
+    expect(launchNotes(NOT_ESTABLISHED, null)[0]).toBe(
       "Whether Game.sfc starts cannot be established: the emulator source does not list the system Sega Dreamcast.",
     );
   });
@@ -159,14 +151,14 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
   it("an archive whose contents were not read starts, and says so", () => {
     const archive = launch({ entry: "DeSmuME", file: "Game.zip", extension: ".zip", contents_unread: true });
     expect(launchRefusal(archive, true)).toBeNull();
-    expect(launchNote(archive, RETRODECK)).toBe(
+    expect(launchNotes(archive, RETRODECK)[0]).toBe(
       "What is inside Game.zip was not read, so whether DeSmuME finds a game in it cannot be established.",
     );
   });
 
   it("a file that starts says nothing", () => {
     expect(launchRefusal(launch(), true)).toBeNull();
-    expect(launchNote(launch(), RETRODECK)).toBeNull();
+    expect(launchNotes(launch(), RETRODECK)[0]).toBeUndefined();
   });
 
   it("a format the entry was not established to read is said under Play, and lets the game start (#2195 D41)", () => {
@@ -177,21 +169,14 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
       format_unestablished: true,
     });
     expect(launchRefusal(answer, true)).toBeNull();
-    expect(launchNote(answer, RETRODECK)).toBe(
+    expect(launchNotes(answer, RETRODECK)[0]).toBe(
       "Whether RPCS3 Shortcut (Standalone) reads .iso files is not established.",
     );
   });
 
   it("nothing asked says nothing", () => {
     expect(launchRefusal(null, true)).toBeNull();
-    expect(launchNote(null, RETRODECK)).toBeNull();
-  });
-});
-
-describe("launchRefused", () => {
-  it("refuses exactly the three verdicts that refuse a start", () => {
-    expect([PS3_PKG, NOT_THIS_EMULATOR].map(launchRefused)).toEqual([true, true]);
-    expect([launch(), NOT_ESTABLISHED, null].map(launchRefused)).toEqual([false, false, false]);
+    expect(launchNotes(null, RETRODECK)[0]).toBeUndefined();
   });
 });
 
@@ -246,10 +231,9 @@ describe("the resolver's own reasons (#2195 D21, D40)", () => {
     ],
   ] as const)("a refusal for %s refuses the start and names the reason", (reason, sentence, line) => {
     const answer = refused(reason);
-    expect(launchRefused(answer)).toBe(true);
     expect(launchRefusal(answer, true)).toBe(sentence);
     expect(entryLaunchLine(answer, RETRODECK)).toBe(line);
-    expect(launchNote(answer, RETRODECK)).toBeNull();
+    expect(launchNotes(answer, RETRODECK)[0]).toBeUndefined();
   });
 
   it("names the one entry the resolver says starts it, pointing at the emulator menu", () => {
@@ -309,9 +293,8 @@ describe("the resolver's own reasons (#2195 D21, D40)", () => {
     ["version_dependent", "whether it reads .ps3 depends on the emulator's version"],
   ] as const)("a file that starts says what its reading stopped short of: %s", (reason, why) => {
     const answer = stoppedShort(reason);
-    expect(launchRefused(answer)).toBe(false);
     expect(launchRefusal(answer, true)).toBeNull();
-    expect(launchNote(answer, RETRODECK)).toBe(
+    expect(launchNotes(answer, RETRODECK)[0]).toBe(
       `Whether RPCS3 Directory (Standalone) starts this game cannot be established: ${why}.`,
     );
     expect(entryLaunchLine(answer, RETRODECK)).toBe(`whether it starts the game is not established: ${why}`);
@@ -319,7 +302,7 @@ describe("the resolver's own reasons (#2195 D21, D40)", () => {
 
   it("a refusal's reason on a file that starts is no note", () => {
     const answer = stoppedShort("takes_no_folder");
-    expect(launchNote(answer, RETRODECK)).toBeNull();
+    expect(launchNotes(answer, RETRODECK)[0]).toBeUndefined();
     expect(entryLaunchLine(answer, RETRODECK)).toBe("can start it");
   });
 });
@@ -345,10 +328,9 @@ describe("what a disc file opens, as the resolver read it (#2698 D5, D7)", () =>
     ["playlist_refused", "it starts no game from a playlist"],
   ] as const)("a stop on %s turns Play off and names the file it stops on", (reason, why) => {
     const answer = disc({ state: "not_this_emulator", reason });
-    expect(launchRefused(answer)).toBe(true);
     expect(launchRefusal(answer, true)).toBe(`Beetle PSX cannot start Game.cue: ${why}.`);
     expect(entryLaunchLine(answer, RETRODECK)).toBe(why);
-    expect(launchNote(answer, RETRODECK)).toBeNull();
+    expect(launchNotes(answer, RETRODECK)[0]).toBeUndefined();
   });
 
   it("names the entries that do start it after the reason", () => {
@@ -372,9 +354,8 @@ describe("what a disc file opens, as the resolver read it (#2698 D5, D7)", () =>
     "a file the start goes on without (%s) keeps Play on, startable, never not established",
     (reason, why) => {
       const answer = disc({ state: "starts", reason });
-      expect(launchRefused(answer)).toBe(false);
       expect(launchRefusal(answer, true)).toBeNull();
-      expect(launchNote(answer, RETRODECK)).toBe(
+      expect(launchNotes(answer, RETRODECK)[0]).toBe(
         `Beetle PSX can start this game, but goes on without Game (Track 2).bin: ${why}.`,
       );
       expect(entryLaunchLine(answer, RETRODECK)).toBe(`can start it, without Game (Track 2).bin: ${why}`);
@@ -398,8 +379,9 @@ describe("what a disc file opens, as the resolver read it (#2698 D5, D7)", () =>
     ],
   ] as const)("what the reading could not establish (%s) keeps Play on and says so", (reason, why) => {
     const answer = disc({ state: "starts", reason });
-    expect(launchRefused(answer)).toBe(false);
-    expect(launchNote(answer, RETRODECK)).toBe(`Whether Beetle PSX starts this game cannot be established: ${why}.`);
+    expect(launchNotes(answer, RETRODECK)[0]).toBe(
+      `Whether Beetle PSX starts this game cannot be established: ${why}.`,
+    );
     expect(entryLaunchLine(answer, RETRODECK)).toBe(`whether it starts the game is not established: ${why}`);
   });
 
@@ -411,8 +393,7 @@ describe("what a disc file opens, as the resolver read it (#2698 D5, D7)", () =>
       file: "Game.m3u",
       reason_file: "Game.m3u",
     });
-    expect(launchRefused(answer)).toBe(false);
-    expect(launchNote(answer, RETRODECK)).toBe(
+    expect(launchNotes(answer, RETRODECK)[0]).toBe(
       "Genesis Plus GX can start this game, but does not read every disc Game.m3u lists.",
     );
     expect(entryLaunchLine(answer, RETRODECK)).toBe("can start it, but does not read every disc Game.m3u lists");
@@ -426,14 +407,13 @@ describe("what a disc file opens, as the resolver read it (#2698 D5, D7)", () =>
       reason: "path_too_long_unchecked",
       reason_file: "Game.cue",
     });
-    expect(launchRefused(answer)).toBe(false);
-    expect(launchNote(answer, RETRODECK)).toBe(
+    expect(launchNotes(answer, RETRODECK)[0]).toBe(
       "Whether Genesis Plus GX starts this game cannot be established: the path of Game.cue is too long for it to read in full, and what it does then was not checked.",
     );
   });
 
   it("a stop is no note on a file that starts, and a file the start goes on without is no refusal", () => {
-    expect(launchNote(disc({ state: "starts", reason: "playlist_refused" }), RETRODECK)).toBeNull();
+    expect(launchNotes(disc({ state: "starts", reason: "playlist_refused" }), RETRODECK)[0]).toBeUndefined();
     expect(launchRefusal(disc({ state: "not_this_emulator", reason: "goes_on_file_missing" }), true)).toBe(
       "Beetle PSX does not start .cue.",
     );
@@ -472,7 +452,6 @@ describe("every statement the resolver makes, each in its own words (#2698 D8)",
       "Whether SwanStation starts this game cannot be established: how it opens Disc 3.chd was not checked.",
       "SwanStation can start this game, but goes on without Disc 2.cue: it is missing.",
     ]);
-    expect(launchRefused(answer)).toBe(false);
   });
 
   it("the menu shows the first statement and how many more there are", () => {
@@ -647,7 +626,6 @@ describe("a launch the resolver could not establish (#2195 D2, D40, D41 changed)
   });
 
   it("keeps Play on", () => {
-    expect(launchRefused(UNESTABLISHED)).toBe(false);
     expect(launchRefusal(UNESTABLISHED, true)).toBeNull();
   });
 
@@ -699,7 +677,6 @@ describe("a name the frontend would not list the file under (#2195 D2)", () => {
   });
 
   it("is a note beside a start, which it does not refuse", () => {
-    expect(launchRefused(UNLISTED)).toBe(false);
     expect(launchNotes(UNLISTED, RETRODECK)).toEqual([
       "ES-DE would not list Game.GBA under this name; it lists files ending in .gba.",
     ]);
