@@ -34,20 +34,10 @@ you are editing rather than introducing the other one.
 `<verb>_unchecked` is not a synchronous twin: it is the method without its conflict rules (GLOSSARY.md → Conflict
 rules), and is never spelled `do_<verb>`.
 
-## Docstrings — intent over behavior
+## Docstrings
 
-**Module and class docstrings** describe **what belongs here** (the contract), not what is currently in the file
-(behavior). Behavior listings rot when methods change; contracts don't.
-
-- Bad (class): `"""Owns save_sync_state.json — persistence, migrations, default construction."""` (rots when a 4th
-  responsibility lands)
-- Good (class): `"""Owns save_sync_state.json — single source of truth for on-disk save-sync state."""`
-
-**Method docstrings are different** — one method's contract is naturally scoped, so describing behavior, parameters, and
-return value is fine and stays in sync with the signature.
-
-Avoid: "mechanical extraction from X", "during the transition", "moved from Y", "added for the Z flow", "see PR #123" —
-commit-message content that rots in source.
+When a docstring is written and what it may say is `comments.md`'s. Python's alone is the `__init__.py` docstring,
+settled under "Sub-package `__init__.py`" below.
 
 ## Subfolder layout `[ours]`
 
@@ -71,8 +61,9 @@ has to hold a private attribute under the name the base happens to use. `BaseRep
 
 - **Top-level layer namespace** (`adapters/`, `services/`, `domain/`, `lib/`, `models/`): empty (docstring optional).
   Consumers deep-import.
-- **Consumed via package import** (`from package import X`): contract-style module docstring, re-exports of the public
-  class(es), optional `__all__`. Examples: `services/saves/`, `services/saves/sync_engine/`.
+- **Consumed via package import** (`from package import X`): a module docstring stating the package's contract — the one
+  module docstring always written — re-exports of the public class(es), optional `__all__`. Examples: `services/saves/`,
+  `services/saves/sync_engine/`.
 - **Consumed only via deep-import**: empty or docstring, no re-exports. Example: `adapters/romm/`.
 
 Implementation never lives in `__init__.py` — it is a namespace marker plus re-exports.
