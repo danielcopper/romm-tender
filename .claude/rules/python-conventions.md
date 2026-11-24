@@ -36,9 +36,8 @@ rules), and is never spelled `do_<verb>`.
 
 ## Docstrings
 
-When a docstring is written and what it may say is `comments.md`'s, as for every comment: a function's docstring only
-for a contract its signature does not show, never a restatement of its parameters, types or return value. What is
-Python's alone is the `__init__.py` docstring, settled under "Sub-package `__init__.py`" below.
+When a docstring is written and what it may say is `comments.md`'s. Python's alone is the `__init__.py` docstring,
+settled under "Sub-package `__init__.py`" below.
 
 ## Subfolder layout `[ours]`
 
