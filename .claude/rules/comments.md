@@ -4,6 +4,7 @@ paths:
   - "frontend/src/**/*.ts"
   - "frontend/src/**/*.tsx"
   - "scripts/**/*.py"
+  - "tests/**/*.py"
 ---
 
 # Comments — the exception, never the default
@@ -24,7 +25,8 @@ A comment earns its place only by carrying knowledge that **cannot be put into c
 - **A road not taken** — the obvious alternative and why it is wrong. Without it the next person builds it.
 - **A constraint the code cannot express** — an ordering that must hold, a call that must never happen twice.
 
-An inline comment says it in one line.
+An inline comment says it in one line, unless it is named elsewhere as the home of a fact (see "One home, and no
+history").
 
 A comment that would be equally true on a `docs/` page belongs on that page, under the heading that owns the topic.
 Inline is the last resort, not the first.
@@ -45,15 +47,19 @@ contents rots when the next one lands.
   responsibility lands)
 - Good: `"""Owns save_sync_state.json — single source of truth for on-disk save-sync state."""`
 
-**A docstring named elsewhere as the home of a fact stays**, however long — a script's blind spots, the scope of the
-test isolation in `tests/conftest.py`, the convention in `lib/list_result.py`. It is a contract no signature shows.
-
 ## One home, and no history
 
 **A fact has one home.** State it once — on the `docs/` page that owns the topic if a person needs it, at the one site
 that depends on it if only the code does — and let every other place name that home instead of repeating it. Copies are
 edited one at a time and nothing compares them: one measurement stated in four files drifted to a different number in
 two of them.
+
+**A comment a `docs/` page or a rule file names as the home of a fact stays**, however long and whatever its kind — a
+docstring, a multi-line comment above a line, a module's header comment. Examples: a script's blind spots, the scope of
+the test isolation in `tests/conftest.py`, the convention in `lib/list_result.py`, the bounds above `PALETTES` in
+`scripts/logo/gen.py`, the userinfo refusal above `ENTERED_ADDRESS_WITH_USERINFO_MESSAGE` in `backend/lib/url_host.py`,
+the header of `frontend/src/utils/runningApps.ts`, what a `NamedDomainRefused` subclass declares. It is a contract no
+signature shows, and cutting it strands the pointer.
 
 **History goes in the commit, not in the file.** How a value was arrived at — the measurement behind it, the incident
 that prompted it, the round that found it — is true of the moment it was written, and a commit message is dated and
@@ -72,8 +78,9 @@ Avoid entirely: "mechanical extraction from X", "during the transition", "moved 
 
 **When you touch a line, re-read the comment above it and the docstring of the function or class it sits in.** One that
 no longer matches is corrected in the same change; one that fails this file is cut to what the code cannot show, or
-deleted. A stale comment is worse than none, because it is believed: it is read as current truth by everyone who arrives
-later, and nothing in the toolchain will ever contradict it.
+deleted — except a comment named elsewhere as the home of a fact, which keeps its length and its place. A stale comment
+is worse than none, because it is believed: it is read as current truth by everyone who arrives later, and nothing in
+the toolchain will ever contradict it.
 
 Comments and docstrings in code no change touches wait for the change that does — they are never removed in a sweep of
 their own.
