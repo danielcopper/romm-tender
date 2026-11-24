@@ -171,14 +171,6 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_update_attempt_toast",
     "acknowledge_update_attempt_toast",
     "get_update_output",
-    # What the hosting process knows about its own run — the port it bound, the
-    # start-up repairs that failed, the protocol messages it could not act on.
-    # Touches no RetroDECK state and reads nothing from disk. It has to answer
-    # while a migration is pending for the strongest reason on this list: a
-    # blocked panel is exactly when a reader needs to see that a start-up repair
-    # has been failing, and blocking the call would hide the diagnosis behind
-    # the condition it might explain.
-    "get_host_status",
     # Cancel / pause operations — must not be refused mid-operation when
     # migration marker fires so the user can stop in-flight work. (Resume,
     # which re-begins a filesystem transfer, IS migration-blocked.)
@@ -310,7 +302,6 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     # Firmware / BIOS read-only checks.
     "get_firmware_status",
     "get_platform_firmware_status",
-    "check_platform_bios",
     "get_bios_status",
     # Save sync read-only / device queries.
     "ensure_device_registered",

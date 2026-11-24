@@ -277,6 +277,17 @@ class TestFailedStartUpSteps:
     def test_a_clean_start_records_none(self):
         assert HostStatus().failed_startup_steps == []
 
+    async def test_the_start_up_line_points_at_the_failures_logged_above(
+        self, tmp_path, recorder, default_sigterm, caplog
+    ):
+        status = HostStatus()
+        status.record_failed_step("prune_orphaned_cover_cache")
+
+        with caplog.at_level(logging.WARNING, logger=LOGGER.name):
+            await _run(tmp_path, recorder, status, free_port())
+
+        assert "host: 1 start-up step(s) failed; each is logged above with its traceback" in caplog.messages
+
 
 class TestLoadingThePanelIntoSteam:
     """The composition seam: the run loads the panel, and stops loading it when it ends."""

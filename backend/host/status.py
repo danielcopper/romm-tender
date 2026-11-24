@@ -1,22 +1,13 @@
-"""What the panel can ask about the process hosting it.
+"""What only the process hosting the backend knows about its own run.
 
 Contract: the facts about this backend's own run that no service knows and no
-event announces. It is a record the runtime fills in and an endpoint reads — one
-number each, read when the panel opens.
-
-Two of them exist because the alternative is a fault that lives only in a log
-file. A start-up routine that fails on every start would otherwise never be
-noticed by anyone who did not go looking, and a panel and backend that disagree
-about the protocol would show as nothing at all — the messages are dropped and
-the connection is deliberately kept. Neither is worth an event: an event is a
-statement about a moment, and both of these are states.
+event announces, in a record the runtime fills in as start-up proceeds.
 
 :class:`SteamReadings` and :class:`SteamUrls` are the parts of it the
-application uses rather than the panel: what only the injector can see of
-Steam, and the one thing the application asks it to do there. Each is created
-before the services, which are handed it, and filled in once the injector
-exists — the services are built before it, and may not import this package to
-reach it.
+application uses: what only the injector can see of Steam, and the one thing
+the application asks it to do there. Each is created before the services,
+which are handed it, and filled in once the injector exists — the services are
+built before it, and may not import this package to reach it.
 """
 
 from __future__ import annotations
@@ -28,11 +19,6 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from host.inject.recovery import ListedApp
-
-
-def _no_messages_dropped() -> int:
-    """Before a server exists, nothing has been dropped."""
-    return 0
 
 
 class SteamReadings:
@@ -92,12 +78,6 @@ class HostStatus:
 
     port: int = 0
     failed_startup_steps: list[str] = field(default_factory=list)
-
-    # Read rather than stored, because the count goes on changing for as long as
-    # the connection lives: a number copied in here at start-up would answer 0
-    # for the rest of the run, which is exactly the reading this counter exists
-    # to contradict.
-    count_dropped_messages: Callable[[], int] = _no_messages_dropped
 
     steam: SteamReadings = field(default_factory=SteamReadings)
     steam_urls: SteamUrls = field(default_factory=SteamUrls)

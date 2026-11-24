@@ -317,8 +317,8 @@ Two objects the backend is made of, built in this order:
   process does with them as a whole — the start-up repairs and the shutdown. It runs none of them by itself; the entry
   point calls each at its moment.
 - **Endpoints** — the class in `main.py` that holds every Tender endpoint, over the Application and the host's status
-  record: each endpoint calls a use case on a service, except `get_host_status`, which answers from that record.
-  Endpoints answers a refusal the use case raises in the wire's failure shape.
+  record: each endpoint calls a use case on a service. Endpoints answers a refusal the use case raises in the wire's
+  failure shape.
 
 _Avoid_: **plugin** for either — Tender is not a plugin ([What Tender is](#what-tender-is)).
 

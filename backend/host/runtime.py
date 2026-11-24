@@ -145,7 +145,6 @@ async def run_backend(
             preferred_port=preferred_port,
         )
         status.port = await server.start()
-        status.count_dropped_messages = lambda: server.dropped_messages
         port_file.write(status.port)
 
         # Once, at start-up, with the token in it: this is the address the panel
@@ -154,8 +153,8 @@ async def run_backend(
         # formatter redacts the token — so this line lives on stderr, which is
         # the terminal for a hand start and the journal for a service.
         logger.info(f"host: load the panel from {server.bundle_url()}")
-        if status.failed_startup_steps:
-            logger.warning(f"host: {len(status.failed_startup_steps)} start-up step(s) failed; the panel will say so")
+        if failed := len(status.failed_startup_steps):
+            logger.warning(f"host: {failed} start-up step(s) failed; each is logged above with its traceback")
 
         # After the address is announced, because the injector asks the server
         # for it.

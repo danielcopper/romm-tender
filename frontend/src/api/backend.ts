@@ -27,7 +27,6 @@ import type {
   BiosLevel,
   EmulatorAnswer,
   OneOfGroupVerdict,
-  BiosStatus,
   BiosFileStatus,
   CoreInfo,
   EmulatorStart,
@@ -881,7 +880,6 @@ export const replaceBiosFile = endpoint<[string, string, string, number | null],
 export const identifyLibraryFirmware = endpoint<[string], FirmwareIdentification | EndpointFailure>(
   "identify_library_firmware",
 );
-export const checkPlatformBios = endpoint<[string, string], BiosStatus>("check_platform_bios");
 export const getBiosStatus = endpoint<[number], BiosAnswer>("get_bios_status");
 // A per-platform core change touches no shortcut: the next start of each game
 // that follows the platform asks with it.
@@ -1550,27 +1548,6 @@ export type ShortcutLaunchOptions =
 export type ShortcutFileRefusal = EndpointFailure & { reason: WireReasonSubset<"shortcut_file_unreadable"> };
 
 export const getShortcutLaunchOptions = endpoint<[number[]], ShortcutLaunchOptions>("get_shortcut_launch_options");
-
-/**
- * What only the process hosting this backend knows about its own run.
- *
- * `failed_startup_steps` names the start-up repairs that did not finish — each
- * is reported and counted rather than being fatal, so a repair that fails on
- * every start would otherwise live only in a log file. `dropped_messages`
- * counts protocol messages the backend could not act on, summed over every
- * connection this backend has served rather than the live one: it keeps the
- * connection rather than closing it, so a panel and backend that disagree about
- * the wire would otherwise show as nothing at all — and reconnecting is exactly
- * what a frontend swap does. Both are states, read when the panel opens, which
- * is why neither is an event.
- */
-export interface HostStatus {
-  port: number;
-  failed_startup_steps: string[];
-  dropped_messages: number;
-}
-
-export const getHostStatus = endpoint<[], HostStatus>("get_host_status");
 
 // Durable "re-sign-in for cross-device playtime" notice. The backend persists a
 // flag when a playtime reconcile is rejected because the Client API Token lacks

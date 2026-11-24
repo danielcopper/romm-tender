@@ -1614,13 +1614,8 @@ describe("RomMGameInfoPanel", () => {
     it("bios: answers for the game's own core, not the platform default (#1718)", async () => {
       // The game's core needs firmware the platform's default core does not. The
       // rom-keyed read is the one that knows about the per-game pin, so its
-      // answer is the one on the page; the platform-keyed check is not asked.
+      // answer is the one on the page.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail());
-      vi.mocked(backend.checkPlatformBios).mockResolvedValue({
-        platform_system: null,
-        emulator_source: null,
-        needs_bios: false,
-      });
       vi.mocked(backend.getBiosStatus).mockImplementation((romId: number) =>
         Promise.resolve(
           romId === 60
@@ -1653,7 +1648,6 @@ describe("RomMGameInfoPanel", () => {
       });
       await flushAsync();
 
-      expect(vi.mocked(backend.checkPlatformBios)).not.toHaveBeenCalled();
       expect(container.textContent).toContain("3/4");
     });
 

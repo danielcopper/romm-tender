@@ -1,6 +1,6 @@
 """Coverage for the delegation seams of ``main.Endpoints``.
 
-Every endpoint but ``get_host_status`` forwards to a backend service.
+Every endpoint forwards to a backend service.
 These tests exercise each delegation by:
 
 - building ``Endpoints`` over an ``Application`` whose services are all
@@ -281,15 +281,6 @@ class TestFirmwareEndpointDelegation:
         services.firmware_service.download_required_firmware.assert_awaited_once_with(
             "saturn", "saturn", "kronos_libretro.so", None
         )
-
-    @pytest.mark.asyncio
-    async def test_check_platform_bios_delegates(self, endpoints, services):
-        services.firmware_service.check_platform_bios = AsyncMock(return_value={"present": []})
-        # The frontend sends only the slug; main.py threads no per-game
-        # core, so the system default drives the BIOS filter (active_core_so=None).
-        result = await endpoints.check_platform_bios("snes", "snes")
-        services.firmware_service.check_platform_bios.assert_awaited_once_with("snes", "snes")
-        assert result == {"present": []}
 
     @pytest.mark.asyncio
     async def test_get_bios_status_delegates(self, endpoints, services):
