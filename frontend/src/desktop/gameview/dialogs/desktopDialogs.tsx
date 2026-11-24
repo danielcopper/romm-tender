@@ -19,7 +19,6 @@ import { resolveConflictsSequentially, type SyncConflictResolution } from "../..
 import type { LaunchPrompts } from "../../../utils/launchVerdict";
 import type { SyncFinish, SyncWaitChoice, SyncWaitReason } from "../../../utils/launchGate";
 import type { BiosConfirmCopy } from "../../../utils/biosConfirmWording";
-import { DELETE_LOCAL_SAVES_DESCRIPTION, DELETE_LOCAL_SAVES_TITLE } from "../../../utils/saveSlotWording";
 import type { UnsyncedSavesChoice, UnsyncedSavesPrompt } from "../../../utils/versionSwitch";
 import type { SaveSlotSummary, SlotDeleteInfo, SyncConflict } from "../../../types";
 import type { AskDialog } from "./askDialog";
@@ -30,6 +29,7 @@ import { DesktopAdoptUnusableDialog } from "./DesktopAdoptUnusableDialog";
 import { DesktopAdoptVanishedDialog } from "./DesktopAdoptVanishedDialog";
 import { DesktopBiosConfirmDialog } from "./DesktopBiosConfirmDialog";
 import { DesktopCopySlotDialog } from "./DesktopCopySlotDialog";
+import { DesktopDeleteLocalSavesDialog } from "./DesktopDeleteLocalSavesDialog";
 import { DesktopDeleteSlotDialog } from "./DesktopDeleteSlotDialog";
 import { DesktopSaveConflictDialog } from "./DesktopSaveConflictDialog";
 import { DesktopOfflineDriftDialog } from "./DesktopOfflineDriftDialog";
@@ -132,13 +132,10 @@ export function desktopSlotConflictDialog(ask: AskDialog): (conflict: SyncConfli
 }
 
 export function desktopDeleteLocalSavesDialog(ask: AskDialog): () => Promise<boolean> {
-  const copy: BiosConfirmCopy = {
-    title: DELETE_LOCAL_SAVES_TITLE,
-    description: DELETE_LOCAL_SAVES_DESCRIPTION,
-    confirmLabel: "Delete",
-  };
   return () =>
-    ask<boolean>(false, (resolve) => <DesktopBiosConfirmDialog copy={copy} tone="danger" onChoice={resolve} />);
+    ask<boolean>(false, (resolve) => (
+      <DesktopDeleteLocalSavesDialog onDismiss={() => resolve(false)} onConfirm={() => resolve(true)} />
+    ));
 }
 
 export function desktopCopySlotDialog(

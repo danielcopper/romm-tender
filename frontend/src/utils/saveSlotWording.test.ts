@@ -548,7 +548,9 @@ describe("shared save-card wording and version-history load errors", () => {
     expect(RESTORE_CONFIRM_ERROR_TOAST).toBe("Couldn't confirm the restore.");
     expect(COPY_SAVE_ERROR_TOAST).toBe("Couldn't copy the save. Check your connection and try again.");
     expect(DELETE_LOCAL_SAVES_TITLE).toBe("Delete Local Saves");
-    expect(DELETE_LOCAL_SAVES_DESCRIPTION).toContain("local save files");
+    expect(DELETE_LOCAL_SAVES_DESCRIPTION).toBe(
+      "This will delete local save files for this game. Make sure saves are synced to RomM first — the next sync will re-download them from the server.",
+    );
     expect(DELETE_LOCAL_SAVES_ERROR_TOAST).toBe("Failed to delete saves");
   });
 

@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState, type FC } from "react";
 import { detach } from "../../../utils/detach";
+import { NEW_SAVE_SLOT_TITLE } from "../../../utils/saveSlotWording";
 import { DANGER_TEXT_RED } from "../styles";
 import {
   DIALOG_MUTED_STYLE,
@@ -58,7 +59,7 @@ export const DesktopNewSlotDialog: FC<DesktopNewSlotDialogProps> = ({ onDismiss,
   return (
     <DesktopDialog
       titleId="tender-desktop-new-slot-title"
-      title="New Save Slot"
+      title={NEW_SAVE_SLOT_TITLE}
       onDismiss={creating ? undefined : onDismiss}
     >
       <div style={DIALOG_TEXT_STYLE}>

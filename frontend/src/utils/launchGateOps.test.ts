@@ -452,6 +452,9 @@ describe("ensureTrackingConfiguredBigPicture", () => {
 
     expect(await ensureTrackingConfiguredBigPicture(ROM_ID)).toBe("proceed");
     expect(backend.getSaveSetupInfo).not.toHaveBeenCalled();
+    expect(backend.logError).toHaveBeenCalledWith(
+      `bigpicture start: tracking check for romId=${ROM_ID} failed (assuming configured): Error: net`,
+    );
   });
 
   it("a failed setup read proceeds, switching nothing", async () => {
@@ -465,6 +468,9 @@ describe("ensureTrackingConfiguredBigPicture", () => {
     expect(await ensureTrackingConfiguredBigPicture(ROM_ID)).toBe("proceed");
     expect(tabSwitch).not.toHaveBeenCalled();
     expect(toaster.toast).not.toHaveBeenCalled();
+    expect(backend.logError).toHaveBeenCalledWith(
+      `bigpicture start: save-setup fetch for romId=${ROM_ID} failed (proceeding unconfigured): Error: net`,
+    );
   });
 
   it("an adoptable default is adopted and the start proceeds", async () => {

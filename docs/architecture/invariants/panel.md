@@ -142,14 +142,14 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   (`frontend/src/desktop/gameview/DesktopSlotPanel.tsx` / `frontend/src/utils/useSlotPanelState.ts`) and
   `DesktopVersionHistory` (`frontend/src/desktop/gameview/DesktopVersionHistory.tsx` /
   `frontend/src/utils/useFileVersionHistory.ts`)) the same way. Two answers for the SAME rom are ordered by a sequence
-  taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`, `EmulationSettings`'s `readSeqRef`,
-  `useSaveSurfaceAnswers`'s `latestSeq` and `useDesktopSlotState`'s `slotLoadSeqRef` in `SaveManagementCard.tsx`,
-  `useSlotPanelState`'s `slotSavesSeqRef`, and `useFileVersionHistory`'s `readSeqRef`). Ordered but unbound: the two
-  identity writes (the store's `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab slot load
-  (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the store's
-  `cached.bios_status` fold (and `useStrandedCheck` in `SaveManagementCard.tsx` relies on subtree `key` and effect
-  cancellation rather than a sequence counter). The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on
-  the BIOS tab both read through, is bound and ordered (`bios` ticket). The play button is NOT covered
+  taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`, `EmulationSettings`'s `readSeqRef`, `useRomAnswer`'s
+  `latestRead` in `frontend/src/desktop/gameview/useRomAnswer.ts` and `useDesktopSlotState`'s `slotLoadSeqRef` in
+  `SaveManagementCard.tsx`, `useSlotPanelState`'s `slotSavesSeqRef`, and `useFileVersionHistory`'s `readSeqRef`).
+  Ordered but unbound: the two identity writes (the store's `loadDetail`, the panel's `loadData`) and the panel's lazy
+  SAVES-tab slot load (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor
+  ordered: the store's `cached.bios_status` fold. `useStrandedCheck` in `SaveManagementCard.tsx` is bound by the subtree
+  `key` and ordered by its effect's cleanup. The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on the
+  BIOS tab both read through, is bound and ordered (`bios` ticket). The play button is NOT covered
 
   The panel component itself holds none of these writes. `RomBinding` is built by `bindRom` for a read a run of the
   `[appId]` effect issued and by `bindRomInState` for the active tab's panes, whose writer is built during render; the

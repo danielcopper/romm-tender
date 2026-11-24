@@ -3,17 +3,16 @@
  * client. What each reads is docs/architecture/desktop-dom-architecture.md's.
  */
 
-import { useEffect, useReducer, useState, type CSSProperties, type FC, type ReactNode } from "react";
-import { getSaveSetupInfo, getSaveSyncAvailability, isSaveTrackingConfigured, logWarn } from "../../api/backend";
+import { useEffect, useReducer, type CSSProperties, type FC, type ReactNode } from "react";
+import { getSaveSetupInfo, getSaveSyncAvailability, isSaveTrackingConfigured } from "../../api/backend";
 import type { SaveSetupInfo, SaveStatus } from "../../types";
 import { BIOS_MISSING_RED } from "../../utils/biosColor";
-import { detach } from "../../utils/detach";
 import { formatBytes } from "../../utils/formatters";
 import type { GameDetailState } from "../../utils/gameDetailStore";
 import { useGamePlaytime } from "../../utils/playtimeReconcile";
-import { changesSaveAnswers } from "../../utils/saveHelpers";
 import { saveSyncBadge, type SaveSyncBadgeTone } from "../../utils/saveSyncBadge";
 import { ATTENTION_AMBER, DOT_STYLE, PLAY_BAR_ROW_HEIGHT, SYNCED_GREEN } from "./styles";
+import { useRomAnswer } from "./useRomAnswer";
 
 interface PlayButtonBadgesProps {
   appId: number;
@@ -113,49 +112,7 @@ const Dot: FC<{ color: string }> = ({ color }) => (
   <span className="tender-desktop-badge-dot" style={{ ...DOT_STYLE, backgroundColor: color }} />
 );
 
-/**
- * One read about the ROM shown: asked while it is wanted and again on a change
- * that may move it, ordered by a sequence, and tagged with its ROM so another
- * version's answer reads as none. A read that fails holds no answer rather than
- * the one from before, which may be about another emulator. `ask` is module-level.
- */
-function useRomAnswer<T>(
-  romId: number | null,
-  wanted: boolean,
-  what: string,
-  ask: (romId: number) => Promise<T>,
-): T | null {
-  const [answer, setAnswer] = useState<{ romId: number; value: T } | null>(null);
-  if (!wanted && answer !== null) setAnswer(null);
-
-  useEffect(() => {
-    if (romId === null || !wanted) return;
-    let cancelled = false;
-    let latestRead = 0;
-    const read = async () => {
-      latestRead += 1;
-      const thisRead = latestRead;
-      try {
-        const value = await ask(romId);
-        if (!cancelled && thisRead === latestRead) setAnswer({ romId, value });
-      } catch (e) {
-        logWarn(`DesktopPlayButtonBadges: ${what} read for romId=${romId} failed: ${e}`);
-        if (!cancelled && thisRead === latestRead) setAnswer(null);
-      }
-    };
-    detach(read());
-    const onDataChanged = ({ detail }: WindowEventMap["romm_data_changed"]) => {
-      if (changesSaveAnswers(detail, romId)) detach(read());
-    };
-    globalThis.addEventListener("romm_data_changed", onDataChanged);
-    return () => {
-      cancelled = true;
-      globalThis.removeEventListener("romm_data_changed", onDataChanged);
-    };
-  }, [romId, wanted, what, ask]);
-
-  return answer !== null && answer.romId === romId ? answer.value : null;
-}
+const BADGES_LOG_OWNER = "DesktopPlayButtonBadges";
 
 /**
  * The setup answer while a slot is still to be set up, else `null`. It asks in
@@ -182,8 +139,11 @@ export const PlayButtonBadges: FC<PlayButtonBadgesProps> = ({ appId, detail, sav
     detail;
   const playtime = useGamePlaytime(appId, romId, "DesktopPlayButtonBadges");
   const readsSaves = saveSyncEnabled && installed && !isOffline;
-  const setupInfo = useRomAnswer(romId, readsSaves, "save setup", readSlotSetup);
-  const saveSyncAnswer = useRomAnswer(romId, readsSaves, "save sync availability", getSaveSyncAvailability);
+  const setupInfo = useRomAnswer(romId, readsSaves, readSlotSetup, { owner: BADGES_LOG_OWNER, what: "save setup" });
+  const saveSyncAnswer = useRomAnswer(romId, readsSaves, getSaveSyncAvailability, {
+    owner: BADGES_LOG_OWNER,
+    what: "save sync availability",
+  });
   useMinuteTick(saveSyncEnabled);
   const saveSync = saveSyncBadge({
     enabled: saveSyncEnabled,

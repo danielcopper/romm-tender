@@ -8,6 +8,7 @@ import { makeConflict } from "../test-utils/saveFixtures";
 
 vi.mock("../api/backend", () => ({
   syncRomSaves: vi.fn(),
+  logWarn: vi.fn(),
 }));
 
 vi.mock("./toast", () => ({
@@ -177,6 +178,7 @@ describe("executeManualSaveSync", () => {
 
     await executeManualSaveSync(100, 42);
     expect(toast.showToast).toHaveBeenCalledWith("Server returned 500");
+    expect(backend.logWarn).toHaveBeenCalledWith("Sync Saves for romId=42 failed: Server returned 500");
     expectNothingRefreshed(dispatchSpy);
   });
 
@@ -185,6 +187,7 @@ describe("executeManualSaveSync", () => {
 
     await executeManualSaveSync(100, 42);
     expect(toast.showToast).toHaveBeenCalledWith("Save sync failed");
+    expect(backend.logWarn).toHaveBeenCalledWith("Sync Saves for romId=42 threw: Error: Network boom");
     expectNothingRefreshed(dispatchSpy);
   });
 });

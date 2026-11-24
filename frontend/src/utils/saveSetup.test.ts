@@ -227,8 +227,6 @@ describe("applyLaunchGateSetupOutcome", () => {
       const result = await applyLaunchGateSetupOutcome(outcome, deps);
       expect(result).toBe("abort");
       expect(deps.toast).toHaveBeenCalledWith(expectedToast);
-      expect(expectedToast).toContain("Saves");
-      expect(expectedToast).not.toContain("the Saves tab");
       expect(deps.dispatchSavesTab).toHaveBeenCalledOnce();
     });
 

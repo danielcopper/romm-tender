@@ -1,6 +1,6 @@
 /** The per-game "Sync Saves" action: one `syncRomSaves` call and what it says. */
 
-import { syncRomSaves } from "../api/backend";
+import { logWarn, syncRomSaves } from "../api/backend";
 import { showToast } from "./toast";
 import { saveSyncToastBody } from "./saveSyncToast";
 import { noteSaveSyncDisplay } from "./gameDetailStore";
@@ -42,8 +42,10 @@ export async function executeManualSaveSync(appId: number, romId: number): Promi
       noteSaveSyncDisplay(appId, romId, c > 0 ? CONFLICT_DISPLAY : syncedJustNowDisplay());
       return;
     }
+    logWarn(`Sync Saves for romId=${romId} failed: ${result.message}`);
     showToast(result.message || "Save sync failed");
-  } catch {
+  } catch (e) {
+    logWarn(`Sync Saves for romId=${romId} threw: ${e}`);
     showToast("Save sync failed");
   }
 }

@@ -1,10 +1,3 @@
-/**
- * Shared state and lifecycle hook for collapsible save slot accordion panels.
- * Owns expand/collapse state, lazy-loading inactive slot saves with sequence
- * ordering, optional `save_sync` cache invalidation, and slot activate/delete
- * transitions.
- */
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSlotSaves, logWarn } from "../api/backend";
 import type { SaveStatus, SlotDeleteInfo, SlotSaveFile } from "../types";
@@ -106,15 +99,18 @@ export function useSlotPanelState({
   };
 
   const handleActivate = async () => {
+    if (switching || deleting) return;
     setSwitching(true);
     setSwitchError(null);
     try {
       const outcome = await executeSlotSwitch(romId, slotName, "activate");
-      if (!mountedRef.current) return;
+      // Called even after an unmount: Big Picture's tab switch unmounts this
+      // panel, and the callback is what writes the new active slot.
       if (outcome.ok) {
         await onSlotActivated(outcome.saveStatus);
         return;
       }
+      if (!mountedRef.current) return;
       // Partial switches toast rather than setting inline switchError:
       // `switch_incomplete` flips `isActive` after announcing the sync,
       // remounting the keyed panel and dropping local state; `switch_stopped`
@@ -134,6 +130,7 @@ export function useSlotPanelState({
   };
 
   const handleDelete = async (runConfirmAndDelete: (info: SlotDeleteInfo) => Promise<void> | void) => {
+    if (switching || deleting) return;
     setDeleting(true);
     try {
       const info = await loadSlotDeleteInfo(romId, slotName);

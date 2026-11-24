@@ -11,7 +11,7 @@ import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
 import { formatAttributionSegment, pickLastSyncer } from "../../utils/saveHelpers";
-import { VERSIONS_OFFLINE_TEXT } from "../../utils/saveSlotWording";
+import { NO_OLDER_VERSIONS_TEXT, VERSIONS_OFFLINE_TEXT } from "../../utils/saveSlotWording";
 import { useFileVersionHistory, type FileVersionHistoryTarget } from "../../utils/useFileVersionHistory";
 import { renderCopyToSlotButton, type CopyToSlotHandler } from "./CopyToSlotButton";
 import { detach } from "../../utils/detach";
@@ -143,7 +143,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = (props) => {
       );
     }
     if (versionCount === 0) {
-      return <div style={MUTED_NOTE_STYLE}>No older versions available</div>;
+      return <div style={MUTED_NOTE_STYLE}>{NO_OLDER_VERSIONS_TEXT}</div>;
     }
     return (versions ?? []).map(renderVersionRow);
   };

@@ -9,7 +9,7 @@ import { ConfirmModal, DialogButton, showModal } from "@decky/ui";
 import { logError } from "../../api/backend";
 import type { SaveStatus, SyncConflict, SaveSlotSummary } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
-import { MUTED_COLOR, computeSyncSummary, displaySlot } from "../../utils/saveHelpers";
+import { MUTED_COLOR, computeSyncSummary, displaySlot, slotFileCount } from "../../utils/saveHelpers";
 import { NO_SAVE_ON_DEVICE } from "../../utils/saveSyncStatement";
 import {
   LEGACY_SLOT_NOTE,
@@ -196,13 +196,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
 
   const { syncSummaryText, syncSummaryColor } = computeSyncSummary(isActive, saveStatus, conflicts, noSaveLine);
 
-  // Active slot: prefer the server-side save count (SaveSlotSummary.count, kept
-  // fresh by the parent's romm_data_changed → getSaveSlots refresh) so the header
-  // reflects every save in the slot — a copy adds a version that the tracked-file
-  // count (files.length, usually 1) would never show. Fall back to the tracked
-  // file count when the summary count is absent (0 — e.g. the synthesized
-  // active-slot placeholder before getSaveSlots resolves).
-  const fileCount = isActive ? slot.count || (saveStatus?.files.length ?? 0) : (slotFiles?.length ?? slot.count);
+  const fileCount = slotFileCount(isActive, slot.count, saveStatus, slotFiles);
 
   // The slot-less legacy bucket is read-only (#1276, #1478) and
   // demoted: muted styling + a read-only note; it sorts last (in SavesTab).

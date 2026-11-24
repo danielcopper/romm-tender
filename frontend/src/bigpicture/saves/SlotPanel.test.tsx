@@ -937,6 +937,23 @@ describe("SlotPanel", () => {
       expect((getByText("Delete Slot") as HTMLButtonElement).disabled).toBe(false);
     });
 
+    it("switches nothing while a delete is running", async () => {
+      vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
+      vi.mocked(backend.getSlotDeleteInfo).mockReturnValue(new Promise(() => {}));
+
+      const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
+      fireEvent.click(container.querySelector("button")!);
+      await flushAsync();
+      fireEvent.click(getByText("Delete Slot"));
+      await flushAsync();
+      fireEvent.click(getByText("Activate Slot"));
+      await flushAsync();
+      await flushAsync();
+
+      expect(backend.switchSlot).not.toHaveBeenCalled();
+      expect(getByText("Activate Slot")).toBeTruthy();
+    });
+
     it("ends 'Deleting...' when the info call answers a failure", async () => {
       vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
       vi.mocked(backend.getSlotDeleteInfo).mockResolvedValueOnce({
@@ -1236,7 +1253,7 @@ describe("SlotPanel", () => {
       expect(vi.mocked(backend.getSlotSaves)).toHaveBeenCalledWith(2, "default");
     });
 
-    it("does not invoke onSlotSwitched if unmounted before switchSlot resolves", async () => {
+    it("still invokes onSlotSwitched when unmounted before switchSlot resolves", async () => {
       vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
       let resolveSwitch!: (v: backend.SwitchSlotResult) => void;
       vi.mocked(backend.switchSlot).mockImplementationOnce(
@@ -1252,10 +1269,11 @@ describe("SlotPanel", () => {
       fireEvent.click(getByText("Activate Slot"));
 
       unmount();
-      resolveSwitch({ success: true, save_status: makeStatus() });
+      const status = makeStatus();
+      resolveSwitch({ success: true, save_status: status });
       await flushAsync();
 
-      expect(onSlotSwitched).not.toHaveBeenCalled();
+      expect(onSlotSwitched).toHaveBeenCalledWith("default", status);
     });
   });
 });

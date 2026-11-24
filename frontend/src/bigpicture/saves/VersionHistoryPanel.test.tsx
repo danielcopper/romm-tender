@@ -722,7 +722,7 @@ describe("VersionHistoryPanel — self-refresh on romm_data_changed", () => {
     );
   });
 
-  it("does not invoke onRestored if unmounted before savesRollbackToVersion resolves", async () => {
+  it("still invokes onRestored when unmounted before savesRollbackToVersion resolves", async () => {
     vi.mocked(backend.savesListFileVersions).mockResolvedValue({
       status: "ok",
       versions: [makeVersion({ id: 11 })],
@@ -744,6 +744,6 @@ describe("VersionHistoryPanel — self-refresh on romm_data_changed", () => {
     resolveRestore({ status: "ok" });
     await flushAsync();
 
-    expect(onRestored).not.toHaveBeenCalled();
+    expect(onRestored).toHaveBeenCalledTimes(1);
   });
 });

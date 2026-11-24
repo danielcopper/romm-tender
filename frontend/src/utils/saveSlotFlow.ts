@@ -1,9 +1,8 @@
 /**
- * Pure async operations for save-slot and version management: probing inactive
- * versions for stranded local saves, switching or deleting slots, listing or
- * restoring file versions, copying a version into a slot, and deleting local saves.
- * Each surface keeps its own state, timers and dialogs; the sentences are
- * `saveSlotWording.ts`'s.
+ * The save-slot surfaces' round trips: the stranded-version check, switching
+ * into a slot, deleting one, listing and restoring a file's versions, copying a
+ * version into a slot, and deleting local saves. Each surface keeps its own
+ * state, timers and dialogs; the sentences are `saveSlotWording.ts`'s.
  */
 
 import {
@@ -180,8 +179,8 @@ export async function executeSlotDelete(romId: number, slot: string): Promise<bo
 /**
  * Load prior server versions of `filename` in `slot` for `romId`. Returns
  * `{ ok: true }` on `ok` and `multi_file_unsupported`; never throws: other
- * non-ok answers and rejections are mapped via {@link versionHistoryLoadError}
- * (logging rejections and non-refusal failures).
+ * non-ok answers and rejections are mapped via {@link versionHistoryLoadError},
+ * and each is logged.
  */
 export async function loadFileVersions(
   romId: number,
@@ -191,7 +190,8 @@ export async function loadFileVersions(
   try {
     const result = await savesListFileVersions(romId, slot, filename);
     if (result.status === "ok" || result.status === "multi_file_unsupported") {
-      // Multi-file games don't list per-file history; return an empty list.
+      // multi_file_unsupported carries an empty list — a multi-file slot's
+      // siblings are components, not prior versions (#908).
       return { ok: true, versions: result.versions };
     }
     if (result.status === "not_found") {

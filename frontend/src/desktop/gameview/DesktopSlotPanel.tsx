@@ -1,27 +1,28 @@
-/**
- * Collapsible slot accordion panel and tracked-file row renderer for the
- * Desktop Saves card. Handles active slot file details, multi-file note,
- * inactive slot lazy-loading, Activate Slot / Delete Slot busy states, and
- * delegates version history to DesktopVersionHistory.
- */
-
 import type { CSSProperties, FC, ReactNode } from "react";
+import { logError } from "../../api/backend";
 import type { SaveFileStatus, SaveSlotSummary, SaveStatus, SlotSaveFile, SyncConflict } from "../../types";
-import { detach } from "../../utils/detach";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
 import {
+  LAST_SYNCED_NEVER,
   MUTED_COLOR,
-  buildLastSyncedValue,
   computeSyncSummary,
   displaySlot,
   formatSaveTimeAgo,
+  saveFileRowFacts,
+  slotFileCount,
   statusLabel,
+  type LastSyncedParts,
 } from "../../utils/saveHelpers";
 import { executeSlotDelete } from "../../utils/saveSlotFlow";
-import { LEGACY_SLOT_NOTE, multiFileSaveHeading, multiFileSaveNote } from "../../utils/saveSlotWording";
+import {
+  LEGACY_SLOT_NOTE,
+  NO_SAVES_IN_SLOT_TEXT,
+  multiFileSaveHeading,
+  multiFileSaveNote,
+} from "../../utils/saveSlotWording";
 import { NO_SAVE_ON_DEVICE } from "../../utils/saveSyncStatement";
 import { useSlotPanelState, type SlotPanelState } from "../../utils/useSlotPanelState";
-import { DesktopCopyToSlotButton, DesktopVersionHistory } from "./DesktopVersionHistory";
+import { DesktopAttribution, DesktopCopyToSlotButton, DesktopVersionHistory } from "./DesktopVersionHistory";
 import { SvgThrobber } from "./SvgThrobber";
 import type { AskDialog } from "./dialogs/askDialog";
 import { desktopDeleteSlotDialog } from "./dialogs/desktopDialogs";
@@ -32,7 +33,6 @@ import {
   CONFLICT_RED,
   MUTED_PILL_BADGE_STYLE,
   SUBTLE_LABEL_COLOR,
-  SYNCED_GREEN,
   actionButtonStyle,
   confirmActionButtonStyle,
   smallActionButtonStyle,
@@ -76,22 +76,14 @@ const DesktopInfoRow: FC<{ label: string; color?: string; children: ReactNode }>
   </div>
 );
 
-function renderLastSyncedNode(value: string) {
-  if (value === "Never") {
-    return <span style={{ color: ATTENTION_AMBER }}>{value}</span>;
-  }
-  const checkIdx = value.indexOf(" ✓");
-  if (checkIdx !== -1) {
-    const head = value.slice(0, checkIdx);
-    const tail = value.slice(checkIdx + 2);
-    return (
-      <span>
-        {head} <span style={{ color: SYNCED_GREEN }}>✓</span>
-        {tail}
-      </span>
-    );
-  }
-  return value;
+function renderLastSyncedNode({ time, attribution, staleHint }: LastSyncedParts) {
+  return (
+    <span>
+      {time ?? <span style={{ color: ATTENTION_AMBER }}>{LAST_SYNCED_NEVER}</span>}
+      <DesktopAttribution parts={attribution} />
+      {staleHint === null ? null : ` · ${staleHint}`}
+    </span>
+  );
 }
 
 function formatServerSaveSummary(file: SaveFileStatus): string {
@@ -117,10 +109,7 @@ export function renderDesktopSaveFileRow(
   extraFooter?: ReactNode,
 ) {
   const { color: statusColor, label: statusLabelText } = statusLabel(file.status, file.last_sync_at);
-  const isSynced = file.status === "synced" || file.status === "skip";
-  const conflictActive = file.status === "conflict" || Boolean(conflict);
-  const checkedHint = !isSynced && lastSyncCheckAt ? formatSaveTimeAgo(lastSyncCheckAt) : null;
-  const lastSyncedValue = buildLastSyncedValue(file, isSynced);
+  const { conflictActive, checkedHint, lastSynced } = saveFileRowFacts(file, conflict, lastSyncCheckAt);
   const sizeBytes = file.local_size ?? file.server_size;
 
   return (
@@ -179,7 +168,7 @@ export function renderDesktopSaveFileRow(
       ) : null}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px" }}>
-        <DesktopInfoRow label="Last synced:">{renderLastSyncedNode(lastSyncedValue)}</DesktopInfoRow>
+        <DesktopInfoRow label="Last synced:">{renderLastSyncedNode(lastSynced)}</DesktopInfoRow>
         {checkedHint ? (
           <DesktopInfoRow label="Checked:" color={MUTED_COLOR}>
             {checkedHint}
@@ -431,7 +420,7 @@ const InactiveSlotFilesList: FC<{
   if (slotFiles.length === 0) {
     return (
       <div style={{ color: MUTED_COLOR, fontStyle: "italic", fontSize: "12px", marginBottom: "12px" }}>
-        No saves in this slot
+        {NO_SAVES_IN_SLOT_TEXT}
       </div>
     );
   }
@@ -464,17 +453,6 @@ const InactiveSlotFilesList: FC<{
     </div>
   );
 };
-
-function resolveSlotFileCount(
-  isActive: boolean,
-  slotCount: number,
-  saveStatus: SaveStatus | null,
-  slotFiles: SlotSaveFile[] | null,
-): number {
-  // Synthesized active-slot placeholder carries count=0 before getSaveSlots settles.
-  if (!isActive) return slotFiles?.length ?? slotCount;
-  return slotCount > 0 ? slotCount : (saveStatus?.files.length ?? 0);
-}
 
 function hasActiveSlotSaves(saveStatus: SaveStatus | null, slotCount: number): boolean {
   return (saveStatus?.files.length ?? 0) > 0 || slotCount > 0;
@@ -515,7 +493,11 @@ const InactiveSlotSection: FC<InactiveSlotSectionProps> = ({
               type="button"
               style={actionButtonStyle(activateDisabled)}
               disabled={activateDisabled}
-              onClick={() => detach(panel.handleActivate())}
+              onClick={() => {
+                panel
+                  .handleActivate()
+                  .catch((e) => logError(`DesktopSlotPanel: slot '${slotName}' threw during its switch: ${e}`));
+              }}
             >
               {panel.switching ? <SvgThrobber style={{ width: "12px", height: "12px" }} /> : null}
               <span>{panel.switching ? "Switching..." : "Activate Slot"}</span>
@@ -524,7 +506,9 @@ const InactiveSlotSection: FC<InactiveSlotSectionProps> = ({
               type="button"
               style={actionButtonStyle(deleteDisabled, true)}
               disabled={deleteDisabled}
-              onClick={() => detach(onDelete())}
+              onClick={() => {
+                onDelete().catch((e) => logError(`DesktopSlotPanel: slot '${slotName}' threw during its delete: ${e}`));
+              }}
             >
               {panel.deleting ? <SvgThrobber style={{ width: "12px", height: "12px" }} /> : null}
               <span>{panel.deleting ? "Deleting..." : "Delete Slot"}</span>
@@ -589,7 +573,7 @@ export const DesktopSlotPanel: FC<DesktopSlotPanelProps> = ({
 
   const conflicts: SyncConflict[] = isActive ? (saveStatus?.conflicts ?? []) : [];
   const { syncSummaryText, syncSummaryColor } = computeSyncSummary(isActive, saveStatus, conflicts, noSaveLine);
-  const fileCount = resolveSlotFileCount(isActive, slot.count, saveStatus, panel.slotFiles);
+  const fileCount = slotFileCount(isActive, slot.count, saveStatus, panel.slotFiles);
   const activeHasSaves = hasActiveSlotSaves(saveStatus, slot.count);
 
   return (

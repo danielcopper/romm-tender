@@ -1,8 +1,8 @@
 /**
- * Big Picture's SAVES tab view while save sync is off
- * (`docs/architecture/save-file-sync-architecture.md`, "This device's save files (save sync off)"):
- * lists this device's save files or the refusal/not-downloaded sentence (`SyncOffSection` in
- * `SaveManagementCard.tsx` renders the desktop counterpart). Each row is focusable for controller navigation.
+ * The SAVES tab while save sync is off: "Save sync is off.", and this device's save files for the game — or, for a
+ * downloaded game whose saves no sync would carry, the sentence its sync is refused with (#2527 D1). A game not
+ * downloaded reads that no save lies here, refused or not (D5). It offers nothing to press that needs save sync; each
+ * row is focusable only so a controller can reach it.
  */
 
 import type { FC, ReactElement } from "react";

@@ -1,11 +1,3 @@
-/**
- * Shared state and lifecycle hook for expandable per-save version history
- * panels. Lazy-loads prior server versions on expand, auto-fetches if an open
- * panel reconnects from offline before loading, invalidates/refreshes on
- * matching `romm_data_changed` (`save_sync`) events, and guards against
- * unmounted or superseded responses.
- */
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SaveVersionEntry, SyncConflict } from "../types";
 import { detach } from "./detach";
@@ -98,9 +90,10 @@ export function useFileVersionHistory(
     setRestoringVersionId(version.id);
     try {
       if (await executeVersionRestore(romId, slot, version, showConflict)) {
-        if (!mountedRef.current) return;
-        setVersions(null);
-        setOpen(false);
+        if (mountedRef.current) {
+          setVersions(null);
+          setOpen(false);
+        }
         onRestored();
       }
     } finally {

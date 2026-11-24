@@ -9,7 +9,7 @@ import { DialogButton } from "@decky/ui";
 import type { SaveFileStatus, SyncConflict } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
-import { buildLastSyncedValue, formatSaveTimeAgo, statusLabel } from "../../utils/saveHelpers";
+import { buildLastSyncedValue, saveFileRowFacts, statusLabel } from "../../utils/saveHelpers";
 
 // Label column width — keeps values aligned vertically across rows
 const LABEL_WIDTH = "88px";
@@ -36,15 +36,7 @@ export function renderSaveFileRow(
   lastSyncCheckAt: string | null,
 ): ReactElement {
   const { color, label } = statusLabel(f.status, f.last_sync_at);
-  // "synced"/"skip" are the at-rest states; anything else (upload/download/
-  // conflict/unknown) has work pending, so the row must not claim a successful
-  // sync — no ✓, and the "Checked" hint surfaces the attempt time instead (#1334).
-  const isSynced = f.status === "synced" || f.status === "skip";
-  const conflictActive = f.status === "conflict" || !!conflict;
-  // The slot's most recent sync ATTEMPT — surfaced as a separate "Checked" hint
-  // only when this file isn't at rest, so a pending/failed file shows both the
-  // last success and the recent check without duplicating the synced ✓ line.
-  const checkedHint = !isSynced && lastSyncCheckAt ? formatSaveTimeAgo(lastSyncCheckAt) : null;
+  const { isSynced, conflictActive, checkedHint } = saveFileRowFacts(f, conflict, lastSyncCheckAt);
 
   // Header value pieces (right-aligned meta: size + status)
   const headerMeta: (ReactElement | null)[] = [];

@@ -721,6 +721,16 @@ describe("executeVersionRestore", () => {
     });
     await expectConflictRejectionPropagates((cb) => executeVersionRestore(7, "default", VERSION, cb));
   });
+
+  it("returns false once the conflict prompt for a conflict_blocked restore resolves", async () => {
+    const showConflict = vi.fn().mockResolvedValue("resolved");
+    vi.mocked(backend.savesRollbackToVersion).mockResolvedValueOnce({
+      status: "conflict_blocked",
+      conflicts: [CONFLICT],
+    });
+    await expect(executeVersionRestore(7, "default", VERSION, showConflict)).resolves.toBe(false);
+    expect(showConflict).toHaveBeenCalledWith(CONFLICT);
+  });
 });
 
 describe("executeDeleteLocalSaves", () => {

@@ -1,11 +1,11 @@
 /**
- * Desktop confirmation dialog for deleting a save slot.
- * Shown from DesktopSlotPanel when the user confirms deleting an inactive slot.
+ * The confirmation for deleting a save slot, opened by an inactive slot's
+ * Delete press in DesktopSlotPanel.
  */
 
 import type { FC } from "react";
 import type { SlotDeleteInfo } from "../../../types";
-import { formatSlotDeleteLines } from "../../../utils/saveSlotWording";
+import { CANNOT_BE_UNDONE, formatSlotDeleteLines } from "../../../utils/saveSlotWording";
 import { DANGER_TEXT_RED } from "../styles";
 import { DIALOG_TEXT_STYLE, DesktopDialog, DesktopDialogFooter, dialogButtonStyle } from "./DesktopDialog";
 
@@ -23,7 +23,7 @@ export const DesktopDeleteSlotDialog: FC<DesktopDeleteSlotDialogProps> = ({ dele
       </div>
     ))}
     <div style={{ fontSize: "13px", color: DANGER_TEXT_RED, fontWeight: 600, marginBottom: "16px" }}>
-      This cannot be undone.
+      {CANNOT_BE_UNDONE}
     </div>
 
     <DesktopDialogFooter onDismiss={onDismiss}>

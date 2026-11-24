@@ -1,15 +1,9 @@
-/**
- * Expandable per-save version history subsection for DesktopSlotPanel.
- * Lazy-loads prior server versions on expand, shows offline / entity / device /
- * connection error states with Retry, and supports Restore and Copy to slot...
- * on version rows.
- */
-
 import type { CSSProperties, FC } from "react";
+import { logError } from "../../api/backend";
 import { detach } from "../../utils/detach";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
-import { MUTED_COLOR, formatAttributionSegment, pickLastSyncer } from "../../utils/saveHelpers";
-import { VERSIONS_OFFLINE_TEXT } from "../../utils/saveSlotWording";
+import { MUTED_COLOR, attributionParts, pickLastSyncer, type AttributionParts } from "../../utils/saveHelpers";
+import { NO_OLDER_VERSIONS_TEXT, VERSIONS_OFFLINE_TEXT } from "../../utils/saveSlotWording";
 import { useFileVersionHistory, type FileVersionHistoryTarget } from "../../utils/useFileVersionHistory";
 import { SvgThrobber } from "./SvgThrobber";
 import type { AskDialog } from "./dialogs/askDialog";
@@ -38,17 +32,18 @@ const TABLE_GRID_STYLE: CSSProperties = {
   alignItems: "center",
 };
 
-function renderAttributionWithCheckmark(attr: string | null) {
-  if (attr === null) return null;
-  if (!attr.endsWith("✓")) return ` · ${attr}`;
-  const prefix = attr === "✓" ? " · " : ` · ${attr.slice(0, -1)}`;
+/** An attribution segment after the time it follows, its ✓ in green. */
+export const DesktopAttribution: FC<{ parts: AttributionParts | null }> = ({ parts }) => {
+  if (parts === null) return null;
+  const text = parts.text ?? "";
+  if (!parts.check) return <>{` · ${text}`}</>;
   return (
     <>
-      {prefix}
+      {text ? ` · ${text} ` : " · "}
       <span style={{ color: SYNCED_GREEN }}>✓</span>
     </>
   );
-}
+};
 
 export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = (props) => {
   const { slot, ask, onCopySave, isOffline } = props;
@@ -78,9 +73,7 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = (props) => 
       );
     }
     if (versions !== null && versions.length === 0) {
-      return (
-        <div style={{ color: MUTED_COLOR, fontStyle: "italic", fontSize: "11px" }}>No older versions available</div>
-      );
+      return <div style={{ color: MUTED_COLOR, fontStyle: "italic", fontSize: "11px" }}>{NO_OLDER_VERSIONS_TEXT}</div>;
     }
     if (versions !== null && versions.length > 0) {
       return (
@@ -104,7 +97,7 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = (props) => 
           </div>
           {versions.map((v) => {
             const lastSyncer = pickLastSyncer(v.device_syncs);
-            const attr = formatAttributionSegment(v.uploaded_by_us, lastSyncer?.device_name);
+            const attr = attributionParts(v.uploaded_by_us, lastSyncer?.device_name);
             const isThisRestoring = restoringVersionId === v.id;
             const actionDisabled = restoringVersionId !== null;
             const versionHeading = v.emulator ? `#${v.id} · ${v.emulator}` : `#${v.id}`;
@@ -138,14 +131,18 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = (props) => 
                 </span>
                 <span style={{ color: MUTED_COLOR }}>
                   {formatTimestamp(v.updated_at)}
-                  {renderAttributionWithCheckmark(attr)}
+                  <DesktopAttribution parts={attr} />
                 </span>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
                   <button
                     type="button"
                     style={actionStyle}
                     disabled={actionDisabled}
-                    onClick={() => detach(handleRestore(v))}
+                    onClick={() => {
+                      handleRestore(v).catch((e) =>
+                        logError(`DesktopVersionHistory: restoring version ${v.id} in slot '${slot}' threw: ${e}`),
+                      );
+                    }}
                   >
                     {isThisRestoring ? <SvgThrobber style={{ width: "10px", height: "10px" }} /> : null}
                     <span>{isThisRestoring ? "Restoring..." : "Restore"}</span>

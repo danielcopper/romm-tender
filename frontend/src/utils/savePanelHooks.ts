@@ -1,9 +1,3 @@
-/**
- * Shared low-level hooks for expandable save and slot panels: unmount tracking,
- * synchronous ref-backed expand/collapse toggles, and `romm_data_changed`
- * (`save_sync`) event listeners scoped to a single ROM.
- */
-
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { isSaveSyncForRom } from "./saveHelpers";
 
@@ -20,8 +14,8 @@ export function useMountedRef(): MutableRefObject<boolean> {
 }
 
 /**
- * Boolean open/expanded state mirrored to a synchronous ref so same-turn DOM
- * event handlers observe closures triggered before React commits a re-render.
+ * Open/closed state mirrored in a ref, so code later in the same turn reads the
+ * new value before React has re-rendered.
  */
 export function useExpandedPanel(defaultExpanded: boolean) {
   const [expanded, setExpanded] = useState(defaultExpanded);

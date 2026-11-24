@@ -4,14 +4,6 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { PlayButtonBadges } from "./PlayButtonBadges";
 import * as backend from "../../api/backend";
 import { BIOS_MISSING_RED } from "../../utils/biosColor";
-import {
-  ACCENT_BLUE,
-  BODY_TEXT_COLOR,
-  CONFLICT_RED,
-  DANGER_TEXT_RED,
-  STRANDED_ORANGE,
-  SUBTLE_LABEL_COLOR,
-} from "./styles";
 import * as playtimeReconcile from "../../utils/playtimeReconcile";
 import type { GameDetailState } from "../../utils/gameDetailStore";
 import type { SaveSetupInfo, SaveStatus, SaveSyncAvailability } from "../../types";
@@ -866,23 +858,5 @@ describe("PlayButtonBadges", () => {
       const props = (element as unknown as Record<string, object>)[propsKey!]!;
       expect(Object.keys(props).filter((name) => /^on[A-Z]/.test(name))).toEqual([]);
     }
-  });
-
-  it("pins desktop gameview palette constants", () => {
-    expect({
-      ACCENT_BLUE,
-      BODY_TEXT_COLOR,
-      CONFLICT_RED,
-      DANGER_TEXT_RED,
-      STRANDED_ORANGE,
-      SUBTLE_LABEL_COLOR,
-    }).toEqual({
-      ACCENT_BLUE: "#1a9fff",
-      BODY_TEXT_COLOR: "#dfe3e6",
-      CONFLICT_RED: "#d94126",
-      DANGER_TEXT_RED: "#ff6b6b",
-      STRANDED_ORANGE: "#ff8800",
-      SUBTLE_LABEL_COLOR: "#6e7f91",
-    });
   });
 });

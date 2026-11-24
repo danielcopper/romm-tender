@@ -73,16 +73,20 @@ export function resolveSaveSetupOutcome(info: SaveSetupInfo): SaveSetupOutcome {
   return { kind: "needs_user_choice" };
 }
 
+export type SaveSetupSurface = "bigpicture" | "desktop";
+
+/** Where the launch gate's toasts send the user, as each game-page surface names it. */
+const SAVES_PLACE: Record<SaveSetupSurface, string> = { bigpicture: "the Saves tab", desktop: "Saves" };
+
 /** User-facing copy for the server-unreachable branch, shared by the wizard
  *  banner and the launch-gate toast. */
 export const SERVER_UNREACHABLE_WIZARD_MESSAGE =
   "RomM server is not reachable — cannot configure save slot. Retry once the server is back.";
 
-export const SERVER_UNREACHABLE_TOAST_BODY =
-  "Cannot configure save slot — RomM server is not reachable. Open the Saves tab to retry.";
+const serverUnreachableToastBody = (place: string) =>
+  `Cannot configure save slot — RomM server is not reachable. Open ${place} to retry.`;
 
-const SERVER_UNREACHABLE_DESKTOP_TOAST_BODY =
-  "Cannot configure save slot — RomM server is not reachable. Open Saves to retry.";
+export const SERVER_UNREACHABLE_TOAST_BODY = serverUnreachableToastBody(SAVES_PLACE.bigpicture);
 
 /** Copy for the `not_found` branch. Deliberately does NOT say the game has no
  *  saves: the 404 can come from this device's registration (a RomM database
@@ -90,11 +94,10 @@ const SERVER_UNREACHABLE_DESKTOP_TOAST_BODY =
 export const NOT_FOUND_WIZARD_MESSAGE =
   "RomM couldn't find the save data for this setup — setup paused. The game or this device may no longer be on the server.";
 
-export const NOT_FOUND_TOAST_BODY =
-  "Cannot configure save slot — RomM couldn't find the save data for this setup. Open the Saves tab.";
+const notFoundToastBody = (place: string) =>
+  `Cannot configure save slot — RomM couldn't find the save data for this setup. Open ${place}.`;
 
-const NOT_FOUND_DESKTOP_TOAST_BODY =
-  "Cannot configure save slot — RomM couldn't find the save data for this setup. Open Saves.";
+export const NOT_FOUND_TOAST_BODY = notFoundToastBody(SAVES_PLACE.bigpicture);
 
 /** Copy for the `romm_refused` branch: RomM answered the listing, with something
  *  that is neither a missing entity nor an outage (a 429, a refused request, an
@@ -113,47 +116,16 @@ export function rommRefusedToastBody(message: string): string {
 export const DEVICE_NOT_REGISTERED_WIZARD_MESSAGE =
   "This device could not be registered with RomM — setup paused. Retry, or sign in again if it keeps failing.";
 
-export const DEVICE_NOT_REGISTERED_TOAST_BODY =
-  "Cannot configure save slot — this device could not be registered with RomM. Open the Saves tab to retry.";
+const deviceNotRegisteredToastBody = (place: string) =>
+  `Cannot configure save slot — this device could not be registered with RomM. Open ${place} to retry.`;
 
-const DEVICE_NOT_REGISTERED_DESKTOP_TOAST_BODY =
-  "Cannot configure save slot — this device could not be registered with RomM. Open Saves to retry.";
+export const DEVICE_NOT_REGISTERED_TOAST_BODY = deviceNotRegisteredToastBody(SAVES_PLACE.bigpicture);
 
-const NEEDS_USER_CHOICE_TOAST_BODY = "Configure save sync in the Saves tab first";
-const NEEDS_USER_CHOICE_DESKTOP_TOAST_BODY = "Configure save sync in Saves first";
+const needsUserChoiceToastBody = (place: string) => `Configure save sync in ${place} first`;
 
 /** Fallback toast body when `confirmSlotChoice` resolves to `success: false`
  *  without a message — used by both automated setup paths. */
-const CONFIRM_FAILED_TOAST_BODY = "Couldn't configure save sync — open the Saves tab to finish setup.";
-const CONFIRM_FAILED_DESKTOP_TOAST_BODY = "Couldn't configure save sync — open Saves to finish setup.";
-
-export type SaveSetupSurface = "bigpicture" | "desktop";
-
-const SURFACE_TOAST_COPY: Record<
-  SaveSetupSurface,
-  {
-    serverUnreachable: string;
-    notFound: string;
-    deviceNotRegistered: string;
-    confirmFailed: string;
-    needsUserChoice: string;
-  }
-> = {
-  bigpicture: {
-    serverUnreachable: SERVER_UNREACHABLE_TOAST_BODY,
-    notFound: NOT_FOUND_TOAST_BODY,
-    deviceNotRegistered: DEVICE_NOT_REGISTERED_TOAST_BODY,
-    confirmFailed: CONFIRM_FAILED_TOAST_BODY,
-    needsUserChoice: NEEDS_USER_CHOICE_TOAST_BODY,
-  },
-  desktop: {
-    serverUnreachable: SERVER_UNREACHABLE_DESKTOP_TOAST_BODY,
-    notFound: NOT_FOUND_DESKTOP_TOAST_BODY,
-    deviceNotRegistered: DEVICE_NOT_REGISTERED_DESKTOP_TOAST_BODY,
-    confirmFailed: CONFIRM_FAILED_DESKTOP_TOAST_BODY,
-    needsUserChoice: NEEDS_USER_CHOICE_DESKTOP_TOAST_BODY,
-  },
-};
+const confirmFailedToastBody = (place: string) => `Couldn't configure save sync — open ${place} to finish setup.`;
 
 /** Side-effect bundle for the launch-gate handler. The component supplies
  *  Tender's `showToast` and the global event dispatch; tests pass spies. */
@@ -194,22 +166,22 @@ export async function applyLaunchGateSetupOutcome(
   outcome: SaveSetupOutcome,
   deps: LaunchGateSetupDeps,
 ): Promise<"proceed" | "abort"> {
-  const copy = SURFACE_TOAST_COPY[deps.surface ?? "bigpicture"];
+  const place = SAVES_PLACE[deps.surface ?? "bigpicture"];
   switch (outcome.kind) {
     // No slot is set up for a game whose saves no sync carries, and nothing is
     // asked of the user: the start goes on (#2153 D1).
     case "sync_unavailable":
       return "proceed";
     case "server_unreachable":
-      return abortLaunchToSaves(deps, copy.serverUnreachable);
+      return abortLaunchToSaves(deps, serverUnreachableToastBody(place));
     // Same abort, honest cause — a 404 must not let the launch proceed with save
     // tracking unconfigured.
     case "not_found":
-      return abortLaunchToSaves(deps, copy.notFound);
+      return abortLaunchToSaves(deps, notFoundToastBody(place));
     case "romm_refused":
       return abortLaunchToSaves(deps, rommRefusedToastBody(outcome.message));
     case "device_not_registered":
-      return abortLaunchToSaves(deps, copy.deviceNotRegistered);
+      return abortLaunchToSaves(deps, deviceNotRegisteredToastBody(place));
     case "auto_confirm": {
       // Auto-confirm of a named/default slot — never migrate (so no conflict).
       const result = await deps.confirmSlotChoice(deps.rid, outcome.slot, false, null, false);
@@ -217,13 +189,13 @@ export async function applyLaunchGateSetupOutcome(
         // A resolved failure (not a throw) must not let the launch proceed with
         // save tracking unconfigured — route to Saves like the other
         // abort branches (#1009).
-        return abortLaunchToSaves(deps, result.message || copy.confirmFailed);
+        return abortLaunchToSaves(deps, result.message || confirmFailedToastBody(place));
       }
       return "proceed";
     }
     // Server has saves — user must configure in Saves.
     case "needs_user_choice":
-      return abortLaunchToSaves(deps, copy.needsUserChoice);
+      return abortLaunchToSaves(deps, needsUserChoiceToastBody(place));
   }
 }
 
@@ -273,13 +245,10 @@ function heldWizardMessage(result: SaveSetupInfo): string | null {
   }
 }
 
-/** Apply the initial `getSaveSetupInfo` result for a save setup wizard's
- *  fetch effect. Held states (`server_unreachable`, `not_found`,
- *  `romm_refused`, `device_not_registered`) route to `deps.setError`,
- *  `sync_unavailable` routes to `deps.setUnavailable`, `auto_confirm_default`
- *  auto-confirms (calling `deps.onComplete` on success, or surfacing the error
- *  via `setError` and falling back to `setInfo`), and all other outcomes open
- *  the per-slot picker via `deps.setInfo`. */
+/** Apply the initial `getSaveSetupInfo` result inside `SlotSetupWizard`'s
+ *  fetch effect. Routes server_unreachable to a held-wizard error banner,
+ *  auto_confirm_default through a backend confirm, and everything else into
+ *  the per-slot picker by calling `setInfo`. */
 export async function applyWizardInitialSetupResult(result: SaveSetupInfo, deps: WizardSetupDeps): Promise<void> {
   const held = heldWizardMessage(result);
   if (held !== null) {

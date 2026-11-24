@@ -10,7 +10,10 @@ import {
   formatAttributionSegment,
   formatSaveTimeAgo,
   isSaveSyncForRom,
+  lastSyncedParts,
   pickLastSyncer,
+  saveFileRowFacts,
+  slotFileCount,
   sortSaveSlots,
   statusLabel,
 } from "./saveHelpers";
@@ -546,6 +549,82 @@ describe("buildLastSyncedValue", () => {
 
   it("renders Never without checkmark when un-synced with no timestamp", () => {
     expect(buildLastSyncedValue(makeFile({ last_sync_at: null, status: "upload" }), false)).toBe("Never");
+  });
+});
+
+describe("lastSyncedParts", () => {
+  useJuneFixedClock();
+
+  const makeFile = (overrides: Partial<SaveFileStatus> = {}): SaveFileStatus => ({
+    filename: "save.srm",
+    local_path: null,
+    local_hash: null,
+    local_mtime: null,
+    local_size: null,
+    server_save_id: null,
+    server_file_name: null,
+    server_emulator: null,
+    server_updated_at: null,
+    server_size: null,
+    last_sync_at: null,
+    status: "synced",
+    ...overrides,
+  });
+
+  it("keeps a device name holding ✓ whole and the check apart from it", () => {
+    const file = makeFile({
+      last_sync_at: "2025-06-15T11:30:00Z",
+      uploaded_by_us: null,
+      device_syncs: [{ device_id: "d1", device_name: "deck ✓", is_current: true, last_synced_at: null }],
+    });
+    expect(lastSyncedParts(file, true)).toEqual({
+      time: "30m ago",
+      attribution: { text: "deck ✓", check: true },
+      staleHint: null,
+    });
+  });
+
+  it("answers no time for a file never synced, whatever follows it", () => {
+    const file = makeFile({ uploaded_by_us: false, is_current: false });
+    expect(lastSyncedParts(file, false)).toEqual({
+      time: null,
+      attribution: { text: "(not this device)", check: false },
+      staleHint: "Newer version available on server",
+    });
+  });
+});
+
+describe("saveFileRowFacts", () => {
+  const file = (status: string): SaveFileStatus =>
+    ({ filename: "save.srm", last_sync_at: null, status }) as unknown as SaveFileStatus;
+
+  it("shows the check time only for a file not at rest, and a conflict from either source", () => {
+    expect(saveFileRowFacts(file("synced"), undefined, "2025-06-15T11:30:00Z")).toMatchObject({
+      isSynced: true,
+      conflictActive: false,
+      checkedHint: null,
+    });
+    expect(saveFileRowFacts(file("upload"), undefined, null)).toMatchObject({ isSynced: false, checkedHint: null });
+    expect(saveFileRowFacts(file("conflict"), undefined, null).conflictActive).toBe(true);
+    expect(saveFileRowFacts(file("skip"), {} as SyncConflict, null)).toMatchObject({
+      isSynced: true,
+      conflictActive: true,
+    });
+  });
+});
+
+describe("slotFileCount", () => {
+  const status = { files: [{}, {}] } as unknown as SaveStatus;
+
+  it("prefers the active slot's server count, falling back to its tracked files", () => {
+    expect(slotFileCount(true, 5, status, null)).toBe(5);
+    expect(slotFileCount(true, 0, status, null)).toBe(2);
+    expect(slotFileCount(true, 0, null, null)).toBe(0);
+  });
+
+  it("counts an inactive slot's loaded files, else its summary", () => {
+    expect(slotFileCount(false, 3, status, null)).toBe(3);
+    expect(slotFileCount(false, 3, status, [1])).toBe(1);
   });
 });
 

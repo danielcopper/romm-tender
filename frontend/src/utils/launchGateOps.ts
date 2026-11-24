@@ -234,12 +234,16 @@ async function ensureTrackingConfiguredForSurface(
   romId: number,
   surface: SaveSetupSurface = "bigpicture",
 ): Promise<"proceed" | "abort"> {
-  const trackingResult = await boundedOr(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS, () => ({
-    setup_needed: false,
-  }));
+  const trackingResult = await boundedOr(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS, (e) => {
+    logError(`${surface} start: tracking check for romId=${romId} failed (assuming configured): ${e}`);
+    return { setup_needed: false };
+  });
   if (!trackingResult.setup_needed) return "proceed";
 
-  const setupInfo = await boundedOr(getSaveSetupInfo(romId), SERVER_CALL_LIMIT_MS, () => null);
+  const setupInfo = await boundedOr(getSaveSetupInfo(romId), SERVER_CALL_LIMIT_MS, (e) => {
+    logError(`${surface} start: save-setup fetch for romId=${romId} failed (proceeding unconfigured): ${e}`);
+    return null;
+  });
   if (setupInfo === null) return "proceed";
 
   return applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {

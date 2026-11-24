@@ -65,33 +65,51 @@ export function attributionLabel(uploadedByUs: boolean | null | undefined): stri
 /**
  * Format the per-save attribution+checkmark segment appended after the sync time.
  *
- * Formats device attribution and an optional trailing checkmark into one
- * ready-to-render string, or null when nothing meaningful can be shown.
- * When `showCheck=false`, pending upload/download work suppresses the ✓ so a
- * failed post-exit sync does not render a false checkmark (#1334). Version rows
- * keep the default (`showCheck=true`): the ✓ there is the per-version
- * attribution marker, not a live sync verdict.
+ * Combines device name, attribution label, and an optional trailing checkmark
+ * into one ready-to-render string, or null when nothing meaningful can be shown.
+ * The checkmark marks an actually-synced file, so a save row passes
+ * `showCheck=false` for a file with pending upload/download work — a failed
+ * post-exit sync must not render a ✓ (#1334). Version rows keep the default
+ * (`showCheck=true`): the ✓ there is the per-version attribution marker, not a
+ * live sync verdict.
  */
 export function formatAttributionSegment(
   uploadedByUs: boolean | null | undefined,
   deviceName: string | null | undefined,
   showCheck = true,
 ): string | null {
-  const check = showCheck ? " ✓" : "";
+  const parts = attributionParts(uploadedByUs, deviceName, showCheck);
+  return parts === null ? null : attributionText(parts);
+}
+
+/** {@link formatAttributionSegment}'s segment before it is joined: the device and label text, and whether a ✓
+ *  follows it — for a surface that draws the ✓ apart from the text. */
+export interface AttributionParts {
+  text: string | null;
+  check: boolean;
+}
+
+export function attributionParts(
+  uploadedByUs: boolean | null | undefined,
+  deviceName: string | null | undefined,
+  showCheck = true,
+): AttributionParts | null {
   const label = attributionLabel(uploadedByUs);
   if (uploadedByUs === true) {
-    return deviceName ? `${deviceName} ${label}${check}` : `${label}${check}`;
+    return { text: deviceName ? `${deviceName} ${label}` : label, check: showCheck };
   }
   if (uploadedByUs === false) {
     // Intentionally no device name — the last device to sync it need not be the uploader (it is this device once it
     // has downloaded the save).
-    return `${label}${check}`;
+    return { text: label, check: showCheck };
   }
-  if (label === null) {
-    if (deviceName) return `${deviceName}${check}`;
-    return showCheck ? "✓" : null;
-  }
-  return null;
+  if (deviceName) return { text: deviceName, check: showCheck };
+  return showCheck ? { text: null, check: true } : null;
+}
+
+function attributionText({ text, check }: AttributionParts): string {
+  if (!check) return text ?? "";
+  return text === null ? "✓" : `${text} ✓`;
 }
 
 /** Map a save file status to color and label */
@@ -207,23 +225,86 @@ export function filterSaveSlotsForDisplay(
   return slots.filter((s) => activeSlot !== null || s.slot !== "");
 }
 
+export const LAST_SYNCED_NEVER = "Never";
+
+/** The "Last synced" info-row value's parts; `time` is `null` for a file never synced. */
+export interface LastSyncedParts {
+  time: string | null;
+  attribution: AttributionParts | null;
+  staleHint: string | null;
+}
+
 /**
- * Compose the "Last synced" info-row value: "<time> · <attribution> ✓ · <stale hint>".
+ * The parts of the "Last synced" value: the time, the server attribution, and
+ * — when the server has moved past us — the "newer version" hint.
  *
  * The time binds to the last SUCCESS (`f.last_sync_at`), never the attempt time,
  * and the ✓ renders only for an at-rest file — a failed post-exit sync shows its
- * old success time with no ✓ (#1334). Appends the server-attribution segment and,
- * when the server has moved past us, the "newer version" hint.
+ * old success time with no ✓ (#1334).
  */
-export function buildLastSyncedValue(f: SaveFileStatus, isSynced: boolean): string {
+export function lastSyncedParts(f: SaveFileStatus, isSynced: boolean): LastSyncedParts {
   const lastSyncer = pickLastSyncer(f.device_syncs);
-  const pieces: string[] = [f.last_sync_at ? formatSaveTimeAgo(f.last_sync_at) || "Never" : "Never"];
-  const attrSegment = formatAttributionSegment(f.uploaded_by_us, lastSyncer?.device_name, isSynced);
-  if (attrSegment !== null) pieces.push(attrSegment);
-  if (f.is_current === false) {
-    pieces.push("Newer version available on server");
-  }
+  return {
+    time: (f.last_sync_at && formatSaveTimeAgo(f.last_sync_at)) || null,
+    attribution: attributionParts(f.uploaded_by_us, lastSyncer?.device_name, isSynced),
+    staleHint: f.is_current === false ? "Newer version available on server" : null,
+  };
+}
+
+/** {@link lastSyncedParts} as one line: "<time> · <attribution> ✓ · <stale hint>". */
+export function buildLastSyncedValue(f: SaveFileStatus, isSynced: boolean): string {
+  const { time, attribution, staleHint } = lastSyncedParts(f, isSynced);
+  const pieces = [time ?? LAST_SYNCED_NEVER];
+  if (attribution !== null) pieces.push(attributionText(attribution));
+  if (staleHint !== null) pieces.push(staleHint);
   return pieces.join(" · ");
+}
+
+/** What a tracked save file's row shows besides its own fields. */
+export interface SaveFileRowFacts {
+  /** "synced"/"skip" are the at-rest states; anything else (upload/download/
+   *  conflict/unknown) has work pending, so the row must not claim a successful
+   *  sync — no ✓, and the "Checked" hint surfaces the attempt time instead (#1334). */
+  isSynced: boolean;
+  conflictActive: boolean;
+  /** The slot's most recent sync ATTEMPT — shown only when this file isn't at
+   *  rest, so a pending/failed file shows both the last success and the recent
+   *  check without duplicating the synced ✓ line. */
+  checkedHint: string | null;
+  lastSynced: LastSyncedParts;
+}
+
+export function saveFileRowFacts(
+  f: SaveFileStatus,
+  conflict: SyncConflict | undefined,
+  lastSyncCheckAt: string | null,
+): SaveFileRowFacts {
+  const isSynced = f.status === "synced" || f.status === "skip";
+  return {
+    isSynced,
+    conflictActive: f.status === "conflict" || conflict !== undefined,
+    checkedHint: !isSynced && lastSyncCheckAt ? formatSaveTimeAgo(lastSyncCheckAt) : null,
+    lastSynced: lastSyncedParts(f, isSynced),
+  };
+}
+
+/**
+ * The save count a slot panel's header shows. The active slot prefers the
+ * server-side count (`SaveSlotSummary.count`, kept fresh by the surface's
+ * `getSaveSlots` refresh) so the header reflects every save in the slot — a
+ * copy adds a version that the tracked-file count (usually 1) would never show.
+ * It falls back to the tracked file count when the summary counts 0 — the
+ * placeholder `sortSaveSlots` puts in for an active slot `getSaveSlots`
+ * answered without listing. An inactive slot counts its files once loaded.
+ */
+export function slotFileCount(
+  isActive: boolean,
+  slotCount: number,
+  saveStatus: SaveStatus | null,
+  slotFiles: readonly unknown[] | null,
+): number {
+  if (!isActive) return slotFiles?.length ?? slotCount;
+  return slotCount || (saveStatus?.files.length ?? 0);
 }
 
 /**

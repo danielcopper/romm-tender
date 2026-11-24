@@ -1,21 +1,3 @@
-/**
- * SaveManagementCard — save slot browser and manager for the Desktop game view.
- *
- * Parity with the game-detail save sync flows:
- * - Returns `null` and issues zero reads while `detail.romId === null` or the
- *   backend reports a stranded panel (`useStrandedAnswer`).
- * - Save sync off (`!detail.saveSyncEnabled`): reads `getLocalSaveFiles(romId)`
- *   to list this device's save files or explain refusal / not-downloaded state.
- * - Save sync on: checks `getSaveSyncAvailability(romId)` (`refusesDownloadedGame`,
- *   `notDownloadedStatement`, `noSaveLine`), shows live retry progress while
- *   loading with a known-offline fast path and auto-reload on reconnect, renders
- *   unslotted local files and stale last-known snapshots, delegates collapsible
- *   slot panels and per-file version history to `DesktopSlotPanel`, renders
- *   inline slot-tracking confirmation and stranded-version warnings, and drives
- *   manual sync, delete local saves, `+ New Slot`, and `Copy to slot...`
- *   dialogs.
- */
-
 import {
   useCallback,
   useEffect,
@@ -34,6 +16,7 @@ import {
   getSaveSlots,
   getSaveSyncAvailability,
   isSaveTrackingConfigured,
+  logError,
   logWarn,
 } from "../../api/backend";
 import type {
@@ -45,10 +28,7 @@ import type {
   WireReason,
 } from "../../types";
 import {
-  beginServerLoad,
   reportServerReachable,
-  setServerRetryProgress,
-  settleServerLoad,
   useRommConnectionState,
   useServerRetryProgress,
   type ServerRetryProgress,
@@ -57,15 +37,7 @@ import { detach } from "../../utils/detach";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
 import { refreshSaveStatus, type GameDetailState } from "../../utils/gameDetailStore";
 import { executeManualSaveSync } from "../../utils/manualSaveSync";
-import { usePruneLeaseOwner } from "../../utils/pruneLease";
-import {
-  MUTED_COLOR,
-  changesSaveAnswers,
-  displaySlot,
-  filterSaveSlotsForDisplay,
-  isSaveSyncForRom,
-  sortSaveSlots,
-} from "../../utils/saveHelpers";
+import { MUTED_COLOR, displaySlot, filterSaveSlotsForDisplay, sortSaveSlots } from "../../utils/saveHelpers";
 import {
   executeCopySaveToSlot,
   executeDeleteLocalSaves,
@@ -73,7 +45,14 @@ import {
   findStrandedVersion,
   type StrandedVersion,
 } from "../../utils/saveSlotFlow";
-import { LAST_KNOWN_SLOTS_STALE_NOTE, connectingToRommText, strandedVersionNotice } from "../../utils/saveSlotWording";
+import {
+  LAST_KNOWN_SLOTS_STALE_NOTE,
+  NO_ACTIVE_SLOT_SETUP_PROMPT,
+  SLOT_SWITCHING_OFFLINE_NOTICE,
+  connectingToRommText,
+  strandedVersionNotice,
+} from "../../utils/saveSlotWording";
+import { useMountedRef, useRomSaveSyncListener } from "../../utils/savePanelHooks";
 import { announceSaveSync } from "../../utils/saveSyncEvents";
 import {
   NOT_DOWNLOADED_NO_SAVE,
@@ -85,11 +64,13 @@ import {
   refusalHint,
   refusesDownloadedGame,
 } from "../../utils/saveSyncStatement";
+import { releaseUnsettledRun, runSlotLoad, type SlotLoadRun } from "../../utils/slotLoadRun";
 import { applyLoadSlotsResult, applyRefreshSlotResult, type LoadSlotsFields } from "../../utils/slotState";
 import { useStrandedAnswer } from "../../utils/strandedPanelStore";
 import { showToast } from "../../utils/toast";
 import { DesktopSlotPanel, renderDesktopSaveFileRow } from "./DesktopSlotPanel";
 import { SvgThrobber } from "./SvgThrobber";
+import { useRomAnswer } from "./useRomAnswer";
 import type { AskDialog } from "./dialogs/askDialog";
 import { DesktopNewSlotDialog } from "./dialogs/DesktopNewSlotDialog";
 import {
@@ -126,6 +107,20 @@ const INITIAL_SLOT_STATE: SlotState = {
   slotsLoading: false,
 };
 
+const SETUP_NOTICE_STYLE: CSSProperties = {
+  padding: "8px 12px",
+  background: "rgba(26, 159, 255, 0.15)",
+  borderRadius: "4px",
+  border: "1px solid rgba(26, 159, 255, 0.4)",
+  marginBottom: "12px",
+  fontSize: "12px",
+  color: ACCENT_BLUE,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+};
+
 const REFUSAL_BOX_STYLE: CSSProperties = {
   padding: "10px 12px",
   borderRadius: "4px",
@@ -157,30 +152,13 @@ async function readTrackingConfigured(
     if (isCurrent()) onResult(tracking.configured);
   } catch (e) {
     logWarn(`DesktopSaveManagementCard: failed to check tracking for romId=${romId}: ${e}`);
-    if (isCurrent()) onResult(true);
-  }
-}
-
-async function readSurfaceAnswer<T>(
-  reader: () => Promise<T>,
-  label: string,
-  romId: number,
-  isLatest: () => boolean,
-  setter: (value: T | null) => void,
-): Promise<void> {
-  try {
-    const answer = await reader();
-    if (isLatest()) setter(answer);
-  } catch (e) {
-    logWarn(`DesktopSaveManagementCard: ${label} read for romId=${romId} failed: ${e}`);
-    if (isLatest()) setter(null);
   }
 }
 
 function useTabSwitchScroll(cardRef: RefObject<HTMLDivElement | null>): void {
   useEffect(() => {
-    const onTabSwitch = (e: Event) => {
-      if ((e as CustomEvent<{ tab?: string } | null>).detail?.tab === "saves") {
+    const onTabSwitch = ({ detail }: WindowEventMap["romm_tab_switch"]) => {
+      if (detail.tab === "saves") {
         cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     };
@@ -189,52 +167,24 @@ function useTabSwitchScroll(cardRef: RefObject<HTMLDivElement | null>): void {
   }, [cardRef]);
 }
 
+const CARD_LOG_OWNER = "DesktopSaveManagementCard";
+
 function useSaveSurfaceAnswers(
   romId: number,
   saveSyncEnabled: boolean,
   installed: boolean,
 ): { localSavesAnswer: LocalSaveFiles | null; saveSyncAnswer: SaveSyncAvailability | null } {
-  const [rawLocalSavesAnswer, setRawLocalSavesAnswer] = useState<LocalSaveFiles | null>(null);
-  const [rawSaveSyncAnswer, setRawSaveSyncAnswer] = useState<SaveSyncAvailability | null>(null);
-
-  if (!saveSyncEnabled && rawSaveSyncAnswer !== null) setRawSaveSyncAnswer(null);
-  if (saveSyncEnabled && rawLocalSavesAnswer !== null) setRawLocalSavesAnswer(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let latestSeq = 0;
-    const read = async () => {
-      const seq = ++latestSeq;
-      const isLatest = () => !cancelled && seq === latestSeq;
-      if (!saveSyncEnabled) {
-        await readSurfaceAnswer(() => getLocalSaveFiles(romId), "local saves", romId, isLatest, setRawLocalSavesAnswer);
-        return;
-      }
-      await readSurfaceAnswer(
-        () => getSaveSyncAvailability(romId),
-        "save sync availability",
-        romId,
-        isLatest,
-        setRawSaveSyncAnswer,
-      );
-    };
-    detach(read());
-    const onDataChanged = ({ detail: ev }: WindowEventMap["romm_data_changed"]) => {
-      if (changesSaveAnswers(ev, romId)) {
-        detach(read());
-      }
-    };
-    globalThis.addEventListener("romm_data_changed", onDataChanged);
-    return () => {
-      cancelled = true;
-      globalThis.removeEventListener("romm_data_changed", onDataChanged);
-    };
-  }, [romId, saveSyncEnabled, installed]);
-
-  return {
-    localSavesAnswer: saveSyncEnabled ? null : rawLocalSavesAnswer,
-    saveSyncAnswer: saveSyncEnabled ? rawSaveSyncAnswer : null,
-  };
+  const localSavesAnswer = useRomAnswer(romId, !saveSyncEnabled, getLocalSaveFiles, {
+    owner: CARD_LOG_OWNER,
+    what: "local saves",
+    rereadOn: installed,
+  });
+  const saveSyncAnswer = useRomAnswer(romId, saveSyncEnabled, getSaveSyncAvailability, {
+    owner: CARD_LOG_OWNER,
+    what: "save sync availability",
+    rereadOn: installed,
+  });
+  return { localSavesAnswer, saveSyncAnswer };
 }
 
 function useStrandedCheck(appId: number, romId: number, active: boolean): StrandedVersion | null {
@@ -262,40 +212,6 @@ function useStrandedCheck(appId: number, romId: number, active: boolean): Strand
   }, [appId, romId, active]);
 
   return active ? rawStrandedVersion : null;
-}
-
-interface SlotLoadRun {
-  settled: boolean;
-}
-
-async function loadDesktopSlots(
-  romId: number,
-  run: SlotLoadRun,
-  isCancelled: () => boolean,
-  slotsLoadedRef: MutableRefObject<boolean>,
-  setSlotState: Dispatch<SetStateAction<SlotState>>,
-): Promise<void> {
-  const load = beginServerLoad();
-  setServerRetryProgress(null);
-  setSlotState((prev) => ({ ...prev, slotsLoading: true }));
-  try {
-    const result = await getSaveSlots(romId);
-    if (isCancelled()) return;
-    run.settled = true;
-    reportSlotResultReachability(result);
-    applyLoadSlotsResult<SlotState>(result, setSlotState, slotsLoadedRef, (msg) =>
-      logWarn(`DesktopSaveManagementCard: ${msg}`),
-    );
-  } catch (e) {
-    logWarn(`DesktopSaveManagementCard: failed to load save slots for romId=${romId}: ${e}`);
-    if (!isCancelled()) {
-      run.settled = true;
-      slotsLoadedRef.current = false;
-      setSlotState((prev) => ({ ...prev, slotsLoading: false }));
-    }
-  } finally {
-    settleServerLoad(load);
-  }
 }
 
 async function loadOfflineSnapshot(
@@ -584,8 +500,6 @@ const SaveSlotsSection: FC<{
   romId: number;
   isOffline: boolean;
   slotConfirmed: boolean | null;
-  activeSlot: string | null;
-  activeSlotKnown: boolean;
   confirmingSlot: boolean;
   slotState: SlotState;
   retryProgress: ServerRetryProgress | null;
@@ -601,8 +515,6 @@ const SaveSlotsSection: FC<{
   romId,
   isOffline,
   slotConfirmed,
-  activeSlot,
-  activeSlotKnown,
   confirmingSlot,
   slotState,
   retryProgress,
@@ -633,6 +545,7 @@ const SaveSlotsSection: FC<{
       </div>
     );
   }
+  const { activeSlot, activeSlotKnown } = slotState;
   const showUnslotted = !activeSlotKnown || activeSlot === null;
   return (
     <>
@@ -669,48 +582,28 @@ const SaveSlotsSection: FC<{
   );
 };
 
-const SaveSyncOnSection: FC<{
-  romId: number;
+const SaveSyncNotices: FC<{
   isOffline: boolean;
   strandedVersion: StrandedVersion | null;
   slotConfirmed: boolean | null;
   activeSlot: string | null;
-  activeSlotKnown: boolean;
+  slotsLoading: boolean;
   hasSaves: boolean;
   confirmingSlot: boolean;
   notDownloaded: ReturnType<typeof notDownloadedStatement> | null;
   notDownloadedHint: string | null;
-  slotState: SlotState;
-  retryProgress: ServerRetryProgress | null;
-  displaySlots: SaveSlotSummary[];
-  saveStatus: SaveStatus | null;
-  noSaveText: string;
-  ask: AskDialog;
   onConfirmSlot: (slotName: string) => void;
-  onSlotActivated: (slotName: string, newStatus: SaveStatus) => Promise<void>;
-  onSlotListChanged: () => void;
-  onCopySave: (saveId: number, sourceSlot: string) => void;
 }> = ({
-  romId,
   isOffline,
   strandedVersion,
   slotConfirmed,
   activeSlot,
-  activeSlotKnown,
+  slotsLoading,
   hasSaves,
   confirmingSlot,
   notDownloaded,
   notDownloadedHint,
-  slotState,
-  retryProgress,
-  displaySlots,
-  saveStatus,
-  noSaveText,
-  ask,
   onConfirmSlot,
-  onSlotActivated,
-  onSlotListChanged,
-  onCopySave,
 }) => {
   const confirmDisabled = isOffline || confirmingSlot;
 
@@ -728,7 +621,7 @@ const SaveSyncOnSection: FC<{
             color: CONFLICT_RED,
           }}
         >
-          RomM is offline — slot switching is disabled until the server is reachable. This prevents save sync conflicts.
+          {SLOT_SWITCHING_OFFLINE_NOTICE}
         </div>
       ) : null}
 
@@ -749,22 +642,7 @@ const SaveSyncOnSection: FC<{
       ) : null}
 
       {slotConfirmed === false && activeSlot !== null && hasSaves ? (
-        <div
-          data-testid="unconfirmed-slot-banner"
-          style={{
-            padding: "8px 12px",
-            background: "rgba(26, 159, 255, 0.15)",
-            borderRadius: "4px",
-            border: "1px solid rgba(26, 159, 255, 0.4)",
-            marginBottom: "12px",
-            fontSize: "12px",
-            color: ACCENT_BLUE,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "12px",
-          }}
-        >
+        <div data-testid="unconfirmed-slot-banner" style={SETUP_NOTICE_STYLE}>
           <div>
             <strong>Save slot tracking is not confirmed.</strong> Confirm the active slot or choose another slot to
             enable sync.
@@ -780,28 +658,15 @@ const SaveSyncOnSection: FC<{
         </div>
       ) : null}
 
+      {slotConfirmed === false && activeSlot === null && !slotsLoading && !isOffline ? (
+        <div data-testid="desktop-saves-setup-prompt" style={{ ...SETUP_NOTICE_STYLE, display: "block" }}>
+          {NO_ACTIVE_SLOT_SETUP_PROMPT}
+        </div>
+      ) : null}
+
       {notDownloaded ? (
         <NotDownloadedBanner notDownloaded={notDownloaded} notDownloadedHint={notDownloadedHint} />
       ) : null}
-
-      <SaveSlotsSection
-        romId={romId}
-        isOffline={isOffline}
-        slotConfirmed={slotConfirmed}
-        activeSlot={activeSlot}
-        activeSlotKnown={activeSlotKnown}
-        confirmingSlot={confirmingSlot}
-        slotState={slotState}
-        retryProgress={retryProgress}
-        displaySlots={displaySlots}
-        saveStatus={saveStatus}
-        noSaveText={noSaveText}
-        ask={ask}
-        onConfirmSlot={onConfirmSlot}
-        onSlotActivated={onSlotActivated}
-        onSlotListChanged={onSlotListChanged}
-        onCopySave={onCopySave}
-      />
     </>
   );
 };
@@ -857,7 +722,6 @@ function useDesktopSlotState(
     await readTrackingConfigured(romId, isLatest, setRawSlotConfirmed);
   }, [romId, saveSyncEnabled, mountedRef]);
 
-  // Initial slot load + known-offline snapshot path + reconnect reload.
   useEffect(() => {
     if (!saveSyncEnabled || syncRefused) {
       slotLoadSeqRef.current += 1;
@@ -868,8 +732,9 @@ function useDesktopSlotState(
 
     let cancelled = false;
     const seq = ++slotLoadSeqRef.current;
-    const isCancelled = () => cancelled || slotLoadSeqRef.current !== seq;
-    const isCurrent = () => !cancelled && slotLoadSeqRef.current === seq;
+    const isOvertaken = () => slotLoadSeqRef.current !== seq;
+    const isCancelled = () => cancelled || isOvertaken();
+    const isCurrent = () => !isCancelled();
 
     if (isOffline) {
       // Leave `slotsLoadedRef.current` false offline so reconnect triggers a live load.
@@ -881,29 +746,28 @@ function useDesktopSlotState(
     }
 
     slotsLoadedRef.current = true;
-    const run: SlotLoadRun = { settled: false };
+    const run: SlotLoadRun = { cancelled: false, settled: false };
     detach(readTrackingConfigured(romId, isCurrent, setRawSlotConfirmed));
-    detach(loadDesktopSlots(romId, run, isCancelled, slotsLoadedRef, setSlotState));
+    detach(
+      runSlotLoad<SlotState>(romId, run, {
+        slotsLoadedRef,
+        setState: setSlotState,
+        isOvertaken,
+        log: (msg) => logWarn(`DesktopSaveManagementCard: ${msg}`),
+      }),
+    );
 
     return () => {
       cancelled = true;
-      if (!run.settled) {
-        slotsLoadedRef.current = false;
-        setSlotState((prev) => (prev.slotsLoading ? { ...prev, slotsLoading: false } : prev));
-      }
+      run.cancelled = true;
+      releaseUnsettledRun(run, slotsLoadedRef, setSlotState);
     };
   }, [romId, saveSyncEnabled, syncRefused, isOffline]);
 
-  // Refresh slot list and status when `save_sync` fires for this ROM.
-  useEffect(() => {
-    if (!saveSyncEnabled || syncRefused) return;
-    const onDataChanged = ({ detail: ev }: WindowEventMap["romm_data_changed"]) => {
-      if (!isSaveSyncForRom(ev, romId)) return;
-      detach(Promise.all([refreshDesktopSaveStatus(appId), refreshSlots()]));
-    };
-    globalThis.addEventListener("romm_data_changed", onDataChanged);
-    return () => globalThis.removeEventListener("romm_data_changed", onDataChanged);
-  }, [appId, romId, saveSyncEnabled, syncRefused, refreshSlots]);
+  const onRomSaveSync = useCallback(() => {
+    detach(Promise.all([refreshDesktopSaveStatus(appId), refreshSlots()]));
+  }, [appId, refreshSlots]);
+  useRomSaveSyncListener(romId, saveSyncEnabled && !syncRefused, onRomSaveSync);
 
   return { slotState, setSlotState, rawSlotConfirmed, setRawSlotConfirmed };
 }
@@ -924,14 +788,7 @@ const SaveManagementCardContent: FC<{
 }> = ({ appId, romId, detail }) => {
   const dialogHost = useDialogHost();
   const cardRef = useRef<HTMLDivElement>(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  const mountedRef = useMountedRef();
 
   const connectionState = useRommConnectionState();
   const isOffline = connectionState === "offline";
@@ -960,10 +817,11 @@ const SaveManagementCardContent: FC<{
 
   useTabSwitchScroll(cardRef);
 
-  const applyActivatedSlot = async (slotName: string, verb: string): Promise<boolean> => {
+  const applyActivatedSlot = async (slotName: string, how: "created" | "switched"): Promise<boolean> => {
     const confirmedNow = await autoConfirmIfNeeded(slotName);
     if (!mountedRef.current) return false;
-    showToast(confirmedNow ? `${verb} and confirmed slot '${slotName}'` : `Switched to slot '${slotName}'`);
+    const done = how === "created" ? `Created slot '${slotName}'` : `Switched to slot '${slotName}'`;
+    showToast(confirmedNow ? `${done} and confirmed it` : done);
     setSlotState((prev) => ({
       ...prev,
       activeSlot: slotName,
@@ -1041,6 +899,12 @@ const SaveManagementCardContent: FC<{
     }
   };
 
+  const confirmSlot = (slotName: string) => {
+    handleConfirmSlot(slotName).catch((e) =>
+      logError(`DesktopSaveManagementCard: confirming slot '${slotName}' for romId=${romId} threw: ${e}`),
+    );
+  };
+
   const handleOpenNewSlot = () => {
     detach(
       dialogHost.ask<boolean>(false, (resolve) => (
@@ -1060,7 +924,7 @@ const SaveManagementCardContent: FC<{
               }
               return outcome.message;
             }
-            if (await applyActivatedSlot(trimmed, "Created")) {
+            if (await applyActivatedSlot(trimmed, "created")) {
               resolve(true);
               announceSaveSync(romId);
             }
@@ -1072,7 +936,7 @@ const SaveManagementCardContent: FC<{
   };
 
   const handleSlotActivated = async (slotName: string, newStatus: SaveStatus) => {
-    if (!(await applyActivatedSlot(slotName, "Switched to"))) return;
+    if (!(await applyActivatedSlot(slotName, "switched"))) return;
     globalThis.dispatchEvent(
       new CustomEvent("romm_data_changed", {
         detail: { type: "save_sync", rom_id: romId, save_status: newStatus },
@@ -1085,12 +949,12 @@ const SaveManagementCardContent: FC<{
   };
 
   const handleCopySave = (saveId: number, sourceSlot: string) => {
-    detach(
-      (async () => {
-        const target = await desktopCopySlotDialog(dialogHost.ask)(sourceSlot, slotState.availableSlots);
-        if (!target || !mountedRef.current) return;
-        await executeCopySaveToSlot(romId, saveId, target, desktopSlotConflictDialog(dialogHost.ask));
-      })(),
+    (async () => {
+      const target = await desktopCopySlotDialog(dialogHost.ask)(sourceSlot, slotState.availableSlots);
+      if (!target || !mountedRef.current) return;
+      await executeCopySaveToSlot(romId, saveId, target, desktopSlotConflictDialog(dialogHost.ask));
+    })().catch((e) =>
+      logError(`DesktopSaveManagementCard: copying save ${saveId} from slot '${sourceSlot}' threw: ${e}`),
     );
   };
 
@@ -1116,8 +980,14 @@ const SaveManagementCardContent: FC<{
         isSyncing={isSyncing}
         isOffline={isOffline}
         deletingLocalSaves={deletingLocalSaves}
-        onSyncNow={() => detach(handleSyncNow())}
-        onDeleteLocalSaves={() => detach(handleDeleteLocalSaves())}
+        onSyncNow={() => {
+          handleSyncNow().catch((e) => logError(`DesktopSaveManagementCard: Sync now for romId=${romId} threw: ${e}`));
+        }}
+        onDeleteLocalSaves={() => {
+          handleDeleteLocalSaves().catch((e) =>
+            logError(`DesktopSaveManagementCard: Delete Local Saves for romId=${romId} threw: ${e}`),
+          );
+        }}
         onOpenNewSlot={handleOpenNewSlot}
       />
 
@@ -1130,24 +1000,33 @@ const SaveManagementCardContent: FC<{
       ) : null}
 
       {detail.saveSyncEnabled && !syncRefused ? (
-        <SaveSyncOnSection
-          romId={romId}
+        <SaveSyncNotices
           isOffline={isOffline}
           strandedVersion={strandedVersion}
           slotConfirmed={slotConfirmed}
           activeSlot={slotState.activeSlot}
-          activeSlotKnown={slotState.activeSlotKnown}
+          slotsLoading={slotState.slotsLoading}
           hasSaves={hasSaves}
           confirmingSlot={confirmingSlot}
           notDownloaded={notDownloaded}
           notDownloadedHint={notDownloadedHint}
+          onConfirmSlot={confirmSlot}
+        />
+      ) : null}
+
+      {detail.saveSyncEnabled && !syncRefused ? (
+        <SaveSlotsSection
+          romId={romId}
+          isOffline={isOffline}
+          slotConfirmed={slotConfirmed}
+          confirmingSlot={confirmingSlot}
           slotState={slotState}
           retryProgress={retryProgress}
           displaySlots={displaySlots}
           saveStatus={saveStatus}
           noSaveText={noSaveText}
           ask={dialogHost.ask}
-          onConfirmSlot={(slotName) => detach(handleConfirmSlot(slotName))}
+          onConfirmSlot={confirmSlot}
           onSlotActivated={handleSlotActivated}
           onSlotListChanged={handleSlotListChanged}
           onCopySave={handleCopySave}
@@ -1160,8 +1039,6 @@ const SaveManagementCardContent: FC<{
 };
 
 export const SaveManagementCard: FC<SaveManagementCardProps> = ({ appId, detail }) => {
-  const leaseOwner = `desktop-saves-card:${appId}`;
-  usePruneLeaseOwner(leaseOwner);
   const isStranded = useStrandedAnswer() !== null;
 
   if (detail.romId === null || isStranded) return null;

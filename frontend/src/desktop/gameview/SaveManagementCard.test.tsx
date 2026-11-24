@@ -13,7 +13,6 @@ import {
   setRommConnectionState,
   setServerRetryProgress,
 } from "../../utils/connectionState";
-import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent } from "../../utils/pruneLease";
 import { setStrandedAnswer } from "../../test-utils/stranded-panel";
 import * as toast from "../../utils/toast";
 import * as gameDetailStore from "../../utils/gameDetailStore";
@@ -239,17 +238,6 @@ describe("SaveManagementCard", () => {
       });
       const switchedSpeedrun = await screen.findByTestId("desktop-slot-panel-speedrun");
       expect(within(switchedSpeedrun).queryByText("No saves in this slot")).not.toBeInTheDocument();
-    });
-
-    it("holds prune lease owner desktop-saves-card:<appId> while mounted and releases it on unmount", () => {
-      const { unmount } = render(<SaveManagementCard appId={100} detail={baseDetail} />);
-
-      expect(isPruneLeaseAdmissionCurrent(capturePruneLeaseAdmission("desktop-saves-card:100"))).toBe(true);
-      expect(isPruneLeaseAdmissionCurrent(capturePruneLeaseAdmission("desktop-saves-card:999"))).toBe(false);
-
-      unmount();
-
-      expect(isPruneLeaseAdmissionCurrent(capturePruneLeaseAdmission("desktop-saves-card:100"))).toBe(false);
     });
   });
 
@@ -674,7 +662,7 @@ describe("SaveManagementCard", () => {
 
       await waitFor(() => {
         expect(backend.switchSlot).toHaveBeenCalledWith(42, "casual");
-        expect(toast.showToast).toHaveBeenCalledWith("Switched to slot 'casual'");
+        expect(toast.showToast).toHaveBeenCalledWith("Created slot 'casual'");
         expect(screen.queryByRole("dialog", { name: "New Save Slot" })).not.toBeInTheDocument();
       });
 
@@ -1168,6 +1156,40 @@ describe("SaveManagementCard", () => {
       expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument();
     });
 
+    it("points at + New Slot and Activate while tracking is unconfirmed and no slot is active", async () => {
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: false,
+        active_slot: null,
+        setup_needed: true,
+      });
+      vi.mocked(backend.getSaveSlots).mockResolvedValue({ success: true, slots: mockSlots, active_slot: null });
+
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+
+      expect(await screen.findByTestId("desktop-saves-setup-prompt")).toHaveTextContent(
+        "Save sync isn't set up for this game yet. Create a slot with + New Slot, or activate an existing one, to start syncing.",
+      );
+      expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument();
+
+      act(() => {
+        reportServerReachable(false);
+      });
+      expect(screen.queryByTestId("desktop-saves-setup-prompt")).not.toBeInTheDocument();
+    });
+
+    it("draws no setup prompt while a slot is active, the active slot's own confirmation standing instead", async () => {
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: false,
+        active_slot: "default",
+        setup_needed: true,
+      });
+
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+
+      expect(await screen.findByTestId("unconfirmed-slot-banner")).toBeInTheDocument();
+      expect(screen.queryByTestId("desktop-saves-setup-prompt")).not.toBeInTheDocument();
+    });
+
     it("auto-confirms slot when activating or creating a slot while unconfigured", async () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
         configured: false,
@@ -1191,7 +1213,7 @@ describe("SaveManagementCard", () => {
         await waitFor(() => {
           expect(backend.switchSlot).toHaveBeenCalledWith(42, "speedrun");
           expect(backend.confirmSlotChoice).toHaveBeenCalledWith(42, "speedrun", false, null, false);
-          expect(toast.showToast).toHaveBeenCalledWith("Switched to and confirmed slot 'speedrun'");
+          expect(toast.showToast).toHaveBeenCalledWith("Switched to slot 'speedrun' and confirmed it");
           expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument();
           expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(2);
           expect(backend.getSaveSlots).toHaveBeenCalledTimes(2);
@@ -1247,7 +1269,7 @@ describe("SaveManagementCard", () => {
         });
 
         await waitFor(() => {
-          expect(toast.showToast).toHaveBeenCalledWith("Created and confirmed slot 'new_slot'");
+          expect(toast.showToast).toHaveBeenCalledWith("Created slot 'new_slot' and confirmed it");
           expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
           expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument();
           expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(2);
@@ -2301,7 +2323,58 @@ describe("SaveManagementCard", () => {
       }
     });
 
-    it("promotes connection state from checking to connected when loadDesktopSlots succeeds, synthesizes missing activeSlot, and keeps connected on non-unreachable refresh failure", async () => {
+    it("draws a never-synced file's Never in amber beside its attribution, and a device name holding ✓ whole", async () => {
+      const file = {
+        ...mockSaveStatus.files[0]!,
+        last_sync_at: null,
+        status: "synced" as const,
+        uploaded_by_us: true,
+        device_syncs: [
+          { device_id: "d1", device_name: "deck ✓ pro", is_current: true, last_synced_at: "2026-06-15T21:04:00Z" },
+        ],
+      };
+      const detail = { ...baseDetail, saveStatus: { ...mockSaveStatus, files: [file] } };
+
+      render(<SaveManagementCard appId={100} detail={detail} />);
+
+      const activePanel = await screen.findByTestId("desktop-slot-panel-default");
+      const value = within(activePanel).getByText("Last synced:").nextElementSibling!;
+      expect(value.textContent).toBe("Never · deck ✓ pro (this device) ✓");
+      expect(within(value as HTMLElement).getByText("Never")).toHaveStyle({ color: "#d4a72c" });
+      const greenChecks = Array.from(value.querySelectorAll("span")).filter((el) => el.textContent === "✓");
+      expect(greenChecks).toHaveLength(1);
+      expect(value.textContent!.endsWith(greenChecks[0]!.textContent!)).toBe(true);
+      expect(greenChecks[0]!.nextSibling).toBeNull();
+    });
+
+    it("drops the spinner when a save_sync refresh overtakes the first slot load and answers no slots", async () => {
+      let resolveFirst!: (v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void;
+      vi.mocked(backend.getSaveSlots)
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveFirst = resolve;
+            }),
+        )
+        .mockResolvedValueOnce({ success: true, slots: [], active_slot: null });
+
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      expect(await screen.findByTestId("desktop-saves-connecting")).toBeInTheDocument();
+
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+      });
+      await waitFor(() => expect(backend.getSaveSlots).toHaveBeenCalledTimes(2));
+
+      await act(async () => {
+        resolveFirst({ success: true, slots: mockSlots, active_slot: "default" });
+      });
+
+      await waitFor(() => expect(screen.queryByTestId("desktop-saves-connecting")).not.toBeInTheDocument());
+      expect(screen.queryByTestId("desktop-slot-panel-speedrun")).not.toBeInTheDocument();
+    });
+
+    it("promotes connection state from checking to connected when the first slot load succeeds, synthesizes missing activeSlot, and keeps connected on non-unreachable refresh failure", async () => {
       let resolveSlots!: (v: Awaited<ReturnType<typeof backend.getSaveSlots>>) => void;
       vi.mocked(backend.getSaveSlots).mockImplementationOnce(
         () =>
@@ -3090,7 +3163,7 @@ describe("SaveManagementCard", () => {
       );
       fireEvent.click(activateBtn);
 
-      await waitFor(() => expect(toast.showToast).toHaveBeenCalledWith("Switched to and confirmed slot 'speedrun'"));
+      await waitFor(() => expect(toast.showToast).toHaveBeenCalledWith("Switched to slot 'speedrun' and confirmed it"));
       expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument();
       expect(within(screen.getByRole("button", { name: /speedrun/ })).getByText("ACTIVE")).toBeInTheDocument();
 
@@ -3301,7 +3374,12 @@ describe("SaveManagementCard", () => {
         act(() => {
           globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
         });
-        await waitFor(() => expect(screen.queryByTestId("unconfirmed-slot-banner")).not.toBeInTheDocument());
+        await waitFor(() =>
+          expect(warnSpy).toHaveBeenCalledWith(
+            "DesktopSaveManagementCard: failed to check tracking for romId=42: Error: tracking boom",
+          ),
+        );
+        expect(screen.getByTestId("unconfirmed-slot-banner")).toBeInTheDocument();
         first.unmount();
 
         const refusal = {
