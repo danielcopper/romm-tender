@@ -772,6 +772,20 @@ function useDesktopSlotState(
   return { slotState, setSlotState, rawSlotConfirmed, setRawSlotConfirmed };
 }
 
+/** Confirm *slotName* as the tracked slot without asking; a refusal or a throw is logged and answers false. */
+async function autoConfirmSlot(romId: number, slotName: string): Promise<boolean> {
+  try {
+    const confirmResult = await confirmSlotChoice(romId, slotName, false, null, false);
+    if (confirmResult.success) return true;
+    logWarn(
+      `DesktopSaveManagementCard: auto-confirm confirmSlotChoice for romId=${romId} slot='${slotName}' refused (${confirmResult.reason}): ${confirmResult.message}`,
+    );
+  } catch (e) {
+    logWarn(`DesktopSaveManagementCard: auto-confirm for romId=${romId} slot='${slotName}' failed: ${e}`);
+  }
+  return false;
+}
+
 function refreshDesktopSaveStatus(appId: number): Promise<void> {
   return refreshSaveStatus(appId).then(
     () => undefined,
@@ -833,19 +847,9 @@ const SaveManagementCardContent: FC<{
 
   const autoConfirmIfNeeded = async (slotName: string): Promise<boolean> => {
     if (!detail.saveSyncEnabled || slotConfirmed !== false) return false;
-    try {
-      const confirmResult = await confirmSlotChoice(romId, slotName, false, null, false);
-      if (confirmResult.success) {
-        if (mountedRef.current) setRawSlotConfirmed(true);
-        return true;
-      }
-      logWarn(
-        `DesktopSaveManagementCard: auto-confirm confirmSlotChoice for romId=${romId} slot='${slotName}' refused (${confirmResult.reason}): ${confirmResult.message}`,
-      );
-    } catch (e) {
-      logWarn(`DesktopSaveManagementCard: auto-confirm for romId=${romId} slot='${slotName}' failed: ${e}`);
-    }
-    return false;
+    const confirmed = await autoConfirmSlot(romId, slotName);
+    if (confirmed && mountedRef.current) setRawSlotConfirmed(true);
+    return confirmed;
   };
 
   const handleSyncNow = async () => {
