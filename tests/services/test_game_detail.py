@@ -13,14 +13,14 @@ from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
-from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
+from fakes.fake_platform_systems import FakePlatformSystems, platform_answer
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
 
 from adapters.firmware_file import FirmwareFileAdapter
-from domain.platform_system import NO_SYSTEM, PlatformSystem
+from domain.platform_system import NO_SYSTEM, SEVERAL, PlatformKeys, SystemPair
 from domain.retrodeck_folders import GAME_DOWNLOAD, switched_off
 from domain.rom_save_sync_state import FileSyncState
 from services.achievements import AchievementsService, AchievementsServiceConfig
@@ -78,7 +78,7 @@ class GameDetailHarness:
     uow: FakeUnitOfWork
     settings: dict[str, Any]
     candidate_present: bool = False
-    candidate_probe_calls: list[tuple[str, str]] = field(default_factory=list)
+    candidate_probe_calls: list[tuple[PlatformKeys, str]] = field(default_factory=list)
 
 
 @pytest.fixture
@@ -140,8 +140,8 @@ def game_detail(clock, active_core_resolver, path_probe) -> GameDetailHarness:
         ),
     )
 
-    def candidate_probe(platform_slug: str, fs_name: str) -> bool:
-        harness.candidate_probe_calls.append((platform_slug, fs_name))
+    def candidate_probe(keys: PlatformKeys, fs_name: str) -> bool:
+        harness.candidate_probe_calls.append((keys, fs_name))
         return harness.candidate_present
 
     service = GameDetailService(
@@ -566,7 +566,7 @@ class TestTargetPathOccupied:
         result = await game_detail.service.get_cached_game_detail(50000)
 
         assert result["adoption_candidate_present"] is True
-        assert game_detail.candidate_probe_calls == [("snes", "game_10.sfc")]
+        assert game_detail.candidate_probe_calls == [(PlatformKeys("snes", "snes"), "game_10.sfc")]
 
     @pytest.mark.asyncio
     async def test_no_candidate_leaves_the_page_saying_download(self, game_detail):
@@ -642,8 +642,12 @@ class TestTargetPathOccupied:
         assert result["target_path_occupied"] is False
 
     @pytest.mark.asyncio
-    async def test_false_where_the_platform_has_no_system_in_retrodeck(self, game_detail, path_probe):
-        platform = PlatformSystem(NO_SYSTEM, "snes", "SNES", source=RETRODECK_SOURCE)
+    @pytest.mark.parametrize(
+        ("state", "system"), [(NO_SYSTEM, None), (SEVERAL, (SystemPair("esde", "snes"), SystemPair("esde", "sfc")))]
+    )
+    async def test_false_where_the_platform_has_no_system_in_retrodeck(self, game_detail, path_probe, state, system):
+        """Several systems are no one folder to look in either."""
+        platform = platform_answer(state, "snes", system, name="SNES")
         game_detail.service._platform_systems = FakePlatformSystems(answers={"snes": platform})
         folders = game_detail.service._retrodeck_folders
         asked_folders: list[object] = []
@@ -661,9 +665,9 @@ class TestTargetPathOccupied:
         asked: list[tuple[str | None, bool]] = []
         original = platform_systems.platform_system
 
-        def recording(platform_slug, *, source=None, reading=None, ask_romm=True):
+        def recording(keys, *, source=None, reading=None, ask_romm=True):
             asked.append((source, ask_romm))
-            return original(platform_slug, source=source, reading=reading, ask_romm=ask_romm)
+            return original(keys, source=source, reading=reading, ask_romm=ask_romm)
 
         platform_systems.platform_system = recording
         game_detail.service._platform_systems = platform_systems

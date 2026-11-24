@@ -63,21 +63,30 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -390,21 +399,30 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -720,7 +738,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -729,7 +750,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -738,7 +762,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -969,7 +996,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -1162,7 +1190,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -1394,7 +1423,8 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -1487,7 +1517,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/xbox/xemu",
@@ -1496,7 +1527,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -1634,7 +1666,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/home/deck/Emulation/saves/xemu",
@@ -1643,7 +1676,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -1732,7 +1766,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -1850,7 +1885,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -1904,6 +1940,657 @@
                 "key": "mlc_path",
                 "value": null,
                 "options_file": null
+              }
+            ],
+            "alternatives": []
+          }
+        }
+      }
+    },
+    {
+      "name": "cemu-the-mlc-lists-every-title-it-holds-spelled-as-the-hole",
+      "rationale": "A title's usr/save/<hi>/<lo>/ is created when the title initialises its save library, before its first save (SAVEInit, nn_save.cpp:305-336 at Cemu 2.6), under its base title's id, so the tree records every title that set up its save here. save-id-candidates lists each directory of that shape as \"<hi>/<lo>\", the spelling the save_id hole is filled with, so a caller whose source names a Wii U title by its low word reads the high word off the entry — a game under 00050000, a demo under 00050002, and Mii Maker's directory under 00050010, which Cemu creates when it sets up the MLC (CemuApp.cpp:471-482). Names not of the shape the emulator creates — the system tree, an uppercase word, a file — are not titles and stay out.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nglobal_core_options = \"true\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psp</name>\n    <path>%ROMPATH%/psp</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Ppsspp (Standalone)\">%EMULATOR_PPSSPP% %ROM%</command>\n  </system>\n  <system>\n    <name>xbox</name>\n    <path>%ROMPATH%/xbox</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Xemu (Standalone)\">%EMULATOR_XEMU% %ROM%</command>\n  </system>\n  <system>\n    <name>wiiu</name>\n    <path>%ROMPATH%/wiiu</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Cemu (Standalone)\">%EMULATOR_CEMU% %ROM%</command>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/Cemu/settings.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<content>\n  <mlc_path>/mnt/sd/retrodeck/bios/cemu</mlc_path>\n</content>\n",
+          "/mnt/sd/retrodeck/saves/wiiu/cemu/00050000/41424347": "not a title directory\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/saves/wiiu/cemu/00050000",
+          "/mnt/sd/retrodeck/saves/wiiu/cemu/00050000/41424344",
+          "/mnt/sd/retrodeck/saves/wiiu/cemu/00050000/41424344/meta",
+          "/mnt/sd/retrodeck/saves/wiiu/cemu/00050000/41424344/user/common",
+          "/mnt/sd/retrodeck/saves/wiiu/cemu/00050002",
+          "/mnt/sd/retrodeck/saves/wiiu/cemu/00050002/41424345",
+          "/mnt/sd/retrodeck/saves/wiiu/cemu/00050002/41424345/meta",
+          "/mnt/sd/retrodeck/saves/wiiu/cemu/00050010/1004a000/user/common/db",
+          "/mnt/sd/retrodeck/saves/wiiu/cemu/0005000E/41424346",
+          "/mnt/sd/retrodeck/saves/wiiu/cemu/system/act/80000001"
+        ],
+        "symlinks": {
+          "/mnt/sd/retrodeck/bios/cemu/usr/save": "/mnt/sd/retrodeck/saves/wiiu/cemu"
+        },
+        "entry_savefile_query": {
+          "system": "wiiu"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_savefile_location": {
+          "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save/<save_id>",
+          "root_kind": "emulator_directory",
+          "needs": [
+            "save_id"
+          ],
+          "fallback_dir": null,
+          "physical_dir": "/mnt/sd/retrodeck/saves/wiiu/cemu/<save_id>",
+          "file_set": {
+            "state": "declared",
+            "files": [],
+            "complete": false,
+            "groups": [
+              {
+                "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save/<save_id>",
+                "files": null,
+                "granularity": "per-game-directory",
+                "role": "battery",
+                "size_fixed": false,
+                "slots": []
+              }
+            ]
+          },
+          "caveats": [
+            {
+              "code": "file-names-unestablished",
+              "data": {
+                "token": "CEMU",
+                "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save/<save_id>",
+                "role": "battery",
+                "save_id": "the Wii U title id: <high 8 hex>/<low 8 hex>, lowercase",
+                "save_id_spelling": "title-id-words",
+                "citation": "nn_save.cpp:133-145 at Cemu 2.6 — '/vol/storage_mlc01/usr/save/%08x/%08x/user/%08x/' and 'user/common/'"
+              }
+            },
+            {
+              "code": "save-id-candidates",
+              "data": {
+                "token": "CEMU",
+                "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save",
+                "titles": [
+                  "00050000/41424344",
+                  "00050002/41424345",
+                  "00050010/1004a000"
+                ],
+                "unreadable": [],
+                "citation": "nn_save.cpp:305-336, TitleList.cpp:614-627, CemuApp.cpp:471-482 at Cemu 2.6"
+              }
+            },
+            {
+              "code": "redirect-outranked",
+              "data": {
+                "token": "CEMU",
+                "via": "variable",
+                "name": "XDG_DATA_HOME",
+                "argument": "<dir>",
+                "file": "settings.xml",
+                "key": "mlc_path"
+              }
+            }
+          ],
+          "redirects": [
+            {
+              "via": "flag",
+              "name": "--mlc",
+              "argument": "<dir>",
+              "moves": [
+                "saves",
+                "firmware",
+                "installed-content"
+              ]
+            },
+            {
+              "via": "variable",
+              "name": "XDG_DATA_HOME",
+              "argument": "<dir>",
+              "moves": [
+                "saves",
+                "firmware",
+                "installed-content"
+              ]
+            }
+          ],
+          "granularity": {
+            "value": "per-game-directory",
+            "mode": "mlc",
+            "readings": [
+              {
+                "key": "mlc_path",
+                "value": "/mnt/sd/retrodeck/bios/cemu",
+                "options_file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/Cemu/settings.xml"
+              }
+            ],
+            "alternatives": []
+          }
+        }
+      }
+    },
+    {
+      "name": "cemu-a-low-word-under-two-categories-is-listed-under-both",
+      "rationale": "Two title directories share a low word under different high words — a game and its demo. Both are listed, so a caller holding the low word alone sees two matches and leaves the hole unfilled rather than syncing the wrong folder — atlas states what the MLC holds and does not pick. The listing is read below the MLC settings.xml names, here EmuDeck's, the same reading every arrangement's Cemu answer takes.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>wiiu</name>\n    <fullname>Nintendo Wii U</fullname>\n    <path>%ROMPATH%/wiiu/roms</path>\n    <extension>.wua .WUA .rpx .RPX</extension>\n    <command label=\"Cemu (Native)\">/bin/bash /home/deck/Emulation/tools/launchers/cemu.sh -f -g %ROM%</command>\n    <command label=\"Cemu (Proton)\">/bin/bash /home/deck/Emulation/tools/launchers/cemu.sh -w -f -g z:%ROM%</command>\n    <platform>wiiu</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/Applications/Cemu.AppImage": "",
+          "/home/deck/.config/Cemu/settings.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<content>\n  <mlc_path>/home/deck/Emulation/roms/wiiu/mlc01</mlc_path>\n</content>\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/ROMs",
+          "/home/deck/Emulation/roms/wiiu/mlc01/usr/save/00050000/41424344/meta",
+          "/home/deck/Emulation/roms/wiiu/mlc01/usr/save/00050002/41424344/meta"
+        ],
+        "entry_savefile_query": {
+          "system": "wiiu",
+          "label": "Cemu (Native)"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_savefile_location": {
+          "dir": "/home/deck/Emulation/roms/wiiu/mlc01/usr/save/<save_id>",
+          "root_kind": "emulator_directory",
+          "needs": [
+            "save_id"
+          ],
+          "fallback_dir": null,
+          "physical_dir": null,
+          "file_set": {
+            "state": "declared",
+            "files": [],
+            "complete": false,
+            "groups": [
+              {
+                "dir": "/home/deck/Emulation/roms/wiiu/mlc01/usr/save/<save_id>",
+                "files": null,
+                "granularity": "per-game-directory",
+                "role": "battery",
+                "size_fixed": false,
+                "slots": []
+              }
+            ]
+          },
+          "caveats": [
+            {
+              "code": "file-names-unestablished",
+              "data": {
+                "token": "CEMU",
+                "dir": "/home/deck/Emulation/roms/wiiu/mlc01/usr/save/<save_id>",
+                "role": "battery",
+                "save_id": "the Wii U title id: <high 8 hex>/<low 8 hex>, lowercase",
+                "save_id_spelling": "title-id-words",
+                "citation": "nn_save.cpp:133-145 at Cemu 2.6 — '/vol/storage_mlc01/usr/save/%08x/%08x/user/%08x/' and 'user/common/'"
+              }
+            },
+            {
+              "code": "save-id-candidates",
+              "data": {
+                "token": "CEMU",
+                "dir": "/home/deck/Emulation/roms/wiiu/mlc01/usr/save",
+                "titles": [
+                  "00050000/41424344",
+                  "00050002/41424344"
+                ],
+                "unreadable": [],
+                "citation": "nn_save.cpp:305-336, TitleList.cpp:614-627, CemuApp.cpp:471-482 at Cemu 2.6"
+              }
+            },
+            {
+              "code": "redirect-outranked",
+              "data": {
+                "token": "CEMU",
+                "via": "variable",
+                "name": "XDG_DATA_HOME",
+                "argument": "<dir>",
+                "file": "settings.xml",
+                "key": "mlc_path"
+              }
+            }
+          ],
+          "redirects": [
+            {
+              "via": "flag",
+              "name": "--mlc",
+              "argument": "<dir>",
+              "moves": [
+                "saves",
+                "firmware",
+                "installed-content"
+              ]
+            },
+            {
+              "via": "variable",
+              "name": "XDG_DATA_HOME",
+              "argument": "<dir>",
+              "moves": [
+                "saves",
+                "firmware",
+                "installed-content"
+              ]
+            }
+          ],
+          "granularity": {
+            "value": "per-game-directory",
+            "mode": "mlc",
+            "readings": [
+              {
+                "key": "mlc_path",
+                "value": "/home/deck/Emulation/roms/wiiu/mlc01",
+                "options_file": "/home/deck/.config/Cemu/settings.xml"
+              }
+            ],
+            "alternatives": []
+          }
+        }
+      }
+    },
+    {
+      "name": "cemu-a-save-tree-holding-no-title-directory-states-nothing",
+      "rationale": "The save tree holds the accounts' system tree and no title directory, so no title set up its save here: no save-id-candidates is stated. The code's absence means an empty or absent tree, never one that could not be read.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nglobal_core_options = \"true\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psp</name>\n    <path>%ROMPATH%/psp</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Ppsspp (Standalone)\">%EMULATOR_PPSSPP% %ROM%</command>\n  </system>\n  <system>\n    <name>xbox</name>\n    <path>%ROMPATH%/xbox</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Xemu (Standalone)\">%EMULATOR_XEMU% %ROM%</command>\n  </system>\n  <system>\n    <name>wiiu</name>\n    <path>%ROMPATH%/wiiu</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Cemu (Standalone)\">%EMULATOR_CEMU% %ROM%</command>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/Cemu/settings.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<content>\n  <mlc_path>/mnt/sd/retrodeck/bios/cemu</mlc_path>\n</content>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/saves/wiiu/cemu/system/act/80000001"
+        ],
+        "symlinks": {
+          "/mnt/sd/retrodeck/bios/cemu/usr/save": "/mnt/sd/retrodeck/saves/wiiu/cemu"
+        },
+        "entry_savefile_query": {
+          "system": "wiiu"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_savefile_location": {
+          "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save/<save_id>",
+          "root_kind": "emulator_directory",
+          "needs": [
+            "save_id"
+          ],
+          "fallback_dir": null,
+          "physical_dir": "/mnt/sd/retrodeck/saves/wiiu/cemu/<save_id>",
+          "file_set": {
+            "state": "declared",
+            "files": [],
+            "complete": false,
+            "groups": [
+              {
+                "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save/<save_id>",
+                "files": null,
+                "granularity": "per-game-directory",
+                "role": "battery",
+                "size_fixed": false,
+                "slots": []
+              }
+            ]
+          },
+          "caveats": [
+            {
+              "code": "file-names-unestablished",
+              "data": {
+                "token": "CEMU",
+                "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save/<save_id>",
+                "role": "battery",
+                "save_id": "the Wii U title id: <high 8 hex>/<low 8 hex>, lowercase",
+                "save_id_spelling": "title-id-words",
+                "citation": "nn_save.cpp:133-145 at Cemu 2.6 — '/vol/storage_mlc01/usr/save/%08x/%08x/user/%08x/' and 'user/common/'"
+              }
+            },
+            {
+              "code": "redirect-outranked",
+              "data": {
+                "token": "CEMU",
+                "via": "variable",
+                "name": "XDG_DATA_HOME",
+                "argument": "<dir>",
+                "file": "settings.xml",
+                "key": "mlc_path"
+              }
+            }
+          ],
+          "redirects": [
+            {
+              "via": "flag",
+              "name": "--mlc",
+              "argument": "<dir>",
+              "moves": [
+                "saves",
+                "firmware",
+                "installed-content"
+              ]
+            },
+            {
+              "via": "variable",
+              "name": "XDG_DATA_HOME",
+              "argument": "<dir>",
+              "moves": [
+                "saves",
+                "firmware",
+                "installed-content"
+              ]
+            }
+          ],
+          "granularity": {
+            "value": "per-game-directory",
+            "mode": "mlc",
+            "readings": [
+              {
+                "key": "mlc_path",
+                "value": "/mnt/sd/retrodeck/bios/cemu",
+                "options_file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/Cemu/settings.xml"
+              }
+            ],
+            "alternatives": []
+          }
+        }
+      }
+    },
+    {
+      "name": "cemu-an-mlc-without-a-save-tree-states-no-listing",
+      "rationale": "The MLC exists and holds no usr/save at all, so no title set up its save here: the answer still templates usr/save/<save_id> and states no save-id-candidates.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nglobal_core_options = \"true\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psp</name>\n    <path>%ROMPATH%/psp</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Ppsspp (Standalone)\">%EMULATOR_PPSSPP% %ROM%</command>\n  </system>\n  <system>\n    <name>xbox</name>\n    <path>%ROMPATH%/xbox</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Xemu (Standalone)\">%EMULATOR_XEMU% %ROM%</command>\n  </system>\n  <system>\n    <name>wiiu</name>\n    <path>%ROMPATH%/wiiu</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Cemu (Standalone)\">%EMULATOR_CEMU% %ROM%</command>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/Cemu/settings.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<content>\n  <mlc_path>/mnt/sd/retrodeck/bios/cemu</mlc_path>\n</content>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios/cemu"
+        ],
+        "entry_savefile_query": {
+          "system": "wiiu"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_savefile_location": {
+          "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save/<save_id>",
+          "root_kind": "emulator_directory",
+          "needs": [
+            "save_id"
+          ],
+          "fallback_dir": null,
+          "physical_dir": null,
+          "file_set": {
+            "state": "declared",
+            "files": [],
+            "complete": false,
+            "groups": [
+              {
+                "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save/<save_id>",
+                "files": null,
+                "granularity": "per-game-directory",
+                "role": "battery",
+                "size_fixed": false,
+                "slots": []
+              }
+            ]
+          },
+          "caveats": [
+            {
+              "code": "file-names-unestablished",
+              "data": {
+                "token": "CEMU",
+                "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save/<save_id>",
+                "role": "battery",
+                "save_id": "the Wii U title id: <high 8 hex>/<low 8 hex>, lowercase",
+                "save_id_spelling": "title-id-words",
+                "citation": "nn_save.cpp:133-145 at Cemu 2.6 — '/vol/storage_mlc01/usr/save/%08x/%08x/user/%08x/' and 'user/common/'"
+              }
+            },
+            {
+              "code": "redirect-outranked",
+              "data": {
+                "token": "CEMU",
+                "via": "variable",
+                "name": "XDG_DATA_HOME",
+                "argument": "<dir>",
+                "file": "settings.xml",
+                "key": "mlc_path"
+              }
+            }
+          ],
+          "redirects": [
+            {
+              "via": "flag",
+              "name": "--mlc",
+              "argument": "<dir>",
+              "moves": [
+                "saves",
+                "firmware",
+                "installed-content"
+              ]
+            },
+            {
+              "via": "variable",
+              "name": "XDG_DATA_HOME",
+              "argument": "<dir>",
+              "moves": [
+                "saves",
+                "firmware",
+                "installed-content"
+              ]
+            }
+          ],
+          "granularity": {
+            "value": "per-game-directory",
+            "mode": "mlc",
+            "readings": [
+              {
+                "key": "mlc_path",
+                "value": "/mnt/sd/retrodeck/bios/cemu",
+                "options_file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/Cemu/settings.xml"
+              }
+            ],
+            "alternatives": []
+          }
+        }
+      }
+    },
+    {
+      "name": "cemu-a-save-tree-that-cannot-be-listed-is-stated-as-unread",
+      "rationale": "The save tree exists and cannot be listed. An empty listing would read as \"no title set up its save here\", so save-id-candidates is stated with no titles and the tree under unreadable — the code's absence keeps meaning an empty or absent tree.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nglobal_core_options = \"true\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psp</name>\n    <path>%ROMPATH%/psp</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Ppsspp (Standalone)\">%EMULATOR_PPSSPP% %ROM%</command>\n  </system>\n  <system>\n    <name>xbox</name>\n    <path>%ROMPATH%/xbox</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Xemu (Standalone)\">%EMULATOR_XEMU% %ROM%</command>\n  </system>\n  <system>\n    <name>wiiu</name>\n    <path>%ROMPATH%/wiiu</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Cemu (Standalone)\">%EMULATOR_CEMU% %ROM%</command>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/Cemu/settings.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<content>\n  <mlc_path>/mnt/sd/retrodeck/bios/cemu</mlc_path>\n</content>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios",
+          "/mnt/sd/retrodeck/saves/wiiu/cemu",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "symlinks": {
+          "/mnt/sd/retrodeck/bios/cemu/usr/save": "/mnt/sd/retrodeck/saves/wiiu/cemu"
+        },
+        "entry_savefile_query": {
+          "system": "wiiu"
+        },
+        "unlistable": [
+          "/mnt/sd/retrodeck/saves/wiiu/cemu"
+        ]
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_savefile_location": {
+          "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save/<save_id>",
+          "root_kind": "emulator_directory",
+          "needs": [
+            "save_id"
+          ],
+          "fallback_dir": null,
+          "physical_dir": "/mnt/sd/retrodeck/saves/wiiu/cemu/<save_id>",
+          "file_set": {
+            "state": "declared",
+            "files": [],
+            "complete": false,
+            "groups": [
+              {
+                "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save/<save_id>",
+                "files": null,
+                "granularity": "per-game-directory",
+                "role": "battery",
+                "size_fixed": false,
+                "slots": []
+              }
+            ]
+          },
+          "caveats": [
+            {
+              "code": "file-names-unestablished",
+              "data": {
+                "token": "CEMU",
+                "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save/<save_id>",
+                "role": "battery",
+                "save_id": "the Wii U title id: <high 8 hex>/<low 8 hex>, lowercase",
+                "save_id_spelling": "title-id-words",
+                "citation": "nn_save.cpp:133-145 at Cemu 2.6 — '/vol/storage_mlc01/usr/save/%08x/%08x/user/%08x/' and 'user/common/'"
+              }
+            },
+            {
+              "code": "save-id-candidates",
+              "data": {
+                "token": "CEMU",
+                "dir": "/mnt/sd/retrodeck/bios/cemu/usr/save",
+                "titles": [],
+                "unreadable": [
+                  "/mnt/sd/retrodeck/bios/cemu/usr/save"
+                ],
+                "citation": "nn_save.cpp:305-336, TitleList.cpp:614-627, CemuApp.cpp:471-482 at Cemu 2.6"
+              }
+            },
+            {
+              "code": "redirect-outranked",
+              "data": {
+                "token": "CEMU",
+                "via": "variable",
+                "name": "XDG_DATA_HOME",
+                "argument": "<dir>",
+                "file": "settings.xml",
+                "key": "mlc_path"
+              }
+            }
+          ],
+          "redirects": [
+            {
+              "via": "flag",
+              "name": "--mlc",
+              "argument": "<dir>",
+              "moves": [
+                "saves",
+                "firmware",
+                "installed-content"
+              ]
+            },
+            {
+              "via": "variable",
+              "name": "XDG_DATA_HOME",
+              "argument": "<dir>",
+              "moves": [
+                "saves",
+                "firmware",
+                "installed-content"
+              ]
+            }
+          ],
+          "granularity": {
+            "value": "per-game-directory",
+            "mode": "mlc",
+            "readings": [
+              {
+                "key": "mlc_path",
+                "value": "/mnt/sd/retrodeck/bios/cemu",
+                "options_file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/Cemu/settings.xml"
               }
             ],
             "alternatives": []
@@ -1966,7 +2653,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -2073,7 +2761,8 @@
             "code": "standalone-variant-unestablished",
             "data": {
               "label": "Cemu (Proton)",
-              "system": "wiiu",
+              "source": "esde",
+              "key": "wiiu",
               "variant": "proton"
             }
           }
@@ -2122,7 +2811,8 @@
             "code": "standalone-variant-unestablished",
             "data": {
               "label": "Cemu (Native)",
-              "system": "wiiu",
+              "source": "esde",
+              "key": "wiiu",
               "variant": "flatpak"
             }
           }
@@ -2181,14 +2871,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/n3ds/azahar/sdmc/Nintendo 3DS/00000000000000000000000000000000/00000000000000000000000000000000/extdata",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -2319,14 +3011,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/azahar-emu/sdmc/Nintendo 3DS/00000000000000000000000000000000/00000000000000000000000000000000/extdata",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -2453,14 +3147,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/home/deck/Emulation/storage/azahar/sdmc/Nintendo 3DS/00000000000000000000000000000000/00000000000000000000000000000000/extdata",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -2596,14 +3292,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/home/deck/Emulation/storage/azahar/sdmc/Nintendo 3DS/00000000000000000000000000000000/00000000000000000000000000000000/extdata",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -2740,7 +3438,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -2859,7 +3560,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -2972,7 +3676,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -3087,7 +3794,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/psx/duckstation/memcards",
@@ -3096,7 +3806,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "2"
+                ]
               }
             ]
           },
@@ -3219,7 +3932,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -3349,7 +4065,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -3471,7 +4190,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -3604,7 +4326,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/ps2/pcsx2/memcards",
@@ -3613,7 +4338,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "2"
+                ]
               }
             ]
           },
@@ -3730,7 +4458,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/memcards",
@@ -3739,7 +4470,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "2"
+                ]
               }
             ]
           },
@@ -3860,7 +4594,10 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "1"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/ps2/pcsx2/memcards",
@@ -3869,7 +4606,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "2"
+                ]
               }
             ]
           },
@@ -3999,7 +4739,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -4113,7 +4856,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -4189,7 +4933,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -4277,7 +5022,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -4364,7 +5110,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -4459,7 +5206,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -4557,7 +5305,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -4598,7 +5347,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "$(EmulatorDir): /mnt/sd/retrodeck/storage/rpcs3/\n/dev_hdd0/: $(EmulatorDir)dev_hdd0/\n/app_home/: \"\"\n/dev_usb***/:\n  /dev_usb000:\n    Path: $(EmulatorDir)dev_usb000/\n",
           "/mnt/sd/retrodeck/storage/rpcs3/dev_hdd0/home/00000001/localusername": "User"
         },
@@ -4640,14 +5389,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/storage/rpcs3/dev_hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -4718,7 +5469,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: /mnt/sd/hdd0/\n",
           "/mnt/sd/hdd0/home/00000001/localusername": "User",
           "/mnt/sd/hdd0/home/00000002/localusername": "User"
@@ -4762,21 +5513,24 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/home/00000002/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -4848,7 +5602,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: /mnt/sd/hdd0/\n"
         },
         "dirs": [
@@ -4892,14 +5646,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -4977,7 +5733,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: /mnt/sd/hdd0/\n"
         },
         "dirs": [
@@ -5018,14 +5774,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -5096,7 +5854,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n"
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n"
         },
         "dirs": [
           "/mnt/sd/retrodeck/saves",
@@ -5135,14 +5893,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/dev_hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -5220,7 +5980,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: ~\n"
         },
         "dirs": [
@@ -5260,14 +6020,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/dev_hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -5338,7 +6100,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "$(EmulatorDir): /mnt/sd/retrodeck/storage/rpcs3/\n"
         },
         "dirs": [
@@ -5378,14 +6140,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/storage/rpcs3/dev_hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -5456,7 +6220,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "$(EmulatorDir): /mnt/sd/retrodeck/storage/rpcs3/\n/dev_hdd0/: ~\n"
         },
         "dirs": [
@@ -5496,14 +6260,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/storage/rpcs3/dev_hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -5574,7 +6340,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "$(EmulatorDir):\n  path: /mnt/sd/retrodeck/storage/rpcs3/\n"
         },
         "dirs": [
@@ -5619,7 +6385,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "$(EmulatorDir): /run/user/1000/rpcs3/\n"
         },
         "dirs": [
@@ -5708,14 +6474,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/home/deck/Emulation/storage/rpcs3/dev_hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -5786,7 +6554,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: /mnt/sd/hdd0/\n",
           "/mnt/sd/hdd0/home/00000001/localusername": "User"
         },
@@ -5829,14 +6597,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -5910,7 +6680,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: /mnt/sd/hdd0/\n",
           "/mnt/sd/hdd0/home/00000001/localusername": "User",
           "/mnt/sd/hdd0/home/.hidden/localusername": "User"
@@ -5954,14 +6724,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -6035,7 +6807,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: /mnt/sd/hdd0/\n",
           "/mnt/sd/hdd0/home/12345678/localusername": "User",
           "/mnt/sd/hdd0/home/1234abcd/localusername": "User"
@@ -6079,21 +6851,24 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/home/1234abcd/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -6165,7 +6940,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: /mnt/sd/hdd0/\n",
           "/mnt/sd/hdd0/home/00000000/localusername": "User",
           "/mnt/sd/hdd0/home/00000001/localusername": "User"
@@ -6209,14 +6984,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -6290,7 +7067,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: /mnt/sd/hdd0/\n"
         },
         "dirs": [
@@ -6331,14 +7108,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -6412,7 +7191,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: /mnt/sd/hdd0/\n",
           "/mnt/sd/hdd0/home/00000001/localusername": "User"
         },
@@ -6458,14 +7237,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -6539,7 +7320,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: /mnt/sd/hdd0/\n"
         },
         "dirs": [
@@ -6583,14 +7364,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -6664,7 +7447,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: /mnt/sd/hdd0/\n",
           "/mnt/sd/hdd0/home/00000001/localusername": "User"
         },
@@ -6709,14 +7492,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -6790,7 +7575,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: /mnt/sd/hdd0/\n",
           "/mnt/sd/hdd0/home/00000001/localusername": "User"
         },
@@ -6835,14 +7620,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/hdd0/savedata/vmc",
                 "files": null,
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": null
               }
             ]
           },
@@ -6959,7 +7746,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -7064,14 +7852,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/01/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -7177,14 +7967,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/01/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -7291,14 +8083,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/01/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -7405,14 +8199,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/01/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -7516,7 +8312,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -7624,7 +8421,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -7730,7 +8528,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -7836,14 +8635,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/00/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -7950,14 +8751,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/00/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -8063,7 +8866,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -8170,7 +8974,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -8274,7 +9079,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -8382,7 +9188,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -8491,7 +9298,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -8601,7 +9409,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -8707,7 +9516,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -8810,7 +9620,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -8913,7 +9724,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -9017,7 +9829,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -9120,7 +9933,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -9224,7 +10038,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -9328,7 +10143,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -9434,14 +10250,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/01/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -9546,7 +10364,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -9653,7 +10472,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -9760,7 +10580,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -9864,7 +10685,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -9968,7 +10790,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -10077,14 +10900,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/01/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -10195,7 +11020,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -10303,7 +11129,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -10410,7 +11237,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -10739,7 +11567,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -10824,7 +11653,8 @@
             "code": "standalone-variant-unestablished",
             "data": {
               "label": "Vita3K (Standalone)",
-              "system": "psvita",
+              "source": "esde",
+              "key": "psvita",
               "variant": "proton"
             }
           }
@@ -10887,21 +11717,30 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/EUR/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/JAP/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -11208,7 +12047,8 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -11297,21 +12137,30 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/primehack/GC/EUR/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/primehack/GC/JAP/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -11617,7 +12466,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -11802,21 +12652,30 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/io.github.shiiion.primehack/data/dolphin-emu/GC/EUR/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/io.github.shiiion.primehack/data/dolphin-emu/GC/JAP/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -12672,7 +13531,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/xbox/xemu",
@@ -12681,7 +13541,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -12782,7 +13643,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/xbox/xemu",
@@ -12791,7 +13653,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -12884,7 +13747,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/xbox/xemu",
@@ -12893,7 +13757,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -12986,7 +13851,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/xbox/xemu",
@@ -12995,7 +13861,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -13091,7 +13958,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -13193,7 +14063,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/ps2/pcsx2/memcards",
@@ -13202,7 +14075,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "2"
+                ]
               }
             ]
           },
@@ -13331,7 +14207,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -13340,7 +14219,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -13349,28 +14231,40 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card B",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               }
             ]
           },
@@ -13674,7 +14568,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -13879,7 +14774,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -14093,7 +14989,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -14302,7 +15199,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -14514,7 +15412,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -14722,7 +15621,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -14920,7 +15820,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -14929,7 +15832,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -14938,7 +15844,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -15189,7 +16098,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -15198,7 +16110,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -15207,7 +16122,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -15457,7 +16375,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -15596,7 +16517,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -15730,7 +16654,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -15874,7 +16801,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -15996,7 +16926,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/ps2/pcsx2/memcards",
@@ -16005,7 +16938,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "2"
+                ]
               }
             ]
           },
@@ -16156,7 +17092,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/ps2/pcsx2/memcards",
@@ -16165,7 +17104,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "2"
+                ]
               }
             ]
           },
@@ -16311,7 +17253,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/ps2/pcsx2/memcards",
@@ -16320,7 +17265,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "2"
+                ]
               }
             ]
           },
@@ -16472,7 +17420,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -16584,7 +17535,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -16692,7 +17646,10 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -16814,7 +17771,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -16936,7 +17896,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -17049,7 +18012,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/ps2/pcsx2/memcards",
@@ -17058,7 +18024,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1B"
+                ]
               }
             ]
           },
@@ -17185,7 +18154,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -17310,7 +18282,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -17416,7 +18391,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -17538,7 +18516,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               },
               {
                 "dir": "/home/deck/Emulation/saves/duckstation/saves",
@@ -17547,7 +18528,10 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "2"
+                ]
               }
             ]
           },
@@ -17651,21 +18635,30 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               }
             ]
           },
@@ -17965,21 +18958,30 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               }
             ]
           },
@@ -18283,42 +19285,60 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card B",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               }
             ]
           },
@@ -18705,42 +19725,60 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card B",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "B"
+                ]
               }
             ]
           },
@@ -19361,21 +20399,30 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -19695,7 +20742,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -19704,7 +20754,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -19713,7 +20766,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -19722,7 +20778,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -19731,7 +20790,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -19740,7 +20802,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "B"
+                ]
               }
             ]
           },
@@ -19973,7 +21038,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -19982,7 +21050,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -19991,7 +21062,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -20227,21 +21301,30 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -20798,7 +21881,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -21930,7 +23016,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -22162,7 +23251,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -22852,7 +23944,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -22861,7 +23956,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC",
@@ -22870,7 +23968,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/roms/gba",
@@ -22879,7 +23980,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "B"
+                ]
               }
             ]
           },
@@ -24063,21 +25167,30 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -24383,21 +25496,30 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -24752,7 +25874,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/mnt/cards",
@@ -24761,7 +25886,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/mnt/cards",
@@ -24770,7 +25898,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -25468,7 +26599,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/primehack/GC",
@@ -25477,7 +26611,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "B"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/primehack/GC",
@@ -25486,7 +26623,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "B"
+                ]
               }
             ]
           },
@@ -26175,7 +27315,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -26586,7 +27729,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/:\n  path: /mnt/sd/hdd/\n"
         },
         "dirs": [
@@ -26631,7 +27774,7 @@
         "files": {
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
-          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path><extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <platform>ps3</platform>\n  </system>\n</systemList>\n",
           "/home/deck/.var/app/net.retrodeck.retrodeck/config/rpcs3/vfs.yml": "/dev_hdd0/: /mnt/sd/a/\n/dev_hdd0/: /mnt/sd/b/\n"
         },
         "dirs": [
@@ -26719,7 +27862,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -26826,7 +27970,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -26939,14 +28084,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/01/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -27048,14 +28195,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/02/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -27157,14 +28306,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/03/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -27266,14 +28417,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/00/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -27374,14 +28527,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/01/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -27479,7 +28634,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -27577,7 +28733,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -27675,7 +28832,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -27779,14 +28937,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/01/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -27888,7 +29048,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -27994,7 +29155,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -28099,7 +29261,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -28204,7 +29367,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -28308,7 +29472,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -28411,14 +29576,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/null/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -28520,7 +29687,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -28628,14 +29796,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/01/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -28736,14 +29906,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/vita/ux0/user/01/savedata",
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -28847,7 +30019,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -28926,7 +30099,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -29014,7 +30188,8 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "battery",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -29100,7 +30275,11 @@
                 ],
                 "granularity": "shared-file",
                 "role": "unknown",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A",
+                  "B"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/roms/gba",
@@ -29109,7 +30288,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/roms/gba",
@@ -29118,7 +30300,10 @@
                 ],
                 "granularity": "shared-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -29382,7 +30567,11 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1",
+                  "2"
+                ]
               }
             ]
           },
@@ -29488,7 +30677,11 @@
                 ],
                 "granularity": "shared-card",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1",
+                  "2"
+                ]
               }
             ]
           },
@@ -29608,7 +30801,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "unknown",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               }
             ]
           },
@@ -29710,7 +30904,11 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "1",
+                  "2"
+                ]
               }
             ]
           },
@@ -29843,21 +31041,33 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A",
+                  "B"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/gc/folders/EUR",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A",
+                  "B"
+                ]
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/gc/folders/JAP",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A",
+                  "B"
+                ]
               }
             ]
           },
@@ -30189,21 +31399,30 @@
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "memory-card",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": [
+                  "A"
+                ]
               }
             ]
           },
@@ -30512,7 +31731,10 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": [
+                  "1"
+                ]
               }
             ]
           },
@@ -30641,7 +31863,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "battery",
-                "size_fixed": null
+                "size_fixed": null,
+                "slots": []
               },
               {
                 "dir": "/mnt/sd/retrodeck/saves/xbox/xemu",
@@ -30650,7 +31873,8 @@
                 ],
                 "granularity": "shared-file",
                 "role": "settings",
-                "size_fixed": true
+                "size_fixed": true,
+                "slots": []
               }
             ]
           },
@@ -30740,7 +31964,8 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },
@@ -30855,14 +32080,16 @@
                 "files": null,
                 "granularity": "per-game-directory",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               },
               {
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/azahar-emu/sdmc/Nintendo 3DS/00000000000000000000000000000000/00000000000000000000000000000000/extdata",
                 "files": null,
                 "granularity": "per-game-files",
                 "role": "battery",
-                "size_fixed": false
+                "size_fixed": false,
+                "slots": []
               }
             ]
           },

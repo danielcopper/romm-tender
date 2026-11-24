@@ -71,8 +71,27 @@ from .find_rules import (
     SHELL_CONSTRUCTS,
 )
 from .machine import CORE_UNANSWERED_STATUSES
+from .launch_codes import (
+    CAVEAT_ENTRY_DIRECTORY_UNREAD,
+    CAVEAT_FRONTEND_NAME_UNSCANNED,
+    DIRECTORY_UNREAD_REASONS,
+    SCANNED_KINDS,
+    UNSCANNED_REASONS,
+)
 from .opens_codes import OPENS_EFFECTS, OPENS_FAILURE_CODES
+from .portability_codes import (
+    BUILD_UNCONFIRMED_REASONS,
+    CAVEAT_ENTRY_LABEL_UNKNOWN,
+    CAVEAT_SAVE_ANSWER_UNRESOLVED,
+    CAVEAT_SAVE_FORMAT_BUILD_UNCONFIRMED,
+    CAVEAT_SAVE_FORMAT_UNRECORDED,
+    CAVEAT_SAVE_PART_UNESTABLISHED,
+    CARTRIDGE_STATEMENTS,
+    PART_UNESTABLISHED_REASONS,
+    PORTABILITY_SIDES,
+)
 from .retroarch_cfg import CFG_LAYER_KINDS, CFG_LAYER_OVERRIDE_KINDS, RetroArchCfg
+from .save_formats import CARTRIDGE_KINDS, SAVE_LENGTH_RULES, SAVE_REGIONS
 from .standalone_saves import REDIRECT_VIAS, SaveRedirect
 from .system_firmware import CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE, STATED_EVIDENCE_WORDS
 from .yaml_scalars import REFUSAL_CODES
@@ -453,13 +472,16 @@ CAVEAT_FILE_SET_SPANS_ROOTS = "file-set-spans-roots"
 # would be the failure this project exists to avoid. `data` carries `dir` and a
 # `citation` for the reading behind it.
 CAVEAT_FILE_NAMES_UNESTABLISHED = "file-names-unestablished"
-# The title directories an emulator's NAND holds, each spelled the way the
-# answer's ``save_id`` hole is filled (``"<hi>/<lo>"``), so a caller whose
-# source knows a game by part of its title id — a Wii disc's low word — can
-# match it here: one entry with that word fills the hole, two leave it
-# ambiguous, and none means no title of that word was ever started on this
-# machine. Dolphin creates a disc's ``title/<hi>/<lo>/data`` the moment it
-# boots the disc, so a started game is listed before it saves anything.
+# The title directories an emulator's NAND or MLC holds, each spelled the way
+# the answer's ``save_id`` hole is filled (``"<hi>/<lo>"``), so a caller whose
+# source knows a game by part of its title id — a Wii disc's or a Wii U
+# title's low word — can match it here: one entry with that word fills the
+# hole, two leave it ambiguous, and none means the emulator never created a
+# directory for a title of that word on this machine. Dolphin creates a disc's
+# ``title/<hi>/<lo>/data`` the moment it boots the disc, so a started game is
+# listed before it saves anything; Cemu creates a title's
+# ``usr/save/<hi>/<lo>`` when the title initialises its save library, before
+# its first save.
 # ``data`` carries the ``dir`` listed, the ``titles`` found there (only the
 # names of the shape the emulator creates, eight lowercase hex digits at both
 # levels), the ``citation`` for that creation, and ``unreadable``: where the
@@ -530,10 +552,33 @@ CAVEAT_FILE_SET_CLAIMS_MERGED = "file-set-claims-merged"
 CAVEAT_SAVE_FILES_SHARED_WITH_CORE = "save-files-shared-with-core"
 # The caller named no system, and the answer holds anyway because every system
 # the core's record covers writes the same files. The claim is scoped to those
-# systems — `data["systems"]` lists them — because a core run for a system its
-# record never names has established nothing here. It is the honest answer on
-# an arrangement with no frontend catalogue, where no system is ever named.
+# systems — `data` lists them as the parallel `sources` and `keys` — because a
+# core run for a system its record never names has established nothing here.
 CAVEAT_FILE_SET_ACROSS_SYSTEMS = "file-set-across-systems"
+# The system asked stands for several ES-DE systems and two of them the core's
+# record holds state different files (#784 D50). A packaged save record is
+# filed under ES-DE's names, and the platform table names several of them for
+# some systems — libretro's Super Nintendo is ES-DE's snes, sfc and snesna. The
+# record keys such a system where the entries it holds for them state the same
+# files; where two differ, no recorded file set is applied rather than one
+# picked. `data` carries `core` and the held systems, which do not all agree,
+# as the parallel `sources` and `keys`.
+CAVEAT_SAVE_RECORD_AMBIGUOUS = "save-record-ambiguous"
+# The system asked stands for several ES-DE systems, the core's record keys it
+# by the ones it holds, and it holds no entry for the rest (#784 D50) —
+# libretro's Game Boy is ES-DE's gb and sgb, and Gambatte's record covers gb
+# alone. The files answered are the held systems' files; for the others the
+# record states nothing. `data` carries `core` and the systems it holds no
+# entry for as the parallel `sources` and `keys`.
+CAVEAT_SAVE_RECORD_PARTIAL = "save-record-partial"
+# The system asked is none the core's record holds an entry for (#784 D55): a
+# single ES-DE name the record does not list, a name whose translation reaches
+# no ES-DE name, a cited pair, or RetroDECK's own name. The file set is
+# unknown, and asked without a system the record's unanimous answer stands
+# instead. `data` carries `core` and the system as asked, as `source` and
+# `key`, or as the parallel `sources` and `keys` where several pairs were
+# asked; on the portability question, `side` too.
+CAVEAT_SAVE_RECORD_UNRECORDED = "save-record-unrecorded"
 CAVEAT_UNKNOWN_OPTION_VALUE = "unknown-option-value"
 # Set to blank or the literal "default". Not the same as absent — an absent
 # key resolves to RetroArch's platform default on every route — and the
@@ -1140,9 +1185,8 @@ class Caveat:
 
     One value, several values, or one value per subject — see
     :data:`DataValue`. Sequences arrive as any sequence of strings and are
-    kept as tuples. The mapping form belongs to the pairs the guide documents:
-    the alternative-emulator tally, the card-index options
-    ``core-mode-unestablished`` reads, and the BIOS search's listing.
+    kept as tuples. The mapping form belongs only to the ``(code, key)`` pairs
+    ``docs/how-to-use.md`` lists among the caveat data shapes.
     """
 
     def __post_init__(self) -> None:
@@ -1573,8 +1617,18 @@ class FileGroup:
     ``save-files-compressed`` says it compresses them. ``null`` where it
     was not established — never a claim that the size varies.
     """
+    slots: tuple[str, ...] | None = ()
+    """The slots of the console that read this group's files, in the emulator's own words (Dolphin's ``A`` and ``B``,
+    a PlayStation's ``1`` and ``2``), from the path the emulator resolves for each slot; two slots set to one file make
+    one group read by both (#577 D23). Empty where the emulator keeps no slots, and ``None`` where which slots read the
+    group is not established (#577 D24): RPCS3's virtual memory cards, whose slot is a per-game setting atlas does not
+    read, or PCEE2's card folder under a PCSX2 ini, whose multitap cards an unread setting may add."""
 
     def __post_init__(self) -> None:
+        if self.slots is not None and (
+            any(not slot.strip() for slot in self.slots) or len(set(self.slots)) != len(self.slots)
+        ):
+            raise ValueError(f"FileGroup: slots must be distinct non-blank strings, got {self.slots!r}")
         # Typed, and still checked: a truthy string or a 1 would otherwise be
         # serialized as a claim nobody made.
         if self.size_fixed is not None and type(self.size_fixed) is not bool:
@@ -2234,6 +2288,11 @@ SearchReading = Literal["identified", "unrecognised", "unreadable"]
 ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
     {
         (CAVEAT_CORE_MODE_UNESTABLISHED, "reason"): CORE_MODE_UNESTABLISHED_REASONS,
+        # How ES-DE's scan meets a content path it would not list, and why
+        # (#776 D2), and why a directory's route is not followed to its end.
+        (CAVEAT_FRONTEND_NAME_UNSCANNED, "kind"): SCANNED_KINDS,
+        (CAVEAT_FRONTEND_NAME_UNSCANNED, "reason"): UNSCANNED_REASONS,
+        (CAVEAT_ENTRY_DIRECTORY_UNREAD, "reason"): DIRECTORY_UNREAD_REASONS,
         # The seam's own vocabulary, registered rather than restated: the words
         # a probe answers with are decided in atlas/machine.py, and a second
         # spelling here would be a place for the two to drift apart.
@@ -2275,15 +2334,54 @@ ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
         # The world-knowledge mark carries two keys and only one of them is
         # closed: the evidence level, as the contract spells it rather than in
         # the bracket notation the research pages use. The system it is about
-        # is a system id — open by construction, because atlas publishes its
-        # own spelling wherever no catalogue declares one.
+        # rides as `source` and `key`, a pair of whichever source names it —
+        # open by construction, as every source's keys are.
         (CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE, "evidence"): STATED_EVIDENCE_WORDS,
         (UNRESOLVED_EMULATOR_CONFIG_UNREADABLE, "reason"): EMULATOR_CONFIG_UNREADABLE_REASONS,
         # Whether the emulator stops at a failure of the open or goes on
         # without the file, on every code a failure is stated under: the words
         # are decided in atlas/opens_codes.py beside the codes they ride.
         **{(code, "effect"): OPENS_EFFECTS for code in OPENS_FAILURE_CODES},
+        # Which of the two entries a save-portability caveat is about, and why
+        # a build was not confirmed: the words are decided in
+        # atlas/portability_codes.py beside the codes they ride.
+        **{
+            (code, "side"): PORTABILITY_SIDES
+            for code in (
+                CAVEAT_SAVE_FORMAT_BUILD_UNCONFIRMED,
+                CAVEAT_SAVE_FORMAT_UNRECORDED,
+                CAVEAT_SAVE_ANSWER_UNRESOLVED,
+                CAVEAT_ENTRY_LABEL_UNKNOWN,
+                # A system asked as several ES-DE names, where the save-format
+                # records of one side differ or leave some of them uncovered,
+                # or a system they hold no record for at all.
+                CAVEAT_SAVE_RECORD_AMBIGUOUS,
+                CAVEAT_SAVE_RECORD_PARTIAL,
+                CAVEAT_SAVE_RECORD_UNRECORDED,
+            )
+        },
+        (CAVEAT_SAVE_FORMAT_BUILD_UNCONFIRMED, "reason"): BUILD_UNCONFIRMED_REASONS,
+        (CAVEAT_SAVE_PART_UNESTABLISHED, "reason"): PART_UNESTABLISHED_REASONS,
+        # What holds per cartridge kind where a part's layout differs by it
+        # (#577 D15, D16): a mapping keyed by the kind, whose mapped words are
+        # a verdict or that the part holds no game data for it.
+        (CAVEAT_SAVE_PART_UNESTABLISHED, "cartridges"): CARTRIDGE_STATEMENTS,
+        (CAVEAT_SAVE_PART_UNESTABLISHED, "other_cartridges"): CARTRIDGE_STATEMENTS,
+        # What decides each side's length where the two size a save per game
+        # in different ways (#577 D19).
+        (CAVEAT_SAVE_PART_UNESTABLISHED, "source_length"): SAVE_LENGTH_RULES,
+        (CAVEAT_SAVE_PART_UNESTABLISHED, "target_length"): SAVE_LENGTH_RULES,
+        # The region a part is kept apart for (#577 D21).
+        (CAVEAT_SAVE_PART_UNESTABLISHED, "region"): SAVE_REGIONS,
     }
+)
+
+
+# The ``(code, key)`` pairs whose value is a mapping keyed by a closed
+# vocabulary, and that vocabulary: there the KEYS are words too, checked at
+# construction beside the mapped words :data:`ENUMERATED_DATA` closes.
+ENUMERATED_DATA_KEYS: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
+    {(CAVEAT_SAVE_PART_UNESTABLISHED, "cartridges"): CARTRIDGE_KINDS}
 )
 
 
@@ -2298,6 +2396,7 @@ def _check_enumerations(what: str, code: str, data: "Mapping[str, DataValue]") -
     are said about and are left alone.
     """
     for key, value in data.items():
+        _check_enumerated_keys(what, code, key, value)
         allowed = ENUMERATED_DATA.get((code, key))
         if allowed is None:
             continue
@@ -2306,6 +2405,16 @@ def _check_enumerations(what: str, code: str, data: "Mapping[str, DataValue]") -
                 raise ValueError(
                     f"{what}: {code}.{key} must be one of {list(allowed)}, got {stated!r}"
                 )
+
+
+def _check_enumerated_keys(what: str, code: str, key: str, value: "DataValue") -> None:
+    """Refuse a mapping key outside the vocabulary :data:`ENUMERATED_DATA_KEYS` names for its ``(code, key)``."""
+    subjects = ENUMERATED_DATA_KEYS.get((code, key))
+    if subjects is None or not isinstance(value, Mapping):
+        return
+    stray = next((subject for subject in value if subject not in subjects), None)
+    if stray is not None:
+        raise ValueError(f"{what}: {code}.{key} keys must be drawn from {list(subjects)}, got {stray!r}")
 
 
 def _stated_words(value: "DataValue") -> tuple[str, ...]:

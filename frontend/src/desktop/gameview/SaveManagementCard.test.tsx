@@ -139,6 +139,7 @@ describe("SaveManagementCard", () => {
     startCheck: { state: "checking" },
     vanishedPick: null,
     emulatorPlatformSystem: null,
+    emulatorDataSystem: null,
   };
 
   beforeEach(() => {
@@ -1512,9 +1513,10 @@ describe("SaveManagementCard", () => {
 
         await waitFor(() => {
           expect(warnSpy).toHaveBeenCalledWith(
-            "DesktopSlotPanel: failed to load slot saves for romId=42 slot='speedrun': Error: slot fetch down",
+            "DesktopSlotPanel: slot 'speedrun' saves could not be read: Error: slot fetch down",
           );
-          expect(screen.getByText("No saves in this slot")).toBeInTheDocument();
+          expect(screen.getByTestId("desktop-slot-load-error")).toHaveTextContent("Couldn't load this slot's saves.");
+          expect(screen.queryByText("No saves in this slot")).not.toBeInTheDocument();
         });
 
         // Partial stop shows toast and announces save sync
@@ -2714,6 +2716,28 @@ describe("SaveManagementCard", () => {
       expect(screen.queryByTestId("desktop-slot-panel-before-toggle")).not.toBeInTheDocument();
     });
 
+    it("reads an inactive slot's saves again on the next expand after a failed read", async () => {
+      vi.mocked(backend.getSlotSaves)
+        .mockResolvedValueOnce({ success: false, reason: "server_error", message: "slot list denied" })
+        .mockResolvedValueOnce({
+          success: true,
+          slot: "speedrun",
+          saves: [{ filename: "alt.srm", id: 700, size: 1024, updated_at: "2026-06-14T10:00:00Z", emulator: "mgba" }],
+        });
+
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      const header = await screen.findByRole("button", { name: /speedrun/ });
+      fireEvent.click(header);
+      await screen.findByTestId("desktop-slot-load-error");
+
+      fireEvent.click(header);
+      fireEvent.click(header);
+
+      await screen.findByText("alt.srm");
+      expect(screen.queryByTestId("desktop-slot-load-error")).not.toBeInTheDocument();
+      expect(backend.getSlotSaves).toHaveBeenCalledTimes(2);
+    });
+
     it("logs operational refusals via logWarn and isolates post-confirm refreshSaveStatus rejection", async () => {
       const warnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
       try {
@@ -2753,7 +2777,10 @@ describe("SaveManagementCard", () => {
         fireEvent.click(await screen.findByRole("button", { name: /speedrun/ }));
         await waitFor(() => {
           expect(warnSpy).toHaveBeenCalledWith(
-            "DesktopSlotPanel: getSlotSaves for romId=42 slot='speedrun' failed (server_error): slot list denied",
+            "DesktopSlotPanel: slot 'speedrun' saves could not be read: slot list denied",
+          );
+          expect(screen.getByTestId("desktop-slot-load-error")).toHaveTextContent(
+            "Couldn't load this slot's saves: slot list denied",
           );
         });
 

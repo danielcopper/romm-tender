@@ -8,8 +8,8 @@ import { setRommConnectionState } from "../utils/connectionState";
 import type { SaveFileStatus, SaveSlotSummary, SaveStatus, SaveVersionEntry } from "../types";
 
 // SavesTab.test.tsx stubs SlotPanel to read its props; the state a panel keeps
-// across a restore, an activation or a copy lives inside the real SlotPanel and
-// VersionHistoryPanel, so this file renders both.
+// across a restore, an activation, a copy or a change of ROM lives inside the
+// real SlotPanel and VersionHistoryPanel, so this file renders both.
 
 function makeSlot(slot: string): SaveSlotSummary {
   return { slot, source: "server", count: 1, latest_updated_at: null };
@@ -267,5 +267,81 @@ describe("SavesTab — a restore reloads nothing it closed", () => {
     fireEvent.click(toggle);
     await waitFor(() => expect(container.textContent).toContain("after.srm"));
     expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("SavesTab — a change of ROM under the same slot names", () => {
+  const slotFile = (romId: number, slot: string) => `${slot}-rom${romId}.srm`;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setRommConnectionState("connected");
+    vi.mocked(backend.getVersionList).mockResolvedValue({ multi_version: false, bound_vanished: false });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: false,
+      only_here: false,
+      stranding: "none",
+      rom_id: 0,
+    });
+    vi.mocked(backend.getSlotSaves).mockImplementation((romId, slot) =>
+      Promise.resolve({
+        success: true,
+        slot,
+        saves: [
+          { filename: slotFile(romId, slot), id: 90, size: 10, updated_at: "2025-06-14T10:00:00Z", emulator: "" },
+        ],
+      }),
+    );
+  });
+
+  it("closes an open inactive slot, which opened again lists the new ROM's files", async () => {
+    const { container, rerender } = render(<SavesTab {...props()} />);
+    await flushAsync();
+    fireEvent.click(header(container, "beta"));
+    await flushAsync();
+    expect(panel(container, "beta").textContent).toContain(slotFile(1, "beta"));
+
+    rerender(<SavesTab {...props({ romId: 2 })} />);
+    await flushAsync();
+    expect(isOpen(container, "beta")).toBe(false);
+    expect(container.textContent).not.toContain(slotFile(1, "beta"));
+
+    fireEvent.click(header(container, "beta"));
+    await flushAsync();
+    expect(vi.mocked(backend.getSlotSaves)).toHaveBeenLastCalledWith(2, "beta");
+    expect(panel(container, "beta").textContent).toContain(slotFile(2, "beta"));
+  });
+
+  it("does not show a slot read for the previous ROM that lands after the change", async () => {
+    let answerOldRead: () => void = () => undefined;
+    vi.mocked(backend.getSlotSaves).mockImplementationOnce(
+      (romId, slot) =>
+        new Promise((res) => {
+          answerOldRead = () =>
+            res({
+              success: true,
+              slot,
+              saves: [
+                { filename: slotFile(romId, slot), id: 90, size: 10, updated_at: "2025-06-14T10:00:00Z", emulator: "" },
+              ],
+            });
+        }),
+    );
+    const { container, rerender } = render(<SavesTab {...props()} />);
+    await flushAsync();
+    fireEvent.click(header(container, "beta"));
+    await flushAsync();
+
+    rerender(<SavesTab {...props({ romId: 2 })} />);
+    await act(async () => {
+      answerOldRead();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(container.textContent).not.toContain(slotFile(1, "beta"));
+
+    fireEvent.click(header(container, "beta"));
+    await flushAsync();
+    expect(panel(container, "beta").textContent).toContain(slotFile(2, "beta"));
+    expect(container.textContent).not.toContain(slotFile(1, "beta"));
   });
 });

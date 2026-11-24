@@ -1,10 +1,7 @@
 /**
- * One run of a save surface's first slot load: the spinner it puts up, the
- * load-once gate it holds, and the answer it folds in — the same for Big
- * Picture's SAVES tab (`bigpicture/panelSlotsLoad.ts`) and the desktop Saves
- * card (`desktop/gameview/SaveManagementCard.tsx`). Each caller owns the gate
- * and decides when a run starts; how it orders runs against its slot refreshes
- * is the `isOvertaken` it passes.
+ * A save surface's first slot load, shared by every surface: the caller owns
+ * the load-once gate and when a run starts, and orders runs against its slot
+ * refreshes through the `isOvertaken` it passes.
  */
 
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";

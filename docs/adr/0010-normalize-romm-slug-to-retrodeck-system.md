@@ -1,7 +1,7 @@
 ---
 status: accepted
 decided: 2026-06-05
-updated: 2026-10-08
+updated: 2026-11-18
 ---
 
 # Platform identity is normalized to a RetroDECK `system` at the RomM seam; local resolution keys by `system`, never by the raw RomM slug
@@ -118,3 +118,20 @@ is turned into a `system` with is its ids rather than `slug` / `fs_slug`, throug
 records is still the one carried downstream. §2–§4 stand: the resolved `system` is still the identity every local
 resolution keys by, and the BIOS-folder vocabulary is still kept apart from it. How the answer is chosen is
 [core-emulator-selection.md](../architecture/core-emulator-selection.md#a-platforms-system)'s.
+
+## Amendment — the platform is asked with RomM's slug and folder, and the answer's system is forwarded as it names it
+
+Recorded for [#2751](https://github.com/danielcopper/romm-tender/issues/2751)
+([#2217](https://github.com/danielcopper/romm-tender/issues/2217) D16–D18,
+[#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8). The first amendment's ids are no longer what a
+platform is asked with: the resolver's platform question is asked with exactly two (source, key) pairs, RomM's slug
+(`("romm", slug)`) and the platform's folder in RomM (`("folder", fs_slug)`), the same for every question and every
+source, and the resolver's own platform table translates them; RomM's ids are kept and not sent. The answer names a
+system as a `(source, key)` pair, and Tender forwards that pair to every later question rather than holding or comparing
+a system name of its own; an installed game is asked by the name its install record holds, as §2 keeps it. Where the
+pairs leave several switched-on systems, Tender picks none — the first amendment's choice among several (named like the
+platform, else the first listed) is withdrawn — asks every later question with the pairs, and links nothing. A platform
+with no system names which of five cases holds: the resolver cannot match it, RomM's slug and folder name different
+systems, the source's frontend has none, it has one this machine has not set up, or only a switched-off one. §2–§4
+stand. Not taken: sending the ids where several systems remain — measured on 37 RomM platforms with emu-atlas 0.35.0,
+they narrowed one, and RomM's libretro name for it contradicted the other pairs.

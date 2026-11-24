@@ -252,7 +252,7 @@
     "desmume": {
       "verdict": "card",
       "per_game_capable": true,
-      "note": "[V-source/binary] Answers only system RAM. Writes <save dir>/<rom_stem>.dsv itself through its backup device — the battery path defaults to the save directory this build fills, with system-directory and content-directory fallbacks; a legacy .sav is imported once, never written. No .dsv.bak in this build: the copy is gated on a Windows-frontend-only setting whose default is off — the difference to the desmume2015 card's pair. Supersedes the 07-24 queue triage. Not live-observed.",
+      "note": "[V-source/binary] Answers only system RAM. Writes <save dir>/<rom_stem>.dsv itself through its backup device — the battery path defaults to the save directory this build fills, with system-directory and content-directory fallbacks; a legacy .sav is imported once, never written. No .dsv.bak in this build: the copy is gated on a Windows-frontend-only setting whose default is off. Supersedes the 07-24 queue triage. Not live-observed.",
       "verified": {
         "retrodeck": null,
         "emudeck": null,
@@ -306,7 +306,7 @@
     "desmume2015": {
       "verdict": "card",
       "per_game_capable": true,
-      "note": "[V-source/binary] Answers only SYSTEM_RAM, so RetroArch writes nothing; writes <rom_stem>.dsv itself with a .dsv.bak beside it — relative to the launching process's working directory, because the path member its build never fills stays empty. The one carded core whose directory is a property of the launch. Not live-observed.",
+      "note": "[V-source/binary] Answers only SYSTEM_RAM, so RetroArch writes nothing; writes <rom_stem>.dsv itself relative to the launching process's working directory, because the path member its build never fills stays empty, and no .dsv.bak, since the copy is gated on a setting that defaults to off and nothing sets. The one carded core whose directory is a property of the launch. Not live-observed.",
       "verified": {
         "retrodeck": null,
         "emudeck": null,

@@ -8,9 +8,11 @@ machine through the same reading.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, cast
 
 import pytest
+from _atlas_machines import asked_launch_command, vector_named
 from _vendor.atlas import (
     AVAILABILITY_NOT_INSTALLED,
     AVAILABILITY_STARTABLE,
@@ -35,6 +37,10 @@ from _vendor.atlas import (
     CAVEAT_LAUNCH_ENVIRONMENT_UNREAD,
     CAVEAT_LAUNCHER_SCRIPT_UNPINNED,
     KIND_STANDALONE,
+    RESOLUTION_AMBIGUOUS,
+    RESOLUTION_CONFLICT,
+    RESOLUTION_UNANIMOUS,
+    RESOLUTION_UNKNOWN,
     VARIANT_APPIMAGE,
     VARIANT_FLATPAK,
     VARIANT_NATIVE,
@@ -42,7 +48,10 @@ from _vendor.atlas import (
     EnvironmentVariable,
     LaunchCommand,
     LaunchProgram,
+    SystemCandidate,
+    SystemResolution,
     WorkingFolder,
+    translate,
 )
 from _vendor.atlas.esde import EmulatorSpec
 from _vendor.atlas.installations import EmulatorEntry, LaunchCommandAnswer
@@ -51,7 +60,7 @@ from _vendor.atlas.placement import Caveat
 
 from adapters.atlas_launch import AtlasLaunchAdapter, read_start
 from adapters.emulator_sources import EmulatorSourcesAdapter
-from domain.emulator_commands import NOT_ESTABLISHED_NO_FIND_RULE, NOT_INSTALLED
+from domain.emulator_commands import NOT_ESTABLISHED_FIND_RULES_UNREAD, NOT_ESTABLISHED_NO_FIND_RULE, NOT_INSTALLED
 from domain.start_command import (
     COMMAND_TOO_LONG,
     COMMAND_UNREAD,
@@ -65,6 +74,8 @@ from domain.start_command import (
     NO_PROGRAM,
     PLACEHOLDER_UNFILLED,
     ROM_ROOT_UNKNOWN,
+    SYSTEM_UNKNOWN,
+    SYSTEMS_SEVERAL,
     StartCommand,
     StartNote,
     StartRefused,
@@ -290,6 +301,47 @@ class TestARefusedCommand:
     )
     def test_each_refusal_reads_as_its_reason(self, code, reason):
         assert read_start(_answer(None, _caveat(code))) == StartRefused(reason)
+
+    @pytest.mark.parametrize(
+        ("status", "reason"),
+        [
+            (RESOLUTION_UNKNOWN, SYSTEM_UNKNOWN),
+            (RESOLUTION_CONFLICT, SYSTEM_UNKNOWN),
+            (RESOLUTION_AMBIGUOUS, SYSTEMS_SEVERAL),
+        ],
+    )
+    def test_a_system_that_resolved_to_no_one_system_gives_no_command_and_says_which(self, status, reason):
+        """#2751: several systems the resolver names none of, or none here — never "could not be read"."""
+        several = (
+            SystemCandidate(("esde", "mark3"), "declared"),
+            SystemCandidate(("esde", "mastersystem"), "declared"),
+        )
+        ambiguous = status == RESOLUTION_AMBIGUOUS
+        resolution = SystemResolution(
+            status,
+            None,
+            None,
+            candidates=several if ambiguous else (),
+            translation=translate((("romm", "sms"),)) if ambiguous else None,
+        )
+        answer = replace(_answer(None, entry=_entry(AVAILABILITY_NOT_INSTALLED)), resolution=resolution)
+
+        assert read_start(answer) == StartRefused(reason)
+
+    def test_beside_systems_that_answer_alike_the_entrys_own_refusal_is_read(self):
+        """#2225 D8, #2751 D3: a shared answer holds for the platform, so its entry's installation is said.
+
+        Asked of a recorded machine whose EmuDeck twins answer alike, so the
+        entry is the resolver's own entry of a shared answer.
+        """
+        answer = asked_launch_command(
+            vector_named(
+                "launch_command", "several-named-systems", "emudeck-siblings-declared-alike-answer-every-question-alike"
+            )
+        )
+
+        assert answer.resolution.status == RESOLUTION_UNANIMOUS
+        assert read_start(answer) == StartRefused(NOT_ESTABLISHED_FIND_RULES_UNREAD)
 
     def test_a_refusal_tender_has_no_word_for_reads_as_a_command_that_could_not_be_read(self):
         assert read_start(_answer(None, _caveat("a-code-of-a-later-release"))) == StartRefused(COMMAND_UNREAD)

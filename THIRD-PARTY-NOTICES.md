@@ -15,6 +15,7 @@ Tender also ships, and this file does not describe:
 | What                                         | Licence                                          | Where its text is                                                                    |
 | -------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `backend/_vendor/atlas` (emu-atlas)          | MIT                                              | `backend/_vendor/atlas.LICENSE`, beside the tree                                     |
+| emu-atlas's platform table (keys only)       | each source's own, as `SOURCES.md` names it      | `backend/_vendor/atlas/data/SOURCES.md` names each; no licence text ships            |
 | `backend/_vendor/vdf` (ValvePython/vdf)      | MIT                                              | `backend/_vendor/vdf/LICENSE`, inside the tree                                       |
 | `backend/_vendor/backports` (backports.zstd) | PSF-2.0, and BSD for the zstd library it carries | `backend/_vendor/backports/zstd/LICENSE.txt` and `LICENSE_zstd.txt`, inside the tree |
 | `backend/_vendor/png` (pypng)                | MIT                                              | `backend/_vendor/png/LICENCE`, inside the tree                                       |

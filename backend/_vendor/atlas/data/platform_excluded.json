@@ -1,0 +1,61 @@
+{
+ "schema": 1,
+ "spec": "Issue #784 D17. Source keys the table deliberately places on no row, each with the reason; the release check (scripts/check_platform_table.py) holds every other key to a placement.",
+ "excluded": [
+  {
+   "source": "libretro",
+   "key": "null",
+   "reason": "the placeholder 'database' of libretro's test cores (3dengine and others), no system"
+  },
+  {
+   "source": "romm",
+   "key": "black-point",
+   "reason": "no included source states what this is (looked in: RomM 5.4.1's IGDB, ScreenScraper, MobyGames and LaunchBox tables — the slug is in none)"
+  },
+  {
+   "source": "romm",
+   "key": "bubble",
+   "reason": "no included source states what this is (looked in: RomM's IGDB, ScreenScraper and LaunchBox tables; only its MobyGames table names it, moby_handler.py:428, and MobyGames is not shipped)"
+  },
+  {
+   "source": "romm",
+   "key": "versatile",
+   "reason": "no included source states what this is (looked in: RomM's IGDB, ScreenScraper and LaunchBox tables; only its MobyGames table names it, moby_handler.py:1227, and MobyGames is not shipped)"
+  },
+  {
+   "source": "libretro",
+   "key": "Nicai",
+   "reason": "no included source states what this is (looked in: core-info nicaiemu_libretro.info — manufacturer 'MStar', systemname 'Nicai', nothing about the device)"
+  },
+  {
+   "source": "libretro",
+   "key": "Native32",
+   "reason": "no included source states what this is (looked in: core-info native32emu_libretro.info — manufacturer 'Sunplus', systemname 'Native32', nothing about the device)"
+  },
+  {
+   "source": "romm-folder",
+   "key": "black-point",
+   "reason": "no included source states what this is (the folder of the slug's own spelling resolves to romm/black-point, excluded for the same reason)"
+  },
+  {
+   "source": "romm-folder",
+   "key": "bubble",
+   "reason": "no included source states what this is (the folder of the slug's own spelling resolves to romm/bubble, excluded for the same reason)"
+  },
+  {
+   "source": "romm-folder",
+   "key": "versatile",
+   "reason": "no included source states what this is (the folder of the slug's own spelling resolves to romm/versatile, excluded for the same reason)"
+  },
+  {
+   "source": "igdb",
+   "key": "50501",
+   "reason": "not an IGDB platform id: RomM's own note on its ScummVM record says 50501 is an IGDB keyword id (romm:backend/adapters/services/igdb.py:2165)"
+  },
+  {
+   "source": "igdb",
+   "key": "scummvm",
+   "reason": "not an IGDB platform: the slug of RomM's ScummVM record, whose id RomM's own note calls an IGDB keyword id (romm:backend/adapters/services/igdb.py:2165)"
+  }
+ ]
+}

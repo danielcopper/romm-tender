@@ -24,6 +24,7 @@ from __future__ import annotations
 import functools
 import json
 import os
+import posixpath
 import re
 import shlex
 import tomllib
@@ -32,6 +33,7 @@ from types import MappingProxyType
 from typing import (
     Any,
     Callable,
+    Collection,
     Iterable,
     Iterator,
     Literal,
@@ -47,6 +49,7 @@ from typing import (
 from dataclasses import dataclass, field, replace as _dc_replace
 
 from . import _xml as _ET
+from ._agreement import Agreement
 from ._question import once, one_question
 from . import whdload
 from .content_path import (
@@ -70,6 +73,9 @@ from .esde import (
     GamelistSelections,
     SystemDeclaration,
     commented_out_systems,
+    loaded_declaration,
+    loaded_declarations,
+    skipped_for,
     emulator_token,
     esde_extension,
     expand_home_path,
@@ -83,12 +89,47 @@ from .esde import (
 from .evidence import arrangement_caveats
 from .platforms import (
     CAVEAT_PLATFORM_SCRAPING_IGNORED,
+    CAVEAT_PLATFORM_SOURCE_VERSION_DIFFERS,
     CAVEAT_PLATFORM_UNKNOWN,
-    CAVEAT_PLATFORM_UNMAPPED,
-    PlatformIdentities,
-    platform_identities,
-    platforms_for,
-    systems_for,
+    CAVEAT_PLATFORM_VERSION_UNAPPLIED,
+    ESDE_PLATFORM_SOURCE,
+    ESDE_SOURCE,
+    INTERSECTION_CONFLICT,
+    INTERSECTION_UNKNOWN,
+    LIBRETRO_SOURCE,
+    LIFTED_CODES,
+    PAIR_KNOWN,
+    PLATFORM_STATUS_ABSENT,
+    PLATFORM_STATUS_DECLARED,
+    PLATFORM_STATUS_DISABLED,
+    PLATFORM_SYSTEM_STATUSES,
+    RESOLUTION_AMBIGUOUS,
+    RESOLUTION_CONFLICT,
+    RESOLUTION_RESOLVED,
+    RESOLUTION_UNANIMOUS,
+    RESOLUTION_UNKNOWN,
+    RETRODECK_SOURCE,
+    PlatformSystemStatus,
+    PlatformTranslation,
+    SystemArgument,
+    SystemCandidate,
+    SystemNaming,
+    SystemPair,
+    SystemResolution,
+    catalogue_pair,
+    exact_platform_tags,
+    named_systems,
+    names_one_system,
+    platform_table,
+    system_pairs,
+    EXACT_TIER,
+    AskedPair,
+    SystemTier,
+    parallel_lists,
+    check_system_pair,
+    systems_by_tier,
+    systems_reached,
+    translate,
 )
 from .systems import known_systems, vocabulary_platform_tags
 from .firmware import (
@@ -105,7 +146,6 @@ from .firmware import (
     CAVEAT_EMULATOR_LIST_DERIVED,
     CAVEAT_FIRMWARE_ROOT_MISSING,
     CAVEAT_INFO_PATH_UNRESOLVED,
-    CAVEAT_SYSTEM_UNKNOWN,
     derived_core_selection,
     derived_enumeration_lead,
     Catalogue,
@@ -116,10 +156,13 @@ from .firmware import (
     FirmwareIdentification,
     SandboxTranslation,
     InventoryCatalogue,
-    SYSTEMS_WITHOUT_CATALOGUE_ID,
     carded_systems,
     load_hashes,
     read_core_declarations,
+    spelled,
+    stated_once,
+    system_unknown,
+    system_naming,
     xemu_file_value,
 )
 from .find_rules import NO_FIND_RULES, FindRules, merge_find_rules, parse_find_rules
@@ -169,7 +212,20 @@ from .launch_command import (
     LauncherScript,
     LauncherStep,
     TooLarge,
+    rom_file,
     take_apart,
+)
+from .launch_codes import (
+    CAVEAT_ENTRY_DIRECTORY_HOLDS,
+    CAVEAT_ENTRY_DIRECTORY_UNREAD,
+    CAVEAT_FRONTEND_NAME_UNSCANNED,
+    DIRECTORY_UNREAD_CONTENT_OVERRIDE,
+    DIRECTORY_UNREAD_CORE,
+    DIRECTORY_UNREAD_OWN_LOADER,
+    SCANNED_KIND_DIRECTORY,
+    SCANNED_KIND_FILE,
+    UNSCANNED_DIRECTORY_WITHOUT_TOKEN,
+    UNSCANNED_TOKEN_NOT_LISTED,
 )
 from .launch_environment import (
     SOURCE_PATHS,
@@ -190,7 +246,7 @@ from .launcher_scripts import (
     step_runs,
 )
 from .frontend_path import frontend_search_path, frontend_working_directory
-from .launch_formats import lookup_install_first, lookup_standalone_launch
+from .launch_formats import StandaloneLaunchCard, lookup_install_first, lookup_standalone_launch
 from .firmware import firmware_for_core as _resolve_for_core
 from .firmware import firmware_for_system as _resolve_for_system
 from .firmware import firmware_inventory as _resolve_inventory
@@ -254,6 +310,8 @@ from .oddities import (
     lookup_card,
 )
 from .save_memory import SaveMemoryRecord, SystemMemory, lookup_save_memory
+from .portability_codes import PORTABILITY_UNESTABLISHED, PORTABILITY_VERDICTS
+from .save_portability import SavePart, portability_answer
 from .squashfs import zstd_provider
 from .textures import (
     XDG_CONFIG,
@@ -285,6 +343,9 @@ from .placement import (
     CAVEAT_FILE_MEMBERSHIP_BY_HEADER,
     CAVEAT_FILE_NAMES_UNESTABLISHED,
     CAVEAT_FILE_SET_ACROSS_SYSTEMS,
+    CAVEAT_SAVE_RECORD_AMBIGUOUS,
+    CAVEAT_SAVE_RECORD_PARTIAL,
+    CAVEAT_SAVE_RECORD_UNRECORDED,
     CAVEAT_FILE_SET_CLAIMS_MERGED,
     CAVEAT_FILE_SET_DIRECTORIES_UNREAD,
     CAVEAT_EMULATOR_CONFIG_MISSING,
@@ -2089,15 +2150,31 @@ class _SaveQuery:
     core_path_resolver: Callable[[str], _CoreLookup]
     arrangement: str
     arrangement_version: str | None
-    # Which system the question is about, where the asker knew — the catalogue
-    # routes do, because an entry is declared *for* a system. It narrows one
-    # thing only: a save-memory record is keyed by core and system together, so
-    # a core that behaves differently per system (mGBA answers a Game Boy
-    # cartridge's clock and a GBA cartridge's not at all) can be stated
-    # precisely instead of not at all. ``None`` is the honest state of the
-    # direct route, which is handed a core and nothing else, and it narrows
-    # nothing rather than picking one of a record's systems.
-    system: str | None = None
+    # The ES-DE names the asked system files a save-memory record under (#784
+    # D50), where the asker knew the system — the catalogue routes do, because
+    # an entry is declared *for* a system. They narrow one thing only: a record
+    # is keyed by core and system together, so a core that behaves differently
+    # per system (mGBA answers a Game Boy cartridge's clock and a GBA
+    # cartridge's not at all) can be stated precisely instead of not at all.
+    # One name is the record's key; several key it where the entries the
+    # record holds for them agree (:func:`_record_agreement`); none keys no
+    # record.
+    record_keys: tuple[str, ...] = ()
+    # Whether the asker named a system at all. No keys is both the direct
+    # route handed a core and nothing else, and an asked system that keys no
+    # record; only the first may fall back to the files every system of a
+    # record agrees on, since a system that was asked and keys nothing is not
+    # "no system".
+    system_asked: bool = False
+    # The pairs the asked system was named by, version aside, where they
+    # resolved to one system of the installation or to several: what an
+    # answer keying no record names as the system it holds none for (#784
+    # D55). Where they name several, each candidate's placement is keyed and
+    # asked with them, and the placements are compared (#784 D62). Empty
+    # where nothing was asked, and on the placement answered where no single
+    # system was named — unknown, conflict, or several that place apart — whose
+    # resolution states why.
+    asked: tuple[SystemPair, ...] = ()
     extra_sources: tuple[str, ...] = ()
     extra_caveats: tuple[Caveat, ...] = ()
     # The flatpak filesystem-revocation check for one resolved host path
@@ -2123,6 +2200,17 @@ class _SaveQuery:
     # there is no sandbox at all; ``sandbox.app_id`` tells those two apart
     # (:func:`_read_appended`).
     program_view: "Callable[[], _SandboxLaunchView] | None" = None
+
+    def __post_init__(self) -> None:
+        if (self.record_keys or self.asked) and not self.system_asked:
+            raise ValueError("_SaveQuery: record keys come from an asked system")
+        if self.record_keys and not self.asked:
+            raise ValueError("_SaveQuery: record keys come with the pairs that asked for them")
+
+    @property
+    def system(self) -> str | None:
+        """The one ES-DE name the asked system keys a record by, or ``None`` where it is not exactly one."""
+        return self.record_keys[0] if len(self.record_keys) == 1 else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -2311,6 +2399,48 @@ def _identify_core(
             " (retro_get_system_info)",
         ),
     )
+
+
+def _core_library_version(machine: Machine, query: "_SaveQuery", core_so: str) -> str | None:
+    """The ``library_version`` of the core the save route loads for *core_so*, or ``None`` where it is not read.
+
+    The same lookup :func:`_identify_core` makes — the path the configuration
+    resolves, or the caller's own where *core_so* is one — and the same probe,
+    which the machine keeps per path, so the save answer and this reading are
+    one observation of one file.
+    """
+    lookup = _CoreLookup(core_so) if os.sep in core_so else query.core_path_resolver(core_so)
+    if lookup.so_path is None:
+        return None
+    info = machine.read_core(lookup.so_path).info
+    return info.library_version if info is not None else None
+
+
+# Where a RetroDECK deploy states the build of a component it ships: the
+# component recipe writes the release it downloaded beside the binary
+# (``component_version``), which is what a standalone card's pinned build
+# states as its ``release`` (atlas.standalone_saves.StandaloneBuild).
+_COMPONENT_VERSION = "/app/retrodeck/components/{component}/component_version"
+
+
+def _component_release(machine: Machine, sandbox: "_Sandbox", token: str | None) -> str | None:
+    """The release a RetroDECK deploy states for the standalone emulator *token*, or ``None``.
+
+    The component's directory is the first segment of the binary the settings
+    table anchors the emulator's name to (``duckstation/bin/duckstation-qt``),
+    so the record read is the one beside the binary that runs. An emulator the
+    table does not carry, a deploy tree that holds no such file and a file that
+    cannot be read all leave the build unread.
+    """
+    try:
+        binary = emulator_settings.emulator_directory(token).stated(None).binary
+    except ValueError:
+        return None
+    path = sandbox.bundled(_COMPONENT_VERSION.format(component=binary.split("/", 1)[0]))
+    if path is None:
+        return None
+    result = machine.read_text(path)
+    return (result.text or "").strip() if result.status == READ_OK else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -4069,7 +4199,8 @@ def _apply_rule_card(
             f"the rule for card {card.key!r} selected mode {choice.mode!r}, which the card does "
             "not state — the rule and the card shipped out of step"
         )
-    mode = _fill_rule_templates(card.key, choice.mode, mode, choice.fills)
+    mode = _fill_rule_templates(card.key, choice.mode, mode, choice.fills, choice.fill_slots)
+    mode = _fill_unnamed_slots(mode, choice.unnamed_slots)
     card = _fill_rule_sizes(card, choice.fills)
     unknown = [name for name, _ in choice.alternatives if name not in card.modes]
     if unknown:
@@ -4115,7 +4246,11 @@ def _apply_rule_card(
 
 
 def _fill_rule_templates(
-    card_key: str, mode_name: str, mode: SaveMode, fills: Mapping[str, tuple[str, ...]]
+    card_key: str,
+    mode_name: str,
+    mode: SaveMode,
+    fills: Mapping[str, tuple[str, ...]],
+    fill_slots: Mapping[str, Mapping[str, tuple[str, ...]]] = MappingProxyType({}),
 ) -> SaveMode:
     """Substitute the templates the card's own rule fills, once, before anything reads the mode.
 
@@ -4127,7 +4262,19 @@ def _fill_rule_templates(
     if not any(_carries_rule_template(group) for group in mode.groups):
         return mode
     where = f"card {card_key!r} mode {mode_name!r}"
-    groups = tuple(_fill_rule_group(where, group, fills) for group in mode.groups)
+    groups = tuple(_fill_rule_group(where, group, fills, fill_slots) for group in mode.groups)
+    return cast(SaveMode, _dc_replace(mode, groups=groups))
+
+
+def _fill_unnamed_slots(mode: SaveMode, slots: tuple[str, ...] | None) -> SaveMode:
+    """The mode with the slots its rule read stated on each ``unnamed`` group, whose cards no name follows for:
+    ``None`` where the rule cannot establish them (#577 D24)."""
+    if slots == ():
+        return mode
+    groups = tuple(
+        cast(SaveGroup, _dc_replace(group, unnamed_slots=slots)) if group.unnamed is not None else group
+        for group in mode.groups
+    )
     return cast(SaveMode, _dc_replace(mode, groups=groups))
 
 
@@ -4165,7 +4312,10 @@ def _carries_rule_template(group: SaveGroup) -> bool:
 
 
 def _fill_rule_group(
-    where: str, group: SaveGroup, fills: Mapping[str, tuple[str, ...]]
+    where: str,
+    group: SaveGroup,
+    fills: Mapping[str, tuple[str, ...]],
+    fill_slots: Mapping[str, Mapping[str, tuple[str, ...]]] = MappingProxyType({}),
 ) -> SaveGroup:
     return cast(
         SaveGroup,
@@ -4174,8 +4324,29 @@ def _fill_rule_group(
             subdir=_fill_rule_subdir(where, group.subdir, fills),
             files=_fill_rule_names(where, group.files, fills),
             observe=_fill_rule_names(where, group.observe, fills),
+            slots=_fill_rule_slots(group, fills, fill_slots),
         ),
     )
+
+
+def _fill_rule_slots(
+    group: SaveGroup,
+    fills: Mapping[str, tuple[str, ...]],
+    fill_slots: Mapping[str, Mapping[str, tuple[str, ...]]],
+) -> Mapping[str, tuple[str, ...]]:
+    """The slots of each name once the rule's templates are filled: a filled name is read by the slots the rule
+    says read its value, and otherwise by its template's (#577 D23)."""
+    slots = dict(group.slots)
+    for name in (*(group.files or ()), *(group.observe or ())):
+        carried = [token for token in RULE_FILLED_TEMPLATES if token in name]
+        if len(carried) != 1:
+            continue
+        token = carried[0]
+        for value in fills.get(token, ()):
+            read_by = fill_slots.get(token, {}).get(value) or group.slots.get(name, ())
+            if read_by:
+                slots[name.replace(token, value)] = read_by
+    return MappingProxyType(slots)
 
 
 def _fill_rule_subdir(
@@ -4731,15 +4902,7 @@ def _cross_root_parts(
         directory = os.path.join(base.base, *[seg for seg in (group.subdir or "").split("/") if seg])
         filled = _card_files(group.files or (), content.rom_stem)
         names = filled if filled is not None else group.files or ()
-        groups_out.append(
-            FileGroup(
-                dir=directory,
-                files=names,
-                granularity=group.granularity,
-                role=group.role,
-                size_fixed=_card_group_size(group, card.sizes),
-            )
-        )
+        groups_out.extend(_slotted_file_groups(group, names, directory=directory, sizes=card.sizes))
         holes.extend(base.needs)
         caveats.append(
             Caveat(
@@ -5174,16 +5337,47 @@ def _declared_groups(
         subdir, _ = _fill_subdir(
             group.subdir or "", rom_stem=rom_stem or None, content_dir_name=content_dir_name
         )
-        groups.append(
-            FileGroup(
-                dir=os.path.join(base, *[s for s in subdir.split("/") if s]),
-                files=names,
-                granularity=group.granularity,
-                role=group.role,
-                size_fixed=_card_group_size(group, sizes),
-            )
-        )
+        directory_of_group = os.path.join(base, *[s for s in subdir.split("/") if s])
+        groups.extend(_slotted_file_groups(group, names, directory=directory_of_group, sizes=sizes))
     return tuple(groups)
+
+
+def _slot_buckets(
+    group: SaveGroup, names: tuple[str, ...] | None, templates: tuple[str, ...]
+) -> tuple[tuple[tuple[str, ...] | None, tuple[str, ...] | None, tuple[str, ...]], ...]:
+    """A card group's names split by the slots that read them: ``(slots, names, templates)`` per bucket.
+
+    A group whose names different slots read is stated as one group per slot
+    (#577 D23); a group the card states no slots for is one bucket with none.
+    *templates* are the card's spellings of *names*, one for one.
+    """
+    if names is None:
+        return ((group.unnamed_slots, names, templates),)
+    if not group.slots:
+        return (((), names, templates),)
+    buckets: dict[tuple[str, ...], tuple[list[str], list[str]]] = {}
+    for name, template in zip(names, templates):
+        bucket = buckets.setdefault(group.slots.get(template, ()), ([], []))
+        bucket[0].append(name)
+        bucket[1].append(template)
+    return tuple((slots, tuple(named), tuple(spelled)) for slots, (named, spelled) in buckets.items())
+
+
+def _slotted_file_groups(
+    group: SaveGroup, names: tuple[str, ...] | None, *, directory: str, sizes: Mapping[str, SizeFact]
+) -> list[FileGroup]:
+    """A declared card group as the answer states it: one group per set of slots its names are read by (#577 D23)."""
+    return [
+        FileGroup(
+            dir=directory,
+            files=named,
+            granularity=group.granularity,
+            role=group.role,
+            size_fixed=_card_group_size(group, sizes, spelled if slots else None),
+            slots=slots,
+        )
+        for slots, named, spelled in _slot_buckets(group, names, group.files or ())
+    ]
 
 
 def _card_group_size(
@@ -5205,6 +5399,13 @@ def _card_group_size(
     if not named:
         return None
     return _one_claim([sizes.get(name) for name in named])
+
+
+def _observed_templates_of(group: SaveGroup, names: Sequence[str], rom_stem: str | None) -> tuple[str, ...]:
+    """The template of *group* each of the observed *names* resolves from, one for one."""
+    candidates = group.observe if group.observe is not None else group.files or ()
+    spelled = {(_card_files((template,), rom_stem) or ("",))[0]: template for template in candidates}
+    return tuple(spelled.get(name, name) for name in names)
 
 
 def _observed_templates(group: SaveGroup, names: Sequence[str], rom_stem: str | None) -> tuple[str, ...]:
@@ -5263,6 +5464,13 @@ def _one_entry_per_file(
     return tuple(merged), tuple(caveats)
 
 
+def _merged_slots(claims: Sequence[FileGroup]) -> tuple[str, ...] | None:
+    """Every slot the claims on one file name, or ``None`` where one of them leaves its slots unestablished."""
+    if any(claim.slots is None for claim in claims):
+        return None
+    return tuple(dict.fromkeys(slot for claim in claims for slot in claim.slots or ()))
+
+
 def _merged_entry(claims: Sequence[FileGroup]) -> tuple[FileGroup, tuple[Caveat, ...]]:
     """One entry for the claims that met on one file, and a caveat per file where they disagreed.
 
@@ -5278,14 +5486,19 @@ def _merged_entry(claims: Sequence[FileGroup]) -> tuple[FileGroup, tuple[Caveat,
     roles = tuple(dict.fromkeys(claim.role for claim in claims))
     granularities = tuple(dict.fromkeys(claim.granularity for claim in claims))
     sizes = tuple(dict.fromkeys(claim.size_fixed for claim in claims))
+    # Two slots set to one file are one group read by both (#577 D23); where
+    # one claim cannot say which slots read the file, neither can the entry
+    # (#577 D24).
+    slots = _merged_slots(claims)
     if len(roles) == len(granularities) == len(sizes) == 1:
-        return first, ()
+        return (first if slots == first.slots else _dc_replace(first, slots=slots)), ()
     entry = FileGroup(
         dir=first.dir,
         files=first.files,
         granularity=granularities[0] if len(granularities) == 1 else GRANULARITY_SHARED_FILE,
         role=roles[0] if len(roles) == 1 else ROLE_UNKNOWN,
         size_fixed=sizes[0] if len(sizes) == 1 else None,
+        slots=slots,
     )
     size_words = tuple(_SIZE_FIXED_WORDS[size] for size in sizes)
     return entry, tuple(
@@ -5475,15 +5688,20 @@ def _observed_groups(
         if not mine:
             continue
         claimed.update(mine)
-        groups.append(
-            FileGroup(
-                dir=directory,
-                files=mine,
-                granularity=group.granularity,
-                role=group.role,
-                size_fixed=_card_group_size(group, sizes, _observed_templates(group, mine, rom_stem)),
+        spelled = _observed_templates_of(group, mine, rom_stem)
+        for slots, named, templates in _slot_buckets(group, mine, spelled):
+            groups.append(
+                FileGroup(
+                    dir=directory,
+                    files=named,
+                    granularity=group.granularity,
+                    role=group.role,
+                    size_fixed=_card_group_size(
+                        group, sizes, templates if slots else _observed_templates(group, mine, rom_stem)
+                    ),
+                    slots=slots,
+                )
             )
-        )
     unclaimed = [name for name in observed if name not in claimed]
     catchall = _unnamed_here(mode) if unclaimed else None
     if catchall is not None:
@@ -5494,6 +5712,7 @@ def _observed_groups(
                 granularity=catchall.granularity,
                 role=catchall.role,
                 size_fixed=_card_group_size(catchall, sizes),
+                slots=catchall.unnamed_slots,
             )
         )
         unclaimed = []
@@ -5848,7 +6067,97 @@ def _every_recorded_system(record: SaveMemoryRecord) -> str:
     return ", ".join(sorted(record.systems))
 
 
-def _across_systems_caveat(record: SaveMemoryRecord, *, system: str | None) -> Caveat | None:
+def _record_agreement(record: SaveMemoryRecord, query: _SaveQuery) -> Agreement[SystemMemory]:
+    """The entry of *record* the save question keys, with the systems it was keyed over.
+
+    A system asked as several ES-DE names keys the entry the record states
+    alike for the ones it holds (:meth:`SaveMemoryRecord.agreement`). A system
+    that was asked and keys no record is not "no system", so the files every
+    recorded system agrees on are no answer for it; only a question naming no
+    system falls to them.
+    """
+    return record.agreement(query.record_keys if query.system_asked else tuple(record.systems))
+
+
+def _record_scope(
+    record: SaveMemoryRecord, query: _SaveQuery, agreed: Agreement[SystemMemory]
+) -> tuple[str, tuple[Caveat, ...]]:
+    """Which systems a keyed record's answer is about, and what says how far it reaches.
+
+    Named or not, the answer has to say which systems it is about: the one
+    named, the several it stands for that the record holds, or — none named —
+    every system the record covers, because it answered only where they all
+    agree. Scoped across the record's systems only where no system was asked:
+    an asked system keyed its entry, by one name or by several that agree, and
+    an asked name the record holds no entry for is named beside the answer.
+    """
+    if not query.system_asked:
+        return _every_recorded_system(record), (_across_systems_caveat(record),)
+    return ", ".join(agreed.held), _as_tuple(_record_partial(record, agreed) if agreed.uncovered else None)
+
+
+def _record_unkeyed(record: SaveMemoryRecord, query: _SaveQuery, agreed: Agreement[SystemMemory]) -> Caveat | None:
+    """Why the save question keyed none of *record*'s entries, where that is worth saying.
+
+    Only an asked system stands for names whose disagreement or absence is
+    worth stating (#784 D50, D55); a question naming none falls to the
+    record's own systems, and their disagreement is the record's shape, not a
+    refusal. Pairs that named several systems key the record once per
+    candidate (#784 D62); where the candidates' placements differ, nothing is
+    keyed and the resolution states why.
+    """
+    if not query.system_asked:
+        return None
+    if agreed.differs:
+        return _record_ambiguous(record, agreed)
+    return _record_unrecorded(record, query.asked) if query.asked else None
+
+
+def _record_unrecorded(record: SaveMemoryRecord, asked: tuple[SystemPair, ...]) -> Caveat:
+    """That the system asked is none *record* holds an entry for (#784 D55)."""
+    message = (
+        f"the system asked ({', '.join(spelled(pair) for pair in asked)}) is none core {record.key!r}'s record "
+        "holds an entry for — which files the core writes for it is not recorded, so no file set is applied"
+    )
+    if len(asked) == 1:
+        return Caveat(
+            CAVEAT_SAVE_RECORD_UNRECORDED,
+            message,
+            {"core": record.key, "source": asked[0][0], "key": asked[0][1]},
+        )
+    sources, keys = parallel_lists(asked)
+    return Caveat(
+        CAVEAT_SAVE_RECORD_UNRECORDED,
+        message,
+        {"core": record.key, "sources": sources, "keys": keys},
+    )
+
+
+def _record_ambiguous(record: SaveMemoryRecord, agreed: Agreement[SystemMemory]) -> Caveat:
+    """Why a system asked as several ES-DE names keyed none of *record*'s entries (#784 D50)."""
+    held = agreed.held
+    return Caveat(
+        CAVEAT_SAVE_RECORD_AMBIGUOUS,
+        f"the system asked stands for ES-DE's {', '.join(held)}{', among others' if agreed.uncovered else ''}, "
+        f"and core {record.key!r}'s record states different files for them — no recorded file set is applied "
+        "rather than one picked",
+        {"core": record.key, "sources": tuple(ESDE_SOURCE for _ in held), "keys": held},
+    )
+
+
+def _record_partial(record: SaveMemoryRecord, agreed: Agreement[SystemMemory]) -> Caveat:
+    """The ES-DE names a system was asked as that *record* holds no entry for (#784 D50)."""
+    uncovered = agreed.uncovered
+    return Caveat(
+        CAVEAT_SAVE_RECORD_PARTIAL,
+        f"the system asked stands for ES-DE's {', '.join((*agreed.held, *uncovered))}, and core "
+        f"{record.key!r}'s record holds {', '.join(agreed.held)} but not {', '.join(uncovered)} — the files "
+        "answered are the ones it states for the systems it holds, and for the others it states nothing",
+        {"core": record.key, "sources": tuple(ESDE_SOURCE for _ in uncovered), "keys": uncovered},
+    )
+
+
+def _across_systems_caveat(record: SaveMemoryRecord) -> Caveat:
     """Said whenever a record answered without a system to key it by.
 
     The answer is not weaker for it — every system this record covers writes
@@ -5857,15 +6166,13 @@ def _across_systems_caveat(record: SaveMemoryRecord, *, system: str | None) -> C
     recorded has established nothing here, and a client reading the names as
     universal would carry that mistake into a system atlas never spoke about.
     """
-    if system is not None:
-        return None
     systems = sorted(record.systems)
     return Caveat(
         CAVEAT_FILE_SET_ACROSS_SYSTEMS,
         f"no system was named, and core {record.key!r} writes the same files for every system it "
         f"is recorded for ({', '.join(systems)}) — so this answer holds for whichever of them the "
         "content is, and states nothing about any other",
-        {"core": record.key, "systems": systems},
+        {"core": record.key, "sources": tuple(ESDE_SOURCE for _ in systems), "keys": tuple(systems)},
     )
 
 
@@ -5952,9 +6259,10 @@ def _standard_declaration(
       fill it and the shape is not the answer.
     - **The core has no record**, which is not "it writes nothing" but "nobody
       has read its source yet".
-    - **The system is unknown or not in the record.** A record is keyed by core
-      *and* system because one core is not one behaviour, and narrowing by
-      guessing which system was meant is the guess this package refuses.
+    - **The system is unknown or not in the record**, or was asked and keys
+      none. A record is keyed by core *and* system because one core is not
+      one behaviour, and narrowing by guessing which system was meant is the
+      guess this package refuses.
     - **The installed core could not be examined at all.** A record is read
       out of one build's source, and applying it on the strength of a ``.so``
       file name would state a source-verified claim about a binary nobody
@@ -5977,14 +6285,11 @@ def _standard_declaration(
     record = lookup_save_memory(so_basename=so_basename, library_name=library_name)
     if record is None:
         return _Declaration()
-    entry = record.for_system(query.system)
+    agreed = _record_agreement(record, query)
+    entry = agreed.entry
     if entry is None:
-        return _Declaration()
-    # Named or not, the answer has to say which systems it is about. With one
-    # named it is that one; without, the record answered because every system
-    # it covers agrees, and the scope is all of them.
-    scope = query.system if query.system is not None else _every_recorded_system(record)
-    across = _as_tuple(_across_systems_caveat(record, system=query.system))
+        return _Declaration(caveats=_as_tuple(_record_unkeyed(record, query, agreed)))
+    scope, across = _record_scope(record, query, agreed)
     # Last, and deliberately after the system check: this is the only refusal
     # here that states a caveat, so it must fire exactly where a declaration
     # was actually withheld. Asked without a system the record could never
@@ -6008,7 +6313,7 @@ def _standard_declaration(
     if files is None:
         return _Declaration()
     frontend = tuple(
-        (name, record.size(query.system, memory_type))
+        (name, record.size_among(agreed.held, memory_type))
         for name, memory_type in zip(files, entry.memory_types)
     )
     if entry.frontend_writes_nothing:
@@ -8336,7 +8641,7 @@ def _standalone_texture_unresolved(spec: EmulatorSpec) -> Unresolved:
         f"where standalone emulator {spec.label!r} ({spec.system}) reads texture packs is not "
         "resolvable yet — its texture directory is named in a configuration of its own, and "
         "reading those is the standalone roadmap block (ROADMAP.md)",
-        {"label": spec.label, "system": spec.system},
+        {"label": spec.label, "source": spec.catalogue_source, "key": spec.system},
     )
 
 
@@ -8496,6 +8801,11 @@ _DOLPHIN_FAMILY = frozenset({"DOLPHIN", "PRIMEHACK"})
 # The Dolphin build the cards cite, the same string as their
 # ``citations.build``.
 _DOLPHIN_BUILD = "dolphin 2609"
+# The PrimeHack builds the cards cite, the same strings as their
+# ``citations.build``: the revision RetroDECK's component master-230724.27 is
+# built from, and the one the Flathub flatpak ships.
+_PRIMEHACK_BUILD = "shiiion/dolphin 81bfb96"
+_PRIMEHACK_FLATHUB_BUILD = "shiiion/dolphin 53f53e0"
 
 # The libretro Dolphin core RetroDECK deploys: libretro/dolphin at
 # fd1aca3af7db75504ed7512406d8a4cf4187110a, the revision the shipped
@@ -8519,10 +8829,10 @@ _DOLPHIN_GAME_LAYERS: dict[tuple[str, str | None], _DolphinGameLayer] = {
         name="Dolphin", build=_DOLPHIN_BUILD, **_DOLPHIN_2609_LINES
     ),
     ("PRIMEHACK", None): _DolphinGameLayer(
-        name="PrimeHack", build="shiiion/dolphin 81bfb96", **_DOLPHIN_FORK_LINES
+        name="PrimeHack", build=_PRIMEHACK_BUILD, **_DOLPHIN_FORK_LINES
     ),
     ("PRIMEHACK", "io.github.shiiion.primehack"): _DolphinGameLayer(
-        name="PrimeHack", build="shiiion/dolphin 53f53e0", **_DOLPHIN_REBASED_FORK_LINES
+        name="PrimeHack", build=_PRIMEHACK_FLATHUB_BUILD, **_DOLPHIN_REBASED_FORK_LINES
     ),
 }
 
@@ -8736,16 +9046,40 @@ class _DolphinTree:
     readable: bool = True
 
 
+# The region codes a build cuts from the end of a configured raw card's name
+# before it puts the running disc's there, by the card's ``build`` citation:
+# GetMemcardPath tries ".USA", ".JAP", ".EUR" and, in Dolphin 2609 and the
+# Flathub PrimeHack, ".DEV" (MainSettings.cpp:805-808 at f84df020, :807-810 at
+# shiiion/dolphin 53f53e0); the PrimeHack revision RetroDECK builds has no
+# ".DEV" (:664-666 at 81bfb96), and neither does the core
+# (_DOLPHIN_CORE_CARD_SPELLINGS). No build cuts ".JPN" from a card's name.
+_DOLPHIN_CARD_SPELLINGS: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {
+        _DOLPHIN_BUILD: ("USA", "JAP", "EUR", "DEV"),
+        _PRIMEHACK_FLATHUB_BUILD: ("USA", "JAP", "EUR", "DEV"),
+        _PRIMEHACK_BUILD: ("USA", "JAP", "EUR"),
+    }
+)
+
+
 def _standalone_dolphin_tree(card: StandaloneSaveCard, homes: _XdgHomes) -> _DolphinTree:
     """The tree a standalone Dolphin-family launch reads: the emulator's own XDG data tree."""
     user = homes.emulator_root(XDG_DATA, card.token)
+    cite = _cites(card, homes)
+    spellings = _DOLPHIN_CARD_SPELLINGS.get(cite("build"))
+    if spellings is None:
+        raise ValueError(
+            f"{cite('build')!r} is a build the card-name table states nothing for — which region codes "
+            "it cuts from a configured card's name is unread, and the cards and the code shipped out of step"
+        )
     return _DolphinTree(
         token=card.token,
         label=f"standalone save card '{card.token}'",
         provenance=card.provenance,
-        cite=_cites(card, homes),
+        cite=cite,
         gc_root=os.path.join(user, "GC"),
         nand_root=os.path.join(user, "Wii"),
+        card_spellings=spellings,
     )
 
 
@@ -8981,6 +9315,7 @@ def _dolphin_raw_slot(
                 granularity=GRANULARITY_SHARED_FILE,
                 role=ROLE_MEMORY_CARD,
                 size_fixed=True,
+                slots=(letter,),
             )
             for name in names
         ),
@@ -9045,6 +9380,7 @@ def _dolphin_folder_slot(
                 granularity=GRANULARITY_PER_GAME_FILES,
                 role=ROLE_MEMORY_CARD,
                 size_fixed=False,
+                slots=(letter,),
             )
             for d in dirs
         ),
@@ -9066,8 +9402,8 @@ def _dolphin_folder_slot(
 # table does: a default would state one build's behaviour for another's answer.
 _DOLPHIN_AGP_WRITES_UNSET_CARTRIDGE = {
     _DOLPHIN_BUILD: False,
-    "shiiion/dolphin 53f53e0": False,
-    "shiiion/dolphin 81bfb96": True,
+    _PRIMEHACK_FLATHUB_BUILD: False,
+    _PRIMEHACK_BUILD: True,
     # The core writes it only for a non-empty stem too (EXI_DeviceAGP.cpp:44-45).
     _DOLPHIN_CORE_BUILD: False,
 }
@@ -9237,6 +9573,7 @@ def _dolphin_agp_slot(
                 granularity=GRANULARITY_SHARED_FILE,
                 role=ROLE_BATTERY,
                 size_fixed=True,
+                slots=(letter,),
             ),
         ),
         readings=readings,
@@ -9952,28 +10289,52 @@ def _dolphin_wii_answer(
     )
 
 
-# The shape Dolphin gives each word of a title directory's name: eight
-# lowercase hex digits (``{:08x}``, NandPaths.cpp:63-67 at 2609). A name of
-# any other shape is no directory the emulator created for a title.
-_WII_TITLE_WORD_PATTERN = "[0-9a-f]" * 8
+# The shape Dolphin and Cemu give each word of a title directory's name:
+# eight lowercase hex digits (``{:08x}``, NandPaths.cpp:63-67 at Dolphin 2609;
+# ``%08x``, nn_save.cpp:331-333 at Cemu 2.6). A name of any other shape is no
+# directory the emulator created for a title.
+_TITLE_WORD_PATTERN = "[0-9a-f]" * 8
 
 
 def _wii_title_listing(
     machine: Machine, title_tree: str, *, token: str, cite: _Cite
 ) -> Caveat | None:
-    """Every title directory below the NAND's ``title`` tree, spelled like the hole it fills.
+    """Every title directory below the NAND's ``title`` tree (:func:`_title_directory_listing`).
 
-    A caller whose source names a Wii disc by its low word alone finds that
-    word here and reads the high word off the entry, rather than assuming
-    one. Dolphin creates ``title/<hi>/<lo>/data`` every time it boots a disc
-    (the ES DIVerify the emulated boot ends with), so a game started once is
-    listed whether or not it has saved. An absent or empty tree states
-    nothing; a tree that could not be listed in full states what it could
-    read beside where the listing stopped.
+    Dolphin creates ``title/<hi>/<lo>/data`` every time it boots a disc (the
+    ES DIVerify the emulated boot ends with), so a game started once is
+    listed whether or not it has saved.
     """
-    pattern = os.path.join(
-        _glob_escape(title_tree), _WII_TITLE_WORD_PATTERN, _WII_TITLE_WORD_PATTERN, ""
+    return _title_directory_listing(
+        machine,
+        title_tree,
+        token=token,
+        created="when it boots the disc",
+        none_means="no disc of that word was started here",
+        citation=f"{cite('title_created')} at {cite('build')}",
     )
+
+
+def _title_directory_listing(
+    machine: Machine,
+    title_tree: str,
+    *,
+    token: str,
+    created: str,
+    none_means: str,
+    citation: str,
+) -> Caveat | None:
+    """Every ``<hi>/<lo>`` title directory below *title_tree*, spelled like the hole it fills.
+
+    A caller whose source names a title by its low word alone finds that word
+    here and reads the high word off the entry, rather than assuming one.
+    *created* says when the emulator creates a title's directory and
+    *none_means* what a low word matching no entry then tells; *citation* is
+    the source for both. An absent or empty tree states nothing; a tree that
+    could not be listed in full states what it could read beside where the
+    listing stopped.
+    """
+    pattern = os.path.join(_glob_escape(title_tree), _TITLE_WORD_PATTERN, _TITLE_WORD_PATTERN, "")
     listing = machine.glob(pattern)
     if not listing.matches and not listing.unreadable:
         return None
@@ -9988,18 +10349,19 @@ def _wii_title_listing(
     return Caveat(
         CAVEAT_SAVE_ID_CANDIDATES,
         f"{title_tree} {found}, each spelled as the <save_id> it fills{stopped}. The emulator "
-        "creates a title's directory when it boots the disc, so a low word that matches one "
-        "entry names the whole id, two entries leave it ambiguous, and none means no disc of "
-        "that word was started here",
+        f"creates a title's directory {created}, so a low word that matches one entry names "
+        f"the whole id, two entries leave it ambiguous, and none means {none_means}",
         {
             "token": token,
             "dir": title_tree,
             "titles": titles,
             # Where the walk stopped, and empty where it read everything: a
             # listing that holds nothing because nothing could be read is never
-            # mistaken for a tree no disc was started in.
+            # mistaken for a tree no title ever made its directory in — no
+            # disc booted in Dolphin's NAND, no title that set up its save in
+            # Cemu's MLC.
             "unreadable": listing.unreadable,
-            "citation": f"{cite('title_created')} at {cite('build')}",
+            "citation": citation,
         },
     )
 
@@ -10919,9 +11281,11 @@ def _xemu_savefile_placement(
 # Cemu 2.6 — the Wii U's internal storage (MLC) holds every save, and where
 # the MLC lives is: a --mlc launch flag, else settings.xml's mlc_path, else
 # <user data>/mlc01 (ActiveSettings.cpp:242-268). The save tree inside it is
-# usr/save/<title id hi>/<title id lo>/user/ — the shipped binary carries
-# that scheme as the whole literal 'usr/save/{:08X}/{:08X}/user/' — one
-# subtree per title, the id the game's own.
+# usr/save/<title id hi>/<title id lo>/user/, one subtree per title, the id
+# the game's own. The shipped binary carries the scheme as the whole literal
+# 'usr/save/{:08X}/{:08X}/user/', but that one is the log line naming a
+# title's save path (CafeSystem.cpp:202); the directories are created and
+# written in lowercase (SaveInfo.cpp:16, nn_save.cpp:331-333).
 # ---------------------------------------------------------------------------
 
 
@@ -11044,6 +11408,23 @@ def _cemu_savefile_placement(
             },
         )
     )
+    # Beside the hole, the titles the tree already holds. A title's
+    # usr/save/<hi>/<lo>/ (and meta/ below it) is created when the title
+    # initialises its save library, before its first save read or write
+    # (SAVEInit, nn_save.cpp:305-336), under the id of the base title — an
+    # update's or a DLC's id resolves to it before the boot
+    # (TitleList.cpp:614-627) — and Cemu creates Mii Maker's three when it
+    # sets up the MLC (CemuApp.cpp:471-482).
+    listing = _title_directory_listing(
+        machine,
+        tree,
+        token=card.token,
+        created="when the title initialises its save library, before its first save",
+        none_means="no title of that word has set up its save here",
+        citation="nn_save.cpp:305-336, TitleList.cpp:614-627, CemuApp.cpp:471-482 at Cemu 2.6",
+    )
+    if listing is not None:
+        caveats.append(listing)
     stated_xml = xml_path if result.status == READ_OK else None
     return _per_title_placement(
         card,
@@ -11460,6 +11841,7 @@ def _duckstation_shared_slot(
             granularity=GRANULARITY_SHARED_CARD,
             role=ROLE_MEMORY_CARD,
             size_fixed=True,
+            slots=(str(slot + 1),),
         ),
         readings=(type_reading, path_reading),
     )
@@ -11558,6 +11940,7 @@ def _duckstation_per_game_slot(
             granularity=GRANULARITY_PER_GAME_FILE,
             role=ROLE_MEMORY_CARD,
             size_fixed=True,
+            slots=(str(slot + 1),),
         ),
         readings=tuple(readings),
         caveats=(caveat,),
@@ -12029,6 +12412,19 @@ def _pcsx2_multitap_ports(
     return ports
 
 
+def _pcsx2_slot_word(filename_key: str) -> str:
+    """The slot a ``[MemoryCards]`` filename key belongs to, in PCSX2's own words.
+
+    ``Slot1_Filename`` and ``Slot2_Filename`` are the console's ports ``1`` and
+    ``2``; a multitap's ``Multitap<port>_Slot<n>_Filename`` is the port's slot
+    ``B`` to ``D`` (``1B`` … ``2D``), slot ``A`` being the port's own card.
+    """
+    if filename_key.startswith("Multitap"):
+        port, slot = filename_key.removeprefix("Multitap").removesuffix("_Filename").split("_Slot")
+        return f"{port}{chr(ord('A') + int(slot) - 1)}"
+    return filename_key.removeprefix("Slot").removesuffix("_Filename")
+
+
 def _pcsx2_slot_group(
     machine: Machine,
     values: Mapping[tuple[str, str], str],
@@ -12059,6 +12455,7 @@ def _pcsx2_slot_group(
     for the second.
     """
     enable_key, filename_key, default_name, enabled_default, _port = slot
+    slot_word = _pcsx2_slot_word(filename_key)
     raw_enable, enable_spelled = _simpleini_value(values, "MemoryCards", enable_key)
     parsed_enable = qt_ini.from_chars_bool(raw_enable)
     enabled = parsed_enable if parsed_enable is not None else enabled_default
@@ -12135,6 +12532,7 @@ def _pcsx2_slot_group(
             granularity=GRANULARITY_PER_GAME_FILES,
             role=ROLE_MEMORY_CARD,
             size_fixed=False,
+            slots=(slot_word,),
         )
         return "folder", group, tuple(readings), (caveat,)
     group = FileGroup(
@@ -12143,6 +12541,7 @@ def _pcsx2_slot_group(
         granularity=GRANULARITY_SHARED_CARD,
         role=ROLE_MEMORY_CARD,
         size_fixed=True,
+        slots=(slot_word,),
     )
     return "file", group, tuple(readings), ()
 
@@ -13941,6 +14340,10 @@ def _rpcs3_savefile_placement(
                 files=None,
                 granularity=GRANULARITY_PER_GAME_FILE,
                 role=ROLE_MEMORY_CARD,
+                # A classic's card is put in a slot by a per-game setting
+                # atlas does not read, so which slot reads it is not
+                # established (#577 D24).
+                slots=None,
             ),
         ),
         trailing_caveats=(
@@ -16013,7 +16416,7 @@ def _standalone_savefile_unresolved(spec: EmulatorSpec) -> Unresolved:
         f"standalone emulator {spec.label!r} ({spec.system}) is not resolvable yet — its save "
         "tree is shaped by a configuration of its own, and only emulators with a packaged "
         "standalone save card are read (issue #3 tracks the rest)",
-        {"label": spec.label, "system": spec.system},
+        {"label": spec.label, "source": spec.catalogue_source, "key": spec.system},
     )
 
 
@@ -17711,7 +18114,7 @@ def _standalone_savestate_unresolved(spec: EmulatorSpec) -> Unresolved:
         f"standalone emulator {spec.label!r} ({spec.system}) is not resolvable yet — where "
         "its states land is the emulator's own affair, and only emulators with a packaged "
         "standalone savestate card are read (#225 landed the family)",
-        {"label": spec.label, "system": spec.system},
+        {"label": spec.label, "source": spec.catalogue_source, "key": spec.system},
     )
 
 
@@ -17819,7 +18222,7 @@ def _emudeck_variant_unresolved(spec: EmulatorSpec, token: str, variant: str, wh
     return Unresolved(
         UNRESOLVED_STANDALONE_VARIANT_UNESTABLISHED,
         f"this entry launches {token} as EmuDeck's {variant!r} variant — {why}",
-        {"label": spec.label, "system": spec.system, "variant": variant},
+        {"label": spec.label, "source": spec.catalogue_source, "key": spec.system, "variant": variant},
     )
 
 
@@ -18363,7 +18766,7 @@ def _standalone_mod_unresolved(spec: EmulatorSpec) -> Unresolved:
         f"where standalone emulator {spec.label!r} ({spec.system}) reads mods is not resolvable yet "
         "— its mod directory is named in a configuration of its own, and reading those is the "
         "standalone roadmap block (ROADMAP.md)",
-        {"label": spec.label, "system": spec.system},
+        {"label": spec.label, "source": spec.catalogue_source, "key": spec.system},
     )
 
 
@@ -18635,6 +19038,7 @@ def _retroarch_firmware_context(
     standalone_sandbox: _Sandbox | None = None,
     distribution: str | None = None,
     distribution_sandbox: SandboxTranslation | None = None,
+    naming: SystemNaming | None = None,
 ) -> FirmwareContext:
     """One live read of everything a firmware answer needs, for any arrangement.
 
@@ -18666,7 +19070,12 @@ def _retroarch_firmware_context(
     distribution's bundled paths read from this host. Only an arrangement that
     ships files into the firmware root passes them — a bare RetroArch ships
     none, so nothing is asked there.
+
+    *naming* is the installation's (:meth:`_CatalogueQueries._naming`): the
+    systems it names each core and each declared file by are its own to say
+    (#784 D43, D47). Without one, ES-DE's names.
     """
+    naming = naming if naming is not None else system_naming((ESDE_SOURCE,))
     # The dropped lines are read here, not only the values: once an absent key
     # resolves silently to the platform default, a line the parser refused
     # looks exactly like a key nobody wrote — and the user did write it. The
@@ -18686,7 +19095,7 @@ def _retroarch_firmware_context(
     caveats.extend(root_caveats)
     sources.extend(root_sources)
     cores, cores_read, core_caveats, core_sources, core_dir = _firmware_core_declarations(
-        sandbox, parsed
+        sandbox, parsed, naming
     )
     caveats.extend(core_caveats)
     sources.extend(core_sources)
@@ -18716,6 +19125,7 @@ def _retroarch_firmware_context(
         standalone_xdg_pinned=standalone_homes is not None and standalone_homes.xdg_pinned,
         distribution=distribution,
         distribution_sandbox=distribution_sandbox,
+        naming=naming,
     )
 
 
@@ -18831,7 +19241,7 @@ def _firmware_core_options(
 
 
 def _firmware_core_declarations(
-    sandbox: _Sandbox, parsed: Mapping[str, str]
+    sandbox: _Sandbox, parsed: Mapping[str, str], naming: SystemNaming
 ) -> tuple[tuple[CoreDeclarations, ...], bool, list[Caveat], list[str], str | None]:
     """What the installed cores declare they want, and whether that could be read.
 
@@ -18871,7 +19281,12 @@ def _firmware_core_declarations(
             )
         else:
             sources.append(f"declarations limited to cores installed in {core_dir}")
-        enumeration = read_core_declarations(machine, info_dir, core_dir=core_dir)
+        # Once per question: telling whether a cited system is held reads the
+        # same cores the answer does (#784 D53), and both see one revision.
+        enumeration = once(
+            ("core-declarations", id(machine), info_dir, core_dir, id(naming)),
+            lambda: read_core_declarations(machine, info_dir, core_dir=core_dir, naming=naming),
+        )
         cores = enumeration.cores
         cores_listed = enumeration.listed
         caveats.extend(
@@ -18979,25 +19394,15 @@ class _FirmwareQueries:
             content_path=content_path,
         )
 
-    @one_question
-    def firmware_for_system(
+    def _firmware_for_system(
         self,
-        system: str,
+        system: SystemPair,
         *,
         verify: bool = False,
         cwd: str | None = None,
         content_path: str | None = None,
     ) -> FirmwareAnswer:
-        """Which emulators can run *system*, and what does each of them want?
-
-        ``cwd`` is the working folder the launch will use, an absolute host
-        path: it completes a standalone emulator's relative configured path
-        (xemu's), is ignored where no answer depends on it, and a value that
-        is not absolute raises ``ValueError``. ``content_path`` names the game
-        the launch is for, as :meth:`firmware_for_core` takes it.
-        """
-        checked_cwd(cwd)
-        checked_content_path(content_path)
+        """The firmware answer for the one system :meth:`firmware_for_system` resolved — no catalogue by default."""
         return _resolve_for_system(
             self._machine,
             self._firmware_context(cwd=cwd),
@@ -19200,6 +19605,7 @@ class _CatalogueHost(Protocol):
     """
 
     kind: str
+    catalogue_columns: tuple[str, ...]
 
     def entry_savefile_location(
         self,
@@ -19209,6 +19615,7 @@ class _CatalogueHost(Protocol):
         content_path: str | None = None,
         cwd: str | None = None,
         appendconfig: tuple[str, ...] = (),
+        asked: tuple[AskedPair, ...] | None = None,
     ) -> SavefilePlacement | Unresolved: ...
 
     def entry_savestate_location(
@@ -19281,6 +19688,20 @@ class _CatalogueHost(Protocol):
         ...
 
 
+def _check_entries_name_systems(
+    owner: str, entries: Iterable["EmulatorEntry | None"], resolution: SystemResolution | None
+) -> None:
+    """An entry names no system exactly in an answer several named systems give alike (#784 D65 e).
+
+    The shared answer's entries stand for one entry of each candidate, so they
+    name none; every other answer's entries name the system they launch.
+    """
+    shared = resolution is not None and resolution.status == RESOLUTION_UNANIMOUS
+    for entry in entries:
+        if entry is not None and (entry.system is None) != shared:
+            raise ValueError(f"{owner}: an entry names no system exactly where the resolution is unanimous")
+
+
 @dataclass(frozen=True, slots=True)
 class CatalogueAnswer:
     """Which emulators a frontend catalogue declares for one system.
@@ -19302,6 +19723,14 @@ class CatalogueAnswer:
     """Every degradation of this answer, and on an empty one the statement of which of
     the three empties it is.
     """
+    resolution: SystemResolution | None = None
+    """How the system this question named was resolved here (#784 D44, D52): how it ended, the system it
+    answered for, the relation, and the table's translation of the asked pairs — or the candidates where
+    several answer.
+    """
+
+    def __post_init__(self) -> None:
+        _check_entries_name_systems("CatalogueAnswer", self.entries, self.resolution)
 
 
 @dataclass(frozen=True, slots=True)
@@ -19313,14 +19742,14 @@ class SystemsAnswer:
     that genuinely declares none.
     """
 
-    systems: tuple[str, ...] = ()
-    """Every system this installation lists, sorted. On RetroDECK that is what its
-    frontend catalogue declares, in the catalogue's own spelling, and on EmuDeck what
-    its readable catalogue layers declare — joined, while the bundled layer is sealed,
-    by the systems the installed cores' own declarations file under. A bare RetroArch
-    ships no catalogue, so there the cores' systems are the whole list. A system taken
-    from the cores rather than a catalogue is named in atlas's own vocabulary, and an
-    answer listing one carries ``emulator-list-derived``.
+    systems: tuple[SystemPair, ...] = ()
+    """Every system this installation lists, sorted, each as the (source, key) pair it is named by
+    (#784 D47). On RetroDECK that is what its frontend catalogue declares, and on EmuDeck what
+    its readable catalogue layers declare — joined, while the bundled layer is sealed, by the
+    systems the installed cores' own declarations name. A bare RetroArch ships no catalogue, so
+    there the cores' systems are the whole list, named by the libretro database names they
+    declare. A catalogue's system is named in the catalogue's own source, a core's by its
+    declaration, and an answer listing one taken from the cores carries ``emulator-list-derived``.
     """
     sources: tuple[str, ...] = ()
     caveats: tuple[Caveat, ...] = ()
@@ -19333,176 +19762,239 @@ class SystemsAnswer:
     """
 
 
-# The three statuses a platform question states about a system (issue #68).
-# "declared" — this installation's own systems answer lists it. "disabled" —
-# the catalogue's text carries it only inside an XML comment: present and
-# deliberately off, which is a different fact than never shipped. "absent" —
-# the vocabulary knows the system and this installation does not have it.
-# They never collapse, because the consumer's next step differs for each:
-# place content, ask the user to enable, or don't place it here at all.
-PLATFORM_STATUS_DECLARED = "declared"
-PLATFORM_STATUS_DISABLED = "disabled"
-PLATFORM_STATUS_ABSENT = "absent"
+PlatformTagsSource = Literal["catalogue", "vocabulary"]
 
-# Where a statement's platform tags came from. "catalogue" is a read of this
-# machine — the system's own <platform> text (a commented block included).
-# "vocabulary" is the snapshot column of the stated build (atlas.systems):
-# what backs an absent system, and a declared one whose catalogue is sealed —
-# world knowledge, marked as such per the boundary rule.
-PLATFORM_TAGS_CATALOGUE = "catalogue"
-PLATFORM_TAGS_VOCABULARY = "vocabulary"
+PLATFORM_TAGS_CATALOGUE: PlatformTagsSource = "catalogue"
+"""A read of this machine: the system's own ``<platform>`` text, a commented block included."""
+PLATFORM_TAGS_VOCABULARY: PlatformTagsSource = "vocabulary"
+"""The stated build's snapshot column (:mod:`atlas.systems`) — what backs an absent system, a declared one whose
+catalogue is sealed, and a name nobody knows: world knowledge, marked as such per the boundary rule."""
+
+PLATFORM_TAGS_SOURCES = (PLATFORM_TAGS_CATALOGUE, PLATFORM_TAGS_VOCABULARY)
 
 
 @dataclass(frozen=True, slots=True)
 class PlatformSystemMatch:
-    """One system answering to a public platform id, and how firmly it is here.
+    """One system an asked ``(source, key)`` pair names, and how firmly it is here.
 
     ``platforms`` is the system's whole tag list (not just the matching tag) —
     a consumer deciding between two matches wants to see that ``naomi`` is an
     ``arcade`` system while ``dreamcast`` is the family's own platform.
     """
 
-    system: str
-    """The system that answers to the queried platform id."""
-    status: str
+    system: SystemPair
+    """The system the pairs name, as the (source, key) pair this installation names it by."""
+    status: PlatformSystemStatus
     """How firmly this system is here — ``declared``, ``disabled`` in the catalogue's own
-    text, or ``absent`` and known to the vocabulary alone.
+    text, or ``absent`` and known to the vocabulary alone (on a bare RetroArch, libretro's
+    column of the table); one of :data:`PLATFORM_SYSTEM_STATUSES`.
     """
     platforms: tuple[str, ...]
     """The system's whole platform tag list, not just the matching tag — a consumer
     deciding between two matches reads it.
     """
-    tags_source: str
+    tags_source: PlatformTagsSource
     """Where those tags came from — ``catalogue`` for a read of this machine,
-    ``vocabulary`` for the stated build's snapshot column.
+    ``vocabulary`` for the stated build's snapshot column; one of :data:`PLATFORM_TAGS_SOURCES`.
     """
+
+    def __post_init__(self) -> None:
+        check_system_pair("PlatformSystemMatch", self.system)
+        if self.status not in PLATFORM_SYSTEM_STATUSES:
+            raise ValueError(f"PlatformSystemMatch: status {self.status!r} is not one of {PLATFORM_SYSTEM_STATUSES}")
+        if self.tags_source not in PLATFORM_TAGS_SOURCES:
+            raise ValueError(
+                f"PlatformSystemMatch: tags_source {self.tags_source!r} is not one of {PLATFORM_TAGS_SOURCES}"
+            )
 
 
 @dataclass(frozen=True, slots=True)
 class PlatformSystemsAnswer:
-    """Which of this installation's systems answer to a public platform id.
+    """Which of this installation's systems answer to one ``(source, key)`` pair or several together.
 
-    The id resolves one of two ways, never both: ``systems`` holds the one
-    system the per-system table says it stands for (ScreenScraper ``6`` is
-    ``cps1``, whose ``arcade`` tag every arcade system shares), and
-    ``platforms`` what the crosswalk resolved it to otherwise. Both are empty
-    exactly when the ``platform-unmapped`` caveat states why. ``matches`` is
-    ordered: declared systems first, then disabled, then absent, each
-    alphabetical. An empty match list under resolved platforms is a statement
-    about this machine — the platform is real and nothing here answers to it.
+    ``translation`` is the platform table's answer for the asked pairs (world
+    knowledge, pinned and cited), and ``translation.pairs`` names them, in the
+    order asked; ``matches`` is this installation's half —
+    every system the translation names in this installation's catalogue
+    columns — ES-DE's system names, and RetroDECK's own on a RetroDECK, and
+    on a bare RetroArch libretro's column together with the cited pairs atlas
+    packages for its cores — plus a declared
+    system whose live ``<platform>`` tag is an exact ES-DE platform key of the
+    translation. ``matches`` is ordered: declared systems first, then
+    disabled, then absent, each alphabetical. An empty match list under agreed
+    pairs is a statement about this machine — the system is real and nothing
+    here answers to it; every unknown pair states the translation's own
+    ``platform-unmapped``, ``platform-excluded`` or ``platform-source-unknown``,
+    and pairs that share a system only through different parts or overlaps of it
+    state ``platform-parts-unestablished``.
     """
 
-    vocabulary: str
-    """The platform vocabulary the question was asked in, one of
-    :data:`~atlas.platforms.KNOWN_PLATFORM_VOCABULARIES`.
-    """
-    value: str
-    """The platform id the question was asked with, verbatim — a numeric id passes as its
-    decimal string.
-    """
-    platforms: tuple[str, ...] = ()
-    """What the crosswalk resolved the id to — empty when the per-system table resolved
-    it instead, and when the ``platform-unmapped`` caveat states that nothing did.
-    """
-    systems: tuple[str, ...] = ()
-    """The one system the per-system table says the id stands for alone — listed there,
-    it wins over the crosswalk; empty when the table does not list the id.
+    translation: PlatformTranslation
+    """The platform table's answer for the asked pairs: each pair as asked, every source's
+    keys with relation and citation per pair and for their intersection, the table version
+    and the pinned version of every project each source's column is read from.
     """
     matches: tuple[PlatformSystemMatch, ...] = ()
-    """Every system answering to those platforms, or the system the id stands for, each
+    """Every system the translation names in this installation's catalogue columns, and
+    every declared system whose live tag is an exact ES-DE platform key of it, each
     qualified by how firmly it is here — declared first, then disabled, then absent,
     each group alphabetical.
     """
     sources: tuple[str, ...] = ()
     caveats: tuple[Caveat, ...] = ()
-    """Every degradation of this answer, including the statement that no platform
-    corresponds to the id.
+    """Every degradation of this answer, including why each unknown pair is unknown and
+    that pairs share a system only through different parts or overlaps of it.
     """
 
 
 @dataclass(frozen=True, slots=True)
 class SystemPlatformsAnswer:
-    """One system's platform tags and their public identities, status-qualified.
+    """One system's platform tags and what the platform table says it is, status-qualified.
 
-    ``identities`` carries one entry per tag the crosswalk knows; a tag it
-    does not know states ``platform-unknown`` instead, and the ``ignore``
-    sentinel states ``platform-scraping-ignored`` — so the identity list, the
-    tag list and the caveats always add up. An empty ``platforms`` under
-    ``status: declared`` is the catalogue's own statement: the system block
-    carries no ``<platform>`` tag (ES-DE warns about exactly that state).
+    ``translation`` is the table's answer for the system's name in this
+    installation's first catalogue column that holds it (ES-DE's, then
+    RetroDECK's own on a RetroDECK; libretro's on a bare RetroArch); for a
+    declared system the table knows by
+    no name, it is the answer for its live tags that each name one system,
+    and where neither reaches the table the answer is ``unknown`` and
+    states ``platform-unmapped``. A tag the table's ES-DE platform column does
+    not hold states ``platform-unknown``, and the ``ignore`` sentinel states
+    ``platform-scraping-ignored``. An empty ``platforms``
+    under ``status: declared`` is the catalogue's own statement: the system
+    block carries no ``<platform>`` tag (ES-DE warns about exactly that state).
     """
 
-    system: str
-    """The system the question was asked about, echoed back as the caller spelled it."""
-    status: str
+    system: SystemPair | None
+    """The system the question answered for, as the (source, key) pair this installation names it
+    by — ``None`` where the asked pairs named no single system (``resolution`` says why).
+    """
+    status: PlatformSystemStatus | None
     """How firmly that system is here — ``declared``, ``disabled`` in the catalogue's own
-    text, or ``absent``, which this installation does not have.
+    text, or ``absent``, which this installation does not have; one of
+    :data:`PLATFORM_SYSTEM_STATUSES`, ``None`` exactly where ``system`` is.
     """
-    tags_source: str
+    tags_source: PlatformTagsSource | None
     """Where the tags came from — ``catalogue`` for a read of this machine,
-    ``vocabulary`` for the stated build's snapshot column and for a name nobody knows.
+    ``vocabulary`` for the stated build's snapshot column and for a name nobody knows;
+    one of :data:`PLATFORM_TAGS_SOURCES`, ``None`` exactly where ``system`` is.
+    """
+    translation: PlatformTranslation
+    """The platform table's answer for the system — by its catalogue name, or by its exact
+    platform tags where the table knows no name — every source's keys with relation and
+    citation, or ``unknown`` where the table holds neither. Where the asked pairs named no
+    single system, it is the table's answer for the pairs that went through the table, or —
+    where every pair was read live — for those pairs without the version stated with one,
+    which a pair read live never meets (#784 D51).
     """
     platforms: tuple[str, ...] = ()
     """The system's platform tags; empty under ``declared`` is the catalogue's own
     statement that the system block carries none.
     """
-    identities: tuple[PlatformIdentities, ...] = ()
-    """One entry per tag the crosswalk knows — a tag it does not know is stated as a
-    caveat instead, so the two lists and the caveats always add up.
-    """
     sources: tuple[str, ...] = ()
     caveats: tuple[Caveat, ...] = ()
-    """Every degradation of this answer, and the statement for every tag no identity is
-    listed for.
+    """Every degradation of this answer: the statement for every tag the table does not
+    hold, and ``platform-unmapped`` where the table knows neither the name nor a tag.
+    """
+    resolution: SystemResolution | None = None
+    """How the system this question named was resolved here (#784 D44, D52): how it ended, the system it
+    answered for, the relation, and the table's translation of the asked pairs — or the candidates where
+    several answer.
     """
 
+    def __post_init__(self) -> None:
+        if (self.status is None) != (self.system is None) or (self.tags_source is None) != (self.system is None):
+            raise ValueError("SystemPlatformsAnswer: system, status and tags_source are None exactly together")
+        if self.system is not None:
+            check_system_pair("SystemPlatformsAnswer", self.system)
+        if self.status is not None and self.status not in PLATFORM_SYSTEM_STATUSES:
+            raise ValueError(f"SystemPlatformsAnswer: status {self.status!r} is not one of {PLATFORM_SYSTEM_STATUSES}")
+        if self.tags_source is not None and self.tags_source not in PLATFORM_TAGS_SOURCES:
+            raise ValueError(
+                f"SystemPlatformsAnswer: tags_source {self.tags_source!r} is not one of {PLATFORM_TAGS_SOURCES}"
+            )
+        if self.system is None and self.platforms:
+            raise ValueError("SystemPlatformsAnswer: platform tags are stated only for a system")
+        if self.resolution is not None and self.resolution.system != self.system:
+            raise ValueError(
+                f"SystemPlatformsAnswer: answers for {self.system!r} while its resolution names "
+                f"{self.resolution.system!r}"
+            )
 
-# The launchability verdicts (issue #36) — five claims that never collapse.
-# "not-accepted" is a read of the machine: the frontend's accept-list for the
-# system does not carry this file's extension, so ES-DE never scans it and
-# nothing here will launch it. "needs-installation" is that same 'no' with its
-# reason from world knowledge: the format is real content for the platform,
-# and an installation step has to run before anything can launch (a PSN .pkg).
-# It is the one verdict that names the emulators that install the file
-# (issue #717), because it is the one whose remedy is an emulator's.
-# "unknown" is a statement about the look, never about the file: the system is
-# not one this catalogue declares, or the catalogue could not be read — a
-# client that treated it as either of the other two would be told something
-# nobody checked. Each constant spells its code.
+
+# Why a system question named no single system (#784 D44, D49), beside the
+# existing ``system-unknown`` for a pair that names none. "ambiguous": the
+# asked pairs name several systems of this installation in their first tier,
+# and atlas picks none (D8, D9) — data names them as two lists of one length,
+# ``sources`` and ``keys``, and the answer's ``resolution.candidates`` states
+# each with its catalogue status. "pairs-conflict": the asked pairs share no
+# system — a table conflict, two own-source names, or an own-source name the
+# other pairs do not reach — and data names the asked pairs the same way.
+# "unanimous": the asked pairs name several systems alike and every one of them
+# gives the question the same answer, which the answer then is (#784 D62, D65)
+# — data names them as "ambiguous" does, and atlas still picks none.
+CAVEAT_SYSTEM_AMBIGUOUS = "system-ambiguous"
+CAVEAT_SYSTEM_UNANIMOUS = "system-unanimous"
+# The same word as a refusal, the two-route sharing core-not-installed has: an
+# entry of a shared answer whose candidates' entries answer one of its own
+# questions differently refuses it, naming the candidates as the caveat does
+# (#784 D66, D67 a).
+UNRESOLVED_SYSTEM_AMBIGUOUS = CAVEAT_SYSTEM_AMBIGUOUS
+CAVEAT_SYSTEM_PAIRS_CONFLICT = "system-pairs-conflict"
+
+
+# The launchability verdicts (issues #36, #776) — five claims that never
+# collapse, and none of them about what the frontend's scan lists (#776 D1):
+# three are about the emulator that would run, one about the platform's
+# format, one about the look. "launchable" is an entry reading
+# that took the file: the entry's emulator, read through its loader card, its
+# own boot or open of the file, or — for a libretro entry — the core's claims,
+# which RetroArch hands the file past without checking. "entry-not-accepted" is
+# that entry's established refusal: a standalone whose recorded loader does not
+# read the format or starts no directory, RetroArch refusing a directory as
+# content, a block-extract core handed an archive it does not claim, and a row
+# whose command hands RetroArch a core file this host cannot load, which reads
+# nothing at all (#446). The last is established from the command rather than
+# from a loader, and it is the one where nothing about the FORMAT was weighed —
+# its own caveat (``core-file-foreign``) says so. Its remedies are to unpack the
+# container or to select an entry that takes it — ``alternatives`` names the
+# ones established to. "unestablished" is an entry reading that ended without
+# a take or a refusal (#776 D3, D9): an emulator whose loader atlas has not read
+# (a standalone without a card), a card whose builds disagree, a boot or an open
+# that stops short, a directory a core opens through its own loader, a file the
+# libretro core does not claim (D10) — never an archive, whose contents alone are
+# unread (D11).
+# "needs-installation" is a 'no' with its reason from world knowledge: the
+# format is real content for the platform, and an installation step has to run
+# before anything can launch (a PSN .pkg). It is the one verdict that names the
+# emulators that install the file (issue #717), because it is the one whose
+# remedy is an emulator's. "unknown" is a statement about the look, never about
+# the file: the system is not one this catalogue declares or runs, or the
+# catalogue could not be read — a client that treated it as any of the others
+# would be told something nobody checked. Each constant spells its code.
 VERDICT_LAUNCHABLE = "launchable"
-VERDICT_NOT_ACCEPTED = "not-accepted"
-# The accept-list is declared per system — the union over every entry — and
-# the command per emulator, so the list can say yes while the entry that
-# actually runs loads nothing (issue #66). This verdict is that split, stated
-# only where the running entry's refusal is ESTABLISHED: a standalone whose
-# recorded loader does not read the format, a block-extract core handed an
-# archive it does not claim, and a row whose command hands RetroArch a core
-# file this host cannot load, which reads nothing at all (#446). The third is
-# established from the command rather than from a loader, and it is the one
-# where nothing about the FORMAT was weighed — its own caveat
-# (``core-file-foreign``) says so, where the other two put their reason in
-# ``sources``. The remedies differ from not-accepted's, which is why the two
-# never collapse: unpack the container, or select an entry that takes it —
-# ``alternatives`` names the ones established to.
 VERDICT_ENTRY_NOT_ACCEPTED = "entry-not-accepted"
+VERDICT_UNESTABLISHED = "unestablished"
 VERDICT_NEEDS_INSTALLATION = "needs-installation"
 VERDICT_UNKNOWN = "unknown"
 
 LAUNCH_VERDICTS = (
     VERDICT_LAUNCHABLE,
-    VERDICT_NOT_ACCEPTED,
     VERDICT_ENTRY_NOT_ACCEPTED,
+    VERDICT_UNESTABLISHED,
     VERDICT_NEEDS_INSTALLATION,
     VERDICT_UNKNOWN,
 )
-# The two verdicts that name the entry that would run.
-_ENTRY_VERDICTS = (VERDICT_LAUNCHABLE, VERDICT_ENTRY_NOT_ACCEPTED)
+# The three verdicts that name the entry that would run, and the two that may
+# state what its reading established it boots.
+_ENTRY_VERDICTS = (VERDICT_LAUNCHABLE, VERDICT_ENTRY_NOT_ACCEPTED, VERDICT_UNESTABLISHED)
+_BOOT_VERDICTS = (VERDICT_LAUNCHABLE, VERDICT_UNESTABLISHED)
 
 # The per-entry half of a launchability answer, three statements apart. For a
 # libretro entry the extension list is a CLAIM, not a gate: RetroArch checks
 # nothing on a direct load and hands the file to the core, so a file outside
-# the claims is attempted, never refused — stated, because a client deciding
-# what to bake should know the claim is absent. Archives are the exception
+# the claims is attempted, never refused — and whether the core reads it is
+# something nobody established, so it answers unestablished with the claim's
+# absence stated (#776 D10). Archives are the exception
 # that runs through RetroArch's own hands: a container the core does not
 # claim is opened and searched for a file matching the claims
 # (task_content.c:1325-1358 @ a79435a) — what is inside is something atlas
@@ -19523,6 +20015,9 @@ CAVEAT_ENTRY_FORMAT_UNESTABLISHED = "entry-format-unestablished"
 # an extension the builds a card serves disagree on is taken on one machine and
 # refused on the next, which is neither a refusal nor a take: unestablished,
 # under a code of its own that names the reason.
+# A standalone loader that opens archives itself (issue #744) loads what it
+# finds inside a taken one, so that take states archive-contents-unread, as
+# RetroArch's archive hands do, rather than the content statement.
 CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD = "entry-format-content-unread"
 CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT = "entry-format-build-dependent"
 
@@ -19572,43 +20067,49 @@ class Boot:
 
 @dataclass(frozen=True, slots=True)
 class LaunchabilityAnswer:
-    """Whether one file launches as one system's content here — and why not, when not.
+    """Whether the emulator that would run starts one path as one system's content here — and why not, when not.
 
-    ``extension`` is the token ES-DE would derive from the file
-    (:func:`atlas.esde.esde_extension` — from the last dot, case preserved),
-    stated on every verdict so a 'no' shows the exact string that missed.
-    ``accepted`` is the system's declared list verbatim, empty where nothing
-    was read. ``entry`` is the launch entry that would run — the frontend's
-    own selection hierarchy applied, per-game override first — stated on the
-    two verdicts where one exists: ``launchable``, and ``entry-not-accepted``,
-    where the entry *is* the finding. ``alternatives`` travels with the
-    latter alone: the labels of the declared entries established to take the
-    file, which is one of the two remedies that verdict leaves open.
-    ``installers`` travels with ``needs-installation`` alone, whose remedy it
-    is, and is ``None`` on every other verdict. ``boots`` travels with
-    ``launchable`` alone, and only where atlas read the judged entry's own
-    boot of the file. ``opens`` travels with the two verdicts that name an
-    entry, and only where atlas read what that entry's emulator opens through
-    the file (issue #716) — on ``entry-not-accepted`` it lists what the
-    emulator got to before it stopped, and the file it stopped at.
+    The question is the emulator's, never whether ES-DE's scan lists the path
+    (#776 D1): the entry that would run — the frontend's own selection
+    hierarchy applied, per-game override first — is judged on what it is
+    handed. ``entry`` is that entry, stated on the three verdicts about it:
+    ``launchable``, ``entry-not-accepted``, where the entry *is* the finding,
+    and ``unestablished``, where its reading ended without either.
+    ``alternatives`` travels with ``entry-not-accepted`` alone: the labels of
+    the declared entries established to take the path, which is one of the
+    two remedies that verdict leaves open. ``installers`` travels with
+    ``needs-installation`` alone, whose remedy it is, and is ``None`` on every
+    other verdict. ``boots`` travels with ``launchable`` and ``unestablished``,
+    and only where atlas read the judged entry's own boot of the path.
+    ``opens`` travels with the three verdicts that name an entry, and only
+    where atlas read what that entry's emulator opens through the file (issue
+    #716) — on ``entry-not-accepted`` it lists what the emulator got to before
+    it stopped, and the file it stopped at.
+
+    ``extension`` and ``accepted`` are stated on every verdict: the token
+    ES-DE derives from the path and the system's accept-list. The list is the
+    frontend's side and is never weighed in the verdict; where ES-DE's scan
+    would not list the path under its name, ``frontend-name-unscanned`` among
+    the caveats names every token that would make it (D2, D4).
     """
 
     verdict: str
-    """Whether this file launches as this system's content here, and why not when not —
+    """Whether the emulator that would run starts this path as this system's content here, and why not when not —
     one of :data:`LAUNCH_VERDICTS`, which never collapse into one another.
     """
     extension: str
-    """The token ES-DE would derive from the file, from the last dot with case preserved
-    — stated on every verdict, so a no shows the exact string that missed.
+    """The token ES-DE derives from the path, from the last dot with case preserved — the name ES-DE's scan
+    compares against ``accepted``, stated on every verdict.
     """
     accepted: tuple[str, ...] = ()
-    """The system's declared accept-list verbatim, and empty where nothing was read."""
+    """The system's declared accept-list verbatim — what ES-DE's scan lists, never what decides the verdict — and
+    empty where nothing was read."""
     entry: EmulatorEntry | None = None
-    """The launch entry that would run, the frontend's own selection hierarchy applied —
-    stated on the two verdicts where one exists, and ``None`` on the others.
+    """The launch entry that would run, the frontend's own selection hierarchy applied — stated on the three verdicts
+    about it, and ``None`` on the others.
     """
     alternatives: tuple[str, ...] = ()
-    """The labels of the declared entries established to take this file — one of the two
+    """The labels of the declared entries established to take this path — one of the two
     remedies the entry-not-accepted verdict leaves open, and empty on every other.
     """
     installers: tuple[Installer, ...] | None = None
@@ -19617,11 +20118,12 @@ class LaunchabilityAnswer:
     installs it, and ``None`` on every other.
     """
     boots: Boot | None = None
-    """What the judged entry boots from this file — on a launchable verdict whose entry atlas read the emulator's own
-    boot for, and ``None`` everywhere else, including every entry whose emulator's boot atlas does not read.
+    """What the judged entry boots from this path — on a launchable or an unestablished verdict whose entry atlas read
+    the emulator's own boot for, and ``None`` everywhere else, including every entry whose emulator's boot atlas does
+    not read.
     """
     opens: tuple[Opened, ...] | None = None
-    """The files the judged entry's emulator opens through this file, in the order it opens them — on the two
+    """The files the judged entry's emulator opens through this file, in the order it opens them — on the three
     verdicts that name an entry, where atlas reads that emulator's open of the file, and ``None`` everywhere else,
     including every entry whose emulator's open atlas does not read and a file atlas could not read.
     """
@@ -19629,6 +20131,11 @@ class LaunchabilityAnswer:
     caveats: tuple[Caveat, ...] = ()
     """Every degradation of this answer, stated structurally so a client branches on the
     code rather than on prose.
+    """
+    resolution: SystemResolution | None = None
+    """How the system this question named was resolved here (#784 D44, D52): how it ended, the system it
+    answered for, the relation, and the table's translation of the asked pairs — or the candidates where
+    several answer.
     """
 
     def __post_init__(self) -> None:
@@ -19639,14 +20146,55 @@ class LaunchabilityAnswer:
             raise ValueError(
                 "LaunchabilityAnswer: installers stand exactly where the verdict is needs-installation"
             )
-        # What an entry boots is a statement about a launch that happens: a
-        # verdict that launches nothing, or names no entry, has nothing to boot.
-        if self.boots is not None and (self.verdict != VERDICT_LAUNCHABLE or self.entry is None):
-            raise ValueError("LaunchabilityAnswer: boots stand only on a launchable verdict about an entry")
-        # What an emulator opens is a statement about an entry: both verdicts
-        # that name one may carry it, a refusal included, and no other.
+        # What an entry boots is a statement about a launch that may happen: a
+        # refusal launches nothing, and a verdict naming no entry has nothing to
+        # boot; an unestablished reading keeps what it did establish (#776 D9).
+        if self.boots is not None and (self.verdict not in _BOOT_VERDICTS or self.entry is None):
+            raise ValueError(
+                "LaunchabilityAnswer: boots stand only on a launchable or unestablished verdict about an entry"
+            )
+        # What an emulator opens is a statement about an entry: every verdict
+        # that names one may carry it, a refusal included, and no other.
         if self.opens is not None and (self.verdict not in _ENTRY_VERDICTS or self.entry is None):
             raise ValueError("LaunchabilityAnswer: opens stand only on a verdict about an entry")
+        installed = (installer.entry for installer in self.installers or ())
+        _check_entries_name_systems("LaunchabilityAnswer", (self.entry, *installed), self.resolution)
+
+
+@dataclass(frozen=True, slots=True)
+class SavePortabilityAnswer:
+    """Whether the target entry reads what the source entry wrote, part by part (#577).
+
+    ``verdict`` is the most severe verdict of the parts (D9) — never milder than
+    ``unestablished`` where the answer has no part to judge or a caveat says a
+    part could not be told apart. ``source`` and ``target`` are the two entries
+    the labels named, ``None`` where a label names none. How the parts are found
+    and judged is :mod:`atlas.save_portability`'s.
+    """
+
+    verdict: str
+    """The pair's summary, one of :data:`~atlas.save_portability.PORTABILITY_VERDICTS`: the most severe of the parts."""
+    source: EmulatorEntry | None = None
+    """The entry that wrote the save, and ``None`` where its label is not in the catalogue."""
+    target: EmulatorEntry | None = None
+    """The entry that would read it, and ``None`` where its label is not in the catalogue."""
+    parts: tuple[SavePart, ...] = ()
+    """One entry per part of the source's save, in the order its save answer states them."""
+    sources: tuple[str, ...] = ()
+    caveats: tuple[Caveat, ...] = ()
+    """Every degradation of this answer, stated structurally so a client branches on the code rather than on prose."""
+    resolution: SystemResolution | None = None
+    """How the system this question named was resolved here (#784 D44, D52): how it ended, the system it
+    answered for, the relation, and the table's translation of the asked pairs — or the candidates where
+    several answer.
+    """
+
+    def __post_init__(self) -> None:
+        if self.verdict not in PORTABILITY_VERDICTS:
+            raise ValueError(
+                f"SavePortabilityAnswer: verdict must be one of {PORTABILITY_VERDICTS}, got {self.verdict!r}"
+            )
+        _check_entries_name_systems("SavePortabilityAnswer", (self.source, self.target), self.resolution)
 
 
 @dataclass(frozen=True, slots=True)
@@ -19671,6 +20219,14 @@ class LaunchCommandAnswer:
     """Every degradation of this answer, its refusal among them, stated structurally so a client branches on the
     code rather than on prose.
     """
+    resolution: SystemResolution | None = None
+    """How the system this question named was resolved here (#784 D44, D52): how it ended, the system it
+    answered for, the relation, and the table's translation of the asked pairs — or the candidates where
+    several answer.
+    """
+
+    def __post_init__(self) -> None:
+        _check_entries_name_systems("LaunchCommandAnswer", (self.entry,), self.resolution)
 
 
 # Flatpak's per-app overrides are GKeyFile INI, and only the environment they
@@ -19852,7 +20408,7 @@ def _flatpak_environment(
     """
     files = _flatpak_override_files(machine, home, app_id)
     return _flatpak_environment_from(
-        tuple((path, machine.read_text(path).text) for path in files)
+        tuple((path, _read_text_once(machine, path).text) for path in files)
     )
 
 
@@ -20208,14 +20764,14 @@ def _flatpak_query_context(machine: Machine, home: str, app_id: str) -> _Flatpak
     """
     deploy = _running_deploy(machine, home, app_id)
     files = _flatpak_override_files_for(deploy, home, app_id)
-    texts = tuple((path, machine.read_text(path).text) for path in files)
+    texts = tuple((path, _read_text_once(machine, path).text) for path in files)
     sandbox, sources = _sandbox_from_environment(
         machine, home, app_id, _flatpak_environment_from(texts)
     )
     metadata: tuple[tuple[str, str | None], ...] = ()
     if deploy is not None:
         metadata_path = os.path.join(os.path.dirname(deploy.files), "metadata")
-        metadata = ((metadata_path, machine.read_text(metadata_path).text),)
+        metadata = ((metadata_path, _read_text_once(machine, metadata_path).text),)
     base_table, effective_table = _merge_filesystems(metadata, texts)
     return _FlatpakQueryContext(
         sandbox=sandbox,
@@ -20296,6 +20852,17 @@ def _embedded_catalogue_layer_once(machine: Machine, appimage_path: str, entry: 
     return once(("es_systems_embedded", id(machine), appimage_path, entry), read_and_parse)
 
 
+def _read_text_once(machine: Machine, path: str) -> ReadResult:
+    """*path*'s read, once per question — every route that needs the file reads the same revision.
+
+    The arrangement marker, the companion cfg, the backend checkout's HEAD and
+    the Flatpak override files are each read by more than one route a single
+    question takes (the answer and the catalogue reading behind
+    ``system-unknown``, #784 D53); one read keeps them one revision.
+    """
+    return once(("read_text", id(machine), path), lambda: machine.read_text(path))
+
+
 def _esde_settings_once(machine: Machine, path: str) -> tuple[ReadResult, Mapping[str, str] | None]:
     """ES-DE's ``es_settings.xml`` → ``(read, settings)``, read and parsed once per question.
 
@@ -20317,7 +20884,7 @@ def _esde_settings_once(machine: Machine, path: str) -> tuple[ReadResult, Mappin
     return once(("es_settings", id(machine), path), read_and_parse)
 
 
-def _catalogue_unread_caveat(system: str | None = None) -> tuple[Caveat, ...]:
+def _catalogue_unread_caveat(system: SystemPair | None = None) -> tuple[Caveat, ...]:
     """The caveat for a catalogue that could not be read — the same fact as the firmware route's.
 
     One fact, one code: ``firmware_for_system`` already states this exact
@@ -20333,12 +20900,12 @@ def _catalogue_unread_caveat(system: str | None = None) -> tuple[Caveat, ...]:
             "the frontend's emulator catalogue could not be read, so which emulators this "
             "installation knows is unknown — this answer is empty because atlas could not look, "
             "not because nothing is there",
-            {"system": system} if system is not None else {},
+            {"source": system[0], "key": system[1]} if system is not None else {},
         ),
     )
 
 
-def _catalogue_exclusive_caveat(path: str, system: str | None = None) -> tuple[Caveat, ...]:
+def _catalogue_exclusive_caveat(path: str, system: SystemPair | None = None) -> tuple[Caveat, ...]:
     """The custom catalogue declared itself exclusive — a statement, not a degradation.
 
     ES-DE honors a document-level ``<loadExclusive/>`` only in the custom
@@ -20356,9 +20923,18 @@ def _catalogue_exclusive_caveat(path: str, system: str | None = None) -> tuple[C
             f"the custom es_systems.xml at {path} carries a document-level <loadExclusive/>, so "
             "the frontend loads it alone and the bundled catalogue is not loaded — this "
             "enumeration is the custom layer only, and it is the complete catalogue in force",
-            {"system": system} if system is not None else {},
+            {"source": system[0], "key": system[1]} if system is not None else {},
         ),
     )
+
+
+# The statements an ES-DE frontend's answers make about the state of its
+# catalogue as a whole, whichever system was asked.
+_CATALOGUE_STATUS_CODES = (
+    CAVEAT_EMULATOR_CATALOGUE_EXCLUSIVE,
+    CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
+    HEALTH_ISSUE_CATALOGUE_INVALID,
+)
 
 
 # What an exclusive answer rests on: the one layer that was read. Module-level
@@ -20369,7 +20945,7 @@ _CATALOGUE_SOURCE_EXCLUSIVE = (
 
 
 def _rom_path_undeclared_caveat(
-    system: str, declaration: SystemDeclaration | None
+    system: SystemPair, declaration: SystemDeclaration | None
 ) -> tuple[Caveat, ...]:
     """A read catalogue that names no directory for this system.
 
@@ -20379,9 +20955,9 @@ def _rom_path_undeclared_caveat(
     that this catalogue states no directory.
     """
     subject = (
-        f"declares no system {system!r}"
+        f"declares no system {spelled(system)}"
         if declaration is None
-        else f"declares {system!r} without a <path>"
+        else f"declares {spelled(system)} without a <path>"
     )
     return (
         Caveat(
@@ -20389,12 +20965,12 @@ def _rom_path_undeclared_caveat(
             f"the frontend's catalogue was read and {subject}, so where its ROMs live is not "
             "something this machine states — the answer is empty because the declaration is, "
             "not because atlas could not look",
-            {"system": system},
+            {"source": system[0], "key": system[1]},
         ),
     )
 
 
-def _rom_path_unresolved_caveat(system: str, declared: str, rom_directory: str) -> tuple[Caveat, ...]:
+def _rom_path_unresolved_caveat(system: SystemPair, declared: str, rom_directory: str) -> tuple[Caveat, ...]:
     """A configured ROM directory that is not a path a ``%ROMPATH%`` can be resolved against.
 
     One fact and one code, now that the other reasons have theirs: the
@@ -20414,16 +20990,16 @@ def _rom_path_unresolved_caveat(system: str, declared: str, rom_directory: str) 
     return (
         Caveat(
             CAVEAT_ROM_PATH_UNRESOLVED,
-            f"the catalogue declares {system!r} at {declared!r}, and ES-DE's ROMDirectory is "
+            f"the catalogue declares {spelled(system)} at {declared!r}, and ES-DE's ROMDirectory is "
             f"{rom_directory!r}, which is not an absolute path — atlas states no directory rather "
             "than guessing one, because a ROM directory guessed wrong is a real directory the "
             "caller would go looking in",
-            {"system": system, "declared": declared, "configured": rom_directory},
+            {"source": system[0], "key": system[1], "declared": declared, "configured": rom_directory},
         ),
     )
 
 
-def _settings_unreadable_caveat(system: str, path: str, status: str) -> tuple[Caveat, ...]:
+def _settings_unreadable_caveat(system: SystemPair, path: str, status: str) -> tuple[Caveat, ...]:
     """The frontend's settings are there and atlas could not read them.
 
     A statement about atlas, not about the machine, and the reason it is
@@ -20435,9 +21011,9 @@ def _settings_unreadable_caveat(system: str, path: str, status: str) -> tuple[Ca
         Caveat(
             CAVEAT_FRONTEND_SETTINGS_UNREADABLE,
             f"the frontend's settings at {path} exist and could not be read ({status}), so what "
-            f"they say about {system!r}'s ROM directory is unknown — atlas states none rather "
+            f"they say about {spelled(system)}'s ROM directory is unknown — atlas states none rather "
             "than the default, which only applies to a file that sets nothing",
-            {"system": system, "path": path, "status": status},
+            {"source": system[0], "key": system[1], "path": path, "status": status},
         ),
     )
 
@@ -20480,6 +21056,11 @@ def _per_game_alternative_emulator_caveat(per_game: Mapping[str, str]) -> Caveat
     )
 
 
+def _spec_system(spec: EmulatorSpec) -> SystemPair:
+    """The system a catalogue entry belongs to, as the pair the installation names it by."""
+    return (spec.catalogue_source, spec.system)
+
+
 def _foreign_core_of(kind: str, command: str) -> str | None:
     """The core file this launch hands RetroArch, or ``None`` where it is not such an entry.
 
@@ -20494,7 +21075,7 @@ def _foreign_core_of(kind: str, command: str) -> str | None:
     return foreign_core_file(command)
 
 
-def _foreign_core_caveat(label: str, system: str, core_file: str) -> Caveat:
+def _foreign_core_caveat(label: str, system: SystemPair, core_file: str) -> Caveat:
     """What a ``retroarch-foreign-core`` entry states about itself, wherever it is enumerated.
 
     Rides the entry rather than the answer wherever a list of entries is the
@@ -20516,7 +21097,7 @@ def _foreign_core_caveat(label: str, system: str, core_file: str) -> Caveat:
         f"{label} hands RetroArch {core_file}, a core file this host cannot load — its name "
         "carries another platform's suffix, so this entry launches neither a core nor an "
         "emulator of its own",
-        {"core_file": core_file, "label": label, "system": system},
+        {"core_file": core_file, "label": label, "source": system[0], "key": system[1]},
     )
 
 
@@ -20546,7 +21127,7 @@ def _foreign_core_unresolved(spec: EmulatorSpec, core_file: str, reads: str) -> 
         f"has: the entry hands RetroArch {core_file}, a core file this host cannot load — its "
         "name carries another platform's suffix — so no emulator of its own is launched here "
         "to read any",
-        {"core_file": core_file, "label": spec.label, "system": spec.system},
+        {"core_file": core_file, "label": spec.label, "source": spec.catalogue_source, "key": spec.system},
     )
 
 
@@ -20852,14 +21433,14 @@ def _own_caveats(spec: EmulatorSpec) -> tuple[Caveat, ...]:
     core_file = _foreign_core_of(spec.kind, spec.command)
     caveats: list[Caveat] = []
     if core_file is not None:
-        caveats.append(_foreign_core_caveat(spec.label, spec.system, core_file))
+        caveats.append(_foreign_core_caveat(spec.label, _spec_system(spec), core_file))
     return tuple(caveats)
 
 
 def _firmware_catalogue_entries(
     host: "_CatalogueHost",
     by_system: Mapping[str, SystemDeclaration],
-    system: str,
+    system: SystemPair,
     selections: GamelistSelections,
 ) -> tuple[CatalogueEntry, ...]:
     """The catalogue's emulator list for *system*, shaped for the firmware seam.
@@ -20933,7 +21514,7 @@ _NO_GAMELIST_SELECTIONS = GamelistSelections(system_label=None, per_game={})
 
 def _firmware_catalogues(
     host: "_CatalogueHost", by_system: Mapping[str, SystemDeclaration]
-) -> dict[str, Catalogue]:
+) -> dict[SystemPair, Catalogue]:
     """The catalogue an inventory is informed by: one enumeration per system it can use.
 
     Only the systems a packaged standalone card answers for
@@ -20946,13 +21527,12 @@ def _firmware_catalogues(
     """
     wanted = carded_systems()
     return {
-        system: Catalogue(
-            entries=_firmware_catalogue_entries(
-                host, by_system, system, _NO_GAMELIST_SELECTIONS
-            )
+        pair: Catalogue(
+            entries=_firmware_catalogue_entries(host, by_system, pair, _NO_GAMELIST_SELECTIONS)
         )
         for system in by_system
         if system in wanted
+        for pair in (catalogue_pair(host.catalogue_columns, system),)
     }
 
 
@@ -21242,16 +21822,19 @@ class RomPlacement:
     """Every degradation of this answer, and on an absent ``dir`` the statement of which
     kind of unresolved it is.
     """
+    resolution: SystemResolution | None = None
+    """How the system this question named was resolved here (#784 D44, D52): how it ended, the system it
+    answered for, the relation, and the table's translation of the asked pairs — or the candidates where
+    several answer.
+    """
 
 
 @dataclass(frozen=True, slots=True)
 class SystemRomPlacement:
     """One system of a :class:`RomLocationsAnswer` and where its ROMs live."""
 
-    system: str
-    """The system as the systems answer lists it — in the catalogue's own spelling, or in
-    atlas's own vocabulary where it was taken from the installed cores.
-    """
+    system: SystemPair
+    """The system as the systems answer lists it, the (source, key) pair this installation names it by."""
     placement: RomPlacement
     """Exactly the placement the per-system ROM question answers for this system, caveats included."""
 
@@ -21281,11 +21864,19 @@ class RomLocationsAnswer:
 
 
 def _declared_entries(
-    by_system: Mapping[str, SystemDeclaration], system: str
+    by_system: Mapping[str, SystemDeclaration], system: SystemPair
 ) -> tuple[EmulatorSpec, ...]:
-    """The launch entries a read catalogue declares for *system* — none if it declares no such system."""
-    declaration = by_system.get(system)
-    return () if declaration is None else declaration.entries
+    """The launch entries a read catalogue declares for *system* — none if ES-DE loads no declaration of it.
+
+    Each entry names its system by the pair the installation names it by, so
+    a RetroDECK-only system's entries say so (#784 D47).
+    """
+    declaration = loaded_declaration(by_system, system[1])
+    if declaration is None:
+        return ()
+    return tuple(
+        cast(EmulatorSpec, _dc_replace(spec, catalogue_source=system[0])) for spec in declaration.entries
+    )
 
 
 class EmulatorEntry:
@@ -21309,12 +21900,13 @@ class EmulatorEntry:
         self._launch = launch
 
     @property
-    def system(self) -> str:
-        """The system this entry launches — in the catalogue's own spelling, or, on an entry
-        derived from the installed cores, the identifier it was asked under, in atlas's own
-        vocabulary.
+    def system(self) -> SystemPair | None:
+        """The system this entry launches, as the (source, key) pair the installation names it by
+        (#784 D47) — the catalogue's own name in its own source, or, on an entry derived from the
+        installed cores, the system it was asked under; ``None`` exactly on an entry of a shared
+        answer, which several systems give alike and which names none of them (#784 D65 e).
         """
-        return self._spec.system
+        return _spec_system(self._spec)
 
     @property
     def label(self) -> str:
@@ -21457,16 +22049,32 @@ class EmulatorEntry:
         answer is the one without them, with an ``appended-config-not-read``
         note saying the redirect does not apply.
         """
+        return self._keyed_savefile_location(None, content_path=content_path, cwd=cwd, appendconfig=appendconfig)
+
+    def _keyed_savefile_location(
+        self,
+        asked: tuple[AskedPair, ...] | None,
+        *,
+        content_path: str | None,
+        cwd: str | None,
+        appendconfig: Sequence[str],
+    ) -> SavefilePlacement | Unresolved:
+        """:meth:`savefile_location` with the ES-DE names a save record is keyed by, where the asker named them.
+
+        ``None`` keys the record by the entry's own system. The portability
+        question passes the names its asked pairs give, so ``("esde", "gb")``
+        asked on a bare RetroArch keys both entries' records by gb.
+        """
         checked_cwd(cwd)
         files = checked_appendconfig(appendconfig)
         if files and self._spec.kind != KIND_LIBRETRO:
             return _savefile_with_appended_not_read(
                 self._installation.entry_savefile_location(
-                    self._spec, self._caveats, content_path=content_path, cwd=cwd
+                    self._spec, self._caveats, content_path=content_path, cwd=cwd, asked=asked
                 )
             )
         return self._installation.entry_savefile_location(
-            self._spec, self._caveats, content_path=content_path, cwd=cwd, appendconfig=files
+            self._spec, self._caveats, content_path=content_path, cwd=cwd, appendconfig=files, asked=asked
         )
 
     @one_question
@@ -21555,32 +22163,65 @@ def _systems_with_caveats(answer: SystemsAnswer, caveats: tuple[Caveat, ...]) ->
     return cast(SystemsAnswer, _dc_replace(answer, caveats=caveats))
 
 
-def _rom_placement_with_caveats(answer: RomPlacement, caveats: tuple[Caveat, ...]) -> RomPlacement:
-    """*answer* with *caveats* as its caveat list — ``dataclasses.replace`` behind a concrete signature."""
-    return cast(RomPlacement, _dc_replace(answer, caveats=caveats))
+def _rom_placement_with_caveats(
+    answer: RomPlacement, caveats: tuple[Caveat, ...], resolution: SystemResolution | None = None
+) -> RomPlacement:
+    """*answer* with *caveats* as its caveat list, and the resolution of its system where one is given."""
+    if resolution is None:
+        return cast(RomPlacement, _dc_replace(answer, caveats=caveats))
+    return cast(RomPlacement, _dc_replace(answer, caveats=caveats, resolution=resolution))
 
 
-def _catalogue_with_caveats(answer: CatalogueAnswer, caveats: tuple[Caveat, ...]) -> CatalogueAnswer:
-    """*answer* with *caveats* as its caveat list — ``dataclasses.replace`` behind a concrete signature."""
-    return cast(CatalogueAnswer, _dc_replace(answer, caveats=caveats))
+def _catalogue_with_caveats(
+    answer: CatalogueAnswer, caveats: tuple[Caveat, ...], resolution: SystemResolution | None = None
+) -> CatalogueAnswer:
+    """*answer* with *caveats* as its caveat list, and the resolution of its system where one is given."""
+    if resolution is None:
+        return cast(CatalogueAnswer, _dc_replace(answer, caveats=caveats))
+    return cast(CatalogueAnswer, _dc_replace(answer, caveats=caveats, resolution=resolution))
+
+
+def _portability_with_caveats(
+    answer: SavePortabilityAnswer, caveats: tuple[Caveat, ...], resolution: SystemResolution | None = None
+) -> SavePortabilityAnswer:
+    """*answer* with *caveats* as its caveat list, and the resolution of its system where one is given."""
+    if resolution is None:
+        return cast(SavePortabilityAnswer, _dc_replace(answer, caveats=caveats))
+    return cast(SavePortabilityAnswer, _dc_replace(answer, caveats=caveats, resolution=resolution))
 
 
 def _launchable_with_caveats(
-    answer: LaunchabilityAnswer, caveats: tuple[Caveat, ...]
+    answer: LaunchabilityAnswer, caveats: tuple[Caveat, ...], resolution: SystemResolution | None = None
 ) -> LaunchabilityAnswer:
-    """*answer* with *caveats* as its caveat list — ``dataclasses.replace`` behind a concrete signature."""
-    return cast(LaunchabilityAnswer, _dc_replace(answer, caveats=caveats))
+    """*answer* with *caveats* as its caveat list, and the resolution of its system where one is given."""
+    if resolution is None:
+        return cast(LaunchabilityAnswer, _dc_replace(answer, caveats=caveats))
+    return cast(LaunchabilityAnswer, _dc_replace(answer, caveats=caveats, resolution=resolution))
+
+
+def _noted(notes: tuple[Caveat, ...], caveats: tuple[Caveat, ...]) -> tuple[Caveat, ...]:
+    """*caveats* led by the resolution's *notes*, a note the answer states itself left to the answer's own place.
+
+    A question that states ``system-unknown`` in its own words keeps that
+    statement where it stands; the resolution's copy of it is not said twice
+    (#784 D53, :func:`atlas.firmware.stated_once`).
+    """
+    own = stated_once(caveats)
+    fresh = stated_once((*own, *notes))[len(own) :]
+    return (*fresh, *own)
 
 
 def _launch_command_with_caveats(
-    answer: LaunchCommandAnswer, caveats: tuple[Caveat, ...]
+    answer: LaunchCommandAnswer, caveats: tuple[Caveat, ...], resolution: SystemResolution | None = None
 ) -> LaunchCommandAnswer:
-    """*answer* with *caveats* as its caveat list — ``dataclasses.replace`` behind a concrete signature."""
-    return cast(LaunchCommandAnswer, _dc_replace(answer, caveats=caveats))
+    """*answer* with *caveats* as its caveat list, and the resolution of its system where one is given."""
+    if resolution is None:
+        return cast(LaunchCommandAnswer, _dc_replace(answer, caveats=caveats))
+    return cast(LaunchCommandAnswer, _dc_replace(answer, caveats=caveats, resolution=resolution))
 
 
 def _chosen_entry(
-    entries: tuple[EmulatorEntry, ...], label: str | None, system: str
+    entries: tuple[EmulatorEntry, ...], label: str | None, system: SystemPair
 ) -> EmulatorEntry | Caveat | None:
     """The entry a launch command or a launchability verdict is about: the one *label* names, or the frontend's first.
 
@@ -21599,9 +22240,36 @@ def _chosen_entry(
             return entry
     return Caveat(
         CAVEAT_LAUNCH_COMMAND_LABEL_UNKNOWN,
-        f"no catalogue entry of system {system!r} is labelled {label!r}",
-        {"system": system, "label": label},
+        f"no catalogue entry of system {spelled(system)} is labelled {label!r}",
+        {"source": system[0], "key": system[1], "label": label},
     )
+
+
+def _blank_commands(system: SystemPair, declaration: SystemDeclaration | None) -> tuple[Caveat, ...]:
+    """Why a system ES-DE loads lists no entry, where every command it keeps is blank — else nothing (#784 D60).
+
+    *declaration* is the one ES-DE loads
+    (:func:`atlas.esde.loaded_declaration`), so a declaration with no entry
+    here is one whose kept commands are all blank.
+
+    ES-DE keeps a ``<command>`` whatever its text (``SystemData.cpp:1067-1070``
+    @ v3.4.1), so such a system loads and is held; atlas states no entry for a
+    command that names nothing, and what the frontend does with one is not
+    evaluated — ``launch-resolution-unsupported`` in its one-command form says
+    so, rather than an empty answer saying nothing.
+    """
+    stated: tuple[Caveat, ...] = ()
+    if declaration is not None and not declaration.entries:
+        stated = (
+            Caveat(
+                CAVEAT_LAUNCH_RESOLUTION_UNSUPPORTED,
+                f"every <command> system {spelled(system)} keeps is blank — ES-DE loads the system with a launch "
+                "command that names nothing, so no entry is stated, and what the frontend does with a blank "
+                "command is not evaluated here",
+                {},
+            ),
+        )
+    return stated
 
 
 class _EntryCoreReader:
@@ -21699,61 +22367,293 @@ class _EntryCoreReader:
 # say why, what it boots where atlas read the emulator's own boot, and what it
 # opens where atlas read the emulator's own open.
 _Stance = tuple[str, tuple[str, ...], tuple[Caveat, ...], Boot | None, tuple[Opened, ...] | None]
-# The reading of an entry's own boot of the file, or None where atlas reads
-# none for that entry and its loader card decides.
-type _BootReader = Callable[[EmulatorEntry], rpcs3_boot.BootReading | None]
+
+
+class _BootReader(Protocol):
+    """The reading of an entry's own boot of the file, or None where atlas reads none for that entry and its loader
+    card decides — and, for a directory the boot is handed, which file inside it the boot would take."""
+
+    def __call__(self, entry: EmulatorEntry) -> rpcs3_boot.BootReading | None: ...
+
+    def takes(self, entry: EmulatorEntry) -> "Callable[[str], bool] | None": ...
+
+
 # The reading of what an entry's emulator opens through the file, or None
 # where atlas reads none for that entry.
 type _OpensReader = Callable[[EmulatorEntry], disc_opens.OpensReading | None]
 
 
+# What the entry that runs is handed for a content path: the target kinds.
+_TARGET_FILE = "file"
+_TARGET_DIRECTORY = "directory"
+_TARGET_UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class _LaunchTarget:
+    """What the entry's emulator is handed for one content path, and what ES-DE's scan meets there (#776).
+
+    ``path`` is what ``%ROM%`` names (:func:`atlas.launch_command.rom_file`):
+    the path itself, or the file of its own name inside a directory ES-DE
+    takes as a file. ``kind`` says whether that is a file, a directory or
+    neither can be told, and ``extension`` is its token, from the last dot
+    with case preserved — what an entry reading weighs. ``names`` and
+    ``files`` are a directory's entries and those of them that are regular
+    files, ``None`` where it is no directory — a directory whose listing
+    cannot be told is no target at all, since ``%ROM%`` is built from it.
+    ``scanned`` is the kind of the content path itself, the one ES-DE's scan
+    meets, ``None`` where it cannot be told.
+    """
+
+    path: str
+    kind: str
+    extension: str
+    names: tuple[str, ...] | None = None
+    files: tuple[str, ...] | None = None
+    scanned: str | None = None
+
+
+def _launch_target(content_path: str, view: CommandView) -> _LaunchTarget:
+    """The target an entry is judged on: what ``%ROM%`` names for *content_path*, read through the frontend's view."""
+    own = view.is_directory(content_path)
+    scanned = SCANNED_KIND_DIRECTORY if own == PROBE_HIT else SCANNED_KIND_FILE
+    if own == PROBE_UNKNOWN:
+        scanned = None
+    handed = rom_file(content_path, view)
+    if handed is None:
+        return _LaunchTarget(content_path, _TARGET_UNKNOWN, esde_extension(content_path), scanned=scanned)
+    kind = view.is_directory(handed)
+    if kind == PROBE_UNKNOWN:
+        return _LaunchTarget(handed, _TARGET_UNKNOWN, esde_extension(handed), scanned=scanned)
+    if kind != PROBE_HIT:
+        return _LaunchTarget(handed, _TARGET_FILE, esde_extension(handed), scanned=scanned)
+    names = view.listing(handed)
+    files = (
+        None
+        if names is None
+        else tuple(name for name in sorted(names) if view.regular_file(f"{handed}/{name}") == PROBE_HIT)
+    )
+    return _LaunchTarget(
+        handed, _TARGET_DIRECTORY, esde_extension(handed), names=names, files=files, scanned=scanned
+    )
+
+
 def _entry_reading(
     entry: EmulatorEntry,
+    system: SystemPair,
     *,
-    extension: str,
+    target: _LaunchTarget,
     core_info_for: "Callable[[EmulatorEntry], CoreInfo | None]",
     boot_reader: _BootReader | None = None,
     opens_reader: _OpensReader | None = None,
 ) -> _Stance:
-    """One entry's stance on one file: accepts, refuses, or unestablished — and what it boots where that is read.
+    """One entry's stance on what it is handed: accepts, refuses, or unestablished — and what it boots or opens.
 
-    The two kinds of entry that launch something split along the boundary rule
-    (issue #66). A libretro entry's claims are read live off the installed
-    core, and they are claims: RetroArch checks nothing on a direct load, so a
-    file outside them is attempted with a statement, never refused — except an
-    archive, which runs through RetroArch's own hands (extracted and searched
-    by the claims, or handed raw to a ``block_extract`` core that never claimed
-    it, which is the one libretro refusal the claims can establish). A
-    standalone entry opens the file itself: its recorded loader decides, and
-    an emulator without a card is an entry nobody read.
+    The question is the emulator's alone (#776 D1): what the entry is handed
+    for the path (*target*, what ``%ROM%`` names), judged the way the entry's
+    emulator judges it, never by whether the frontend's scan lists the path.
+
+    The two kinds of entry that launch something split along the boundary
+    rule (issue #66). A libretro entry's claims are read live off the
+    installed core, and they are claims: RetroArch checks nothing on a direct
+    load, so a file outside them is attempted, never refused, and answers
+    unestablished with the claim's absence stated (#776 D10) — except an archive, which runs through RetroArch's own hands, and a
+    directory, which RetroArch does not read as content (:func:`_libretro_directory_reading`).
+    A standalone entry opens the file itself: its recorded loader decides,
+    files by their extension and directories by its card's directory
+    statement, and an emulator without a card is an entry nobody read.
 
     The third kind reads nothing at all, and that is a refusal rather than an
     unestablished reading: no loader was asked and no claim was weighed
     because the launch loads nothing, which is established from the command
-    itself. So the accept-list can say yes while this entry takes no file of
-    any format — the split :data:`VERDICT_ENTRY_NOT_ACCEPTED` exists for — and
-    the reason is stated under the entry's own code rather than under one of
-    the three format words, none of which was read.
+    itself — its own code (``core-file-foreign``) rather than a format word.
 
     A standalone entry whose emulator's own boot atlas reads is judged by that
-    reading instead of a card (*boot_reader*, issue #618): it reads the file
-    itself rather than its extension, and where it boots it states what. An
-    entry of either kind whose emulator's open of the file atlas reads
-    (*opens_reader*, issue #716) is judged by that reading instead of its
-    claims or its card, and states what it opens.
+    reading instead of a card (*boot_reader*, issue #618), which follows a
+    directory itself. An entry of either kind whose emulator's open of a file
+    atlas reads (*opens_reader*, issue #716) is judged by that reading instead
+    of its claims or its card, and states what it opens. *system* is the
+    system the entry is judged for, which the third kind's refusal names.
     """
     foreign = _foreign_core_of(entry.kind, entry.command) if entry.kind != KIND_LIBRETRO else None
     if foreign is not None:
-        return (*_foreign_core_entry_reading(entry, foreign), None, None)
-    opened = opens_reader(entry) if opens_reader is not None else None
+        return (*_foreign_core_entry_reading(entry, system, foreign), None, None)
+    opened = opens_reader(entry) if opens_reader is not None and target.kind == _TARGET_FILE else None
     if opened is not None:
-        return _opens_stance(entry, opened, extension=extension, core_info_for=core_info_for)
+        return _opens_stance(entry, opened, extension=target.extension, core_info_for=core_info_for)
+    booted = _boot_route(entry, target, boot_reader) if boot_reader is not None else None
+    if booted is not None:
+        return booted
+    if target.kind == _TARGET_UNKNOWN:
+        return (*_target_unknown_reading(entry, target), None, None)
     if entry.kind == KIND_LIBRETRO:
-        return (*_libretro_entry_reading(entry, extension=extension, info=core_info_for(entry)), None, None)
-    reading = boot_reader(entry) if boot_reader is not None else None
-    if reading is not None:
-        return _boot_stance(reading)
-    return (*_standalone_entry_reading(entry, extension=extension), None, None)
+        info = core_info_for(entry)
+        if target.kind == _TARGET_DIRECTORY:
+            return (*_libretro_directory_reading(entry, target, info), None, None)
+        return (*_libretro_entry_reading(entry, extension=target.extension, info=info), None, None)
+    if target.kind == _TARGET_DIRECTORY:
+        return (*_standalone_directory_reading(entry, target), None, None)
+    return (*_standalone_entry_reading(entry, extension=target.extension), None, None)
+
+
+def _target_unknown_reading(
+    entry: EmulatorEntry, target: _LaunchTarget
+) -> tuple[str, tuple[str, ...], tuple[Caveat, ...]]:
+    """Neither a file nor a directory can be told at the path the entry would be handed, so nothing is weighed."""
+    return (
+        _ENTRY_UNESTABLISHED,
+        (),
+        (
+            Caveat(
+                CAVEAT_LAUNCH_PATH_UNESTABLISHED,
+                f"what {entry.label!r} would be handed at {target.path} cannot be told — the frontend's view of "
+                "that path is not established, so whether the entry takes it is not either",
+                {"path": target.path},
+            ),
+        ),
+    )
+
+
+# RetroArch at a79435a and a directory handed to it as content: a core that
+# takes its content as bytes has it read into memory, and a directory yields
+# none, so the load ends 'could not read content file'; a core that takes it
+# by path gets the path, and its own loader decides.
+_RETROARCH_DIRECTORY_SOURCE = (
+    "RetroArch reads the content of a core that does not take it by path into memory "
+    "(content_file_load, tasks/task_content.c:1465-1481 @ a79435a): the file is opened and read through "
+    "the file stream (:1096-1137; libretro-common/streams/file_stream.c:1270-1323), a directory yields no "
+    "bytes, and the load ends 'Could not read content file'"
+)
+
+
+def _libretro_directory_reading(
+    entry: EmulatorEntry, target: _LaunchTarget, info: CoreInfo | None
+) -> tuple[str, tuple[str, ...], tuple[Caveat, ...]]:
+    """A directory handed to a libretro entry: RetroArch's own load, read at its pin (#776 D5)."""
+    holds = _directory_holds(entry, target, _claimed_by(info))
+    if info is None or info.need_fullpath is None:
+        return _ENTRY_UNESTABLISHED, (), (_directory_unread(entry, target, DIRECTORY_UNREAD_CORE), *holds)
+    if info.need_fullpath:
+        return _ENTRY_UNESTABLISHED, (), (_directory_unread(entry, target, DIRECTORY_UNREAD_OWN_LOADER), *holds)
+    # path_get_extension: the name after its last dot, which is what a content
+    # override is looked up by (task_content.c:1374-1400).
+    name = posixpath.basename(target.path)
+    if "." in name and name.rsplit(".", 1)[1]:
+        return (
+            _ENTRY_UNESTABLISHED,
+            (),
+            (_directory_unread(entry, target, DIRECTORY_UNREAD_CONTENT_OVERRIDE), *holds),
+        )
+    return (
+        _ENTRY_REFUSES,
+        (f"entry {entry.label!r}: {_RETROARCH_DIRECTORY_SOURCE}",),
+        (_no_directory(entry, target, "RetroArch reads its content into memory, and a directory holds none"), *holds),
+    )
+
+
+def _standalone_directory_reading(
+    entry: EmulatorEntry, target: _LaunchTarget
+) -> tuple[str, tuple[str, ...], tuple[Caveat, ...]]:
+    """A directory handed to a standalone entry: its loader card's directory statement decides (#776 D5)."""
+    card = _covering_card(entry)
+    if card is None or card.directories is None:
+        return _standalone_entry_reading(entry, extension=target.extension)
+    holds = _directory_holds(entry, target, lambda path: card.takes(esde_extension(path)))
+    statement = card.directories
+    if not statement.recognises:
+        return (
+            _ENTRY_REFUSES,
+            (f"entry {entry.label!r}: its own loader starts no directory — {statement.source}",),
+            (_no_directory(entry, target, "its own loader starts no directory"), *holds),
+        )
+    found = next((name for name in statement.recognises if name in (target.names or ())), None)
+    if found is None:
+        return (
+            _ENTRY_REFUSES,
+            (
+                f"entry {entry.label!r}: its own loader starts a directory only by "
+                f"{', '.join(statement.recognises)} inside it, and this one holds none — {statement.source}",
+            ),
+            (_no_directory(entry, target, f"it holds none of {', '.join(statement.recognises)}"), *holds),
+        )
+    unread = (
+        Caveat(
+            CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD,
+            f"{entry.label!r} takes the directory by the {found} inside it, and its loader then reads the content, "
+            "which atlas does not — whether the content passes is not established",
+            {"entry": entry.label, "extension": target.extension},
+        ),
+    ) if card.content_checked else ()
+    return (
+        _ENTRY_ACCEPTS,
+        (f"entry {entry.label!r}: its own loader starts the directory by the {found} inside it — {statement.source}",),
+        (*unread, *holds),
+    )
+
+
+def _claimed_by(info: CoreInfo | None) -> "Callable[[str], bool]":
+    """Whether a file's extension is one the core claims — nothing is, where the core could not be read."""
+    claims = claimed_extensions(info) or frozenset()
+
+    def claimed(path: str) -> bool:
+        extension = esde_extension(path)
+        return extension.startswith(".") and extension[1:].lower() in claims
+
+    return claimed
+
+
+def _directory_holds(
+    entry: EmulatorEntry, target: _LaunchTarget, takes: "Callable[[str], bool]"
+) -> tuple[Caveat, ...]:
+    """The files in the directory the entry would take as files of their own, named where there is one (#776 D5).
+
+    *takes* answers for a file's path inside the directory.
+    """
+    taken = tuple(path for path in (f"{target.path}/{name}" for name in target.files or ()) if takes(path))
+    holds: tuple[Caveat, ...] = ()
+    if taken:
+        holds = (
+            Caveat(
+                CAVEAT_ENTRY_DIRECTORY_HOLDS,
+                f"{target.path} holds {len(taken)} file(s) {entry.label!r} would take as a file of its own: "
+                f"{', '.join(taken)}",
+                {"entry": entry.label, "path": target.path, "files": taken},
+            ),
+        )
+    return holds
+
+
+def _directory_unread(entry: EmulatorEntry, target: _LaunchTarget, reason: str) -> Caveat:
+    why = {
+        DIRECTORY_UNREAD_OWN_LOADER: "the core takes its content by path, so its own loader is handed the directory",
+        DIRECTORY_UNREAD_CONTENT_OVERRIDE: (
+            "the directory's name carries an extension, and a content override the core may register for it "
+            "decides how RetroArch hands it over"
+        ),
+        DIRECTORY_UNREAD_CORE: "the installed core's reading does not say how it takes its content",
+    }[reason]
+    return Caveat(
+        CAVEAT_ENTRY_DIRECTORY_UNREAD,
+        f"whether {entry.label!r} starts the directory {target.path} is not established — {why}, which atlas "
+        "has not read",
+        {"entry": entry.label, "path": target.path, "reason": reason},
+    )
+
+
+def _no_directory(entry: EmulatorEntry, target: _LaunchTarget, why: str) -> Caveat:
+    return Caveat(
+        rpcs3_boot.CAVEAT_ENTRY_TAKES_NO_DIRECTORY,
+        f"{entry.label!r} is handed {target.path}, a directory, and does not start it — {why}",
+        {"entry": entry.label, "path": target.path},
+    )
+
+
+def _covering_card(entry: EmulatorEntry) -> StandaloneLaunchCard | None:
+    """The loader card that answers for this entry's command, ``None`` where none does."""
+    card = lookup_standalone_launch(emulator_token(entry.command))
+    if card is None or not card.covers(_emulator_arguments(entry.command)):
+        return None
+    return card
 
 
 _BOOT_STANCES = {
@@ -21763,10 +22663,23 @@ _BOOT_STANCES = {
 }
 
 
-def _boot_stance(reading: rpcs3_boot.BootReading) -> _Stance:
-    """A boot reading as an entry's stance — what boots stated where it does."""
+def _boot_route(entry: EmulatorEntry, target: _LaunchTarget, boot_reader: _BootReader) -> _Stance | None:
+    """The stance of an entry whose emulator's own boot atlas reads — ``None`` for every other entry.
+
+    A directory the boot is handed carries what it holds that the boot
+    would take as a file of its own (#776 D5).
+    """
+    reading = boot_reader(entry) if entry.kind != KIND_LIBRETRO else None
+    if reading is None:
+        return None
+    takes = boot_reader.takes(entry) if target.kind == _TARGET_DIRECTORY else None
+    return _boot_stance(reading, _directory_holds(entry, target, takes) if takes is not None else ())
+
+
+def _boot_stance(reading: rpcs3_boot.BootReading, holds: tuple[Caveat, ...] = ()) -> _Stance:
+    """A boot reading as an entry's stance — what boots stated where it does, and what a directory holds beside it."""
     boot = Boot(reading.file, reading.disc_root) if reading.file is not None else None
-    return _BOOT_STANCES[reading.outcome], reading.sources, reading.caveats, boot, None
+    return _BOOT_STANCES[reading.outcome], reading.sources, (*reading.caveats, *holds), boot, None
 
 
 _OPENS_STANCES = {
@@ -21807,7 +22720,7 @@ def _opens_stance(
 
 
 def _foreign_core_entry_reading(
-    entry: EmulatorEntry, core_file: str
+    entry: EmulatorEntry, system: SystemPair, core_file: str
 ) -> tuple[str, tuple[str, ...], tuple[Caveat, ...]]:
     """The third branch of :func:`_entry_reading` — nothing loads, so no file is taken.
 
@@ -21822,7 +22735,7 @@ def _foreign_core_entry_reading(
             "host cannot load — its name carries another platform's suffix, so RetroArch loads "
             "no core and the entry takes no file at all",
         ),
-        (_foreign_core_caveat(entry.label, entry.system, core_file),),
+        (_foreign_core_caveat(entry.label, system, core_file),),
     )
 
 
@@ -21868,6 +22781,8 @@ def _libretro_entry_reading(
                 ),
                 (),
             )
+        # Not D9's unestablished: RetroArch's extract-and-search is read, only the
+        # contents are not, so the take stands with that stated (#776 D11).
         return (
             _ENTRY_ACCEPTS,
             (),
@@ -21883,15 +22798,15 @@ def _libretro_entry_reading(
             ),
         )
     return (
-        _ENTRY_ACCEPTS,
+        _ENTRY_UNESTABLISHED,
         (),
         (
             Caveat(
                 CAVEAT_ENTRY_FORMAT_UNCLAIMED,
                 f"the installed core behind {entry.label!r} does not claim {extension!r} — "
                 "RetroArch checks nothing on a direct load and hands the file over, so the "
-                "core will attempt it and may fail; the claim's absence is stated, not a "
-                "refusal",
+                "core attempts it, and whether it reads it is not established; the claim's "
+                "absence is not a refusal",
                 {"entry": entry.label, "extension": extension},
             ),
         ),
@@ -21945,7 +22860,7 @@ def _standalone_entry_reading(
         return (
             _ENTRY_ACCEPTS,
             (f"entry {entry.label!r}: its own loader reads {extension!r} — {card.source}",),
-            _content_unread(entry.label, extension) if card.content_checked else (),
+            _taken_unread(card, entry.label, extension),
         )
     archive_note = (
         " (an archive container, and this loader opens none — no RetroArch stands in front of "
@@ -21961,6 +22876,28 @@ def _standalone_entry_reading(
         ),
         (),
     )
+
+
+def _taken_unread(card: StandaloneLaunchCard, label: str, extension: str) -> tuple[Caveat, ...]:
+    """What a card's take of *extension* leaves unread: the archive's contents, or the file's content.
+
+    A loader that opens archives itself (issue #744) loads what it finds
+    inside one, which is where the take is decided and which atlas does not
+    read — the same statement RetroArch's archive hands earn a libretro
+    entry, made instead of the content statement rather than beside it. The
+    take stands rather than going unestablished, because the loader's opening
+    of the archive is read and only its contents are not (#776 D11).
+    """
+    if card.archives and is_compressed_extension(extension):
+        return (
+            Caveat(
+                CAVEAT_ARCHIVE_CONTENTS_UNREAD,
+                f"{extension!r} is an archive the own loader of {label!r} opens itself: what loads is the file "
+                "it finds inside, and whether one is in there is inside the archive, which atlas does not read",
+                {"entry": label, "extension": extension},
+            ),
+        )
+    return _content_unread(label, extension) if card.content_checked else ()
 
 
 def _content_unread(label: str, extension: str) -> tuple[Caveat, ...]:
@@ -22044,6 +22981,17 @@ class _EntryBootReader:
         if rpcs3_boot.shell_runs_rom(command):
             return rpcs3_boot.shell_reading(entry.label, self._content_path, self._view())
         return None
+
+    def takes(self, entry: EmulatorEntry) -> "Callable[[str], bool] | None":
+        """Which file the entry's RPCS3 would take as one of its own, for an entry handed the path — else ``None``.
+
+        The entry booting by serial is handed no path, and the shell runs
+        whatever it is handed, so neither names a file a directory holds.
+        """
+        if not rpcs3_boot.hands_path(entry.command):
+            return None
+        view = self._view()
+        return lambda path: rpcs3_boot.takes_file(entry.label, path, view, self._machine.read_ps3_file)
 
 
 # The arguments ES-DE's catalogues hand DuckStation's own build after its
@@ -22156,139 +23104,72 @@ _Verdict = tuple[
 
 def _launchability_verdict(
     *,
-    system: str,
+    system: SystemPair,
     extension: str,
+    target: _LaunchTarget,
     declaration: SystemDeclaration | None,
     entries: tuple[EmulatorEntry, ...],
-    complete: bool,
     core_info_for: "Callable[[EmulatorEntry], CoreInfo | None]",
     label: str | None,
     boot_reader: _BootReader | None = None,
     opens_reader: _OpensReader | None = None,
 ) -> _Verdict:
-    """One (declaration, extension) pair's verdict — shared by every ES-DE-driven handle.
+    """One content path's verdict on one system — shared by every ES-DE-driven handle.
 
     Returns ``(verdict, entry, alternatives, installers, boots, opens, sources, own caveats)``.
-    Module-level for the reason :func:`_entries_from` is: the match is
-    ES-DE's, not an arrangement's, and two copies of it are how "launchable
-    here" and "launchable there" would silently mean different comparisons.
+    Module-level for the reason :func:`_entries_from` is: two copies of it are
+    how "launchable here" and "launchable there" would silently mean different
+    comparisons.
 
-    An accepted extension is judged one level further (issue #66): the entry
-    that would run gets :func:`_entry_reading`'s stance, and an established
-    refusal flips the verdict to ``entry-not-accepted`` — the accept-list is
-    the union over every entry, and the machine then does nothing at all. The
-    other declared entries are judged only then, because ``alternatives`` is
-    that verdict's remedy and nobody else's read. An entry whose emulator's
-    own boot atlas reads (*boot_reader*) is judged by that reading of the
-    file, and a ``launchable`` verdict then states what it boots; one whose
-    emulator's open atlas reads (*opens_reader*) states what it opens, on a
-    refusal as well.
+    The question is whether the emulator that would run starts the path, never
+    whether ES-DE's scan lists it (#776 D1). ES-DE decides which entry runs —
+    the one *label* names, or the frontend's first, chosen by
+    :func:`_chosen_entry` the way the launch command chooses it — and that
+    entry is judged on what it is handed (*target*, what ``%ROM%`` names) by
+    :func:`_entry_reading`: a take is ``launchable``, an established refusal
+    ``entry-not-accepted`` with the other entries established to take it as
+    ``alternatives``, and a reading that ends without either ``unestablished``
+    (D3, D9), keeping what it did establish it boots or opens. A format the
+    install-first record names — a file whose token is the record's, never a
+    directory by its name — is ``needs-installation`` before any entry is
+    asked, whatever the accept-list says: the record is about the platform's format, and the
+    emulators that install it are named with the entries that run them
+    (:func:`_installers`).
 
-    A ``needs-installation`` verdict names the emulators its record says
-    install the file, each with the system's entry that runs it
-    (:func:`_installers`). *label* plays no part in that: the remedy is to
-    install the file, whichever entry the caller would start it through.
+    Where ES-DE's scan would not list the path under its name, the answer says
+    so beside whatever verdict, with every token that would make ES-DE scan it
+    (:func:`_unscanned`, D2, D4) — never where the path lies (D6).
 
-    The entry judged is the one *label* names, or without one the entry that
-    would run — chosen by :func:`_chosen_entry`, the choice the launch command
-    makes, so the two questions can never judge different entries for one
-    label. On a system ES-DE loads, a label none of *entries* carries refuses
-    the verdict with that helper's ``launch-command-label-unknown``, whatever
-    the extension: the caller named an entry this system does not have, and a
-    verdict about another entry, or about none, would answer a question nobody
-    asked. A system no layer declares, or one ES-DE skips, is answered below
-    before any label is looked up; where a sealed read leaves an undeclared
-    system to the entries derived from the installed cores, the handle looks
-    the label up among those itself (:meth:`EmuDeck._derived_label_refusal`).
+    On a system ES-DE loads, a label none of *entries* carries refuses the
+    verdict with :func:`_chosen_entry`'s ``launch-command-label-unknown``: the
+    caller named an entry this system does not have. A system no layer
+    declares, or one with no entry to judge, is answered below before any
+    label is looked up; where a sealed read leaves an undeclared system to the
+    entries derived from the installed cores, the handle looks the label up
+    among those itself (:meth:`EmuDeck._derived_label_refusal`).
 
-    The unknowns split three ways and only one earns ``system-unknown``: a
-    catalogue read **completely** that declares no such system. An incomplete
-    read (EmuDeck's sealed bundled layer) may hide the declaration, so the
-    sealed statement riding the answer is the whole claim. And a declaration
-    ES-DE itself would refuse — no ``<extension>`` or no ``<command>`` — is a
-    system the frontend runs without (loadConfig skips it,
-    SystemData.cpp:1109-1119 @ v3.4.1), stated as unknown with the reason
-    rather than matched against a list nothing consults.
+    The system is one the installation holds as far as its read goes: a
+    catalogue read in full that does not declare it, or declares it without an
+    ``<extension>`` list or a ``<command>``, which ES-DE skips wholesale, names
+    no system, and the question answers ``unknown`` before this is asked
+    (#784 D53, D58). *declaration* is the one ES-DE loads
+    (:func:`atlas.esde.loaded_declaration`): a system with none reaches here
+    only where the read is not complete — EmuDeck's sealed bundled layer may
+    hold a declaration of it that ES-DE loads, and a layer that does not
+    parse was not read — so the verdict is ``unknown`` and the catalogue
+    statement riding the answer is the whole claim. A declaration whose kept
+    commands are all empty is one ES-DE loads with nothing to launch, so no
+    entry is judged and ``launch-resolution-unsupported`` says why (#784 D60).
     """
-    if declaration is None:
-        if not complete:
-            return VERDICT_UNKNOWN, None, (), None, None, None, (), ()
-        return (
-            VERDICT_UNKNOWN,
-            None,
-            (),
-            None,
-            None,
-            None,
-            (),
-            (
-                Caveat(
-                    CAVEAT_SYSTEM_UNKNOWN,
-                    f"the catalogue was read and declares no system {system!r} — whether anything "
-                    "launches this file is a question no layer here answers",
-                    {"system": system},
-                ),
-            ),
-        )
-    if not declaration.extensions or not declaration.entries:
-        missing = "extension" if not declaration.extensions else "command"
-        return (
-            VERDICT_UNKNOWN,
-            None,
-            (),
-            None,
-            None,
-            None,
-            (),
-            (
-                Caveat(
-                    CAVEAT_SYSTEM_UNKNOWN,
-                    f"system {system!r} is declared without a <{missing}> tag, and ES-DE skips such "
-                    "a system wholesale (loadConfig, SystemData.cpp:1109-1119 @ v3.4.1) — the "
-                    "frontend runs without it",
-                    {"system": system},
-                ),
-            ),
-        )
+    if declaration is None or not declaration.entries:
+        return VERDICT_UNKNOWN, None, (), None, None, None, (), _blank_commands(system, declaration)
     entry = _chosen_entry(entries, label, system)
     if isinstance(entry, Caveat):
         return VERDICT_UNKNOWN, None, (), None, None, None, (), (entry,)
-    if extension in declaration.extensions:
-        match_source = (
-            f"accept-list match: the file yields {extension!r} (its name from the last dot, "
-            "case preserved — FileSystemUtil.cpp:630-645 @ v3.4.1) and the system's "
-            "<extension> list declares that exact token (the scan compares exactly, "
-            "SystemData.cpp:669)"
-        )
-        if entry is None:
-            return VERDICT_LAUNCHABLE, None, (), None, None, None, (match_source,), ()
-
-        def judged(candidate: EmulatorEntry) -> _Stance:
-            return _entry_reading(
-                candidate,
-                extension=extension,
-                core_info_for=core_info_for,
-                boot_reader=boot_reader,
-                opens_reader=opens_reader,
-            )
-
-        stance, entry_sources, entry_caveats, boots, opens = judged(entry)
-        if stance == _ENTRY_REFUSES:
-            alternatives = tuple(
-                other.label for other in entries if other is not entry and judged(other)[0] == _ENTRY_ACCEPTS
-            )
-            return (
-                VERDICT_ENTRY_NOT_ACCEPTED,
-                entry,
-                alternatives,
-                None,
-                None,
-                opens,
-                (match_source, *entry_sources),
-                entry_caveats,
-            )
-        return VERDICT_LAUNCHABLE, entry, (), None, boots, opens, (match_source, *entry_sources), entry_caveats
-    record = lookup_install_first(system, extension)
+    unscanned = _unscanned(system, declaration.extensions, target, extension)
+    # The record is about a file of the format: a directory is judged by what
+    # the emulator does with it, never by its name (D5).
+    record = lookup_install_first(system[1], target.extension) if target.kind == _TARGET_FILE else None
     if record is not None:
         return (
             VERDICT_NEEDS_INSTALLATION,
@@ -22297,24 +23178,89 @@ def _launchability_verdict(
             _installers(record.installers, entries),
             None,
             None,
-            (f"install-first format {extension!r} for {system}: {record.statement} — {record.source}",),
-            (),
+            (f"install-first format {target.extension!r} for {system}: {record.statement} — {record.source}",),
+            unscanned,
         )
-    return (
-        VERDICT_NOT_ACCEPTED,
-        None,
-        (),
-        None,
-        None,
-        None,
-        (
-            f"the file yields {extension!r} and the system's <extension> list "
-            f"({' '.join(declaration.extensions)}) carries no such token — the comparison is "
-            "exact and case-sensitive (SystemData.cpp:669 @ v3.4.1), so ES-DE never scans the "
-            "file and nothing here launches it",
-        ),
-        (),
-    )
+    if entry is None:
+        return VERDICT_UNESTABLISHED, None, (), None, None, None, (), unscanned
+
+    def judged(candidate: EmulatorEntry) -> _Stance:
+        return _entry_reading(
+            candidate,
+            system,
+            target=target,
+            core_info_for=core_info_for,
+            boot_reader=boot_reader,
+            opens_reader=opens_reader,
+        )
+
+    stance, entry_sources, entry_caveats, boots, opens = judged(entry)
+    if stance == _ENTRY_REFUSES:
+        alternatives = tuple(
+            other.label for other in entries if other is not entry and judged(other)[0] == _ENTRY_ACCEPTS
+        )
+        return (
+            VERDICT_ENTRY_NOT_ACCEPTED,
+            entry,
+            alternatives,
+            None,
+            None,
+            opens,
+            entry_sources,
+            (*entry_caveats, *unscanned),
+        )
+    verdict = VERDICT_LAUNCHABLE if stance == _ENTRY_ACCEPTS else VERDICT_UNESTABLISHED
+    return verdict, entry, (), None, boots, opens, entry_sources, (*entry_caveats, *unscanned)
+
+
+def _unscanned(
+    system: SystemPair, accepted: tuple[str, ...], target: _LaunchTarget, extension: str
+) -> tuple[Caveat, ...]:
+    """Where ES-DE's scan would not list the content path under its name: how the frontend expects it named (#776 D2).
+
+    ES-DE lists a file whose extension — from the last dot, case preserved — is
+    a token of the system's accept-list, and a directory whose name ends in
+    such a token other than ``.``, which it then takes as one game
+    (populateFolder, es-app/src/SystemData.cpp:663-689 @ v3.4.1, :664-690 in
+    RetroDECK's fork at retrodeck-main-20260926-172324); a directory without one is
+    a folder it walks into. The caveat names every token that would make ES-DE
+    scan the path, in the order of the accept-list as read (D4), and nothing
+    about where the path lies (D6). Where the path's own kind cannot be told,
+    nothing is said.
+    """
+    scanned = target.scanned
+    miss = _scan_miss(accepted, scanned, extension) if scanned is not None else None
+    caveats: tuple[Caveat, ...] = ()
+    if scanned is not None and miss is not None:
+        names, reason = miss
+        what = "a file whose extension is" if scanned == SCANNED_KIND_FILE else "a directory whose name ends in"
+        caveats = (
+            Caveat(
+                CAVEAT_FRONTEND_NAME_UNSCANNED,
+                f"ES-DE's scan would not list this {scanned} under system {spelled(system)} by its name: it lists "
+                f"{what} one of {' '.join(names)} (the accept-list, compared exactly — SystemData.cpp:663-689 @ "
+                "v3.4.1) — the verdict is the emulator's, and this is how the frontend expects the game named",
+                {
+                    "source": system[0],
+                    "key": system[1],
+                    "kind": scanned,
+                    "extension": extension,
+                    "names": names,
+                    "reason": reason,
+                },
+            ),
+        )
+    return caveats
+
+
+def _scan_miss(accepted: tuple[str, ...], scanned: str, extension: str) -> tuple[tuple[str, ...], str] | None:
+    """The tokens that would make ES-DE scan the path, and why it does not — ``None`` where it does."""
+    if scanned == SCANNED_KIND_FILE:
+        return None if extension in accepted else (accepted, UNSCANNED_TOKEN_NOT_LISTED)
+    if extension != "." and extension in accepted:
+        return None
+    reason = UNSCANNED_DIRECTORY_WITHOUT_TOKEN if extension == "." else UNSCANNED_TOKEN_NOT_LISTED
+    return tuple(token for token in accepted if token != "."), reason
 
 
 def _installers(emulators: tuple[str, ...], entries: tuple[EmulatorEntry, ...]) -> tuple[Installer, ...]:
@@ -22352,8 +23298,40 @@ _ENUMERATION_CAVEAT_CODES = frozenset(
 )
 
 
+def _cited_core_installed(context: FirmwareContext, system: SystemPair) -> bool:
+    """Whether an installed core files under *system* — the selection a cited system's answers list
+    (:func:`atlas.firmware.derived_core_selection`), so held and listed can never disagree."""
+    selected, _ = derived_core_selection(context.cores, system, context.naming)
+    return bool(selected)
+
+
+def _core_listed_systems(cores: tuple[CoreDeclarations, ...]) -> set[SystemPair]:
+    """Every system the installed cores' own declarations name: the systems each core is named by,
+    and the system each declared file is filed under — ``_unknown`` names none.
+    """
+    return {system for core in cores for system in core.systems} | {
+        declaration.system
+        for core in cores
+        for declaration in core.firmware
+        if not isinstance(declaration.system, str)
+    }
+
+
+def _snapshot_tags(system: SystemPair) -> tuple[str, ...]:
+    """A system's platform tags from the snapshot column, where it has an ES-DE name there, else none.
+
+    The column is the published system list's (:func:`atlas.known_systems`),
+    which names systems in ES-DE's and RetroDECK's sources; a system named in
+    any other source carries no tags of its own, and its translation states
+    the table's keys instead.
+    """
+    if system[0] not in (ESDE_SOURCE, RETRODECK_SOURCE):
+        return ()
+    return vocabulary_platform_tags(system[1]) or ()
+
+
 def _derived_catalogue_entries(
-    host: "_CatalogueHost", context: FirmwareContext, system: str
+    host: "_CatalogueHost", context: FirmwareContext, system: SystemPair
 ) -> tuple[tuple[EmulatorEntry, ...], tuple[Caveat, ...]]:
     """Catalogue-shaped entries for *system*, derived from the installed cores (issue #133).
 
@@ -22372,13 +23350,14 @@ def _derived_catalogue_entries(
     layer shipped one. With no command there is nothing for a launch lookup to
     read, so every entry answers ``launch-resolution-unsupported``.
     """
-    selected, hidden = derived_core_selection(context.cores, system)
+    selected, hidden = derived_core_selection(context.cores, system, context.naming)
     launch = unsupported(host.kind, "a derived entry carries no launch command")
     entries = tuple(
         EmulatorEntry(
             host,
             EmulatorSpec(
-                system=system,
+                system=system[1],
+                catalogue_source=system[0],
                 label=core.corename or core.core_so,
                 kind=KIND_LIBRETRO,
                 core_so=core.core_so,
@@ -22398,10 +23377,10 @@ def _derived_catalogue_entries(
     )
     derived = Caveat(
         CAVEAT_EMULATOR_LIST_DERIVED,
-        "these entries are derived from the installed cores' own systemname (.info, read live), "
+        "these entries are derived from the installed cores' own declarations (.info, read live), "
         "not from a catalogue — the order claims no default, no entry carries a launch command, "
         "and a catalogue could declare a different list",
-        {"system": system},
+        {"source": system[0], "key": system[1]},
     )
     enumeration = tuple(c for c in context.caveats if c.code in _ENUMERATION_CAVEAT_CODES)
     return entries, (derived, *enumeration, *(() if hidden is None else (hidden,)))
@@ -22486,9 +23465,14 @@ def _entry_mod_with_caveats(
     return cast(ModPlacement, _dc_replace(outcome, caveats=(*outcome.caveats, *extra)))
 
 
-_CROSSWALK_SOURCE = "platform crosswalk (platform_ids_crosswalk.json, pinned sources cited inside)"
-_SYSTEM_IDS_SOURCE = (
-    "per-system platform ids (platform_ids_by_system.json, pinned sources cited inside)"
+# The platform questions' machine half. A declared system the table knows by no
+# name answers through its live <platform> tags, by two rules for two questions:
+# forward, a system belongs to what a pair asks for when one of its tags is
+# exactMatch to the asked systems (exact_platform_tags); reverse, a system's tag
+# stands for the one system it names, placed on one row it covers whole, and a
+# tag on several rows names none alone (names_one_system).
+_PLATFORM_TABLE_SOURCE = (
+    "platform table (platform_table.json with platform_overrides.json; pins and licences in SOURCES.md)"
 )
 
 
@@ -22497,43 +23481,70 @@ class _PlatformView:
     """One handle's platform-relevant reading of its catalogue, taken once per query.
 
     ``declared`` maps every system this installation's systems answer lists to
-    its platform tags; ``vocabulary_backed`` names the subset whose tags could
-    not be read live and came from the snapshot column instead (a sealed
-    catalogue's derived systems, a catalogue-less arrangement's whole list).
+    its platform tags — on an ES-DE frontend from the declarations ES-DE loads
+    (:func:`atlas.esde.loaded_declarations`), so a declaration it skips adds
+    nothing (#784 D61): on a catalogue read in full such a system is absent,
+    and while EmuDeck's bundled layer is sealed it is one the readable layers
+    do not declare, joining as a derived system where the installed cores
+    name it. ``vocabulary_backed`` names the subset whose tags could not be
+    read live and came from the snapshot column instead (a sealed catalogue's
+    derived systems, a catalogue-less arrangement's whole list).
     ``disabled`` maps the systems the catalogue's text carries only inside XML
-    comments — read where the handle can read them (the RetroDECK layers; a
+    comments, a live declaration of the same name winning over its comment —
+    read where the handle can read them (the RetroDECK layers; a
     sealed bundled file cannot be scanned, so on those handles a commented
     system degrades to *absent*, which is stated in the answer's tags rather
     than silently wrong). ``caveats`` is the route's full caveat list in the
     handle's pinned order — findings first, then the catalogue-status
-    statements — the same list the systems answer states.
+    statements — the same list the systems answer states. ``complete`` says
+    whether ``declared`` is the whole of what the catalogue declares — read in
+    full, no layer sealed — so that a system outside it is one this
+    installation does not have (#784 D53). A layer that does not parse leaves
+    the catalogue in force empty, since the frontend loads nothing from it,
+    but its text was not read as a declaration, so the view is not
+    ``complete`` there and atlas claims nothing about a name it does not
+    declare. ``skipped`` maps every system the catalogue declares in a form
+    ES-DE skips wholesale to the tag whose absence makes it do so
+    (:func:`atlas.esde.skipped_for`), for the statement that names it: the
+    frontend runs without it, so a complete view does not hold it (#784 D58)
+    and states it ``absent`` (#784 D61).
     """
 
-    declared: Mapping[str, tuple[str, ...]]
-    vocabulary_backed: frozenset[str]
-    disabled: Mapping[str, tuple[str, ...]]
+    declared: Mapping[SystemPair, tuple[str, ...]]
+    vocabulary_backed: frozenset[SystemPair]
+    disabled: Mapping[SystemPair, tuple[str, ...]]
     sources: tuple[str, ...]
     caveats: tuple[Caveat, ...]
+    complete: bool = False
+    skipped: Mapping[SystemPair, str] = field(default_factory=dict)
 
-
-def _absent_vocabulary_systems(view: _PlatformView) -> tuple[tuple[str, tuple[str, ...]], ...]:
-    """``(system, snapshot tags)`` for every vocabulary system the view neither declares nor disables."""
-    return tuple(
-        (system, vocabulary_platform_tags(system) or ())
-        for system in known_systems()
-        if system not in view.declared and system not in view.disabled
-    )
+    def status_of(self, system: SystemPair) -> PlatformSystemStatus:
+        """How firmly *system* is here: declared, disabled, or absent."""
+        if system in self.declared:
+            return PLATFORM_STATUS_DECLARED
+        if system in self.disabled:
+            return PLATFORM_STATUS_DISABLED
+        return PLATFORM_STATUS_ABSENT
 
 
 def _platform_matches(
-    view: _PlatformView, answers: Callable[[str, tuple[str, ...]], bool]
+    view: _PlatformView,
+    named: frozenset[SystemPair],
+    exact_tags: frozenset[str],
+    absent: tuple[tuple[SystemPair, tuple[str, ...]], ...],
 ) -> tuple[PlatformSystemMatch, ...]:
-    """Every system of *view* that *answers* ``(system, tags)`` accepts, status-qualified.
+    """Every system of *view* a translation names, status-qualified.
 
-    One walk for both routes of the forward question — a crosswalk platform
-    matched by tag, a per-system id matched by name — so a system answers
-    with the same status and tag provenance whichever route named it: declared
-    first, then disabled, then absent, each group alphabetical.
+    A system answers by its name when the translation names it in one of this
+    installation's own catalogue sources or among its cited pairs (*named*),
+    whatever its status; an absent one is one of *absent*, the installation's
+    own column it does not declare. A *declared* system
+    answers through its live ``<platform>`` tag too, when that tag is an exact
+    ES-DE platform key of the translation: the table does not know the name of
+    a system the user added by hand, but it knows the tag that system carries,
+    and a tag that covers exactly the asked systems names nothing else. A tag that covers more
+    (``arcade``) is never exact, so it lets no other system in. Declared first,
+    then disabled, then absent, each group alphabetical.
     """
     matches = [
         PlatformSystemMatch(
@@ -22545,21 +23556,195 @@ def _platform_matches(
             else PLATFORM_TAGS_CATALOGUE,
         )
         for system in sorted(view.declared)
-        if answers(system, view.declared[system])
+        if system in named or exact_tags & frozenset(view.declared[system])
     ]
     matches += [
         PlatformSystemMatch(
             system, PLATFORM_STATUS_DISABLED, view.disabled[system], PLATFORM_TAGS_CATALOGUE
         )
         for system in sorted(view.disabled)
-        if system not in view.declared and answers(system, view.disabled[system])
+        if system not in view.declared and system in named
     ]
     matches += [
         PlatformSystemMatch(system, PLATFORM_STATUS_ABSENT, tags, PLATFORM_TAGS_VOCABULARY)
-        for system, tags in _absent_vocabulary_systems(view)
-        if answers(system, tags)
+        for system, tags in absent
+        if system in named
     ]
     return tuple(matches)
+
+
+def _system_translation(
+    system: SystemPair, tags: tuple[str, ...], status: PlatformSystemStatus
+) -> PlatformTranslation:
+    """The table's answer for a system: by the pair it is named by, else by its tags.
+
+    Only a declared system answers through its tags, and only through the
+    ones that name one system (:func:`atlas.platforms.names_one_system`): a
+    tag that covers more (``arcade``) names none of its systems alone.
+    """
+    answer = translate((system,))
+    if answer.pairs[0].status == PAIR_KNOWN:
+        return answer
+    exact = [
+        (ESDE_PLATFORM_SOURCE, tag)
+        for tag in tags
+        if status == PLATFORM_STATUS_DECLARED and names_one_system(ESDE_PLATFORM_SOURCE, tag)
+    ]
+    return translate(exact) if exact else answer
+
+
+def _lifted(
+    translation: PlatformTranslation | None, codes: Collection[str] = LIFTED_CODES
+) -> tuple[Caveat, ...]:
+    """The translation's own statements the outer answer repeats — by default why a pair answered unknown, and
+    that pairs share a system only through different parts or overlaps of it (#784 D40).
+
+    One code and one data shape inside the translation and outside it: the
+    outer answer repeats what the table said rather than saying it again in
+    other words.
+    """
+    if translation is None:
+        return ()
+    return tuple(c for c in translation.caveats if c.code in codes)
+
+
+# What the translation says about a stated version: that the table holds
+# another, or that a folder pair's version was not applied. Only an answer
+# with no resolution block lifts these (#784 D56): every other answer states
+# them in its translation, and saying them twice would be one fact in two
+# places.
+_VERSION_CODES = (CAVEAT_PLATFORM_SOURCE_VERSION_DIFFERS, CAVEAT_PLATFORM_VERSION_UNAPPLIED)
+
+
+class _Resolved(NamedTuple):
+    """What resolving a system argument gives: the resolution, what the answer states, and the parsed pairs."""
+
+    resolution: SystemResolution
+    notes: tuple[Caveat, ...]
+    pairs: tuple[AskedPair, ...]
+
+
+def _version_unapplied(source: str, key: str, version: str) -> Caveat:
+    """A version stated on a pair in the installation's own catalogue source, which the read never applies (#784 D51)."""
+    return Caveat(
+        CAVEAT_PLATFORM_VERSION_UNAPPLIED,
+        f"{spelled((source, key))} is read live against this installation's catalogue, exactly as spelled, "
+        "and never meets the platform table, so the version stated with it was not applied",
+        {"source": source, "key": key, "version": version},
+    )
+
+
+def _keyed(
+    query: _SaveQuery, keys: tuple[str, ...], *, system_asked: bool, asked: tuple[SystemPair, ...]
+) -> _SaveQuery:
+    """*query* keyed by the ES-DE names a save record files its system under (#784 D50).
+
+    One name is the record's key; several key it where the entries the record
+    holds for them agree (:func:`_record_agreement`); none keys no record.
+    *system_asked* says whether a system was named at all, and *asked* is the
+    pairs that named it where they resolved to one system or to several each
+    candidate is keyed for (#784 D62).
+    """
+    return cast(_SaveQuery, _dc_replace(query, record_keys=keys, system_asked=system_asked, asked=asked))
+
+
+def _asked_systems(pairs: Sequence[AskedPair]) -> tuple[SystemPair, ...]:
+    """The systems *pairs* name, version aside, each once and in the order asked."""
+    return tuple(dict.fromkeys((source, key) for source, key, _ in pairs))
+
+
+def _entry_asked(spec: EmulatorSpec, asked: Sequence[AskedPair] | None) -> tuple[SystemPair, ...]:
+    """The pairs an entry's save question was asked by: the asker's where given, else the entry's own system."""
+    return _asked_systems(asked) if asked is not None else (_spec_system(spec),)
+
+
+def _with_system_notes(
+    placement: SavefilePlacement | Unresolved, notes: tuple[Caveat, ...]
+) -> SavefilePlacement | Unresolved:
+    """*placement* with what resolving its system stated ahead of its own caveats (#784 D44).
+
+    A refusal carries no caveat list and keeps its own reason; the notes are
+    about the system, which a refused placement never reached.
+    """
+    if not notes or isinstance(placement, Unresolved):
+        return placement
+    return cast(SavefilePlacement, _dc_replace(placement, caveats=(*notes, *placement.caveats)))
+
+
+def _shared[A](answers: Sequence[A], systems: tuple[SystemPair, ...], resolution: SystemResolution) -> A | None:
+    """The answer every candidate gives, in its shared form, or ``None`` (:func:`atlas._shared_answer.shared`).
+
+    The one place this module reaches the comparison, and at call time: the
+    comparison owns the dependency on the serializers, and :mod:`atlas.contract`
+    imports this module's answer types.
+    """
+    from ._shared_answer import shared
+
+    return shared(answers, systems, resolution)
+
+
+def _system_ambiguous(named: tuple[SystemPair, ...]) -> Caveat:
+    """The asked pairs name several systems of this installation, and atlas picks none (#784 D8, D9, D44)."""
+    sources, keys = parallel_lists(named)
+    return Caveat(
+        CAVEAT_SYSTEM_AMBIGUOUS,
+        f"the asked system names {len(named)} systems of this installation alike "
+        f"({', '.join(spelled(system) for system in named)}) — atlas picks none; ask with the one meant, "
+        "or with a further pair that narrows it",
+        {"sources": sources, "keys": keys},
+    )
+
+
+def _system_unanimous(named: tuple[SystemPair, ...]) -> Caveat:
+    """The asked pairs name several systems of this installation, and every one answers alike (#784 D62, D65)."""
+    sources, keys = parallel_lists(named)
+    return Caveat(
+        CAVEAT_SYSTEM_UNANIMOUS,
+        f"the asked system names {len(named)} systems of this installation alike "
+        f"({', '.join(spelled(system) for system in named)}) and every one of them gives this question the same "
+        "answer, which this is — atlas picks none, and the answer names no system",
+        {"sources": sources, "keys": keys},
+    )
+
+
+def _pairs_conflict(pairs: tuple[AskedPair, ...]) -> Caveat:
+    """The asked pairs share no system — atlas picks none of them (#784 D9, D44)."""
+    sources, keys = parallel_lists(tuple((source, key) for source, key, _ in pairs))
+    return Caveat(
+        CAVEAT_SYSTEM_PAIRS_CONFLICT,
+        "the asked pairs share no system of this installation — two names this catalogue reads live, "
+        "a conflict in the platform table, or a name the other pairs do not reach — so the question "
+        "answers for none",
+        {"sources": sources, "keys": keys},
+    )
+
+
+def _tag_notes(system: SystemPair, tags: tuple[str, ...]) -> tuple[Caveat, ...]:
+    """The statement for every tag that names no ES-DE platform id: ``ignore``, or a token outside them."""
+    platform_ids = platform_table().keys[ESDE_PLATFORM_SOURCE]
+    notes: list[Caveat] = []
+    for tag in tags:
+        if tag == "ignore":
+            notes.append(
+                Caveat(
+                    CAVEAT_PLATFORM_SCRAPING_IGNORED,
+                    "the catalogue tags this system `ignore` — ES-DE's deliberate "
+                    "opt-out from platform matching, a different fact than a "
+                    "missing tag",
+                    {"source": system[0], "key": system[1]},
+                )
+            )
+        elif tag not in platform_ids:
+            notes.append(
+                Caveat(
+                    CAVEAT_PLATFORM_UNKNOWN,
+                    "a <platform> token outside ES-DE's platform ids — ES-DE "
+                    "warns about and drops exactly this token, so it matches "
+                    "nothing anywhere",
+                    {"source": system[0], "key": system[1], "token": tag},
+                )
+            )
+    return tuple(notes)
 
 
 def _commented_map(texts: tuple[str | None, ...]) -> dict[str, tuple[str, ...]]:
@@ -22600,6 +23785,401 @@ class _CatalogueQueries:
     """
 
     kind: str
+    # The installation's own catalogue sources (#784 D43): the table columns
+    # whose keys its catalogue spells, read live, a bare name being the short
+    # form of a pair in the first. ES-DE's for every ES-DE frontend; RetroDECK
+    # adds its own (primehack, portmaster). EmuDeck's catalogue declares
+    # ES-DE's names only, at the pinned template too: its ROM folders (sneshd,
+    # primehacks) are folders, not systems its catalogue declares. A bare
+    # RetroArch's is libretro's, the database names its cores declare.
+    catalogue_columns: tuple[str, ...] = (ESDE_SOURCE,)
+    # Whether the pairs atlas packages for cores that declare no database name
+    # (atlas/data/core_systems.json) name systems here (#784 D46, D50): on a
+    # bare RetroArch they are the only name such a core has.
+    cites_core_systems: bool = False
+
+    def _naming(self) -> SystemNaming:
+        """How this installation names a system: its own sources and its cited pairs (:func:`system_naming`)."""
+        return system_naming(self.catalogue_columns, core_systems=self.cites_core_systems)
+
+    def _catalogue_system(self, name: str) -> SystemPair:
+        """The pair a name of this installation's catalogue is named by (:func:`catalogue_pair`)."""
+        return catalogue_pair(self.catalogue_columns, name)
+
+    def _named_systems(self, translation: PlatformTranslation) -> frozenset[SystemPair]:
+        """Every system of this installation the translation's intersection names, under any relation."""
+        return frozenset(named_systems(translation, self.catalogue_columns, self._naming().cited))
+
+    def _target_unknown(self, target: SystemPair) -> Caveat | None:
+        """``system-unknown`` for a system the table reached that this installation does not hold, or ``None``."""
+        if target not in self._naming().cited:
+            return self._own_system_unknown(target)
+        if self._cited_held(target):
+            return None
+        return system_unknown(
+            target,
+            f"{spelled(target)} is a system atlas names here only for the cores it is cited for, and no such "
+            "core is installed — nothing here reads it, so an empty answer says the system is unknown here, "
+            "not that it holds or needs nothing",
+        )
+
+    def _cited_held(self, target: SystemPair) -> bool:
+        """Whether a deployed core is cited for *target*: named by it, filed under it, or filing a file there."""
+        return _cited_core_installed(self._firmware_context(), target)
+
+    def _own_system_unknown(self, system: SystemPair) -> Caveat | None:
+        """``system-unknown`` for an own-source pair that names nothing here, or ``None`` (#784 D53).
+
+        The pair is one read live or one the table reached. Where it is
+        stated, the pair names no system of this installation:
+        :meth:`_resolve_pairs` sets an asked one aside as an unknown pair,
+        :meth:`_resolve_routed` a target the table reached (through
+        :meth:`_target_unknown`), and where it decides nothing else the
+        resolution is ``unknown`` beside it.
+
+        On an ES-DE frontend that is a system the catalogue, read in full,
+        does not declare, or one it declares without an ``<extension>`` list
+        or a ``<command>``, which ES-DE skips wholesale (#784 D58); where a
+        layer is sealed, the undeclared system may sit in it, and the sealed
+        statement riding the answer is the whole claim. Where a layer does not
+        parse, the invalid-layer finding is the whole claim, as nothing that
+        layer meant to declare was read. A bare RetroArch has no catalogue and
+        overrides this. Every question that takes a system states it, through
+        :meth:`_resolve` — RetroDECK's gamelist question, which has no caveat
+        list, by refusing. Where it is ``None`` the pair is read as the system
+        it spells.
+        """
+        view, _ = self._platform_view()
+        if not view.complete:
+            return None
+        missing = view.skipped.get(system)
+        if missing is not None:
+            lacks = (
+                "without an <extension> list that names an extension"
+                if missing == "extension"
+                else "without a <command> tag"
+            )
+            return system_unknown(
+                system,
+                f"the catalogue declares system {spelled(system)} {lacks}, and ES-DE skips such a system "
+                "wholesale (loadConfig, SystemData.cpp:1109-1119 @ v3.4.1) — the frontend runs without it, so an "
+                "empty answer says the system is not here, not that it holds or needs nothing",
+            )
+        if system in view.declared:
+            return None
+        declares = (
+            f"carries {spelled(system)} only inside an XML comment, which the frontend does not load"
+            if system in view.disabled
+            else f"declares no system {spelled(system)}"
+        )
+        return system_unknown(
+            system,
+            f"the catalogue was read and {declares} — an empty answer says the system is not here, not that "
+            "it holds or needs nothing",
+        )
+
+    def _skipped_systems(self, by_system: Mapping[str, SystemDeclaration]) -> dict[SystemPair, str]:
+        """Every system of *by_system* ES-DE skips wholesale, with the tag whose absence skips it (#784 D58)."""
+        return {
+            self._catalogue_system(name): missing
+            for name, declaration in by_system.items()
+            if (missing := skipped_for(declaration)) is not None
+        }
+
+    def _absent_systems(self, view: _PlatformView) -> tuple[tuple[SystemPair, tuple[str, ...]], ...]:
+        """``(system, snapshot tags)`` for every system of the own column the view neither declares nor disables.
+
+        The ES-DE frontends' column is the published system list
+        (:func:`atlas.known_systems`, unchanged until #797), tagged from its
+        snapshot column; a bare RetroArch overrides this with the libretro
+        column.
+        """
+        return tuple(
+            (pair, vocabulary_platform_tags(system) or ())
+            for system in known_systems()
+            if (pair := self._catalogue_system(system)) not in view.declared and pair not in view.disabled
+        )
+
+    def _resolve(self, system: SystemArgument, *, standing: bool = False) -> _Resolved:
+        """Which one system of this installation *system* names, and what the answer states about it (#784 D44).
+
+        A bare name is the short form of a pair in the first own source. A pair
+        in an own source is read live, exactly as spelled; a pair in any other
+        source goes through the platform table (#784 D43), and its systems here
+        are the keys of the own sources and the cited pairs the intersection
+        names in the first tier that names any — exact, then broad, then
+        narrow, never related; that tier decides, and a later one is never
+        tried. Several held own-source names, a table conflict, or
+        an own-source name the other pairs do not reach is a conflict. The
+        statements come back beside the resolution: the translation's own
+        (:func:`_lifted`), that a version stated on an own-source pair was not
+        applied (#784 D51), and why no single system was named. The parsed
+        pairs come back too, so no caller parses the argument again.
+
+        A system the installation does not hold, read live or reached through
+        the table, is no system here (#784 D53) — except where *standing* asks about the name's
+        standing itself (:meth:`platform_ids`), whose answer states that the
+        system is absent or disabled: there it stays the system it spells,
+        ``system-unknown`` beside it.
+        """
+        pairs = system_pairs(system, self.catalogue_columns[0])
+        resolution, notes = self._resolve_pairs(pairs, standing=standing)
+        return _Resolved(resolution, notes, pairs)
+
+    def _resolve_pairs(
+        self, pairs: tuple[AskedPair, ...], *, standing: bool = False
+    ) -> tuple[SystemResolution, tuple[Caveat, ...]]:
+        """:meth:`_resolve` over the parsed *pairs*.
+
+        Only systems this installation holds decide (#784 D53): an own-source
+        name it does not hold is an unknown pair that rides along, its
+        ``system-unknown`` beside the answer, and a routed target it does not
+        hold is no candidate — where no target of the tier is held, the
+        resolution is unknown and ``system-unknown`` names each. Asked for
+        a name's *standing*, nothing is set aside, and the statements ride
+        beside the system it names.
+        """
+        naming = self._naming()
+        asked_own = tuple(dict.fromkeys(self._catalogue_system(key) for source, key, _ in pairs if source in naming.own))
+        unheld_own = {own: stated for own in asked_own if (stated := self._own_system_unknown(own)) is not None}
+        own = asked_own if standing else tuple(name for name in asked_own if name not in unheld_own)
+        riding = tuple(unheld_own.values())
+        routed = [pair for pair in pairs if pair[0] not in naming.own]
+        translation = translate(routed) if routed else None
+        lifted = (
+            *_lifted(translation),
+            *(
+                _version_unapplied(source, key, version)
+                for source, key, version in pairs
+                if source in naming.own and version is not None
+            ),
+        )
+        tiers = systems_by_tier(translation, naming.own, naming.cited) if translation is not None else ()
+        if len(own) > 1 or (translation is not None and translation.intersection_status == INTERSECTION_CONFLICT):
+            return SystemResolution(RESOLUTION_CONFLICT, None, None, translation=translation), (
+                *lifted,
+                *riding,
+                _pairs_conflict(pairs),
+            )
+        if own:
+            return self._resolve_own(own[0], pairs, translation, tiers, (*lifted, *riding))
+        if not tiers:
+            return SystemResolution(RESOLUTION_UNKNOWN, None, None, translation=translation), (
+                *lifted,
+                *riding,
+                *(system_unknown((source, key)) for source, key, _ in routed),
+            )
+        return self._resolve_routed(tiers[0], translation, (*lifted, *riding), standing=standing)
+
+    def _resolve_routed(
+        self,
+        tier: tuple[SystemTier, tuple[SystemPair, ...]],
+        translation: PlatformTranslation | None,
+        lifted: tuple[Caveat, ...],
+        *,
+        standing: bool,
+    ) -> tuple[SystemResolution, tuple[Caveat, ...]]:
+        """:meth:`_resolve` for the systems the table names in the first tier that names any, no own name asked.
+
+        A target the installation does not hold is no candidate (#784 D53):
+        one held target is the system, several are ambiguous — until the
+        question asks each of them and finds they answer alike
+        (:meth:`_answered`) — and none leaves
+        the resolution unknown with ``system-unknown`` naming each target —
+        where some are held, the translation already names the others. The
+        first tier that names any target decides, held or not; a later tier is
+        never tried. Asked for a name's *standing*, every target stays, the
+        statements beside it.
+
+        A target in an own source is held where the installation declares it
+        (:meth:`_own_system_unknown`). A cited target — a system atlas names
+        by a pair outside the own sources (#784 D46, D50 b) — is held exactly
+        where a deployed core it is cited for is present (:meth:`_cited_held`):
+        on a bare RetroArch the core whose packaged pair or map target it is,
+        on RetroDECK and EmuDeck the core whose systemname maps to it.
+        Otherwise it is unheld like any other target.
+        """
+        relation, named = tier
+        unheld = {target: stated for target in named if (stated := self._target_unknown(target)) is not None}
+        held = named if standing else tuple(target for target in named if target not in unheld)
+        if not held:
+            return SystemResolution(RESOLUTION_UNKNOWN, None, None, translation=translation), (
+                *lifted,
+                *unheld.values(),
+            )
+        beside = (*lifted, *unheld.values()) if standing else lifted
+        if len(held) == 1:
+            return SystemResolution(RESOLUTION_RESOLVED, held[0], relation, translation=translation), beside
+        view, _ = self._platform_view()
+        candidates = tuple(SystemCandidate(candidate, view.status_of(candidate)) for candidate in held)
+        return SystemResolution(RESOLUTION_AMBIGUOUS, None, None, candidates, translation), (
+            *beside,
+            _system_ambiguous(held),
+        )
+
+    def _unversioned_own(self, pairs: tuple[AskedPair, ...]) -> tuple[AskedPair, ...]:
+        """*pairs* with the version dropped from each pair in an own source, which never meets the table (#784 D51)."""
+        own = self._naming().own
+        return tuple((source, key, None if source in own else version) for source, key, version in pairs)
+
+    def _resolve_own(
+        self,
+        own: SystemPair,
+        pairs: tuple[AskedPair, ...],
+        translation: PlatformTranslation | None,
+        tiers: tuple[tuple[SystemTier, tuple[SystemPair, ...]], ...],
+        lifted: tuple[Caveat, ...],
+    ) -> tuple[SystemResolution, tuple[Caveat, ...]]:
+        """:meth:`_resolve` for the one own-source name that decides: read live, the routed pairs reaching it or not.
+
+        Without routed pairs, or with only pairs the table cannot place, the
+        name decides as an exact match; with them, the routed pairs must reach
+        it in some tier, which then is its relation, and where none does, the
+        pairs conflict. Whether the installation holds the name is settled
+        before (:meth:`_resolve_pairs`).
+        """
+        if translation is None or translation.intersection_status == INTERSECTION_UNKNOWN:
+            return SystemResolution(RESOLUTION_RESOLVED, own, EXACT_TIER, translation=translation), lifted
+        reached: SystemTier | None = next((relation for relation, named in tiers if own in named), None)
+        if reached is None:
+            return SystemResolution(RESOLUTION_CONFLICT, None, None, translation=translation), (
+                *lifted,
+                _pairs_conflict(pairs),
+            )
+        return SystemResolution(RESOLUTION_RESOLVED, own, reached, translation=translation), lifted
+
+    def _unresolved_caveats(self, notes: tuple[Caveat, ...]) -> tuple[tuple[str, ...], tuple[Caveat, ...]]:
+        """What a question answering no single system states: what the systems answer states, and why.
+
+        The installation's own findings and catalogue status, as its platform
+        reading carries them, and any catalogue statement the resolved form
+        carries that the platform reading does not (:meth:`_catalogue_statements`),
+        then the resolution's statements, then the arrangement's evidence — the
+        empty or unknown form every system question shares (#784 D44). An
+        unknown form never states less about the catalogue than the resolved
+        form (#784 D53).
+        """
+        view, version = self._platform_view()
+        missing = tuple(statement for statement in self._catalogue_statements() if statement not in view.caveats)
+        return view.sources, (
+            *view.caveats,
+            *missing,
+            *notes,
+            *arrangement_caveats(self.kind, observed_version=version),
+        )
+
+    def _answered[A](
+        self,
+        resolved: _Resolved,
+        answer_for: Callable[[SystemPair, tuple[Caveat, ...], SystemResolution], A],
+        empty: Callable[[SystemResolution, tuple[Caveat, ...]], A],
+    ) -> A:
+        """A system question's answer for what *resolved* named: one system's, the shared one, or the empty form.
+
+        The one rule every question that answers for a resolved system goes
+        through (#784 D62, D64, D65 c). One system named: *answer_for* it.
+        Several, listed as candidates: each is asked as if it had been named
+        alone, with the statements of the resolution beside it —
+        ``system-unanimous`` where ``system-ambiguous`` stood — and where every
+        candidate gives the same answer that shared answer is the answer, under
+        the ``unanimous`` resolution (:func:`atlas._shared_answer.shared`);
+        where two answer differently, and where no single system was named, the
+        question's *empty* form.
+        """
+        resolution, notes, _ = resolved
+        if resolution.system is not None:
+            return answer_for(resolution.system, notes, resolution)
+        if resolution.status != RESOLUTION_AMBIGUOUS:
+            return empty(resolution, notes)
+        systems = tuple(candidate.system for candidate in resolution.candidates)
+        # Each candidate's answer is built with the statements the shared
+        # answer makes, system-unanimous among them, beside the ambiguous
+        # resolution it is asked under: the candidates' answers are compared
+        # and merged, never returned, and the merge swaps in the unanimous
+        # resolution — so the one set of notes is the shared answer's, and an
+        # answer that differs is answered by *empty* with the original notes.
+        stated = tuple(
+            _system_unanimous(systems) if note.code == CAVEAT_SYSTEM_AMBIGUOUS else note for note in notes
+        )
+        answers = [answer_for(system, stated, resolution) for system in systems]
+        unanimous = SystemResolution(
+            RESOLUTION_UNANIMOUS, None, None, resolution.candidates, resolution.translation
+        )
+        shared = _shared(answers, systems, unanimous)
+        return empty(resolution, notes) if shared is None else shared
+
+    def _catalogue_statements(self) -> tuple[Caveat, ...]:
+        """What every catalogue-informed answer of this installation states about its catalogue, system aside.
+
+        Its unknown forms carry these too, so an answer naming no system states
+        as much about the catalogue as one naming a system (#784 D53). None by
+        default: the platform reading already carries them.
+        """
+        return ()
+
+    @staticmethod
+    def _record_keys(system: SystemPair | None, asked: Sequence[AskedPair] = ()) -> tuple[str, ...]:
+        """The ES-DE names a packaged save record keys *system* by, resolved from the *asked* pairs (#784 D50).
+
+        A save-memory or save-format record is keyed by ES-DE's system names.
+        A system named in ES-DE's or RetroDECK's source keys it by its own key
+        as it stands, with no table between — a system a user added to the
+        catalogue by hand keys no record rather than borrowing one — and so
+        does an asked pair in one of those sources: ``("esde", "gb")`` asked
+        on a bare RetroArch keys gb. Any other system (libretro on a bare
+        RetroArch, a cited pair) keys the ES-DE names the table reaches from
+        it in its first tier, and where those are several the record keys
+        them where the entries it holds for them agree
+        (:func:`_record_agreement`). Empty where nothing names an ES-DE
+        system.
+        """
+        keys: tuple[str, ...]
+        if system is None:
+            keys = ()
+        elif system[0] in (ESDE_SOURCE, RETRODECK_SOURCE):
+            keys = (system[1],)
+        else:
+            keys = tuple(
+                dict.fromkeys(key for source, key, _ in asked if source in (ESDE_SOURCE, RETRODECK_SOURCE))
+            ) or tuple(key for _, key in systems_reached(translate([system]), (ESDE_SOURCE,))[1])
+        return keys
+
+    def _save_placement(
+        self,
+        system: SystemArgument | None,
+        place: Callable[[tuple[str, ...], tuple[SystemPair, ...]], SavefilePlacement | Unresolved],
+    ) -> SavefilePlacement | Unresolved:
+        """A save question's placement, *place* keyed by the names its *system* keys a core's recorded file set by.
+
+        The system is resolved as every system question resolves it (#784
+        D44), keyed by :meth:`_record_keys` and answered through the one rule
+        for several named systems (:meth:`_answered`); *place* takes the keys
+        and the systems the asked pairs name. The resolution's statements —
+        the platform codes it lifts and why no single system was named, or that
+        several answer alike — ride on the placement, so a system the asked
+        pairs do not name is said rather than answered as if none had been
+        asked. The placement carries no resolution (#784 D56), so what the
+        translation says about a stated version — that the table holds
+        another, or that a folder pair's was not applied — which every other
+        question states only there, is lifted onto it too.
+        """
+        if system is None:
+            return place((), ())
+        resolved = self._resolve(system)
+        lifted = _lifted(resolved.resolution.translation, _VERSION_CODES)
+        asked = _asked_systems(resolved.pairs)
+
+        def answer_for(
+            pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution
+        ) -> SavefilePlacement | Unresolved:
+            del resolution
+            return _with_system_notes(place(self._record_keys(pair, resolved.pairs), asked), (*notes, *lifted))
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> SavefilePlacement | Unresolved:
+            del resolution
+            return _with_system_notes(place((), ()), (*notes, *lifted))
+
+        return self._answered(resolved, answer_for, empty)
 
     @one_question
     def standalone_firmware_token(self, command: str) -> str | None:
@@ -22658,6 +24238,73 @@ class _CatalogueQueries:
     def _catalogue_absence(self) -> Caveat:
         raise NotImplementedError  # pragma: no cover - every handle supplies one
 
+    # The firmware half every handle also inherits (:class:`_FirmwareQueries`,
+    # first in each handle's bases, so these never answer).
+    def _firmware_context(self, *, cwd: str | None = None) -> FirmwareContext:
+        raise NotImplementedError  # pragma: no cover - _FirmwareQueries supplies it
+
+    def _firmware_for_system(
+        self,
+        system: SystemPair,
+        *,
+        verify: bool = False,
+        cwd: str | None = None,
+        content_path: str | None = None,
+    ) -> FirmwareAnswer:
+        raise NotImplementedError  # pragma: no cover - _FirmwareQueries supplies it
+
+    @one_question
+    def firmware_for_system(
+        self,
+        system: SystemArgument,
+        *,
+        verify: bool = False,
+        cwd: str | None = None,
+        content_path: str | None = None,
+    ) -> FirmwareAnswer:
+        """Which emulators can run *system*, and what does each of them want?
+
+        *system* is a name of this installation's catalogue, one pair, or
+        several pairs, resolved to one system first (#784 D44): on an ES-DE
+        frontend, a system atlas names by a cited pair (the TI-83 as RomM's
+        ``ti-83``, the Elektronika BK as libretro's ``BK-0010/BK-0011``)
+        answers from the installed cores' own declarations, as every system
+        does on a bare RetroArch, where libretro's names are its own. Asked
+        pairs that name several systems answer what every one of them gives
+        alike, its emulators compared as a set and listed by core file name,
+        with ``resolution`` ``unanimous`` (#784 D62, D63); asked pairs that
+        name no single system otherwise answer no emulators, with
+        ``resolution`` saying why.
+
+        ``cwd`` is the working folder the launch will use, an absolute host
+        path: it completes a standalone emulator's relative configured path
+        (xemu's), is ignored where no answer depends on it, and a value that
+        is not absolute raises ``ValueError``. ``content_path`` names the game
+        the launch is for, as :meth:`firmware_for_core` takes it.
+        """
+        checked_cwd(cwd)
+        checked_content_path(content_path)
+
+        def answer_for(pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution) -> FirmwareAnswer:
+            answer = self._firmware_for_system(pair, verify=verify, cwd=cwd, content_path=content_path)
+            return cast(
+                FirmwareAnswer, _dc_replace(answer, caveats=_noted(notes, answer.caveats), resolution=resolution)
+            )
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> FirmwareAnswer:
+            context = self._firmware_context(cwd=cwd)
+            return FirmwareAnswer(
+                root=context.root,
+                cores=(),
+                unclaimed=(),
+                hash_checked=verify,
+                sources=context.sources,
+                caveats=stated_once((*context.caveats, *self._catalogue_statements(), *notes)),
+                resolution=resolution,
+            )
+
+        return self._answered(self._resolve(system), answer_for, empty)
+
     @one_question
     def systems(self) -> SystemsAnswer:
         """Every system this installation lists, sorted — from its frontend catalogue or its installed cores."""
@@ -22671,166 +24318,155 @@ class _CatalogueQueries:
 
     @one_question
     def systems_for_platform(self, vocabulary: str, value: str) -> PlatformSystemsAnswer:
-        """Which systems here answer to a public platform id, and how firmly.
+        """Which systems here answer to a ``(source, key)`` pair, and how firmly.
 
-        The two halves of the question are answered from their two rightful
-        places: what the id *corresponds to* comes from the crosswalk (world
-        knowledge, pinned and cited), and whether the corresponding systems
-        *are here* is read off this installation — its catalogue's own
-        ``<platform>`` tags connect each system to its platform, so a system
-        the user added by hand translates without any table knowing it.
+        The single-pair form of the platform question (#784 D25). The two
+        halves are answered from their two rightful places: what the pair
+        *means* comes from the platform table (world knowledge, pinned and
+        cited, :func:`atlas.platforms.translate`), and whether the systems it
+        names *are here* is read off this installation.
 
-        An id that stands for one system rather than a platform — ScreenScraper
-        ``6`` is ``cps1``, tagged ``arcade`` like every arcade system — is
-        listed in the per-system table, and a listed id wins over the
-        crosswalk: the answer names that system in ``systems``, leaves
-        ``platforms`` empty, and qualifies the one system exactly as a tag
-        match would be — declared, disabled or absent.
+        *vocabulary* is a source of :func:`atlas.known_platform_vocabularies`,
+        or ``folder`` for a bare folder name; *value* is that source's key, a
+        string — a numeric id passes as its decimal string, and a non-string
+        value raises rather than being coerced. A pair the table holds no key
+        for answers no matches and the ``platform-unmapped`` caveat, a key the
+        table excludes on purpose ``platform-excluded`` (#784 D35), a source
+        the table does not include ``platform-source-unknown`` (D31) —
+        each the translation's own statement, lifted onto the answer: "no
+        system corresponds" is an answer, and inventing a folder name out of
+        the raw key is exactly the failure this question exists to prevent.
 
-        *vocabulary* is one of :data:`atlas.platforms.KNOWN_PLATFORM_VOCABULARIES`
-        and anything else raises — the set is atlas's own and closed. *value* is
-        a string, and a numeric id passes as its decimal string: a client
-        holding IGDB's numeric ``igdb_id`` asks with ``str(igdb_id)``, and a
-        non-string value raises rather than being coerced. A *value* neither
-        table carries answers no systems, no platforms, no matches and the
-        ``platform-unmapped`` caveat: "no platform corresponds" is an answer,
-        and inventing a folder name out of the raw id is exactly the failure
-        this question exists to prevent.
-
-        Each match's status says what the consumer's next step is: a
-        ``declared`` system takes content now, a ``disabled`` one exists in
-        the catalogue's text and is deliberately off, an ``absent`` one is
-        vocabulary knowledge only — this installation never scans a folder
-        for it. The match's ``tags_source`` states whether its tags were read
-        off the machine or taken from the stated build's snapshot column.
+        A system matches when the translation names it in a catalogue column
+        this installation deploys (:attr:`catalogue_columns`: ES-DE's system
+        names, and RetroDECK's own on a RetroDECK, and on a bare RetroArch
+        libretro's column) or among the cited pairs atlas packages for its
+        cores; a
+        declared system matches through its live ``<platform>`` tag too, when
+        that tag is an exact ES-DE platform key of the translation (see
+        :func:`_platform_matches`). Each match's status says what the
+        consumer's next step is: a ``declared`` system takes content now, a
+        ``disabled`` one exists in the catalogue's text and is deliberately
+        off, an ``absent`` one is vocabulary knowledge only. The match's
+        ``tags_source`` states whether its tags were read off the machine or
+        taken from the stated build's snapshot column.
         """
+        return self._systems_for_pairs(((vocabulary, value),))
+
+    @one_question
+    def systems_for_platforms(self, pairs: Sequence[Sequence[str | None]]) -> PlatformSystemsAnswer:
+        """Which systems here answer to several ``(source, key)`` pairs together, and how firmly.
+
+        The multi-pair form of :meth:`systems_for_platform` (#784 D7, D9): each
+        pair is ``(source, key)`` or ``(source, key, version)``, as
+        :func:`atlas.platforms.translate` takes them, and the translation
+        answers per pair and for their intersection. ``matches`` are the
+        systems the intersection names, qualified the same way; pairs that
+        share no system are a ``conflict`` and match nothing, because atlas
+        picks none. Every unknown pair's own caveat is lifted onto the answer,
+        and so is ``platform-parts-unestablished`` where the pairs share a
+        system only through different parts or overlaps of it (#784 D40). The
+        answer has the single-pair form's shape; ``translation.pairs`` names the
+        asked pairs in order (D41). At least one pair is asked; a malformed pair
+        raises.
+        """
+        return self._systems_for_pairs(pairs)
+
+    def _systems_for_pairs(self, pairs: Sequence[Sequence[str | None]]) -> PlatformSystemsAnswer:
         view, version = self._platform_view()
         tail = arrangement_caveats(self.kind, observed_version=version)
-        systems = systems_for(vocabulary, value)
-        if systems:
-            named = frozenset(systems)
-            return PlatformSystemsAnswer(
-                vocabulary,
-                value,
-                systems=systems,
-                matches=_platform_matches(view, lambda system, _tags: system in named),
-                sources=(*view.sources, _SYSTEM_IDS_SOURCE),
-                caveats=(*view.caveats, *tail),
-            )
-        resolved = platforms_for(vocabulary, value)
-        if not resolved:
-            unmapped = Caveat(
-                CAVEAT_PLATFORM_UNMAPPED,
-                "neither the per-system table nor the crosswalk answers to this id — "
-                "placing content under the raw id would name a folder no catalogue declares",
-                {"vocabulary": vocabulary, "value": value},
-            )
-            return PlatformSystemsAnswer(
-                vocabulary, value, caveats=(*view.caveats, unmapped, *tail)
-            )
-        wanted = frozenset(resolved)
+        translation = translate(pairs)
+        caveats = (*view.caveats, *_lifted(translation), *tail)
+        if translation.intersection_status == INTERSECTION_UNKNOWN:
+            return PlatformSystemsAnswer(translation, caveats=caveats)
         return PlatformSystemsAnswer(
-            vocabulary,
-            value,
-            resolved,
-            matches=_platform_matches(view, lambda _system, tags: bool(wanted & frozenset(tags))),
-            sources=(*view.sources, _CROSSWALK_SOURCE),
-            caveats=(*view.caveats, *tail),
+            translation,
+            matches=_platform_matches(
+                view,
+                self._named_systems(translation),
+                frozenset(exact_platform_tags(translation)),
+                self._absent_systems(view),
+            ),
+            sources=(*view.sources, _PLATFORM_TABLE_SOURCE),
+            caveats=caveats,
         )
 
     @one_question
-    def platform_ids(self, system: str) -> SystemPlatformsAnswer:
-        """One system's platform tags and their public identities, status-qualified.
+    def platform_ids(self, system: SystemArgument) -> SystemPlatformsAnswer:
+        """One system's platform tags and what the platform table says it is, status-qualified.
 
-        The reverse direction: which IGDB platform, libretro database names
-        and scraper ids belong to *system* — read from the system's own
-        ``<platform>`` tags where this installation declares it (a commented
-        block included), and from the stated build's snapshot column where it
-        does not (``tags_source`` says which). A name neither this machine
-        nor the vocabulary knows answers no identities and the
-        ``platform-unmapped`` caveat.
-
-        Only the crosswalk is translated out here, tag by tag. The ids the
-        per-system table lists for a system are not among the identities:
-        ``platform_ids("cps1")`` answers the ``arcade`` identities, not
-        ScreenScraper ``6``, though ``systems_for_platform("screenscraper",
-        "6")`` answers ``cps1``.
+        The reverse direction: every source's keys for *system*, resolved to
+        one system of this installation (:meth:`_resolve`, #784 D44) — the
+        table's answer for the pair this installation names it by, or,
+        for a declared system the table does not know by name (one the user
+        added by hand), for its live ``<platform>`` tags that each name one
+        system (:func:`atlas.platforms.names_one_system`). The tags are read
+        from the system's own ``<platform>`` text where this installation
+        declares it (a commented block included), and from the stated build's
+        snapshot column where it does not (``tags_source`` says which). A
+        system the table knows neither way answers an ``unknown`` translation
+        and the ``platform-unmapped`` caveat, as does a name neither this
+        machine nor the vocabulary knows. Asked pairs that name no single
+        system answer with no system, status or tags, the translation of the
+        pairs that went through the table — or, where every pair was read
+        live, of those pairs without the version a pair read live never meets
+        (#784 D51) — and ``resolution`` saying why. It is the one question
+        about a name's standing itself, so an own name the installation does
+        not hold stays that system, ``absent`` or ``disabled``, and its
+        resolution ``resolved``, ``system-unknown`` beside it (#784 D53):
+        telling "disabled here" from "an unknown name" is what it is for.
         """
+        resolution, notes, pairs = self._resolve(system, standing=True)
+        if resolution.system is None:
+            sources, caveats = self._unresolved_caveats(notes)
+            return SystemPlatformsAnswer(
+                None,
+                None,
+                None,
+                resolution.translation or translate(self._unversioned_own(pairs)),
+                sources=(*sources, _PLATFORM_TABLE_SOURCE),
+                caveats=caveats,
+                resolution=resolution,
+            )
+        pair = resolution.system
         view, version = self._platform_view()
         tail = arrangement_caveats(self.kind, observed_version=version)
-        if system in view.declared:
-            status = PLATFORM_STATUS_DECLARED
-            tags = view.declared[system]
-            tags_source = (
-                PLATFORM_TAGS_VOCABULARY
-                if system in view.vocabulary_backed
-                else PLATFORM_TAGS_CATALOGUE
-            )
-        elif system in view.disabled:
-            status, tags, tags_source = (
-                PLATFORM_STATUS_DISABLED,
-                view.disabled[system],
-                PLATFORM_TAGS_CATALOGUE,
-            )
+        status = view.status_of(pair)
+        if status == PLATFORM_STATUS_DECLARED:
+            tags = view.declared[pair]
+            tags_source = PLATFORM_TAGS_VOCABULARY if pair in view.vocabulary_backed else PLATFORM_TAGS_CATALOGUE
+        elif status == PLATFORM_STATUS_DISABLED:
+            tags, tags_source = view.disabled[pair], PLATFORM_TAGS_CATALOGUE
         else:
-            snapshot = vocabulary_platform_tags(system)
+            snapshot = dict(self._absent_systems(view)).get(pair)
             if snapshot is None:
-                unmapped = Caveat(
-                    CAVEAT_PLATFORM_UNMAPPED,
-                    "neither this installation's catalogue nor the vocabulary knows a "
-                    "system of this name, so there are no platform tags to translate",
-                    {"system": system},
-                )
+                # This installation's catalogue does not declare the system and its own column holds
+                # no tags for it; the table may still know it.
+                translation = _system_translation(pair, (), PLATFORM_STATUS_ABSENT)
                 return SystemPlatformsAnswer(
-                    system,
+                    pair,
                     PLATFORM_STATUS_ABSENT,
                     PLATFORM_TAGS_VOCABULARY,
-                    caveats=(*view.caveats, unmapped, *tail),
+                    translation,
+                    sources=(*view.sources, _PLATFORM_TABLE_SOURCE),
+                    caveats=(*view.caveats, *notes, *_lifted(translation), *tail),
+                    resolution=resolution,
                 )
-            status, tags, tags_source = (
-                PLATFORM_STATUS_ABSENT,
-                snapshot,
-                PLATFORM_TAGS_VOCABULARY,
-            )
-        identities: list[PlatformIdentities] = []
-        notes: list[Caveat] = []
-        for tag in tags:
-            if tag == "ignore":
-                notes.append(
-                    Caveat(
-                        CAVEAT_PLATFORM_SCRAPING_IGNORED,
-                        "the catalogue tags this system `ignore` — ES-DE's deliberate "
-                        "opt-out from platform matching, a different fact than a "
-                        "missing tag",
-                        {"system": system},
-                    )
-                )
-                continue
-            row = platform_identities(tag)
-            if row is None:
-                notes.append(
-                    Caveat(
-                        CAVEAT_PLATFORM_UNKNOWN,
-                        "a <platform> token outside the platform vocabulary — ES-DE "
-                        "warns about and drops exactly this token, so it matches "
-                        "nothing anywhere",
-                        {"system": system, "token": tag},
-                    )
-                )
-                continue
-            identities.append(row)
+            tags, tags_source = snapshot, PLATFORM_TAGS_VOCABULARY
+        translation = _system_translation(pair, tags, status)
         return SystemPlatformsAnswer(
-            system,
+            pair,
             status,
             tags_source,
+            translation,
             tags,
-            tuple(identities),
-            (*view.sources, _CROSSWALK_SOURCE),
-            (*view.caveats, *notes, *tail),
+            (*view.sources, _PLATFORM_TABLE_SOURCE),
+            (*view.caveats, *notes, *_tag_notes(pair, tags), *_lifted(translation), *tail),
+            resolution,
         )
 
     @one_question
-    def rom_location(self, system: str) -> RomPlacement:
+    def rom_location(self, system: SystemArgument) -> RomPlacement:
         """Where *system*'s ROMs live, and which extensions the frontend launches.
 
         Both facts are declared per system in the frontend's own catalogue and
@@ -22842,12 +24478,23 @@ class _CatalogueQueries:
         has one atlas has not established, its catalogue could not be read, the
         readable part of it declares nothing while the rest is sealed away, or
         the catalogue was read and this is what it says — no such system, or a
-        ``%ROMPATH%`` nothing here resolves.
+        ``%ROMPATH%`` nothing here resolves. Asked pairs that name several
+        systems answer the directory every one of them gives alike, with
+        ``resolution`` ``unanimous`` (#784 D62); asked pairs that name no single
+        system otherwise answer no directory, with ``resolution`` saying why
+        (#784 D44).
         """
-        answer, version = self._rom_location_answer(system)
-        return _rom_placement_with_caveats(
-            answer, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))
-        )
+        def answer_for(pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution) -> RomPlacement:
+            answer, version = self._rom_location_answer(pair)
+            return _rom_placement_with_caveats(
+                answer, (*notes, *answer.caveats, *arrangement_caveats(self.kind, observed_version=version)), resolution
+            )
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> RomPlacement:
+            sources, caveats = self._unresolved_caveats(notes)
+            return RomPlacement(sources=sources, caveats=caveats, resolution=resolution)
+
+        return self._answered(self._resolve(system), answer_for, empty)
 
     @one_question
     def rom_locations(self) -> RomLocationsAnswer:
@@ -22867,7 +24514,7 @@ class _CatalogueQueries:
         )
 
     @one_question
-    def emulators_for(self, system: str, *, content_path: str | None = None) -> CatalogueAnswer:
+    def emulators_for(self, system: SystemArgument, *, content_path: str | None = None) -> CatalogueAnswer:
         """The emulators that can launch *system*, in launch-priority order.
 
         The first entry is the effective default, resolved live through the
@@ -22898,14 +24545,30 @@ class _CatalogueQueries:
         one too, and ``catalogue-invalid`` besides, since this answer reads the
         catalogue — so an empty caveat list is not what "read, and it declares
         nothing" looks like there.
+
+        *system* is a name of this installation's catalogue, one pair, or
+        several pairs, resolved to one system first (#784 D44). Asked pairs
+        that name several systems answer the entries every one of them gives
+        alike, in the same order, with ``resolution`` ``unanimous`` and no
+        system on an entry (#784 D62, D63); asked pairs that name no single
+        system otherwise answer no entries, with ``resolution`` saying why.
         """
-        answer, version = self._catalogue_answer(system, content_path=content_path)
-        return _catalogue_with_caveats(
-            answer, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))
-        )
+        def answer_for(pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution) -> CatalogueAnswer:
+            answer, version = self._catalogue_answer(pair, content_path=content_path)
+            return _catalogue_with_caveats(
+                answer, (*notes, *answer.caveats, *arrangement_caveats(self.kind, observed_version=version)), resolution
+            )
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> CatalogueAnswer:
+            sources, caveats = self._unresolved_caveats(notes)
+            return CatalogueAnswer(sources=sources, caveats=caveats, resolution=resolution)
+
+        return self._answered(self._resolve(system), answer_for, empty)
 
     @one_question
-    def launch_command(self, system: str, content_path: str, *, label: str | None = None) -> LaunchCommandAnswer:
+    def launch_command(
+        self, system: SystemArgument, content_path: str, *, label: str | None = None
+    ) -> LaunchCommandAnswer:
         """The command the frontend would run for *content_path* as *system* content, taken apart.
 
         The entry is the one *label* names — the catalogue's label, unique per
@@ -22929,8 +24592,9 @@ class _CatalogueQueries:
         or one this runtime cannot read out of its AppImage
         (``frontend-build-sealed``), or a command atlas does not take apart — shell syntax beyond plain
         words, an ``env`` option, a ``.desktop`` file, an entry ES-DE itself
-        refuses, an ``%INJECT%`` file it cannot read or one that injects
-        itself. RetroDECK and EmuDeck take their commands apart; EmuDeck's
+        refuses, a system whose commands are all blank
+        (``launch-resolution-unsupported``), an ``%INJECT%`` file it cannot
+        read or one that injects itself. RetroDECK and EmuDeck take their commands apart; EmuDeck's
         command carries the launcher script it runs, with the script's steps,
         or is refused where no reading is pinned for that script and the files
         it rests on (``launcher-script-unpinned``); a bare RetroArch has no
@@ -22939,61 +24603,232 @@ class _CatalogueQueries:
         RetroDECK's through the reading pinned for its component launcher,
         ``null`` beside ``launch-environment-unpinned`` where none is, and
         EmuDeck's empty.
+
+        *system* is resolved as every system question resolves it (#784 D44).
+        Asked pairs that name several systems answer the command every one of
+        them gives alike for the same entry, its declared position included,
+        with ``resolution`` ``unanimous`` (#784 D62, D63); asked pairs that
+        name no single system otherwise answer no entry and no command, with
+        ``resolution`` saying why.
         """
         if not os.path.isabs(content_path):
             raise ValueError(f"content_path must be an absolute path, got {content_path!r}")
-        answer, version = self._launch_command_answer(system, content_path, label)
-        return _launch_command_with_caveats(
-            answer, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))
-        )
+        def answer_for(
+            pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution
+        ) -> LaunchCommandAnswer:
+            answer, version = self._launch_command_answer(pair, content_path, label)
+            return _launch_command_with_caveats(
+                answer,
+                _noted(notes, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))),
+                resolution,
+            )
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> LaunchCommandAnswer:
+            sources, caveats = self._unresolved_caveats(notes)
+            return LaunchCommandAnswer(sources=sources, caveats=caveats, resolution=resolution)
+
+        return self._answered(self._resolve(system), answer_for, empty)
 
     @one_question
-    def launchable(self, system: str, content_path: str, *, label: str | None = None) -> LaunchabilityAnswer:
-        """Whether *content_path* launches as *system* content here — and why not, when not.
+    def launchable(
+        self, system: SystemArgument, content_path: str, *, label: str | None = None
+    ) -> LaunchabilityAnswer:
+        """Whether the emulator that would run starts *content_path* as *system* content here — and why not, when not.
 
-        The positive half is a read: the frontend's own accept-list for the
-        system, matched the way ES-DE matches it (the file name's token from
-        its last dot, compared exactly and case-sensitively), with the entry
-        that would run resolved through the same selection hierarchy
-        :meth:`emulators_for` applies. The negative half is the interesting
-        one, and the ``verdict`` keeps its meanings apart:
+        The question is the emulator's, never whether ES-DE's scan lists the
+        path (#776 D1). ES-DE decides which entry runs — the selection
+        hierarchy :meth:`emulators_for` applies — and that entry is judged on
+        what ``%ROM%`` hands it, the way its emulator judges it: a libretro
+        core's claims, RetroArch's archive and directory handling, a standalone
+        loader card, or the emulator's own boot or open of the path. The
+        ``verdict`` keeps its meanings apart:
 
-        - ``not-accepted`` — no token in the accept-list equals this file's
-          extension, so ES-DE never scans it: pick another file, or another
-          form of the content.
+        - ``launchable`` — the entry's reading takes the path.
+        - ``entry-not-accepted`` — the entry is established not to start it;
+          ``alternatives`` names the declared entries established to.
+        - ``unestablished`` — the entry's reading ended without a take or a
+          refusal: an emulator whose loader atlas has not read, a card whose
+          builds disagree, a boot or an open that stops short, a directory a
+          core opens through its own loader, a file the libretro core does
+          not claim (D3, D9, D10); an archive whose contents alone are unread
+          stays ``launchable`` (D11). What the reading did establish
+          (``boots``, ``opens``) stays on the answer.
         - ``needs-installation`` — the format is real content for the platform
           and an installation step has to run before anything launches (a PSN
-          ``.pkg``): recorded world knowledge, cited in the sources.
-          ``installers`` names the emulators that install it, each with the
-          system's entry that runs it — empty where no emulator RetroDECK or
-          EmuDeck sets up installs it.
-        - ``unknown`` — the system is not one this catalogue declares, or the
-          catalogue could not be read: a statement about the look, never about
-          the file, and never collapsed into either 'no'.
+          ``.pkg``): recorded world knowledge, cited in the sources, answered
+          before any entry is asked. ``installers`` names the emulators that
+          install it, each with the system's entry that runs it — empty where
+          no emulator RetroDECK or EmuDeck sets up installs it.
+        - ``unknown`` — the system is not one this catalogue declares or runs,
+          or the catalogue could not be read: a statement about the look,
+          never about the path.
 
-        One boundary is stated on every ``launchable`` verdict rather than
-        silently crossed: the accept-list is declared per *system* and the
-        command per *emulator*, so a file the list accepts may still be one
-        the entry that runs cannot read (issue #66 tracks resolving that per
-        entry).
+        How the frontend expects the game named is stated beside the verdict:
+        where ES-DE's scan would not list the path under its name,
+        ``frontend-name-unscanned`` names every token that would make it, in
+        the accept-list's order (D2, D4), and says nothing about where the
+        path lies (D6).
 
         *label* names the entry to judge instead of the one that would run —
         a caller that starts the game through an entry of its own choice asks
         about that entry. It is chosen the way :meth:`launch_command` chooses
         it, and the verdict, ``entry`` and ``alternatives`` are then about the
-        named entry: ``alternatives`` names the other entries established to
-        take the file. On a system ES-DE loads, a label the system's entries
+        named entry. On a system ES-DE loads, a label the system's entries
         do not carry answers ``unknown`` with ``launch-command-label-unknown``,
         the refusal :meth:`launch_command` gives it. Where the entries are
-        derived from the installed cores — a bare RetroArch's, and those of a
+        derived from the installed cores — a bare RetroArch's, those of a
         system only the cores declare while EmuDeck's bundled layer is
-        sealed — a label none of them carries is refused the same way, beside
-        the unknown verdict that answer always states.
+        sealed, and those of a system an ES-DE frontend names by a cited pair
+        (#784 D57) — the verdict stays ``unknown`` (D8), and a label none of
+        them carries is refused the same way beside it. Asked pairs that name
+        several systems answer the verdict every one of them gives alike — the
+        same entry, its declared position included, and the same accepted
+        tokens, alternatives and installers — with ``resolution`` ``unanimous``
+        (#784 D62, D63); asked pairs that name no single system otherwise
+        answer ``unknown``, with ``resolution`` saying why (#784 D44).
         """
-        answer, version = self._launchable_answer(system, content_path, label)
-        return _launchable_with_caveats(
-            answer, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))
+        def answer_for(
+            pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution
+        ) -> LaunchabilityAnswer:
+            answer, version = self._launchable_answer(pair, content_path, label)
+            return _launchable_with_caveats(
+                answer,
+                _noted(notes, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))),
+                resolution,
+            )
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> LaunchabilityAnswer:
+            sources, caveats = self._unresolved_caveats(notes)
+            return LaunchabilityAnswer(
+                verdict=VERDICT_UNKNOWN,
+                extension=esde_extension(content_path),
+                sources=sources,
+                caveats=caveats,
+                resolution=resolution,
+            )
+
+        return self._answered(self._resolve(system), answer_for, empty)
+
+    @one_question
+    def save_portability(
+        self,
+        system: SystemArgument,
+        *,
+        source: str,
+        target: str,
+        content_path: str | None = None,
+        cwd: str | None = None,
+        appendconfig: Sequence[str] = (),
+    ) -> SavePortabilityAnswer:
+        """Whether the entry labelled *target* reads what the one labelled *source* wrote (#577).
+
+        Both entries are this system's, named by their catalogue labels the way
+        :meth:`launch_command` names one, and the question is directed: the
+        source wrote the save, the target would read it. Each entry's own save
+        question (:meth:`EmulatorEntry.savefile_location`) is asked with
+        *content_path*, *cwd* and *appendconfig*, exactly as it takes them, and
+        the answer compares the two part by part — see
+        :class:`SavePortabilityAnswer`. A label no entry
+        carries answers ``unestablished`` with ``entry-label-unknown``; naming
+        one entry twice is not a question and raises ``ValueError``. *source*
+        and *target* are catalogue labels; *system* is resolved to one system
+        first (#784 D44). Asked pairs that name several systems answer what
+        every one of them gives alike, with ``resolution`` ``unanimous``
+        (#784 D62); asked pairs that name no single system otherwise answer
+        ``unestablished``, with ``resolution`` saying why.
+        """
+        checked_cwd(cwd)
+        files = checked_appendconfig(appendconfig)
+        if source == target:
+            raise ValueError(f"source and target name the same entry ({source!r}) — a save is not moved to itself")
+        resolved = self._resolve(system)
+
+        def answer_for(
+            pair: SystemPair, notes: tuple[Caveat, ...], resolution: SystemResolution
+        ) -> SavePortabilityAnswer:
+            answer, version = self._save_portability_answer(
+                pair,
+                asked=resolved.pairs,
+                record_systems=self._record_keys(pair, resolved.pairs),
+                source=source,
+                target=target,
+                content_path=content_path,
+                cwd=cwd,
+                appendconfig=files,
+            )
+            return _portability_with_caveats(
+                answer, (*notes, *answer.caveats, *arrangement_caveats(self.kind, observed_version=version)), resolution
+            )
+
+        def empty(resolution: SystemResolution, notes: tuple[Caveat, ...]) -> SavePortabilityAnswer:
+            sources, caveats = self._unresolved_caveats(notes)
+            return SavePortabilityAnswer(
+                verdict=PORTABILITY_UNESTABLISHED, sources=sources, caveats=caveats, resolution=resolution
+            )
+
+        return self._answered(resolved, answer_for, empty)
+
+    def _save_portability_answer(
+        self,
+        system: SystemPair,
+        *,
+        asked: tuple[AskedPair, ...],
+        record_systems: tuple[str, ...],
+        source: str,
+        target: str,
+        content_path: str | None,
+        cwd: str | None,
+        appendconfig: tuple[str, ...],
+    ) -> tuple[SavePortabilityAnswer, str | None]:
+        """The pair over one catalogue read: both entries' save answers, weighed by their records."""
+        catalogue, version = self._catalogue_answer(system, content_path=content_path)
+        outcome = portability_answer(
+            system,
+            asked=_asked_systems(asked),
+            record_systems=record_systems,
+            source=source,
+            target=target,
+            entries=catalogue.entries,
+            ask=lambda entry: entry._keyed_savefile_location(  # pyright: ignore[reportPrivateUsage]
+                asked, content_path=content_path, cwd=cwd, appendconfig=appendconfig
+            ),
+            running=self._portability_build,
+            token=lambda entry: self.standalone_firmware_token(entry.command),
+            caveats=catalogue.caveats,
+            content_path=content_path,
         )
+        answer = SavePortabilityAnswer(
+            verdict=outcome.verdict,
+            source=outcome.source,
+            target=outcome.target,
+            parts=outcome.parts,
+            sources=outcome.sources,
+            caveats=outcome.caveats,
+        )
+        return answer, version
+
+    def _portability_build(self, entry: EmulatorEntry) -> str | None:
+        """The build this machine names for *entry* — what a save-format record's pin is held against (#577 D5)."""
+        if entry.kind == KIND_LIBRETRO and entry.core_so is not None:
+            return self._portability_core_version(entry.core_so)
+        if entry.kind == KIND_STANDALONE:
+            return self._portability_standalone_release(self.standalone_firmware_token(entry.command))
+        return None
+
+    def _portability_core_version(self, core_so: str) -> str | None:
+        """The ``library_version`` the core the save route loads answers — ``None`` on a handle with no RetroArch."""
+        del core_so
+        return None
+
+    def _portability_standalone_release(self, token: str | None) -> str | None:
+        """The release a deploy states for a standalone emulator's build — ``None`` where no deploy tree states one.
+
+        Only RetroDECK writes one (its components' ``component_version``);
+        EmuDeck runs what it downloaded without such a record, and a bare
+        RetroArch launches no standalone emulator.
+        """
+        del token
+        return None
 
     # The public questions above are the whole catalogue surface, and a
     # handle overrides the ``_…_answer`` methods below instead: what it
@@ -23019,32 +24854,36 @@ class _CatalogueQueries:
         return SystemsAnswer(caveats=(*self.health().issues, self._catalogue_absence())), None
 
     def _catalogue_answer(
-        self, system: str, *, content_path: str | None = None
+        self, system: SystemPair, *, content_path: str | None = None
     ) -> tuple[CatalogueAnswer, str | None]:
         del system, content_path  # with no catalogue, every system and file is refused alike
         return CatalogueAnswer(caveats=(*self.health().issues, self._catalogue_absence())), None
 
     def _launchable_answer(
-        self, system: str, content_path: str, label: str | None
+        self, system: SystemPair, content_path: str, label: str | None
     ) -> tuple[LaunchabilityAnswer, str | None]:
-        # The accept-list lives in the catalogue this arrangement does not
-        # have, so the verdict is unknown for the same reason the entry list
-        # is empty — the refusal is the catalogue question's own, worn by
-        # this answer's shape. A label is looked up the way the launch command
-        # looks it up, so one no entry carries is refused here as there.
+        # The entries live in the catalogue this arrangement does not have,
+        # so no entry runs and the verdict is unknown for the same reason the
+        # entry list is empty — the refusal is the catalogue question's own,
+        # worn by this answer's shape. Entries derived from the installed
+        # cores (an ES-DE frontend's for a cited system) leave it unknown: no
+        # frontend entry decides which core runs (#776 D8). A label is looked
+        # up the way the launch command looks it up, so one no entry carries
+        # is refused here as there.
         answer, version = self._catalogue_answer(system, content_path=content_path)
         chosen = _chosen_entry(answer.entries, label, system)
         return (
             LaunchabilityAnswer(
                 verdict=VERDICT_UNKNOWN,
                 extension=esde_extension(content_path),
+                sources=answer.sources,
                 caveats=(*answer.caveats, *((chosen,) if isinstance(chosen, Caveat) else ())),
             ),
             version,
         )
 
     def _launch_command_answer(
-        self, system: str, content_path: str, label: str | None
+        self, system: SystemPair, content_path: str, label: str | None
     ) -> tuple[LaunchCommandAnswer, str | None]:
         # The command is the chosen entry's, so its refusals start as the
         # catalogue's: no catalogue, no entry, an entry the lookup does not
@@ -23063,7 +24902,7 @@ class _CatalogueQueries:
         )
         return LaunchCommandAnswer(chosen, None, answer.sources, (*answer.caveats, unevaluated)), version
 
-    def _rom_location_answer(self, system: str) -> tuple[RomPlacement, str | None]:
+    def _rom_location_answer(self, system: SystemPair) -> tuple[RomPlacement, str | None]:
         # Same refusal as the two above, for the same reason: where a system's
         # ROMs live is declared in the catalogue this arrangement does not have,
         # so the honest answer names the absence rather than a directory.
@@ -23273,6 +25112,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
 
     kind = "retrodeck"
     kinds = ("retrodeck",)
+    catalogue_columns: tuple[str, ...] = (ESDE_SOURCE, RETRODECK_SOURCE)
     _APP_ID = RETRODECK_APP_ID
 
     def __init__(self, home: str, machine: Machine, *, detected_by_deploy: bool = False) -> None:
@@ -23307,7 +25147,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         finding names the key, and the marker is editable either way.
         """
         path = self._marker_path()
-        result = self._machine.read_text(path)
+        result = _read_text_once(self._machine, path)
         if result.status == READ_MISSING and self._detected_by_deploy:
             return {}, (
                 Caveat(
@@ -23702,8 +25542,18 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
     def _overlay_path(self, root: str) -> str:
         return os.path.join(root, "ES-DE", "custom_systems", _ES_SYSTEMS_XML)
 
-    def _catalogue_exclusive(self, root: str, system: str | None = None) -> tuple[Caveat, ...]:
+    def _catalogue_exclusive(self, root: str, system: SystemPair | None = None) -> tuple[Caveat, ...]:
         return _catalogue_exclusive_caveat(self._overlay_path(root), system)
+
+    def _catalogue_statements(self) -> tuple[Caveat, ...]:
+        """The catalogue-status statement — exclusive, unreadable, or the layer that does not parse — from this
+        query's one platform reading.
+
+        The firmware question's catalogue-informed answers carry it beside the
+        system's; its unknown and conflict forms carry it too (#784 D53).
+        """
+        view, _ = self._platform_view()
+        return tuple(caveat for caveat in view.caveats if caveat.code in _CATALOGUE_STATUS_CODES)
 
     def _read_catalogue(
         self, root: str
@@ -23737,9 +25587,11 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         ``invalid`` is the hardest state (issue #100): a layer atlas read and
         ES-DE cannot load aborts the frontend's whole ``loadConfig``, so the
         catalogue in force is **empty** — read, exclusive of nothing, with
-        the health finding naming the file. It is set only where the file's
-        bytes were read: a file atlas cannot read may parse fine for the
-        frontend, and stays the unread state it always was.
+        the health finding naming the file — and atlas claims nothing about
+        a system it does not declare (#784 D53), since nothing the layer
+        meant to declare was read. It is set only where the file's bytes were
+        read: a file atlas cannot read may parse fine for the frontend, and
+        stays the unread state it always was.
 
         ``disabled`` (issue #68) is the commented-out systems of the same
         texts this read already holds — the layers in force only, from the
@@ -23902,7 +25754,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         known = read or {}
 
         def text(path: str) -> str | None:
-            return known[path] if path in known else self._machine.read_text(path).text
+            return known[path] if path in known else _read_text_once(self._machine, path).text
 
         deploy = _running_deploy(self._machine, self._home, self._APP_ID)
         layers: list[tuple[str, str | None]] = []
@@ -24021,7 +25873,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         return _RomRoot(directory=expanded, sources=sources)
 
     def _esde_system_dir(
-        self, by_system: Mapping[str, SystemDeclaration], system: str
+        self, by_system: Mapping[str, SystemDeclaration], system: SystemPair, *, complete: bool
     ) -> _RomDirectory:
         """Where ES-DE puts *system*'s ROMs: the root with the catalogue's ``<path>`` applied.
 
@@ -24032,10 +25884,17 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         matching overrides against a directory the frontend does not launch
         from, which is how an override goes missing on a machine whose two ROM
         paths have drifted apart.
+
+        A system the catalogue does not declare is ``rom-path-undeclared`` only
+        where *complete*: under a layer that does not parse nothing that layer
+        meant to declare was read, and the invalid-layer finding the caller
+        states is the whole claim (#784 D53).
         """
-        declaration = by_system.get(system)
+        declaration = loaded_declaration(by_system, system[1])
         if declaration is None or declaration.rom_path is None:
-            return _RomDirectory(caveats=_rom_path_undeclared_caveat(system, declaration))
+            if complete:
+                return _RomDirectory(caveats=_rom_path_undeclared_caveat(system, declaration))
+            return _RomDirectory()
         declared = declaration.rom_path
         root = self._rom_root()
         if root.unreadable is not None:
@@ -24113,7 +25972,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         status = self._catalogue_exclusive(root) if exclusive else ()
         return (
             SystemsAnswer(
-                tuple(sorted(by_system)),
+                tuple(sorted(self._catalogue_system(name) for name in loaded_declarations(by_system))),
                 (_CATALOGUE_SOURCE_EXCLUSIVE if exclusive else self._CATALOGUE_SOURCE,),
                 (*findings, *invalid, *status),
             ),
@@ -24142,30 +26001,55 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         invalid = (catalogue_invalid,) if catalogue_invalid is not None else ()
         status = self._catalogue_exclusive(root) if exclusive else ()
         view = _PlatformView(
-            {name: declaration.platforms for name, declaration in by_system.items()},
+            {
+                self._catalogue_system(name): declaration.platforms
+                for name, declaration in loaded_declarations(by_system).items()
+            },
             frozenset(),
-            disabled,
+            # A live declaration wins over a comment of the same name: one
+            # ES-DE loads is declared, and one it skips is absent (#784 D61).
+            {self._catalogue_system(name): tags for name, tags in disabled.items() if name not in by_system},
             (_CATALOGUE_SOURCE_EXCLUSIVE if exclusive else self._CATALOGUE_SOURCE,),
             (*findings, *invalid, *status),
+            complete=catalogue_invalid is None,
+            skipped=self._skipped_systems(by_system),
         )
         return view, version
 
     def _gamelist_selections_at(self, root: str, system: str) -> GamelistSelections:
         gamelist_path = os.path.join(root, "ES-DE", "gamelists", system, "gamelist.xml")
-        text = self._machine.read_text(gamelist_path).text
+        text = _read_text_once(self._machine, gamelist_path).text
         if text is None:
             return GamelistSelections(system_label=None, per_game={})
         return parse_gamelist(text)
 
     @one_question
-    def gamelist_selections(self, system: str) -> GamelistSelections:
+    def gamelist_selections(self, system: SystemArgument) -> GamelistSelections:
+        """The per-system and per-game emulator choices this RetroDECK's gamelist records for *system*.
+
+        *system* is resolved as every system question resolves it (#784 D44).
+        A gamelist's selections carry no caveat list, so a statement that
+        changes what the answer means cannot ride beside it: asked pairs that
+        name no single system of this installation — a name the catalogue does
+        not declare among them (#784 D53) — raise ``ValueError`` stating why,
+        as a malformed system argument does, rather than answering as a system
+        with no gamelist would. The statements a resolved system carries
+        otherwise — a version not applied, a pair the table does not hold —
+        are not carried by this answer.
+        """
+        resolution, notes, _ = self._resolve(system)
+        if resolution.system is None:
+            raise ValueError(
+                "gamelist_selections: the asked system names no single system of this installation — "
+                + "; ".join(note.message for note in notes)
+            )
         config, marker_issues = self._read_marker()
         if _not_set_up(marker_issues) is not None:
             return GamelistSelections(system_label=None, per_game={})
-        return self._gamelist_selections_at(self._config_path(config, "rd_home_path", "")[0], system)
+        return self._gamelist_selections_at(self._config_path(config, "rd_home_path", "")[0], resolution.system[1])
 
     def _catalogue_answer(
-        self, system: str, *, content_path: str | None = None
+        self, system: SystemPair, *, content_path: str | None = None
     ) -> tuple[CatalogueAnswer, str | None]:
         """RetroDECK's own catalogue answer — one snapshot of the ES-DE sources.
 
@@ -24175,15 +26059,19 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         plus its ``custom_systems`` overlay, and the system's gamelist, each
         read once here and handed to the entry assembly together (REVIEW M4).
         The marker's version travels back with the answer for the same reason.
+        A system atlas names by a cited pair is answered from the installed
+        cores instead (:meth:`_cited_catalogue_answer`).
         """
         config, marker_issues = self._read_marker()
         if (finding := _not_set_up(marker_issues)) is not None:
             return CatalogueAnswer(caveats=(finding,)), None
+        version = _marker_version(config)
+        if system in self._naming().cited:
+            return self._cited_catalogue_answer(config, marker_issues, system), version
         findings = self._health_from(config, marker_issues).issues
         root = self._config_path(config, "rd_home_path", "")[0]
         by_system, read, exclusive, catalogue_invalid = self._read_catalogue(root)
         invalid = (catalogue_invalid,) if catalogue_invalid is not None else ()
-        version = _marker_version(config)
         if not read:
             return (
                 CatalogueAnswer(caveats=(*findings, *_catalogue_unread_caveat(system))),
@@ -24194,7 +26082,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         # that query pays ES-DE's settings read — and only that query can be
         # told the anchor failed, which is the whole reason its caveats join.
         anchor = (
-            self._esde_system_dir(by_system, system)
+            self._esde_system_dir(by_system, system, complete=catalogue_invalid is None)
             if content_path is not None
             else _NO_ANCHOR_NEEDED
         )
@@ -24203,28 +26091,56 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
                 _entries_from(
                     self,
                     _declared_entries(by_system, system),
-                    self._gamelist_selections_at(root, system),
+                    self._gamelist_selections_at(root, system[1]),
                     system_roms_dir=anchor.directory,
                     content_path=content_path,
                     launch_for=self._launch_for(),
                 ),
                 (_CATALOGUE_SOURCE_EXCLUSIVE if exclusive else self._CATALOGUE_SOURCE,),
-                (*findings, *invalid, *status, *anchor.caveats),
+                (
+                    *findings,
+                    *invalid,
+                    *status,
+                    *anchor.caveats,
+                    *_blank_commands(system, loaded_declaration(by_system, system[1])),
+                ),
             ),
             version,
         )
 
+    def _cited_catalogue_answer(
+        self, config: dict[str, Any], marker_issues: tuple[Caveat, ...], system: SystemPair
+    ) -> CatalogueAnswer:
+        """The entries of a system atlas names by a cited pair, derived from the installed cores (#784 D57).
+
+        The catalogue declares no entry for such a system (#784 D50 b), so the
+        entries are the ones :func:`_derived_catalogue_entries` derives, over
+        the context the system's held check and its firmware answer read, each
+        without a command, beside ``emulator-list-derived``. The catalogue is
+        not consulted, as the firmware route does not consult it for such a
+        system: it can neither enumerate nor deny these entries.
+        """
+        context = self._firmware_context_from(config, marker_issues)
+        entries, derived = _derived_catalogue_entries(self, context, system)
+        return CatalogueAnswer(entries, context.sources, (*self._health_from(config, marker_issues).issues, *derived))
+
     def _launchable_answer(
-        self, system: str, content_path: str, label: str | None
+        self, system: SystemPair, content_path: str, label: str | None
     ) -> tuple[LaunchabilityAnswer, str | None]:
         """RetroDECK's launchability answer — the same snapshot its catalogue answer takes.
 
         The marker, both catalogue layers and the system's gamelist are each
-        read once here; ``complete`` is always true for this handle, because
-        its bundled layer is a readable file in the Flatpak deployment — an
-        undeclared system is therefore genuinely unknown to the frontend,
-        never possibly-sealed-away.
+        read once here. The bundled layer is a readable file in the Flatpak
+        deployment, so nothing is sealed away on this handle: a system the
+        catalogue does not declare, or declares in a form ES-DE skips, is
+        answered before this, and only a layer that does not parse leaves one
+        to reach here, where the invalid-layer finding is the whole claim
+        (#784 D53). A system atlas names by a cited pair has
+        its entries derived from the installed cores (#784 D57), and is
+        answered from them as an arrangement without a catalogue answers.
         """
+        if system in self._naming().cited:
+            return super()._launchable_answer(system, content_path, label)
         extension = esde_extension(content_path)
         config, marker_issues = self._read_marker()
         if (finding := _not_set_up(marker_issues)) is not None:
@@ -24244,17 +26160,17 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
                 version,
             )
         status = self._catalogue_exclusive(root, system) if exclusive else ()
-        anchor = self._esde_system_dir(by_system, system)
+        anchor = self._esde_system_dir(by_system, system, complete=catalogue_invalid is None)
         lookups: list[tuple[LaunchLookup, _SandboxLaunchView]] = []
         entries = _entries_from(
             self,
             _declared_entries(by_system, system),
-            self._gamelist_selections_at(root, system),
+            self._gamelist_selections_at(root, system[1]),
             system_roms_dir=anchor.directory,
             content_path=content_path,
             launch_for=self._launch_for(lookups),
         )
-        declaration = by_system.get(system)
+        declaration = loaded_declaration(by_system, system[1])
         core_reader = _EntryCoreReader(
             self._machine,
             self._cfg_path(),
@@ -24268,18 +26184,20 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
                 lookups.append(self._lookup())
             return lookups[0][1]
 
-        # RPCS3 runs inside this same sandbox, so the frontend's view is the
-        # emulator's, and its trees are the ones every bundled emulator reads.
+        # Every emulator runs inside this same sandbox, so the frontend's view
+        # is the emulator's, and RPCS3's trees are the ones every bundled
+        # emulator reads.
+        target = _launch_target(content_path, view())
         boot_reader = _EntryBootReader(
             self._machine, content_path, view, lambda _entry: _rpcs3_boot_dirs(self._machine, self._xdg_homes())
         )
-        opens_reader = _EntryOpensReader(self._machine, content_path, lambda _entry: self._xdg_homes(), core_reader)
+        opens_reader = _EntryOpensReader(self._machine, target.path, lambda _entry: self._xdg_homes(), core_reader)
         verdict, entry, alternatives, installers, boots, opens, sources, own = _launchability_verdict(
             system=system,
             extension=extension,
+            target=target,
             declaration=declaration,
             entries=entries,
-            complete=True,
             core_info_for=core_reader,
             label=label,
             boot_reader=boot_reader,
@@ -24306,7 +26224,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         )
 
     def _launch_command_answer(
-        self, system: str, content_path: str, label: str | None
+        self, system: SystemPair, content_path: str, label: str | None
     ) -> tuple[LaunchCommandAnswer, str | None]:
         """RetroDECK's launch command — the catalogue snapshot its launchability answer takes, the entry's own lookup.
 
@@ -24315,8 +26233,12 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         and the sandbox, so the command can never name something the verdict
         did not find. The command is taken apart only for the ES-DE build the
         reading is pinned to (:data:`ESDE_FORK_BUILD`); any other build answers
-        ``frontend-build-unpinned`` with the version the deploy states.
+        ``frontend-build-unpinned`` with the version the deploy states. A
+        system atlas names by a cited pair has its entries derived from the
+        installed cores (#784 D57), none of which carries a command.
         """
+        if system in self._naming().cited:
+            return super()._launch_command_answer(system, content_path, label)
         config, marker_issues = self._read_marker()
         if (finding := _not_set_up(marker_issues)) is not None:
             return LaunchCommandAnswer(caveats=(finding,)), None
@@ -24328,12 +26250,12 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         if not read:
             return LaunchCommandAnswer(caveats=(*findings, *_catalogue_unread_caveat(system))), version
         status = self._catalogue_exclusive(root, system) if exclusive else ()
-        anchor = self._esde_system_dir(by_system, system)
+        anchor = self._esde_system_dir(by_system, system, complete=catalogue_invalid is None)
         lookups: list[tuple[LaunchLookup, _SandboxLaunchView]] = []
         entries = _entries_from(
             self,
             _declared_entries(by_system, system),
-            self._gamelist_selections_at(root, system),
+            self._gamelist_selections_at(root, system[1]),
             system_roms_dir=anchor.directory,
             content_path=content_path,
             launch_for=self._launch_for(lookups),
@@ -24342,12 +26264,12 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         caveats = (*findings, *invalid, *status, *anchor.caveats)
         chosen = _chosen_entry(entries, label, system)
         if chosen is None:
-            unknown = Caveat(
-                CAVEAT_SYSTEM_UNKNOWN,
-                f"the catalogue was read and declares no entry for system {system!r}",
-                {"system": system},
-            )
-            return LaunchCommandAnswer(sources=sources, caveats=(*caveats, unknown)), version
+            # No declaration ES-DE loads is left only under a catalogue layer
+            # that does not parse, where the invalid-layer finding is the
+            # whole claim (#784 D53); a loaded one with no entry keeps only
+            # blank commands (#784 D60).
+            blank = _blank_commands(system, loaded_declaration(by_system, system[1]))
+            return LaunchCommandAnswer(sources=sources, caveats=(*caveats, *blank)), version
         if isinstance(chosen, Caveat):
             return LaunchCommandAnswer(sources=sources, caveats=(*caveats, chosen)), version
         if chosen.availability != AVAILABILITY_STARTABLE or not lookups:
@@ -24502,7 +26424,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         if deploy is None:
             return _StartValue(None)
         metadata_path = _flatpak_metadata_path(deploy)
-        metadata = self._machine.read_text(metadata_path).text
+        metadata = _read_text_once(self._machine, metadata_path).text
         if metadata is None:
             return _StartValue(None, unread=metadata_path)
         groups = _keyfile_groups(metadata)
@@ -24520,7 +26442,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         if kind != KIND_FILE:
             return _StartValue(None)
         overrides = tuple(
-            (path, self._machine.read_text(path).text)
+            (path, _read_text_once(self._machine, path).text)
             for path in _flatpak_override_files_for(deploy, self._home, self._APP_ID)
         )
         layers = ((runtime_metadata_path, runtime_metadata), (metadata_path, metadata), *overrides)
@@ -24549,7 +26471,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         text = self._machine.read_text(os.path.join(deploy.files, self.ESDE_COMPONENT_VERSION)).text
         return None if text is None else text.strip()
 
-    def _rom_location_answer(self, system: str) -> tuple[RomPlacement, str | None]:
+    def _rom_location_answer(self, system: SystemPair) -> tuple[RomPlacement, str | None]:
         """RetroDECK's ROM placement — the catalogue's declaration, resolved ES-DE's way.
 
         One snapshot again: the marker, both catalogue layers and ES-DE's
@@ -24577,8 +26499,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         # joins the list only where the resolution actually read it — which is
         # every outcome except the two that never opened it or opened it and
         # failed. The resolution reports that itself rather than being asked.
-        declaration = by_system.get(system)
-        resolved = self._esde_system_dir(by_system, system)
+        declaration = loaded_declaration(by_system, system[1])
+        resolved = self._esde_system_dir(by_system, system, complete=catalogue_invalid is None)
         placement = RomPlacement(
             extensions=() if declaration is None else declaration.extensions,
             sources=(
@@ -24615,7 +26537,6 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         *,
         content_path: str | None,
         core_so: str | None,
-        system: str | None = None,
         extra_caveats: tuple[Caveat, ...] = (),
         cwd: str | None = None,
         appendconfig: tuple[str, ...] = (),
@@ -24639,7 +26560,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         """
         health = self._health_from(config, marker_issues)
         global_cfg_path = self._cfg_path()
-        cfg = self._machine.read_text(global_cfg_path)
+        cfg = _read_text_once(self._machine, global_cfg_path)
         global_text = cfg.text
         version = _marker_version(config)
         context = _flatpak_query_context(self._machine, self._home, self._APP_ID)
@@ -24656,7 +26577,6 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             core_path_resolver=lambda so: _core_path_from(sandbox, global_text, so),
             arrangement="retrodeck",
             arrangement_version=version,
-            system=system,
             extra_sources=context.sources,
             extra_caveats=(
                 *extra_caveats,
@@ -24677,24 +26597,32 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         *,
         content_path: str | None,
         core_so: str | None,
-        system: str | None = None,
+        record_keys: tuple[str, ...] = (),
+        system_asked: bool = False,
+        asked: tuple[SystemPair, ...] = (),
         extra_caveats: tuple[Caveat, ...] = (),
         cwd: str | None = None,
         appendconfig: tuple[str, ...] = (),
     ) -> SavefilePlacement | Unresolved:
-        return _retroarch_savefile_location(
-            self._machine,
-            self._query_from(
-                config,
-                marker_issues,
-                content_path=content_path,
-                core_so=core_so,
-                system=system,
-                extra_caveats=extra_caveats,
-                cwd=cwd,
-                appendconfig=appendconfig,
-            ),
+        query = self._query_from(
+            config,
+            marker_issues,
+            content_path=content_path,
+            core_so=core_so,
+            extra_caveats=extra_caveats,
+            cwd=cwd,
+            appendconfig=appendconfig,
         )
+        keyed = _keyed(query, record_keys, system_asked=system_asked, asked=asked)
+        return _retroarch_savefile_location(self._machine, keyed)
+
+    def _portability_core_version(self, core_so: str) -> str | None:
+        config, marker_issues = self._read_marker()
+        query = self._query_from(config, marker_issues, content_path=None, core_so=core_so)
+        return _core_library_version(self._machine, query, core_so)
+
+    def _portability_standalone_release(self, token: str | None) -> str | None:
+        return _component_release(self._machine, self._sandbox(), token)
 
     def _savestate_location_from(
         self,
@@ -24726,7 +26654,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         *,
         content_path: str | None = None,
         core_so: str | None = None,
-        system: str | None = None,
+        system: SystemArgument | None = None,
         cwd: str | None = None,
         appendconfig: Sequence[str] = (),
     ) -> SavefilePlacement | Unresolved:
@@ -24734,9 +26662,19 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
 
         ``core_so`` is the core's ``.so`` basename (e.g.
         ``"mupen64plus_next_libretro.so"``) or a full path; atlas resolves
-        ``library_name`` from the binary. ``system`` is the content's system in
-        ES-DE's vocabulary, which is what keys a core's recorded file set. All
-        three are optional — missing ones leave holes and stated caveats, never
+        ``library_name`` from the binary. ``system`` is the content's system — a
+        name in this installation's own catalogue source or (source, key)
+        pairs, resolved as every system question resolves it (#784 D44) — and
+        what keys a core's recorded file set; what resolving it says leads the
+        placement's caveats, a version the table does not hold included, since
+        the placement carries no resolution block (#784 D56), and a refusal
+        keeps only its own reason. Pairs that name several systems answer the
+        placement every one of them keys alike, the resolution's statements,
+        ``system-unanimous`` among them, leading its caveats, and otherwise the
+        placement keyed by none, beside ``system-ambiguous`` (#784 D62); where
+        every candidate refuses alike, that refusal, which carries no
+        resolution statement (#784 D71). All three
+        are optional — missing ones leave holes and stated caveats, never
         guesses. ``cwd`` is the working folder the launch will use, an absolute
         host path: it fills the ``cwd`` hole of a core that saves relative to
         it and completes a relative ``savefile_directory``, is ignored where
@@ -24751,14 +26689,19 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         config, marker_issues = self._read_marker()
         if _not_set_up(marker_issues) is not None:
             return self._not_set_up_refusal()
-        return self._savefile_location_from(
-            config,
-            marker_issues,
-            content_path=content_path,
-            core_so=core_so,
-            system=system,
-            cwd=cwd,
-            appendconfig=files,
+        return self._save_placement(
+            system,
+            lambda keys, asked: self._savefile_location_from(
+                config,
+                marker_issues,
+                content_path=content_path,
+                core_so=core_so,
+                record_keys=keys,
+                system_asked=system is not None,
+                asked=asked,
+                cwd=cwd,
+                appendconfig=files,
+            ),
         )
 
     @one_question
@@ -24963,15 +26906,21 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         """
         if (finding := _not_set_up(marker_issues)) is not None:
             return FirmwareContext(
-                root=None, cores=(), hashes=load_hashes(), cores_read=False, caveats=(finding,)
+                root=None,
+                cores=(),
+                hashes=load_hashes(),
+                cores_read=False,
+                caveats=(finding,),
+                naming=self._naming(),
             )
         sandbox, environment_sources = self._cfg_sandbox()
         deploy = self._sandbox()
-        cfg = self._machine.read_text(self._cfg_path())
+        cfg = _read_text_once(self._machine, self._cfg_path())
         return _retroarch_firmware_context(
             sandbox=sandbox,
             global_text=cfg.text,
             cfg_label=RETROARCH_CFG,
+            naming=self._naming(),
             retroarch_config_dir=self._retroarch_config_dir(),
             findings=(
                 *self._health_from(config, marker_issues).issues,
@@ -24990,9 +26939,9 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         return self._firmware_context_from(config, marker_issues)
 
     @one_question
-    def firmware_for_system(
+    def _firmware_for_system(
         self,
-        system: str,
+        system: SystemPair,
         *,
         verify: bool = False,
         cwd: str | None = None,
@@ -25000,8 +26949,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
     ) -> FirmwareAnswer:
         """Which emulators RetroDECK offers for *system*, and what each of them wants.
 
-        *system* is the ES-DE system name (``"gb"``, ``"dreamcast"``), the same
-        vocabulary :meth:`emulators_for` speaks — the catalogue is the
+        *system* is the system :meth:`firmware_for_system` resolved, named as
+        :meth:`emulators_for` names it — the catalogue is the
         enumeration, so an emulator whose core is not installed and a
         standalone emulator both appear, stated as such instead of silently
         dropped. Whether that catalogue could be read travels with it: an
@@ -25013,8 +26962,6 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         read once here and handed on, never re-read. ``cwd`` and
         ``content_path`` are taken as the shared firmware questions take them.
         """
-        checked_cwd(cwd)
-        checked_content_path(content_path)
         config, marker_issues = self._read_marker()
         if _not_set_up(marker_issues) is not None:
             context = self._stated(self._firmware_context_from(config, marker_issues), cwd=cwd)
@@ -25023,11 +26970,16 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             )
         root = self._config_path(config, "rd_home_path", "")[0]
         by_system, read, exclusive, catalogue_invalid = self._read_catalogue(root)
+        # A layer that does not parse was not read (#784 D53): its finding is
+        # the catalogue's hole, so an empty answer is a look that failed and
+        # never "no emulator covers this system". The resolver states the
+        # hole where the catalogue-status statements below would stand.
         catalogue = Catalogue(
             entries=_firmware_catalogue_entries(
-                self, by_system, system, self._gamelist_selections_at(root, system)
+                self, by_system, system, self._gamelist_selections_at(root, system[1])
             ),
             read=read,
+            hole=catalogue_invalid,
         )
         # The marker this query already read builds the context too — asking
         # for a fresh one would read retrodeck.json twice inside one answer.
@@ -25042,15 +26994,12 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             content_path=content_path,
         )
         # The catalogue-status statements ride only answers the catalogue
-        # informed: an own spelling is answered from the cores, so the
+        # informed: a cited system is answered from the cores, so the
         # resolver never looks at the catalogue for it. They land where the
         # resolver puts its own — right after the context's caveats (the
         # answer is (*context.caveats, *its own), per its contract).
-        status = (
-            *(() if catalogue_invalid is None else (catalogue_invalid,)),
-            *(self._catalogue_exclusive(root, system) if exclusive else ()),
-        )
-        if not status or system in SYSTEMS_WITHOUT_CATALOGUE_ID:
+        status = self._catalogue_exclusive(root, system) if exclusive else ()
+        if not status or system in context.naming.cited:
             return answer
         index = len(context.caveats)
         return _firmware_with_caveats(
@@ -25124,16 +27073,16 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         by_system, read, exclusive, catalogue_invalid = self._read_catalogue(root)
         status = (
             *(() if catalogue_invalid is None else (catalogue_invalid,)),
-            *(self._catalogue_exclusive(root, spec.system) if exclusive else ()),
+            *(self._catalogue_exclusive(root, _spec_system(spec)) if exclusive else ()),
         )
         # A catalogue nobody could read declares nothing, which is not the
         # same fact as a catalogue that was read and declares no <path> for
         # this system — and handing the empty snapshot straight to the
         # resolution would spell the first as the second.
         anchor = (
-            self._esde_system_dir(by_system, spec.system)
+            self._esde_system_dir(by_system, _spec_system(spec), complete=catalogue_invalid is None)
             if read
-            else _RomDirectory(caveats=_catalogue_unread_caveat(spec.system))
+            else _RomDirectory(caveats=_catalogue_unread_caveat(_spec_system(spec)))
         )
         override_label = (
             None
@@ -25153,6 +27102,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         content_path: str | None = None,
         cwd: str | None = None,
         appendconfig: tuple[str, ...] = (),
+        asked: tuple[AskedPair, ...] | None = None,
     ) -> SavefilePlacement | Unresolved:
         """The entry route behind :meth:`EmulatorEntry.savefile_location` — one marker read.
 
@@ -25199,7 +27149,9 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             marker_issues,
             content_path=content_path,
             core_so=spec.core_so,
-            system=spec.system,
+            record_keys=self._record_keys(_spec_system(spec), asked or ()),
+            system_asked=True,
+            asked=_entry_asked(spec, asked),
             extra_caveats=entry_caveats,
             cwd=cwd,
             appendconfig=appendconfig,
@@ -25505,6 +27457,10 @@ class _EsdeSnapshot:
     complete: bool
     tail: tuple[Caveat, ...]
     exclusive: bool = False
+    # The invalid-layer finding where a layer does not parse: the catalogue in
+    # force is then empty and ``complete``, yet nothing it meant to declare
+    # was read, so the platform view claims nothing about undeclared names.
+    invalid: Caveat | None = None
     # The companion cfg's text, from the same single read whose status decided
     # the companion health finding — carried so the derived-enumeration branch
     # (issue #133) can resolve the cores without opening the file a second
@@ -25513,6 +27469,14 @@ class _EsdeSnapshot:
     # settings.sh as the same query read it, for the launch lookup's reading
     # of what EmuDeck's launcher would rewrite (its toolsPath).
     settings: Mapping[str, str] = field(default_factory=dict)
+    # Whether ES-DE is on this disk: without it no catalogue question is
+    # answered at all, a cited system's included (#784 D57).
+    frontend_present: bool = True
+
+    @property
+    def read_in_full(self) -> bool:
+        """Whether every layer in force was read and parsed, so a name it does not declare is not declared."""
+        return self.complete and self.invalid is None
 
 
 class EmuDeck(_FirmwareQueries, _CatalogueQueries):
@@ -25580,7 +27544,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
     def _read_marker(self) -> tuple[dict[str, str], tuple[Caveat, ...]]:
         """One live read of ``settings.sh`` → (settings, marker issues)."""
         path = self._marker_path()
-        result = self._machine.read_text(path)
+        result = _read_text_once(self._machine, path)
         if result.status == READ_MISSING:
             return {}, (Caveat(HEALTH_ISSUE_MARKER_MISSING, f"marker {path} does not exist", {"path": path}),)
         if result.text is None:
@@ -25616,7 +27580,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         is a possible refinement; the two plain files are what is read today.
         """
         git_dir = os.path.join(self._home, self._BACKEND_GIT_SUFFIX)
-        head = self._machine.read_text(os.path.join(git_dir, "HEAD")).text
+        head = _read_text_once(self._machine, os.path.join(git_dir, "HEAD")).text
         if head is None:
             return None
         head = head.strip()
@@ -25624,7 +27588,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             ref = head[len("ref:") :].strip()
             if not ref:
                 return None
-            resolved = self._machine.read_text(os.path.join(git_dir, ref)).text
+            resolved = _read_text_once(self._machine, os.path.join(git_dir, ref)).text
             if resolved is None:
                 return None
             return resolved.strip() or None
@@ -25669,7 +27633,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         ``settings.sh``'s ES-DE record disagrees with the disk.
         """
         settings, marker_issues = self._read_marker()
-        companion_status = self._machine.read_text(self._companion_cfg_path()).status
+        companion_status = _read_text_once(self._machine, self._companion_cfg_path()).status
         marker = self._marker_path()
         installation = self._settings_root(
             settings, marker, ROOT_NAME_INSTALLATION, "romsPath", "roms", parent=True
@@ -25815,7 +27779,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         this disk: without it there is no frontend ROM root to check.
         """
         settings, marker_issues = self._read_marker()
-        companion_status = self._machine.read_text(self._companion_cfg_path()).status
+        companion_status = _read_text_once(self._machine, self._companion_cfg_path()).status
         issues = self._health_from(settings, marker_issues, companion_status).issues
         rom_root_finding = self._rom_root_finding()
         if rom_root_finding is not None:
@@ -25931,7 +27895,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             )
         ]
 
-    def _catalogue_sealed_caveat(self, system: str | None = None) -> Caveat:
+    def _catalogue_sealed_caveat(self, system: SystemPair | None = None) -> Caveat:
         # Reading the sealed layer itself (extracting the AppImage's squashfs)
         # is tracked as issue #65; until then the on-disk layers are the whole
         # readable catalogue and every catalogue answer says so.
@@ -25941,7 +27905,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             "open — only the on-disk layers under ~/ES-DE were read, so this enumeration is "
             "incomplete: a system or emulator this answer does not name may still be declared by "
             "the frontend",
-            {"system": system} if system is not None else {},
+            {"source": system[0], "key": system[1]} if system is not None else {},
         )
 
     def _catalogue_provenance(self, exclusive: bool) -> str:
@@ -25975,7 +27939,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         )
         return self._CATALOGUE_SOURCE.format(provider=f"; zstd images go through {through}")
 
-    def _catalogue_exclusive(self, system: str | None = None) -> tuple[Caveat, ...]:
+    def _catalogue_exclusive(self, system: SystemPair | None = None) -> tuple[Caveat, ...]:
         return _catalogue_exclusive_caveat(
             os.path.join(self._esde_appdata_dir(), self._ESDE_OVERLAY_SUFFIX), system
         )
@@ -26022,15 +27986,18 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         deployed from ``configs/emulationstation/custom_systems/`` and
         path-rewritten at ``:144-145``): unlike RetroDECK's commented-out
         stub, it declares real systems, and per ES-DE's merge semantics a
-        system it declares is *exactly* the one the frontend uses — the
-        sealed layer cannot contradict a same-name overlay system. EmuDeck
+        system it declares in a form ES-DE loads is *exactly* the one the
+        frontend uses — the sealed layer cannot contradict such a same-name
+        overlay system. One ES-DE skips shadows nothing (#784 D59). EmuDeck
         never writes the tag; carrying one is a user's own edit, honored
         because the frontend honors it.
 
         ``invalid`` is the hardest state (issue #100), and it outranks
         ``shadow_broken``: a layer atlas **read** and ES-DE cannot load
         aborts the frontend's whole ``loadConfig``, so the catalogue in
-        force is empty — with the health finding naming the file. A shadow
+        force is empty — with the health finding naming the file — and atlas
+        claims nothing about a system it does not declare (#784 D53), since
+        nothing the layer meant to declare was read. A shadow
         atlas could not read stays ``shadow_broken``: ES-DE may load it
         fine, so what the catalogue says is unknown, never refused.
         """
@@ -26408,7 +28375,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
     def _esde_system_dir(
         self,
         by_system: Mapping[str, SystemDeclaration],
-        system: str,
+        system: SystemPair,
         *,
         complete: bool,
     ) -> _RomDirectory:
@@ -26420,9 +28387,10 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         for the bundled layer, or the custom layer excluded it) — in the
         sealed state the declaration may sit in the layer nobody could read,
         and the caller's answer-level sealed caveat is that statement, so this
-        branch adds nothing on top of it.
+        branch adds nothing on top of it; under a layer that does not parse,
+        the invalid-layer finding is the whole claim the same way (#784 D53).
         """
-        declaration = by_system.get(system)
+        declaration = loaded_declaration(by_system, system[1])
         if declaration is None or declaration.rom_path is None:
             if complete:
                 return _RomDirectory(caveats=_rom_path_undeclared_caveat(system, declaration))
@@ -26449,7 +28417,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             )
         return _RomDirectory(directory=resolved, sources=root.sources)
 
-    def _esde_snapshot(self, system: str | None = None) -> _EsdeSnapshot:
+    def _esde_snapshot(self, system: SystemPair | None = None) -> _EsdeSnapshot:
         """One read of every ES-DE-side source, in the pinned caveat order.
 
         The findings an answer states, the presence it decided and the layers
@@ -26464,7 +28432,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         template method appends closes the list.
         """
         settings, marker_issues = self._read_marker()
-        companion = self._machine.read_text(self._companion_cfg_path())
+        companion = _read_text_once(self._machine, self._companion_cfg_path())
         findings = self._health_from(settings, marker_issues, companion.status).issues
         present = self._esde_present()
         mismatch = self._frontend_marker_mismatch(settings, present)
@@ -26476,6 +28444,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
                 False,
                 (),
                 companion_text=companion.text,
+                frontend_present=False,
             )
         by_system, complete, shadow_broken, exclusive, catalogue_invalid = (
             self._read_esde_catalogue()
@@ -26502,6 +28471,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             complete,
             (*status, *mismatch),
             exclusive,
+            invalid=catalogue_invalid,
             companion_text=companion.text,
             settings=settings,
         )
@@ -26525,19 +28495,12 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         snapshot = self._esde_snapshot()
         if snapshot.refusal is not None:
             return SystemsAnswer(caveats=snapshot.refusal), version
-        systems = set(snapshot.by_system)
+        systems = {self._catalogue_system(name) for name in loaded_declarations(snapshot.by_system)}
         derived_mark: tuple[Caveat, ...] = ()
         sources: tuple[str, ...] = (self._catalogue_provenance(snapshot.exclusive),)
         if not snapshot.complete:
             context = self._derived_context(snapshot)
-            derived = {
-                core.system for core in context.cores if core.system != "_unknown"
-            } | {
-                declaration.system
-                for core in context.cores
-                for declaration in core.firmware
-                if declaration.system != "_unknown"
-            }
+            derived = _core_listed_systems(context.cores)
             if derived - systems:
                 systems |= derived
                 sources = (*sources, *context.sources)
@@ -26575,23 +28538,17 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         if snapshot.refusal is not None:
             return _PlatformView({}, frozenset(), {}, (), snapshot.refusal), version
         declared = {
-            name: declaration.platforms for name, declaration in snapshot.by_system.items()
+            self._catalogue_system(name): declaration.platforms
+            for name, declaration in loaded_declarations(snapshot.by_system).items()
         }
-        vocabulary_backed: set[str] = set()
+        vocabulary_backed: set[SystemPair] = set()
         sources: tuple[str, ...] = (self._catalogue_provenance(snapshot.exclusive),)
         derived_mark: tuple[Caveat, ...] = ()
         if not snapshot.complete:
             context = self._derived_context(snapshot)
-            derived = {
-                core.system for core in context.cores if core.system != "_unknown"
-            } | {
-                declaration.system
-                for core in context.cores
-                for declaration in core.firmware
-                if declaration.system != "_unknown"
-            }
+            derived = _core_listed_systems(context.cores)
             for system in derived - set(declared):
-                declared[system] = vocabulary_platform_tags(system) or ()
+                declared[system] = _snapshot_tags(system)
                 vocabulary_backed.add(system)
             if vocabulary_backed:
                 sources = (*sources, *context.sources)
@@ -26610,11 +28567,25 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             {},
             sources,
             (*snapshot.findings, *snapshot.tail, *derived_mark),
+            complete=snapshot.read_in_full,
+            skipped=self._skipped_systems(snapshot.by_system),
         )
         return view, version
 
+    def _catalogue_statements(self) -> tuple[Caveat, ...]:
+        """The catalogue-status statement and the marker cross-check, from this query's one snapshot.
+
+        The firmware question's catalogue-informed answers carry them beside
+        the system's; its unknown form carries them too (#784 D53). Where no
+        layer was read, the refusal states why instead, findings aside.
+        """
+        snapshot = self._esde_snapshot()
+        if snapshot.refusal is not None:
+            return tuple(caveat for caveat in snapshot.refusal if caveat not in snapshot.findings)
+        return snapshot.tail
+
     def _catalogue_answer(
-        self, system: str, *, content_path: str | None = None
+        self, system: SystemPair, *, content_path: str | None = None
     ) -> tuple[CatalogueAnswer, str | None]:
         """EmuDeck's own catalogue answer — one snapshot of the ES-DE sources.
 
@@ -26628,13 +28599,17 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         #133): the installed cores' own declarations, stated as derived,
         because the sealed layer may declare a different list. The version
         travelling back is the backend checkout's HEAD, exactly as on
-        :meth:`_systems_answer`.
+        :meth:`_systems_answer`. Where ES-DE is on the disk, a system atlas
+        names by a cited pair is answered from the installed cores, sealed or
+        not (:meth:`_cited_catalogue_answer`).
         """
         version = self._observed_backend_head()
         snapshot = self._esde_snapshot(system)
+        if snapshot.frontend_present and system in self._naming().cited:
+            return self._cited_catalogue_answer(snapshot, system), version
         if snapshot.refusal is not None:
             return CatalogueAnswer(caveats=snapshot.refusal), version
-        if system not in snapshot.by_system and not snapshot.complete:
+        if loaded_declaration(snapshot.by_system, system[1]) is None and not snapshot.complete:
             context = self._derived_context(snapshot)
             entries, derived = _derived_catalogue_entries(self, context, system)
             return (
@@ -26646,7 +28621,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
                 version,
             )
         anchor = (
-            self._esde_system_dir(snapshot.by_system, system, complete=snapshot.complete)
+            self._esde_system_dir(snapshot.by_system, system, complete=snapshot.read_in_full)
             if content_path is not None
             else _NO_ANCHOR_NEEDED
         )
@@ -26655,16 +28630,36 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
                 _entries_from(
                     self,
                     _declared_entries(snapshot.by_system, system),
-                    self._gamelist_selections(system),
+                    self._gamelist_selections(system[1]),
                     system_roms_dir=anchor.directory,
                     content_path=content_path,
                     launch_for=self._launch_for(snapshot),
                 ),
                 (self._catalogue_provenance(snapshot.exclusive),),
-                (*snapshot.findings, *snapshot.tail, *anchor.caveats),
+                (
+                    *snapshot.findings,
+                    *snapshot.tail,
+                    *anchor.caveats,
+                    *_blank_commands(system, loaded_declaration(snapshot.by_system, system[1])),
+                ),
             ),
             version,
         )
+
+    def _cited_catalogue_answer(self, snapshot: _EsdeSnapshot, system: SystemPair) -> CatalogueAnswer:
+        """The entries of a system atlas names by a cited pair, derived from the installed cores (#784 D57).
+
+        No ES-DE catalogue declares an entry for such a system (#784 D50 b),
+        so the entries are the ones :func:`_derived_catalogue_entries` derives,
+        each without a command, beside ``emulator-list-derived``. The
+        catalogue is not consulted, as the firmware route does not consult it
+        for such a system, so neither its status — sealed, exclusive,
+        unreadable or invalid — nor the marker cross-check rides here: it can
+        neither enumerate nor deny these entries.
+        """
+        context = self._derived_context(snapshot)
+        entries, derived = _derived_catalogue_entries(self, context, system)
+        return CatalogueAnswer(entries, context.sources, (*snapshot.findings, *derived))
 
     def _derived_context(self, snapshot: _EsdeSnapshot) -> FirmwareContext:
         """The core enumeration behind a derived answer — from the snapshot's own cfg read.
@@ -26678,6 +28673,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             sandbox=sandbox,
             global_text=snapshot.companion_text,
             cfg_label=RETROARCH_CFG,
+            naming=self._naming(),
             retroarch_config_dir=self._retroarch_config_dir(),
             findings=(),
             arrangement_version=None,
@@ -26686,21 +28682,26 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
 
 
     def _launchable_answer(
-        self, system: str, content_path: str, label: str | None
+        self, system: SystemPair, content_path: str, label: str | None
     ) -> tuple[LaunchabilityAnswer, str | None]:
         """EmuDeck's launchability answer — the same snapshot its catalogue answer takes.
 
-        ``complete`` is the snapshot's own flag: with the bundled layer sealed
-        inside the AppImage, a system the readable layers do not declare may
-        still exist, so the verdict stays unknown on the sealed statement
-        alone rather than claiming the frontend knows no such system. An
-        overlay-declared system answers fully — per ES-DE's merge semantics
-        the overlay replaces a same-name bundled system entirely, so its
-        accept-list is exactly what the frontend uses. A label on a system
+        With the bundled layer sealed inside the AppImage, a system the
+        readable layers do not declare, or declare in a form ES-DE skips, may
+        still be declared there in a form ES-DE loads, so the verdict stays
+        unknown on the sealed statement alone rather than claiming the
+        frontend knows no such system. An overlay system ES-DE loads answers
+        fully — per ES-DE's merge semantics it replaces a same-name bundled
+        system entirely, so its entries and accept-list are exactly what the
+        frontend uses. A label on a system
         only the installed cores declare is looked up among the entries
         derived from them (:meth:`_derived_label_refusal`), where the launch
-        command looks it up.
+        command looks it up. A system atlas names by a cited pair has its
+        entries derived from the installed cores (#784 D57), and is answered
+        from them as an arrangement without a catalogue answers.
         """
+        if system in self._naming().cited:
+            return super()._launchable_answer(system, content_path, label)
         extension = esde_extension(content_path)
         version = self._observed_backend_head()
         snapshot = self._esde_snapshot(system)
@@ -26711,17 +28712,17 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
                 ),
                 version,
             )
-        anchor = self._esde_system_dir(snapshot.by_system, system, complete=snapshot.complete)
+        anchor = self._esde_system_dir(snapshot.by_system, system, complete=snapshot.read_in_full)
         lookups: list[tuple[LaunchLookup, _HostLaunchView]] = []
         entries = _entries_from(
             self,
             _declared_entries(snapshot.by_system, system),
-            self._gamelist_selections(system),
+            self._gamelist_selections(system[1]),
             system_roms_dir=anchor.directory,
             content_path=content_path,
             launch_for=self._launch_for(snapshot, lookups),
         )
-        declaration = snapshot.by_system.get(system)
+        declaration = loaded_declaration(snapshot.by_system, system[1])
         core_reader = _EntryCoreReader(
             self._machine,
             self._companion_cfg_path(),
@@ -26736,6 +28737,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
 
         # The emulator runs on the host, as the frontend does, so the host's
         # view is its own; its trees are the ones the variant gate settles.
+        target = _launch_target(content_path, view())
         boot_reader = _EntryBootReader(
             self._machine,
             content_path,
@@ -26743,14 +28745,14 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             lambda entry: _rpcs3_boot_dirs(self._machine, self._launch_gate(entry.command).homes),
         )
         opens_reader = _EntryOpensReader(
-            self._machine, content_path, lambda entry: self._launch_gate(entry.command).homes, core_reader
+            self._machine, target.path, lambda entry: self._launch_gate(entry.command).homes, core_reader
         )
         verdict, entry, alternatives, installers, boots, opens, sources, own = _launchability_verdict(
             system=system,
             extension=extension,
+            target=target,
             declaration=declaration,
             entries=entries,
-            complete=snapshot.complete,
             core_info_for=core_reader,
             label=label,
             boot_reader=boot_reader,
@@ -26782,7 +28784,9 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             version,
         )
 
-    def _derived_label_refusal(self, snapshot: _EsdeSnapshot, system: str, label: str | None) -> tuple[Caveat, ...]:
+    def _derived_label_refusal(
+        self, snapshot: _EsdeSnapshot, system: SystemPair, label: str | None
+    ) -> tuple[Caveat, ...]:
         """The refusal of a label no core-derived entry carries, on a system only the installed cores declare.
 
         The sealed snapshot's verdict on such a system is unknown with no entry
@@ -26791,14 +28795,14 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         here too, and one none of them carries is refused as there. Anywhere
         else the verdict helper has already looked the label up.
         """
-        if label is None or system in snapshot.by_system or snapshot.complete:
+        if label is None or loaded_declaration(snapshot.by_system, system[1]) is not None or snapshot.complete:
             return ()
         entries, _ = _derived_catalogue_entries(self, self._derived_context(snapshot), system)
         chosen = _chosen_entry(entries, label, system)
         return (chosen,) if isinstance(chosen, Caveat) else ()
 
     def _launch_command_answer(
-        self, system: str, content_path: str, label: str | None
+        self, system: SystemPair, content_path: str, label: str | None
     ) -> tuple[LaunchCommandAnswer, str | None]:
         """EmuDeck's launch command — the snapshot its launchability answer takes, the entry's own lookup.
 
@@ -26820,20 +28824,24 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         apart only for the ES-DE build the reading is pinned to
         (:data:`ESDE_APPIMAGE_BUILD`, read off the image): a runtime without
         the image's codec answers ``frontend-build-sealed``, and any other
-        build, or none the image states, ``frontend-build-unpinned``.
+        build, or none the image states, ``frontend-build-unpinned``. A system
+        atlas names by a cited pair has its entries derived from the installed
+        cores (#784 D57), none of which carries a command.
         """
+        if system in self._naming().cited:
+            return super()._launch_command_answer(system, content_path, label)
         version = self._observed_backend_head()
         snapshot = self._esde_snapshot(system)
         if snapshot.refusal is not None:
             return LaunchCommandAnswer(caveats=snapshot.refusal), version
-        if system not in snapshot.by_system and not snapshot.complete:
+        if loaded_declaration(snapshot.by_system, system[1]) is None and not snapshot.complete:
             return self._derived_launch_command(snapshot, system, label), version
-        anchor = self._esde_system_dir(snapshot.by_system, system, complete=snapshot.complete)
+        anchor = self._esde_system_dir(snapshot.by_system, system, complete=snapshot.read_in_full)
         lookups: list[tuple[LaunchLookup, _HostLaunchView]] = []
         entries = _entries_from(
             self,
             _declared_entries(snapshot.by_system, system),
-            self._gamelist_selections(system),
+            self._gamelist_selections(system[1]),
             system_roms_dir=anchor.directory,
             content_path=content_path,
             launch_for=self._launch_for(snapshot, lookups),
@@ -26843,7 +28851,10 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         chosen = _chosen_entry(entries, label, system)
         if isinstance(chosen, Caveat):
             return LaunchCommandAnswer(sources=sources, caveats=(*caveats, chosen)), version
-        if chosen is None or chosen.availability != AVAILABILITY_STARTABLE or not lookups:
+        if chosen is None:
+            blank = _blank_commands(system, loaded_declaration(snapshot.by_system, system[1]))
+            return LaunchCommandAnswer(sources=sources, caveats=(*caveats, *blank)), version
+        if chosen.availability != AVAILABILITY_STARTABLE or not lookups:
             return LaunchCommandAnswer(chosen, sources=sources, caveats=caveats), version
         lookup, view = lookups[0]
         launcher = self._launcher_script_answer(chosen, snapshot.settings, view)
@@ -26944,7 +28955,9 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         emulation = settings.get("emulationPath") or os.path.join(self._home, "Emulation")
         return os.path.join(emulation, pinned[len(EMULATION_ROOT) :])
 
-    def _derived_launch_command(self, snapshot: _EsdeSnapshot, system: str, label: str | None) -> LaunchCommandAnswer:
+    def _derived_launch_command(
+        self, snapshot: _EsdeSnapshot, system: SystemPair, label: str | None
+    ) -> LaunchCommandAnswer:
         """A system only the installed cores declare while the bundled layer is sealed: its entries are derived from
         the cores, carry no command, and each answers its own ``launch-resolution-unsupported``.
         """
@@ -26989,14 +29002,16 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             return launcher.path
         return None
 
-    def _rom_location_answer(self, system: str) -> tuple[RomPlacement, str | None]:
+    def _rom_location_answer(self, system: SystemPair) -> tuple[RomPlacement, str | None]:
         """EmuDeck's ROM placement — the overlay's declaration, resolved ES-DE's way.
 
-        An overlay-declared system answers fully: per ES-DE's merge semantics
-        the overlay replaces a same-name bundled system entirely, so its
-        ``<path>`` and ``<extension>`` are exactly what the frontend uses. A
-        system the readable layers do not declare answers nothing *carrying
-        the sealed caveat* — the declaration may sit in the sealed layer,
+        An overlay system ES-DE loads answers fully: per ES-DE's merge
+        semantics the overlay replaces a same-name bundled system entirely, so
+        its ``<path>`` and ``<extension>`` are exactly what the frontend uses.
+        An overlay declaration ES-DE skips replaces nothing (#784 D59) and is
+        answered as none (:func:`atlas.esde.loaded_declaration`). A system the
+        readable layers do not declare answers nothing *carrying the sealed
+        caveat* — the declaration may sit in the sealed layer,
         which is a different claim from ``rom-path-undeclared``'s "the
         catalogue was read and declares none". The version travelling back is
         the backend checkout's HEAD, exactly as on :meth:`_systems_answer`.
@@ -27005,8 +29020,8 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         snapshot = self._esde_snapshot(system)
         if snapshot.refusal is not None:
             return RomPlacement(caveats=snapshot.refusal), version
-        declaration = snapshot.by_system.get(system)
-        resolved = self._esde_system_dir(snapshot.by_system, system, complete=snapshot.complete)
+        declaration = loaded_declaration(snapshot.by_system, system[1])
+        resolved = self._esde_system_dir(snapshot.by_system, system, complete=snapshot.read_in_full)
         placement = RomPlacement(
             extensions=() if declaration is None else declaration.extensions,
             sources=(
@@ -27055,14 +29070,16 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             self._read_esde_catalogue()
         )
         if shadow_broken:
-            return _catalogue_unread_caveat(spec.system)
+            return _catalogue_unread_caveat(_spec_system(spec))
         if exclusive:
-            status: tuple[Caveat, ...] = self._catalogue_exclusive(spec.system)
+            status: tuple[Caveat, ...] = self._catalogue_exclusive(_spec_system(spec))
         else:
-            status = () if complete else (self._catalogue_sealed_caveat(spec.system),)
+            status = () if complete else (self._catalogue_sealed_caveat(_spec_system(spec)),)
         if catalogue_invalid is not None:
             status = (catalogue_invalid, *status)
-        anchor = self._esde_system_dir(by_system, spec.system, complete=complete)
+        anchor = self._esde_system_dir(
+            by_system, _spec_system(spec), complete=complete and catalogue_invalid is None
+        )
         override_label = (
             None
             if anchor.directory is None
@@ -27083,6 +29100,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         content_path: str | None = None,
         cwd: str | None = None,
         appendconfig: tuple[str, ...] = (),
+        asked: tuple[AskedPair, ...] | None = None,
     ) -> SavefilePlacement | Unresolved:
         """The entry route behind :meth:`EmulatorEntry.savefile_location` — EmuDeck's wiring.
 
@@ -27103,16 +29121,16 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             return self._standalone_entry_savefile(
                 spec, entry_caveats, content_path=content_path, cwd=cwd
             )
+        query = self._query(
+            content_path=content_path,
+            core_so=spec.core_so,
+            extra_caveats=entry_caveats,
+            cwd=cwd,
+            appendconfig=appendconfig,
+        )
+        keys = self._record_keys(_spec_system(spec), asked or ())
         placement = _retroarch_savefile_location(
-            self._machine,
-            self._query(
-                content_path=content_path,
-                core_so=spec.core_so,
-                system=spec.system,
-                extra_caveats=entry_caveats,
-                cwd=cwd,
-                appendconfig=appendconfig,
-            ),
+            self._machine, _keyed(query, keys, system_asked=True, asked=_entry_asked(spec, asked))
         )
         if content_path is None:
             return placement
@@ -27740,12 +29758,14 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         """
         return _flatpak_cfg_sandbox(self._machine, self._home, self._RA_APP_ID)
 
+    def _portability_core_version(self, core_so: str) -> str | None:
+        return _core_library_version(self._machine, self._query(content_path=None, core_so=core_so), core_so)
+
     def _query(
         self,
         *,
         content_path: str | None,
         core_so: str | None,
-        system: str | None = None,
         extra_caveats: tuple[Caveat, ...] = (),
         cwd: str | None = None,
         appendconfig: tuple[str, ...] = (),
@@ -27765,7 +29785,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         """
         settings, marker_issues = self._read_marker()
         global_cfg_path = self._companion_cfg_path()
-        cfg = self._machine.read_text(global_cfg_path)
+        cfg = _read_text_once(self._machine, global_cfg_path)
         health = self._health_from(settings, marker_issues, cfg.status)
         version = self._observed_backend_head()
         context = _flatpak_query_context(self._machine, self._home, self._RA_APP_ID)
@@ -27782,7 +29802,6 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             core_path_resolver=lambda so: _core_path_from(sandbox, cfg.text, so),
             arrangement="emudeck",
             arrangement_version=version,
-            system=system,
             extra_sources=context.sources,
             extra_caveats=(
                 *extra_caveats,
@@ -27800,32 +29819,44 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         *,
         content_path: str | None = None,
         core_so: str | None = None,
-        system: str | None = None,
+        system: SystemArgument | None = None,
         cwd: str | None = None,
         appendconfig: Sequence[str] = (),
     ) -> SavefilePlacement | Unresolved:
         """Where EmuDeck's RetroArch keeps the save — resolved from the bare Flatpak cfg.
 
-        *system* is the content's system in ES-DE's vocabulary
-        (:func:`atlas.known_systems`). It is what keys a core's recorded file
-        set: one core is not one behaviour, so without it the names stay
-        unstated unless every system the record covers agrees. Naming it is the
-        only way to get file names on an arrangement with no frontend
-        catalogue, and it is never guessed from the core — a core's own
-        metadata says which systems it *can* run, never which one this content
-        is. ``cwd`` is the working folder the launch will use, an absolute host
-        path: it fills the ``cwd`` hole of a core that saves relative to it and
-        completes a relative ``savefile_directory``, is ignored where the answer
-        does not depend on it, and a value that is not absolute raises
-        ``ValueError``. ``appendconfig`` names the files the launch appends
-        with ``--appendconfig``, as RetroDECK's question takes them.
+        *system* is the content's system, a name in this installation's own
+        catalogue source or (source, key) pairs, resolved as every system
+        question resolves it (#784 D44), and what resolving it says leads the
+        placement's caveats, a version the table does not hold included, since
+        the placement carries no resolution block (#784 D56); a refusal keeps
+        only its own reason. Pairs that name several systems answer the
+        placement every one of them keys alike, the resolution's statements,
+        ``system-unanimous`` among them, leading its caveats, and otherwise the
+        placement keyed by none, beside ``system-ambiguous`` (#784 D62); where
+        every candidate refuses alike, that refusal, which carries no
+        resolution statement (#784 D71). It is what
+        keys a core's recorded file set: one core is not one behaviour, so
+        without it the names stay unstated unless every system the record
+        covers agrees, and asked but keying no record they stay unstated and
+        ``save-record-unrecorded`` says so (#784 D55). Naming it is the only
+        way to get file names on an arrangement with no frontend catalogue,
+        and it is never guessed from the core — a core's own metadata says
+        which systems it *can* run, never which one this content is. ``cwd`` is the working folder the launch
+        will use, an absolute host path: it fills the ``cwd`` hole of a core
+        that saves relative to it and completes a relative
+        ``savefile_directory``, is ignored where the answer does not depend on
+        it, and a value that is not absolute raises ``ValueError``.
+        ``appendconfig`` names the files the launch appends with
+        ``--appendconfig``, as RetroDECK's question takes them.
         """
         checked_cwd(cwd)
         files = checked_appendconfig(appendconfig)
-        return _retroarch_savefile_location(
-            self._machine,
-            self._query(
-                content_path=content_path, core_so=core_so, system=system, cwd=cwd, appendconfig=files
+        query = self._query(content_path=content_path, core_so=core_so, cwd=cwd, appendconfig=files)
+        return self._save_placement(
+            system,
+            lambda keys, asked: _retroarch_savefile_location(
+                self._machine, _keyed(query, keys, system_asked=system is not None, asked=asked)
             ),
         )
 
@@ -27976,6 +30007,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             sandbox=sandbox,
             global_text=cfg.text,
             cfg_label=RETROARCH_CFG,
+            naming=self._naming(),
             retroarch_config_dir=self._retroarch_config_dir(),
             findings=self._health_from(settings, marker_issues, cfg.status).issues,
             # ``settings.sh`` names no EmuDeck version — the backend
@@ -27989,13 +30021,13 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
 
     def _read_firmware_context(self) -> FirmwareContext:
         settings, marker_issues = self._read_marker()
-        cfg = self._machine.read_text(self._companion_cfg_path())
+        cfg = _read_text_once(self._machine, self._companion_cfg_path())
         return self._firmware_context_from(settings, marker_issues, cfg)
 
     @one_question
-    def firmware_for_system(
+    def _firmware_for_system(
         self,
-        system: str,
+        system: SystemPair,
         *,
         verify: bool = False,
         cwd: str | None = None,
@@ -28022,10 +30054,8 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         then mismatch). ``cwd`` and ``content_path`` are taken as the shared
         firmware questions take them.
         """
-        checked_cwd(cwd)
-        checked_content_path(content_path)
         settings, marker_issues = self._read_marker()
-        cfg = self._machine.read_text(self._companion_cfg_path())
+        cfg = _read_text_once(self._machine, self._companion_cfg_path())
         context = self._stated(self._firmware_context_from(settings, marker_issues, cfg), cwd=cwd)
         present = self._esde_present()
         if not present or context.root is None:
@@ -28047,11 +30077,15 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             # statement RetroDECK's unread bundled layer gets.
             catalogue = Catalogue(entries=(), read=False)
         else:
+            # A layer that does not parse was not read (#784 D53): where the
+            # rest of the catalogue was, its finding is the hole, so an empty
+            # answer is a look that failed and never "no emulator covers this
+            # system". A sealed catalogue's own hole says that already.
             catalogue = Catalogue(
                 entries=_firmware_catalogue_entries(
-                    self, by_system, system, self._gamelist_selections(system)
+                    self, by_system, system, self._gamelist_selections(system[1])
                 ),
-                hole=None if complete else self._catalogue_sealed_caveat(system),
+                hole=catalogue_invalid if complete else self._catalogue_sealed_caveat(system),
             )
         answer = _resolve_for_system(
             self._machine,
@@ -28062,7 +30096,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             content_path=content_path,
         )
         # The catalogue-status statements and the cross-check ride only answers
-        # the catalogue informed: an own spelling is answered from the cores
+        # the catalogue informed: a cited system is answered from the cores
         # on every arrangement, so the resolver never looks at the catalogue
         # for it.
         inserted = (
@@ -28070,7 +30104,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             *(self._catalogue_exclusive(system) if exclusive else ()),
             *mismatch,
         )
-        if not inserted or system in SYSTEMS_WITHOUT_CATALOGUE_ID:
+        if not inserted or system in context.naming.cited:
             return answer
         # Adjacent to the catalogue-status statement, which — when one exists
         # (the hole, or the unreadable statement of a broken shadow) — is the
@@ -28107,7 +30141,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         """
         checked_cwd(cwd)
         settings, marker_issues = self._read_marker()
-        cfg = self._machine.read_text(self._companion_cfg_path())
+        cfg = _read_text_once(self._machine, self._companion_cfg_path())
         context = self._stated(self._firmware_context_from(settings, marker_issues, cfg), cwd=cwd)
         if not self._esde_present() or context.root is None:
             return _resolve_inventory(self._machine, context, verify=verify)
@@ -28141,6 +30175,52 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
 
     kinds: tuple[str, ...] = ()
     _app_id: str | None = None
+    # A bare RetroArch's own source is libretro's (#784 D10): its systems are
+    # the database names its cores' .info files declare, and a core that
+    # declares none is named by the pair atlas packages for it (D46).
+    catalogue_columns: tuple[str, ...] = (LIBRETRO_SOURCE,)
+    cites_core_systems: bool = True
+
+    def _absent_systems(self, view: _PlatformView) -> tuple[tuple[SystemPair, tuple[str, ...]], ...]:
+        """The libretro column's keys no installed core declares — the own column a bare RetroArch has (#784 D50)."""
+        return tuple(
+            (pair, ())
+            for key in sorted(platform_table().keys.get(LIBRETRO_SOURCE, frozenset()))
+            if (pair := (LIBRETRO_SOURCE, key)) not in view.declared
+        )
+
+    def _own_system_unknown(self, system: SystemPair) -> Caveat | None:
+        """``system-unknown`` where no installed core declares *system*, read live in libretro's names; ``None``
+        otherwise.
+
+        A bare RetroArch's systems are the database names its cores declare
+        (#784 D50), so a name no installed core declares names no system here
+        (#784 D53) — a key of libretro's column as much as a name in no
+        column. Only :meth:`platform_ids`, asked about the name's standing,
+        reads a column key no core declares as absent.
+        """
+        if system in self._platform_view()[0].declared:
+            return None
+        held = system[1] in platform_table().keys.get(system[0], frozenset())
+        reason = (
+            f"{spelled(system)} is a name libretro's column holds, but no installed core declares it"
+            if held
+            else f"{spelled(system)} is neither a name its source's column holds nor one an installed emulator declares"
+        )
+        return system_unknown(
+            system,
+            f"{reason} — nothing here reads it back, so an empty answer says the system is unknown here, "
+            "not that it holds or needs nothing",
+        )
+
+    def _cited_held(self, target: SystemPair) -> bool:
+        """Whether an installed core is cited for *target*, read from the enumeration a derived answer uses."""
+        return _cited_core_installed(self._derived_context()[0], target)
+
+    def _catalogue_statements(self) -> tuple[Caveat, ...]:
+        """That there is no frontend catalogue, which a bare RetroArch's catalogue-informed answers state, and so
+        their unknown forms (#784 D53)."""
+        return (self._catalogue_absence(),)
 
     def _catalogue_absence(self) -> Caveat:
         # A settled fact about the arrangement, not a gap in atlas: RetroArch
@@ -28185,7 +30265,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
     @one_question
     def health(self) -> Health:
         """Bare installs: the cfg is the marker — health is its read status."""
-        return self._health_from(self._machine.read_text(self._cfg_path()).status)
+        return self._health_from(_read_text_once(self._machine, self._cfg_path()).status)
 
     def _sandbox(self) -> _Sandbox:
         """This install's cfg spellings — a native install's are the host's own.
@@ -28210,12 +30290,14 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         """
         return self._sandbox(), ()
 
+    def _portability_core_version(self, core_so: str) -> str | None:
+        return _core_library_version(self._machine, self._query(content_path=None, core_so=core_so), core_so)
+
     def _query(
         self,
         *,
         content_path: str | None,
         core_so: str | None,
-        system: str | None = None,
         extra_caveats: tuple[Caveat, ...] = (),
         cwd: str | None = None,
         appendconfig: tuple[str, ...] = (),
@@ -28232,7 +30314,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         they are read as the host's, and a native install has no sandbox at
         all (issue #637).
         """
-        cfg = self._machine.read_text(self._cfg_path())
+        cfg = _read_text_once(self._machine, self._cfg_path())
         health = self._health_from(cfg.status)
         revocation = None
         if self._app_id is not None:
@@ -28250,7 +30332,6 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
             defaults=UPSTREAM_DEFAULTS,
             content_path=content_path,
             core_so=core_so,
-            system=system,
             core_path_resolver=lambda so: _core_path_from(sandbox, cfg.text, so),
             arrangement="bare",
             arrangement_version=None,
@@ -28267,32 +30348,44 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         *,
         content_path: str | None = None,
         core_so: str | None = None,
-        system: str | None = None,
+        system: SystemArgument | None = None,
         cwd: str | None = None,
         appendconfig: Sequence[str] = (),
     ) -> SavefilePlacement | Unresolved:
         """Where this RetroArch install keeps the save for *content_path* under *core_so*.
 
-        *system* is the content's system in ES-DE's vocabulary
-        (:func:`atlas.known_systems`). It is what keys a core's recorded file
-        set: one core is not one behaviour, so without it the names stay
-        unstated unless every system the record covers agrees. Naming it is the
-        only way to get file names on an arrangement with no frontend
-        catalogue, and it is never guessed from the core — a core's own
-        metadata says which systems it *can* run, never which one this content
-        is. ``cwd`` is the working folder the launch will use, an absolute host
-        path: it fills the ``cwd`` hole of a core that saves relative to it and
-        completes a relative ``savefile_directory``, is ignored where the answer
-        does not depend on it, and a value that is not absolute raises
-        ``ValueError``. ``appendconfig`` names the files the launch appends
-        with ``--appendconfig``, as RetroDECK's question takes them.
+        *system* is the content's system, a name in this installation's own
+        catalogue source or (source, key) pairs, resolved as every system
+        question resolves it (#784 D44), and what resolving it says leads the
+        placement's caveats, a version the table does not hold included, since
+        the placement carries no resolution block (#784 D56); a refusal keeps
+        only its own reason. Pairs that name several systems answer the
+        placement every one of them keys alike, the resolution's statements,
+        ``system-unanimous`` among them, leading its caveats, and otherwise the
+        placement keyed by none, beside ``system-ambiguous`` (#784 D62); where
+        every candidate refuses alike, that refusal, which carries no
+        resolution statement (#784 D71). It is what
+        keys a core's recorded file set: one core is not one behaviour, so
+        without it the names stay unstated unless every system the record
+        covers agrees, and asked but keying no record they stay unstated and
+        ``save-record-unrecorded`` says so (#784 D55). Naming it is the only
+        way to get file names on an arrangement with no frontend catalogue,
+        and it is never guessed from the core — a core's own metadata says
+        which systems it *can* run, never which one this content is. ``cwd`` is the working folder the launch
+        will use, an absolute host path: it fills the ``cwd`` hole of a core
+        that saves relative to it and completes a relative
+        ``savefile_directory``, is ignored where the answer does not depend on
+        it, and a value that is not absolute raises ``ValueError``.
+        ``appendconfig`` names the files the launch appends with
+        ``--appendconfig``, as RetroDECK's question takes them.
         """
         checked_cwd(cwd)
         files = checked_appendconfig(appendconfig)
-        return _retroarch_savefile_location(
-            self._machine,
-            self._query(
-                content_path=content_path, core_so=core_so, system=system, cwd=cwd, appendconfig=files
+        query = self._query(content_path=content_path, core_so=core_so, cwd=cwd, appendconfig=files)
+        return self._save_placement(
+            system,
+            lambda keys, asked: _retroarch_savefile_location(
+                self._machine, _keyed(query, keys, system_asked=system is not None, asked=asked)
             ),
         )
 
@@ -28385,23 +30478,11 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         )
 
     def _read_firmware_context(self) -> FirmwareContext:
-        # One read of the cfg answers both: its text is the context, its status
-        # is the health of an installation whose cfg *is* the marker. The
-        # sandbox composes through _cfg_sandbox — on the Flatpak install this
-        # context's one read of the app's override files.
-        cfg = self._machine.read_text(self._cfg_path())
-        sandbox, environment_sources = self._cfg_sandbox()
-        return _retroarch_firmware_context(
-            sandbox=sandbox,
-            global_text=cfg.text,
-            cfg_label=RETROARCH_CFG,
-            retroarch_config_dir=self.root(),
-            findings=self._health_from(cfg.status).issues,
-            # A bare install states no version of anything but RetroArch, and
-            # this arrangement carries no verified pin to compare one against.
-            arrangement_version=None,
-            extra_sources=environment_sources,
-        )
+        # The derived catalogue's reading, with the health leading its caveats:
+        # an installation whose cfg *is* the marker states its cfg's status
+        # before anything the read could not resolve.
+        context, health = self._derived_context()
+        return cast(FirmwareContext, _dc_replace(context, caveats=(*health.issues, *context.caveats)))
 
     # ── The derived catalogue (issue #133) ─────────────────────────────
     # A bare RetroArch ships no frontend catalogue, and the machine still
@@ -28418,14 +30499,25 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         purpose: it is consumed for its cores, and the answer states its own
         health rather than fishing it back out of a mixed caveat list.
         """
-        cfg = self._machine.read_text(self._cfg_path())
+        return once(("bare-retroarch-context", id(self)), self._read_derived_context)
+
+    def _read_derived_context(self) -> tuple[FirmwareContext, Health]:
+        # One read of the cfg answers both: its text is the context, its status
+        # is the health of an installation whose cfg *is* the marker. The
+        # sandbox composes through _cfg_sandbox — on the Flatpak install this
+        # context's one read of the app's override files. The read is the
+        # question's one read of the cfg, which health() shares.
+        cfg = _read_text_once(self._machine, self._cfg_path())
         sandbox, environment_sources = self._cfg_sandbox()
         context = _retroarch_firmware_context(
             sandbox=sandbox,
             global_text=cfg.text,
             cfg_label=RETROARCH_CFG,
+            naming=self._naming(),
             retroarch_config_dir=self.root(),
             findings=(),
+            # A bare install states no version of anything but RetroArch, and
+            # this arrangement carries no verified pin to compare one against.
             arrangement_version=None,
             extra_sources=environment_sources,
         )
@@ -28438,15 +30530,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
                 SystemsAnswer(caveats=(*health.issues, self._catalogue_absence())),
                 None,
             )
-        systems = sorted(
-            {core.system for core in context.cores if core.system != "_unknown"}
-            | {
-                declaration.system
-                for core in context.cores
-                for declaration in core.firmware
-                if declaration.system != "_unknown"
-            }
-        )
+        systems = sorted(_core_listed_systems(context.cores))
         return (
             SystemsAnswer(
                 tuple(systems),
@@ -28456,7 +30540,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
                     Caveat(
                         CAVEAT_EMULATOR_LIST_DERIVED,
                         "this installation ships no emulator catalogue, so the systems listed "
-                        "are those the installed cores' own declarations file under — what a "
+                        "are those the installed cores' own declarations name — what a "
                         "catalogue would have declared is unknown",
                         {},
                     ),
@@ -28467,14 +30551,15 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         )
 
     def _platform_view(self) -> tuple[_PlatformView, str | None]:
-        """A bare RetroArch's platform reading — every tag vocabulary-backed.
+        """A bare RetroArch's platform reading — every system vocabulary-backed.
 
         No frontend catalogue exists here, so no system carries a live
         ``<platform>`` tag and nothing can be a commented block: the declared
-        list is the derived one (:meth:`_systems_answer`, issue #133), its
-        tags the snapshot column's, all of it named vocabulary-backed. The
-        caveats mirror the systems answer's exactly — the derived mark and
-        the enumeration statements ride here the same way.
+        list is the derived one (:meth:`_systems_answer`, issue #133), named
+        by libretro database names and cited pairs, which carry no tags of
+        their own — their translation states the table's keys instead. The
+        caveats mirror the systems answer's exactly — the derived mark and the
+        enumeration statements ride here the same way.
         """
         context, health = self._derived_context()
         if not context.cores_read:
@@ -28482,14 +30567,9 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
                 {}, frozenset(), {}, (), (*health.issues, self._catalogue_absence())
             )
             return view, None
-        systems = {core.system for core in context.cores if core.system != "_unknown"} | {
-            declaration.system
-            for core in context.cores
-            for declaration in core.firmware
-            if declaration.system != "_unknown"
-        }
+        systems = _core_listed_systems(context.cores)
         view = _PlatformView(
-            {system: vocabulary_platform_tags(system) or () for system in systems},
+            {system: _snapshot_tags(system) for system in systems},
             frozenset(systems),
             {},
             context.sources,
@@ -28498,7 +30578,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
                 Caveat(
                     CAVEAT_EMULATOR_LIST_DERIVED,
                     "this installation ships no emulator catalogue, so the systems listed "
-                    "are those the installed cores' own declarations file under — what a "
+                    "are those the installed cores' own declarations name — what a "
                     "catalogue would have declared is unknown",
                     {},
                 ),
@@ -28508,7 +30588,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         return view, None
 
     def _catalogue_answer(
-        self, system: str, *, content_path: str | None = None
+        self, system: SystemPair, *, content_path: str | None = None
     ) -> tuple[CatalogueAnswer, str | None]:
         context, health = self._derived_context()
         if not context.cores_read:
@@ -28527,16 +30607,16 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         )
 
     def _launchable_answer(
-        self, system: str, content_path: str, label: str | None
+        self, system: SystemPair, content_path: str, label: str | None
     ) -> tuple[LaunchabilityAnswer, str | None]:
-        # The derived entries do not change this refusal: the accept-list is
-        # catalogue knowledge, and no core's self-declaration states which
-        # files a frontend would scan — the verdict stays a statement about
-        # the look. A label is the one reason to enumerate them: the launch
+        # The derived entries do not change this refusal: with no frontend
+        # there is no entry that decides which core runs, and choosing one
+        # needs a rule of its own (#776 D8, issue #783) — the verdict stays a
+        # statement about the look. A label is the one reason to enumerate them: the launch
         # command looks a label up among the derived entries, so one none of
         # them carries is refused here as there.
         if label is None:
-            health = self._health_from(self._machine.read_text(self._cfg_path()).status)
+            health = self._health_from(_read_text_once(self._machine, self._cfg_path()).status)
             refusal: tuple[Caveat, ...] = ()
         else:
             context, health = self._derived_context()
@@ -28561,6 +30641,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         content_path: str | None = None,
         cwd: str | None = None,
         appendconfig: tuple[str, ...] = (),
+        asked: tuple[AskedPair, ...] | None = None,
     ) -> SavefilePlacement | Unresolved:
         """The entry route behind a derived entry — the core question, asked by the entry.
 
@@ -28576,16 +30657,16 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
             return _foreign_core_unresolved(spec, foreign, _READS_SAVE_FILES)
         if spec.kind != KIND_LIBRETRO:
             return _standalone_savefile_unresolved(spec)
+        query = self._query(
+            content_path=content_path,
+            core_so=spec.core_so,
+            extra_caveats=entry_caveats,
+            cwd=cwd,
+            appendconfig=appendconfig,
+        )
+        keys = self._record_keys(_spec_system(spec), asked or ())
         return _retroarch_savefile_location(
-            self._machine,
-            self._query(
-                content_path=content_path,
-                core_so=spec.core_so,
-                system=spec.system,
-                extra_caveats=entry_caveats,
-                cwd=cwd,
-                appendconfig=appendconfig,
-            ),
+            self._machine, _keyed(query, keys, system_asked=True, asked=_entry_asked(spec, asked))
         )
 
     @one_question
@@ -28734,7 +30815,7 @@ class Installation(Protocol):
         *,
         content_path: str | None = None,
         core_so: str | None = None,
-        system: str | None = None,
+        system: SystemArgument | None = None,
         cwd: str | None = None,
         appendconfig: Sequence[str] = (),
     ) -> SavefilePlacement | Unresolved: ...
@@ -28768,19 +30849,32 @@ class Installation(Protocol):
 
     def systems_for_platform(self, vocabulary: str, value: str) -> PlatformSystemsAnswer: ...
 
-    def platform_ids(self, system: str) -> SystemPlatformsAnswer: ...
+    def systems_for_platforms(self, pairs: Sequence[Sequence[str | None]]) -> PlatformSystemsAnswer: ...
 
-    def emulators_for(self, system: str, *, content_path: str | None = None) -> CatalogueAnswer: ...
+    def platform_ids(self, system: SystemArgument) -> SystemPlatformsAnswer: ...
+
+    def emulators_for(self, system: SystemArgument, *, content_path: str | None = None) -> CatalogueAnswer: ...
 
     def launchable(
-        self, system: str, content_path: str, *, label: str | None = None
+        self, system: SystemArgument, content_path: str, *, label: str | None = None
     ) -> LaunchabilityAnswer: ...
 
     def launch_command(
-        self, system: str, content_path: str, *, label: str | None = None
+        self, system: SystemArgument, content_path: str, *, label: str | None = None
     ) -> LaunchCommandAnswer: ...
 
-    def rom_location(self, system: str) -> RomPlacement: ...
+    def save_portability(
+        self,
+        system: SystemArgument,
+        *,
+        source: str,
+        target: str,
+        content_path: str | None = None,
+        cwd: str | None = None,
+        appendconfig: Sequence[str] = (),
+    ) -> SavePortabilityAnswer: ...
+
+    def rom_location(self, system: SystemArgument) -> RomPlacement: ...
 
     def rom_locations(self) -> RomLocationsAnswer: ...
 
@@ -28795,7 +30889,7 @@ class Installation(Protocol):
 
     def firmware_for_system(
         self,
-        system: str,
+        system: SystemArgument,
         *,
         verify: bool = False,
         cwd: str | None = None,

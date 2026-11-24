@@ -27,6 +27,7 @@ from domain.firmware_rows import (
     library_match,
     store_copy,
 )
+from domain.platform_system import PlatformKeys
 from lib.errors import Refused, RommApiError, romm_error_log_level
 
 if TYPE_CHECKING:
@@ -35,7 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from domain.firmware_wants import FirmwareCatalogue, FirmwarePlacement
-    from domain.platform_system import PlatformSystem
+    from domain.platform_system import PlatformSystem, SystemArgument
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
     from services.firmware.store import FirmwareStore, LinkOutcome
@@ -112,9 +113,8 @@ class FirmwareDownloader:
         record holds.
         """
         rows = await self._platform_firmware(platform_folder)
-        return await self._fetch_and_link(
-            platform_slug, platform_folder, rows, await self.platform_system(platform_slug, rom_id)
-        )
+        platform = await self.platform_system(PlatformKeys.of(platform_slug, platform_folder), rom_id)
+        return await self._fetch_and_link(platform_slug, platform_folder, rows, platform.one_system)
 
     async def download_platform_firmware_file(
         self, platform_slug, platform_folder, file_name, firmware_id: int | None = None, rom_id: int | None = None
@@ -139,7 +139,8 @@ class FirmwareDownloader:
         fetched = await self._loop.run_in_executor(
             None, self._store.do_fetch, platform_slug, platform_folder, wanted[0]
         )
-        links = await self._update(platform_slug, platform_folder, await self.platform_system(platform_slug, rom_id))
+        platform = await self.platform_system(PlatformKeys.of(platform_slug, platform_folder), rom_id)
+        links = await self._update(platform_folder, platform.one_system)
         return {
             "success": True,
             "message": f"Downloaded {file_name}" if fetched.downloaded else f"{file_name} is already here",
@@ -161,21 +162,24 @@ class FirmwareDownloader:
         there is never replaced from here, and a link of Tender's into another
         platform's folder already serves the place.
         """
-        system = await self.platform_system(platform_slug, rom_id)
+        platform = await self.platform_system(PlatformKeys.of(platform_slug, platform_folder), rom_id)
+        system = platform.taken
         catalogue = await self._loop.run_in_executor(None, self._demand.platform_catalogue, system)
         identity = await self._shown_emulator(catalogue, system, platform_folder, emulator)
         platform_firmware = await self._platform_firmware(platform_folder)
         rows = await self._loop.run_in_executor(
             None, self._required_files, catalogue, platform_folder, identity, platform_firmware
         )
-        return await self._fetch_and_link(platform_slug, platform_folder, rows, system, what="required firmware files")
+        return await self._fetch_and_link(
+            platform_slug, platform_folder, rows, platform.one_system, what="required firmware files"
+        )
 
     async def _fetch_and_link(
         self,
         platform_slug: str,
         platform_folder: str,
         rows: list[dict[str, Any]],
-        system: str | None,
+        system: SystemArgument | None,
         *,
         what: str = "firmware files",
     ) -> dict[str, Any]:
@@ -209,7 +213,7 @@ class FirmwareDownloader:
             downloaded += 1 if fetched.downloaded else 0
             if fetched.backup:
                 backups.append(fetched.backup)
-        links = await self._update(platform_slug, platform_folder, system)
+        links = await self._update(platform_folder, system)
         message = f"Downloaded {downloaded} {what}"
         if failed:
             message += f" ({len(failed)} failed: {', '.join(failed)})"
@@ -222,10 +226,8 @@ class FirmwareDownloader:
             **links.payload(),
         }
 
-    async def _update(self, platform_slug: str, platform_folder: str, system: str | None) -> LinkOutcome:
-        outcome = await self._loop.run_in_executor(
-            None, self._store.do_update_links, platform_slug, platform_folder, system
-        )
+    async def _update(self, platform_folder: str, system: SystemArgument | None) -> LinkOutcome:
+        outcome = await self._loop.run_in_executor(None, self._store.do_update_links, platform_folder, system)
         self._listing.invalidate()
         return outcome
 
@@ -281,7 +283,7 @@ class FirmwareDownloader:
         return await self._loop.run_in_executor(None, self._listing.get_platform_firmware_list, platform_folder)
 
     async def _shown_emulator(
-        self, catalogue: FirmwareCatalogue, system: str | None, platform_folder: str, emulator: str | None
+        self, catalogue: FirmwareCatalogue, system: SystemArgument | None, platform_folder: str, emulator: str | None
     ) -> str | None:
         """The emulator a "Download required" is for: the one the page shows, or the platform's pick.
 
@@ -296,7 +298,7 @@ class FirmwareDownloader:
             raise Refused("emulator_unknown", f"Nothing is known about where {emulator} opens its BIOS files")
         return emulator
 
-    def _platform_emulator_identity(self, system: str, platform_folder: str) -> str | None:
+    def _platform_emulator_identity(self, system: SystemArgument, platform_folder: str) -> str | None:
         """The identity of the platform's resolved emulator, or ``None``.
 
         The same resolution the status surfaces read
@@ -310,18 +312,19 @@ class FirmwareDownloader:
         emulator = resolve_firmware_option(options["options"], pick.label if pick is not None else None)
         return emulator.emulator if emulator is not None else None
 
-    async def platform_system(self, platform_slug: str, rom_id: int | None = None) -> str | None:
-        """The system *platform_slug* is in the answering source — or the one *rom_id*'s install record holds.
+    async def platform_system(self, keys: PlatformKeys, rom_id: int | None = None) -> PlatformSystem:
+        """The system the platform *keys* names is in the answering source — or the one *rom_id*'s install record holds.
 
-        ``None`` where no source answers for it: a download then lands in the
-        store and nothing is linked.
+        Links follow its one system (:attr:`~domain.platform_system.PlatformSystem.one_system`):
+        where it has none — several systems among them, since a link lands in
+        one system's place — a download lands in the store and nothing is
+        linked, and the page says why (``store_only``).
         """
-        platform = await self._loop.run_in_executor(None, self._platform_system_io, platform_slug, rom_id)
-        return platform.taken
+        return await self._loop.run_in_executor(None, self._platform_system_io, keys, rom_id)
 
-    def _platform_system_io(self, platform_slug: str, rom_id: int | None) -> PlatformSystem:
+    def _platform_system_io(self, keys: PlatformKeys, rom_id: int | None) -> PlatformSystem:
         if rom_id is None:
-            return self._platform_systems.platform_system(platform_slug)
+            return self._platform_systems.platform_system(keys)
         with self._uow_factory() as uow:
             install = uow.rom_installs.get(int(rom_id))
-        return self._platform_systems.rom_system(platform_slug, install)
+        return self._platform_systems.rom_system(keys, install)

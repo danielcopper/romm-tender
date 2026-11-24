@@ -3,16 +3,22 @@
  * state's sentence (#2195 D2). The game page, a refused start — the Play
  * button's and Steam's own — and the emulator menu say them from here.
  *
- * Three states refuse a start: the game has to be installed in an emulator
- * first, the file is not one the system starts from, or the entry does not
- * start it, with the resolver's reason where it states one. The other two let
- * it go ahead: it starts, which says nothing unless the resolver states
- * something beside it — its reading of the file stopped short of something, its
- * format included, the file is an archive whose contents were not read, the
- * start goes on without a file it opens, or the emulator does not read every
- * disc a playlist lists — each said in its own words (#2195 D40, D41; #2698 D7,
- * D8); or whether it starts could not be established, which says so. This is
- * the one home of that rule.
+ * Two states refuse a start: the game has to be installed in an emulator
+ * first, or the entry does not start it, with the resolver's reason where it
+ * states one. The other two let it go ahead: it starts, which says nothing
+ * unless the resolver states something beside it — the file is an archive whose
+ * contents were not read, the start goes on without a file it opens, the
+ * emulator does not read every disc a playlist lists, or the reading of the file
+ * stopped short of something, its format included; or whether it starts could
+ * not be established, which says so first, with its reason where the backend
+ * states one, names what could not
+ * be — the reading stopping short among it — and never says it can start
+ * (#2195 D2, D40, D41; #2698 D7, D8). Beside a start or a verdict not
+ * established, after that first sentence, stand a name the frontend would not
+ * list the file under, the files a folder holds that the entry would take as
+ * games of their own, an extension the entry does not list though it would be
+ * handed the file, and a path the source's sandbox could not be established to
+ * reach. Each is said in its own words; this is the one home of that rule.
  *
  * Beside them are the notifications for a page whose check of whether the game
  * can start went wrong, and for a start pressed after it that then fails.
@@ -31,11 +37,7 @@ import { sourceName } from "./emulatorSourceWording";
 import { transportFailureSentence } from "./transportFailureWording";
 import { TimeoutError } from "./withTimeout";
 
-const REFUSING: ReadonlySet<GameLaunch["state"]> = new Set([
-  "needs_installing",
-  "not_a_launch_file",
-  "not_this_emulator",
-]);
+const REFUSING: ReadonlySet<GameLaunch["state"]> = new Set(["needs_installing", "not_this_emulator"]);
 
 /**
  * Why the verdict could not be established, worded; the reason is Tender's word
@@ -48,6 +50,8 @@ function notEstablishedBecause(launch: GameLaunch, source: AnsweringSource | nul
   switch (launch.reason) {
     case "system_unknown":
       return `${named} does not list the system ${launch.platform_name}`;
+    case "systems_several":
+      return `${named} has several systems for ${launch.platform_name} and names none of them`;
     case "entry_unknown":
       return `${named} has no emulator named ${launch.entry}`;
     case "catalogue_unread":
@@ -153,6 +157,7 @@ const STOPPED_SHORT_BECAUSE: Record<LaunchStoppedShortReason, (launch: GameLaunc
     `the check stopped at one of its limits at ${file}, so what it opens past that was not checked`,
   path_too_long_unchecked: (_launch, file) =>
     `the path of ${file} is too long for it to read in full, and what it does then was not checked`,
+  folder_route_unread: (launch) => `how ${launch.entry} takes a game installed as a folder was not checked`,
 };
 
 /**
@@ -175,6 +180,68 @@ const STARTS_WITH_A_NOTE_BECAUSE: Record<LaunchNoteReason, (file: string) => str
   playlist_discs_past_limit: (file) => `does not read every disc ${file} lists`,
 };
 
+/** The statements said in words of their own rather than in one of the groups above. */
+type OwnStatementReason = Exclude<
+  LaunchStatement["reason"],
+  LaunchStoppedShortReason | LaunchGoesOnReason | LaunchNoteReason
+>;
+
+/**
+ * Each statement said in words of its own, as the page's note and the menu's line say it, and whether it is only a
+ * note: one that says nothing about whether the game starts, so a verdict not established still leads with its own
+ * sentence beside it (#2195 D2, D40). `file` is the file the statement names, else the game's.
+ */
+const OWN_STATEMENTS: Record<
+  OwnStatementReason,
+  { notesOnly: boolean; said: (launch: GameLaunch, file: string, source: AnsweringSource | null) => Said }
+> = {
+  frontend_would_not_list: {
+    notesOnly: true,
+    said: (launch) => ({
+      note: `ES-DE would not list ${launch.file} under this name; it lists files ending in ${listedExtensions(launch.starts_from)}.`,
+      line: `ES-DE would not list ${launch.file} under this name`,
+    }),
+  },
+  folder_holds_games: {
+    notesOnly: true,
+    said: (launch, file) => ({
+      note: `${launch.file} holds files ${launch.entry} would take as games of their own: ${file}.`,
+      line: `the folder holds games of their own: ${file}`,
+    }),
+  },
+  format_unclaimed: {
+    notesOnly: true,
+    said: (launch) => ({
+      note: `${launch.entry} does not list ${launch.extension} among the files it takes, but would be handed the file all the same.`,
+      line: `${launch.extension} is not among the files it takes`,
+    }),
+  },
+  sandbox_path_unestablished: {
+    notesOnly: false,
+    said: (launch, _file, source) => {
+      const named = source === null ? "the emulator source" : sourceName(source.kind);
+      return {
+        note: `Whether ${launch.entry} can reach ${launch.file} inside ${named}'s sandbox could not be established.`,
+        line: "whether it can reach the file in the sandbox is not established",
+      };
+    },
+  },
+  format_unestablished: {
+    notesOnly: false,
+    said: (launch) => ({
+      note: `Whether ${launch.entry} reads ${launch.extension} files is not established.`,
+      line: `whether it reads ${launch.extension} is not established`,
+    }),
+  },
+  contents_unread: {
+    notesOnly: false,
+    said: (launch) => ({
+      note: `What is inside ${launch.file} was not read, so whether ${launch.entry} finds a game in it cannot be established.`,
+      line: `what is inside ${launch.file} was not read`,
+    }),
+  },
+};
+
 /** One statement as the page's note says it and as the emulator menu's line says it. */
 interface Said {
   note: string;
@@ -183,11 +250,32 @@ interface Said {
 
 /**
  * *statement* in its own group's words (#2698 D8), or `null` where Tender words none. `tenderStarts` false drops
- * the menu's "can start it" and keeps the rest of the line.
+ * the menu's "can start it" and keeps the rest of the line. Beside a verdict not established nothing says the
+ * game can start (#2195 D40): a file it would go on without and what else it would do are said as what it would do.
  */
-function said(launch: GameLaunch, statement: LaunchStatement, tenderStarts: boolean): Said | null {
+function said(
+  launch: GameLaunch,
+  statement: LaunchStatement,
+  tenderStarts: boolean,
+  source: AnsweringSource | null = null,
+): Said | null {
   const file = statement.file ?? launch.file;
   const reason = statement.reason;
+  const established = launch.state !== "not_established";
+  if (!established && reason in GOES_ON_BECAUSE) {
+    const without = `without ${file}: ${GOES_ON_BECAUSE[reason as LaunchGoesOnReason]}`;
+    return {
+      note: `Whether ${launch.entry} starts this game cannot be established; it would go on ${without}.`,
+      line: `whether it starts the game is not established; it would go on ${without}`,
+    };
+  }
+  if (!established && reason in STARTS_WITH_A_NOTE_BECAUSE) {
+    const note = STARTS_WITH_A_NOTE_BECAUSE[reason as LaunchNoteReason](file);
+    return {
+      note: `Whether ${launch.entry} starts this game cannot be established; it ${note}.`,
+      line: `whether it starts the game is not established; it ${note}`,
+    };
+  }
   if (reason in STOPPED_SHORT_BECAUSE) {
     const why = STOPPED_SHORT_BECAUSE[reason as LaunchStoppedShortReason](launch, file);
     return {
@@ -209,18 +297,7 @@ function said(launch: GameLaunch, statement: LaunchStatement, tenderStarts: bool
       line: tenderStarts ? `can start it, but ${note}` : note,
     };
   }
-  if (reason === "format_unestablished") {
-    return {
-      note: `Whether ${launch.entry} reads ${launch.extension} files is not established.`,
-      line: `whether it reads ${launch.extension} is not established`,
-    };
-  }
-  if (reason === "contents_unread") {
-    return {
-      note: `What is inside ${launch.file} was not read, so whether ${launch.entry} finds a game in it cannot be established.`,
-      line: `what is inside ${launch.file} was not read`,
-    };
-  }
+  if (reason in OWN_STATEMENTS) return OWN_STATEMENTS[reason as OwnStatementReason].said(launch, file, source);
   return null;
 }
 
@@ -241,9 +318,22 @@ function statementsOf(launch: GameLaunch): LaunchStatement[] {
   return statements;
 }
 
-/** Every statement beside the verdict that Tender words, in order. */
-function allSaid(launch: GameLaunch, tenderStarts: boolean): Said[] {
-  return statementsOf(launch).flatMap((statement) => said(launch, statement, tenderStarts) ?? []);
+/**
+ * Whether a verdict not established already says, in its own statements, what
+ * could not be established; where it does not, its sentence leads and the notes
+ * follow it (#2195 D2, D40).
+ */
+function saysWhatIsNotEstablished(launch: GameLaunch): boolean {
+  return statementsOf(launch).some(
+    (statement) =>
+      !(statement.reason in OWN_STATEMENTS && OWN_STATEMENTS[statement.reason as OwnStatementReason].notesOnly) &&
+      said(launch, statement, true) !== null,
+  );
+}
+
+/** Every statement beside the verdict that Tender words, in order; `source` is the source the answer came from. */
+function allSaid(launch: GameLaunch, tenderStarts: boolean, source: AnsweringSource | null): Said[] {
+  return statementsOf(launch).flatMap((statement) => said(launch, statement, tenderStarts, source) ?? []);
 }
 
 /** The file the refusal's reason is about, named as the sentences name it: its name, else the game's own file. */
@@ -371,8 +461,6 @@ export function launchRefusal(launch: GameLaunch | null, canPick: PickPointer): 
         ? "This game has to be installed first."
         : `This game has to be installed in ${names.join(" or ")} first.`;
     }
-    case "not_a_launch_file":
-      return `${launch.file} is not the file ${launch.platform_name} starts from; it starts from ${listedExtensions(launch.starts_from)}.`;
     case "not_this_emulator": {
       const refused = refusedBecause(launch);
       const beside = besideARefusal(launch).join("");
@@ -389,16 +477,27 @@ export function launchRefusal(launch: GameLaunch | null, canPick: PickPointer): 
  * Everything the page says under Play about a verdict that lets the game start, in order, each in its own group's
  * words and none of them weighed against another (#2698 D8): whether it starts could not be established, what the
  * reading of the file stopped short of, what its start goes on without or what else it is established to do short
- * of the whole start, whether the entry reads its format (#2195 D41), and that the file is an archive whose
- * contents were not read. Empty where there is nothing to say. `source` is the source the answer came from.
+ * of the whole start, whether the entry reads its format (#2195 D41), that the file is an archive whose contents
+ * were not read, a name the frontend would not list it under, the files a folder holds as games of their own, an
+ * extension the entry does not list, and a path the sandbox could not be established to reach. Empty where there is
+ * nothing to say. `source` is the source the answer came from.
  */
 export function launchNotes(launch: GameLaunch | null, source: AnsweringSource | null): string[] {
   if (launch === null) return [];
   if (launch.state === "not_established") {
-    return [`Whether ${launch.file} starts cannot be established: ${notEstablishedBecause(launch, source)}.`];
+    const notes = allSaid(launch, true, source).map((each) => each.note);
+    if (saysWhatIsNotEstablished(launch)) return notes;
+    // Where the backend states no reason, the sentence says no more than that.
+    let lead = `Whether ${launch.file} starts cannot be established.`;
+    if (launch.reason === "systems_several") {
+      lead = `Whether ${launch.entry} starts this game cannot be established: ${notEstablishedBecause(launch, source)}.`;
+    } else if (launch.reason !== null) {
+      lead = `Whether ${launch.file} starts cannot be established: ${notEstablishedBecause(launch, source)}.`;
+    }
+    return [lead, ...notes];
   }
   if (launch.state !== "starts") return [];
-  return allSaid(launch, true).map((each) => each.note);
+  return allSaid(launch, true, source).map((each) => each.note);
 }
 
 /** The first of {@link launchNotes}, or `null` where there is nothing to say. */
@@ -427,16 +526,18 @@ export function entryLaunchLine(
   switch (launch.state) {
     case "needs_installing":
       return first("cannot start it: the game has to be installed first", 0);
-    case "not_a_launch_file":
-      return first(`${launch.platform_name} does not start from ${launch.extension}`, 0);
     case "not_this_emulator": {
       const more = besideARefusal(launch).length;
       return first(refusedBecause(launch)?.line(launch) ?? `cannot start ${launch.extension} files`, more);
     }
-    case "not_established":
-      return first(`whether it starts cannot be established: ${notEstablishedBecause(launch, source)}`, 0);
+    case "not_established": {
+      const lines = allSaid(launch, tenderStarts, source).map((each) => each.line);
+      if (saysWhatIsNotEstablished(launch)) return first(lines[0]!, lines.length - 1);
+      const because = launch.reason === null ? "" : `: ${notEstablishedBecause(launch, source)}`;
+      return first(`whether it starts cannot be established${because}`, lines.length);
+    }
     default: {
-      const lines = allSaid(launch, tenderStarts).map((each) => each.line);
+      const lines = allSaid(launch, tenderStarts, source).map((each) => each.line);
       if (lines.length > 0) return first(lines[0]!, lines.length - 1);
       if (tenderStarts) return "can start it";
       return commandLine;

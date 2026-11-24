@@ -251,8 +251,10 @@ export const SavesTab: FC<SavesTabProps> = ({
           <SlotPanel
             // Whether the slot is active is part of the key: a panel reads
             // `defaultExpanded` once, so only a remount opens the new active slot
-            // and closes the old one, and every other panel keeps its state.
-            key={`panel-${slot.slot}-${isActive ? "active" : "inactive"}`}
+            // and closes the old one, and every other panel keeps its state. So is
+            // the ROM: what a panel loads belongs to the ROM it was mounted for
+            // (docs/architecture/save-file-sync-architecture.md, "The Saves tab across a game-version switch").
+            key={`panel-${romId}-${slot.slot}-${isActive ? "active" : "inactive"}`}
             romId={romId}
             slot={slot}
             isActive={isActive}

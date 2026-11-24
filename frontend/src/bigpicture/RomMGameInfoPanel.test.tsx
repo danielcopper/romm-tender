@@ -1616,7 +1616,11 @@ describe("RomMGameInfoPanel", () => {
       // rom-keyed read is the one that knows about the per-game pin, so its
       // answer is the one on the page; the platform-keyed check is not asked.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail());
-      vi.mocked(backend.checkPlatformBios).mockResolvedValue({ needs_bios: false });
+      vi.mocked(backend.checkPlatformBios).mockResolvedValue({
+        platform_system: null,
+        emulator_source: null,
+        needs_bios: false,
+      });
       vi.mocked(backend.getBiosStatus).mockImplementation((romId: number) =>
         Promise.resolve(
           romId === 60

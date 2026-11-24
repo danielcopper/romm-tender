@@ -101,7 +101,9 @@ function renderActiveSlotBody(
             </div>
           ) : null}
           <VersionHistoryPanel
-            key={`vhp-${f.filename}`}
+            // The ROM is in the key: a list belongs to the ROM it was read for
+            // (docs/architecture/save-file-sync-architecture.md, "The Saves tab across a game-version switch").
+            key={`vhp-${romId}-${f.filename}`}
             romId={romId}
             slot={slot}
             filename={f.filename}
@@ -162,6 +164,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
     expanded,
     slotFiles,
     loadingSlot,
+    slotLoadError,
     switching,
     switchError,
     deleting,
@@ -289,6 +292,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
         key="body"
         loadingSlot={loadingSlot}
         slotFiles={slotFiles}
+        loadError={slotLoadError}
         switching={switching}
         switchError={switchError}
         isOffline={isOffline}

@@ -13,13 +13,20 @@ describe("biosHeldRatio", () => {
     // the pair optionally. One function over the shape they share is what keeps
     // one platform from being described in two amounts; the types below are the
     // real ones, so a field renamed on either side fails here.
-    const gamePage: BiosStatus = { needs_bios: true, ratio_server_count: 20, ratio_local_count: 1 };
+    const gamePage: BiosStatus = {
+      platform_system: null,
+      emulator_source: null,
+      needs_bios: true,
+      ratio_server_count: 20,
+      ratio_local_count: 1,
+    };
     const platformPane: FirmwarePlatformExt = {
       platform_slug: "psx",
       files: [],
       ratio_server_count: 20,
       ratio_local_count: 1,
       emulator_data_reason: null,
+      emulator_data_system: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
       platform_system: null,
     };
@@ -33,11 +40,12 @@ describe("biosHeldRatio", () => {
     // was not told: the pair is the only thing on the wire that says what the
     // library holds. Counting the rows instead would answer from a second copy
     // of the backend's rule — see the module header.
-    const gamePage: BiosStatus = { needs_bios: true };
+    const gamePage: BiosStatus = { platform_system: null, emulator_source: null, needs_bios: true };
     const platformPane: FirmwarePlatformExt = {
       platform_slug: "psx",
       files: [],
       emulator_data_reason: null,
+      emulator_data_system: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
       platform_system: null,
     };
@@ -55,6 +63,8 @@ describe("biosHeldRatio", () => {
     // A row that reads "could not be established" is no file missing, so the
     // pair the level counts by — every row the library holds — is not the one stated.
     const someEstablished: BiosStatus = {
+      platform_system: null,
+      emulator_source: null,
       needs_bios: true,
       server_count: 3,
       local_count: 1,
@@ -62,6 +72,8 @@ describe("biosHeldRatio", () => {
       ratio_local_count: 1,
     };
     const noneEstablished: BiosStatus = {
+      platform_system: null,
+      emulator_source: null,
       needs_bios: true,
       server_count: 3,
       local_count: 0,

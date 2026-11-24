@@ -329,7 +329,7 @@
         }
       },
       "provenance": {
-        "source": "DeSmuME source at 7f05a8d, the revision the shipped binary names in its library_version ('git 7f05a8d'). retro_get_memory answers only system RAM (frontend/libretro/libretro.cpp:2473-2488), so RetroArch writes no save file. The core's backup device builds one itself: the battery path defaults to the module path (path.cpp:265-277, :246-262), which the libretro build fills with the frontend's save directory — falling back to the system directory and then the content's own when no save directory is named (LoadModulePath, path.cpp:196-222) — and the file is that path joined with the content's stem and '.dsv' (mc.cpp:232-235, the stem via getpathnoext, path.cpp:417-421). Where no .dsv exists, a '<rom_stem>.sav' lying beside it is imported once and the state dumped back out as the .dsv (mc.cpp:270-283) — the .sav is read, never written. This build writes no '.dsv.bak': the copy is gated on a setting only the Windows frontend reads, and its default is off (mc.cpp:241, NDSSystem.h:534, frontend/windows/main.cpp:1962) — where DeSmuME 2015's card declares the pair, this generation declares the one file. The registered options govern firmware, CPU and video ('desmume_cpu_mode', 'desmume_internal_resolution', …), none moves a file — one mode.",
+        "source": "DeSmuME source at 7f05a8d, the revision the shipped binary names in its library_version ('git 7f05a8d'). retro_get_memory answers only system RAM (frontend/libretro/libretro.cpp:2473-2488), so RetroArch writes no save file. The core's backup device builds one itself: the battery path defaults to the module path (path.cpp:265-277, :246-262), which the libretro build fills with the frontend's save directory — falling back to the system directory and then the content's own when no save directory is named (LoadModulePath, path.cpp:196-222) — and the file is that path joined with the content's stem and '.dsv' (mc.cpp:232-235, the stem via getpathnoext, path.cpp:417-421). Where no .dsv exists, a '<rom_stem>.sav' lying beside it is imported once and the state dumped back out as the .dsv (mc.cpp:270-283) — the .sav is read, never written. This build writes no '.dsv.bak': the copy is gated on a setting only the Windows frontend reads, and its default is off (mc.cpp:241, NDSSystem.h:534, frontend/windows/main.cpp:1962). The registered options govern firmware, CPU and video ('desmume_cpu_mode', 'desmume_internal_resolution', …), none moves a file — one mode.",
         "status": {
           "always": "[D] Read from source at 7f05a8d, the revision the shipped binary names. Not live-observed."
         }
@@ -349,10 +349,9 @@
               {
                 "subdir": null,
                 "files": [
-                  "<rom_stem>.dsv",
-                  "<rom_stem>.dsv.bak"
+                  "<rom_stem>.dsv"
                 ],
-                "granularity": "per-game-files",
+                "granularity": "per-game-file",
                 "role": "battery"
               }
             ]
@@ -361,14 +360,11 @@
         "anchors": {
           "<rom_stem>.dsv": {
             "literal": ".dsv"
-          },
-          "<rom_stem>.dsv.bak": {
-            "literal": ".dsv.bak"
           }
         }
       },
       "provenance": {
-        "source": "DeSmuME 2015 source at af397ff, the revision the shipped binary names ('git af397ff'). retro_get_memory_size answers only RETRO_MEMORY_SYSTEM_RAM (desmume/src/libretro/libretro.cpp:1771-1778), so RetroArch writes no save file. The core builds its own: path.getpathnoext(path.BATTERY) plus '.dsv' (desmume/src/mc.cpp:237-240), the name being the content's file name without its extension (path.h:307-311, :417-422), and it renames an existing file to '.dsv.bak' before writing anew (mc.cpp:248) — so the pair is the upper bound, and the .bak exists only once a save was overwritten. getpath(BATTERY) returns pathToBattery (path.h:222-224), a member the class fills from an ini via ReadKey (:185) — **and the libretro unit never fills it**: no setpath, no ReadPathSettings, no assignment to pathToBattery anywhere in that translation unit. The whole path machinery belongs to DeSmuME's own frontends, and this build uses none of them, so the prefix is the empty string and the file lands relative to the working directory of whatever process loaded the core. That is a property of the launch, not of the machine, which is what the working_directory root says: the answer is a <cwd> template, the caller fills the hole, and the save-dir-launch-dependent caveat carries the sentence.\n\nBoth extensions are whole strings in the shipped binary, as is the message 'DeSmuME .dsv save file not found. Trying to load an old raw .sav file.' — the code is real and reached. The registered options govern video and input, none moves a file — one mode.",
+        "source": "DeSmuME 2015 source at af397ff, the revision the shipped binary names ('git af397ff'). retro_get_memory_size answers only RETRO_MEMORY_SYSTEM_RAM (desmume/src/libretro/libretro.cpp:1771-1778), so RetroArch writes no save file. The core builds its own: path.getpathnoext(path.BATTERY) plus '.dsv' (desmume/src/mc.cpp:237-240), the name being the content's file name without its extension (path.h:307-311, :417-422), and that is the one file it writes: it copies an existing .dsv to '.dsv.bak' at load only where CommonSettings.backupSave is set (mc.cpp:246-269), a setting that defaults to false (desmume/src/NDSSystem.h:515) and that nothing in the tree sets, and no code reads the copy back, so this build writes no '.dsv.bak'. getpath(BATTERY) returns pathToBattery (path.h:222-224), a member the class fills from an ini via ReadKey (:185) — **and the libretro unit never fills it**: no setpath, no ReadPathSettings, no assignment to pathToBattery anywhere in that translation unit. The whole path machinery belongs to DeSmuME's own frontends, and this build uses none of them, so the prefix is the empty string and the file lands relative to the working directory of whatever process loaded the core. That is a property of the launch, not of the machine, which is what the working_directory root says: the answer is a <cwd> template, the caller fills the hole, and the save-dir-launch-dependent caveat carries the sentence.\n\nThe extension is a whole string in the shipped binary, as is the message 'DeSmuME .dsv save file not found. Trying to load an old raw .sav file.' — the code is real and reached. The registered options govern video and input, none moves a file — one mode.",
         "status": {
           "always": "[D] Read from source at the revision the shipped binary names. Not live-observed — and not observable: the directory depends on the launch."
         }
@@ -1022,7 +1018,17 @@
                   "vmu_save_D1.bin",
                   "vmu_save_D2.bin"
                 ],
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "vmu_save_A1.bin": "A1",
+                  "vmu_save_B1.bin": "B1",
+                  "vmu_save_C1.bin": "C1",
+                  "vmu_save_D1.bin": "D1",
+                  "vmu_save_A2.bin": "A2",
+                  "vmu_save_B2.bin": "B2",
+                  "vmu_save_C2.bin": "C2",
+                  "vmu_save_D2.bin": "D2"
+                }
               },
               {
                 "subdir": "dc",
@@ -1051,7 +1057,10 @@
                 "files_established_for": "console",
                 "files_citation": "flycast@1dac369 oslib.cpp:38-67 (names; per-content applies per port, :40-41), maple_cfg.cpp:246-253 (Naomi connects VMUs on B1 and C1 only, so port A1 never exists for arcade content)",
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<save_id>.A1.bin": "A1"
+                }
               },
               {
                 "root": "system_directory",
@@ -1062,7 +1071,12 @@
                   "vmu_save_D1.bin"
                 ],
                 "granularity": "shared-card",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "vmu_save_B1.bin": "B1",
+                  "vmu_save_C1.bin": "C1",
+                  "vmu_save_D1.bin": "D1"
+                }
               },
               {
                 "root": "system_directory",
@@ -1099,7 +1113,13 @@
                 },
                 "files_established_for": "console",
                 "files_citation": "flycast@1dac369 oslib.cpp:38-67 (names), maple_cfg.cpp:246-253 (Naomi connects VMUs on B1 and C1 only)",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<save_id>.A1.bin": "A1",
+                  "<save_id>.B1.bin": "B1",
+                  "<save_id>.C1.bin": "C1",
+                  "<save_id>.D1.bin": "D1"
+                }
               },
               {
                 "root": "system_directory",
@@ -1465,7 +1485,7 @@
         }
       },
       "provenance": {
-        "source": "Kronos source at 6709c1d, the revision the shipped binary names ('v2.7.0 6709c1d'). retro_get_memory_size returns 0 for every id (yabause/src/libretro/libretro.c:1758-1761), so RetroArch writes no save file; the retired record said so and the card replaces it. The core takes GET_SAVE_DIRECTORY with no fallback (:1540-1543) and creates both of its subtrees blind at retro_init (:1545-1549) — a Saturn-only machine carries an empty kronos/stv/ and an ST-V-only one an empty kronos/saturn/.\n\nSaturn content: the internal backup RAM is one file per game, kronos/saturn/<stem>.ram (:1712), handed to the emulator as its backup path (:1588, BackupInit at ctrl/src/yabause.c:272; the writer is BackupFlush, sys/memory/src/memory.c:1319, fopen 'wb' at :1246). A backup-RAM addon cartridge adds kronos/saturn/<stem>-ext{512K,1M,2M,4M}.ram, keyed by the kronos_addon_cartridge option (:1309-1315, option values at :926-946) — and the emulator may auto-select a cartridge per game (yinit.auto_cart, :1596), so all four spellings ride as observation candidates while only the certain .ram is declared. With kronos_use_beetle_saves enabled the same two saves move to Beetle Saturn's flat spellings in the save root — <stem>.bkr for the internal RAM (:1710) and <stem>.bcr for the cartridge (:1304) — so a library shared between the two cores reads one set of files; the option registers 'disabled' as its default and the probe reads it.\n\nST-V content (a zip the driver list identifies, :1646-1650) ignores the option: the machine's backup RAM is kronos/stv/<stem>.ram (:1684) and the board's eeprom is written beside it as <romset>.nv (ctrl/src/stv.c:3075) — named after the identified romset, which equals the stem for sets named as the driver list names them, and the scope says so.",
+        "source": "Kronos source at 6709c1d, the revision the shipped binary names ('v2.7.0 6709c1d'). retro_get_memory_size returns 0 for every id (yabause/src/libretro/libretro.c:1758-1761), so RetroArch writes no save file; the retired record said so and the card replaces it. The core takes GET_SAVE_DIRECTORY with no fallback (:1540-1543) and creates both of its subtrees blind at retro_init (:1545-1549) — a Saturn-only machine carries an empty kronos/stv/ and an ST-V-only one an empty kronos/saturn/.\n\nSaturn content: the internal backup RAM is one file per game, kronos/saturn/<stem>.ram (:1712), handed to the emulator as its backup path (:1588, BackupInit at ctrl/src/yabause.c:272; the writer is BackupFlush, sys/memory/src/memory.c:1319, fopen 'wb' at :1246). A backup-RAM addon cartridge adds kronos/saturn/<stem>-ext{512K,1M,2M,4M}.ram, keyed by the kronos_addon_cartridge option (:1309-1315, option values at :926-946) — and the emulator may auto-select a cartridge per game (yinit.auto_cart, :1596), so all four spellings ride as observation candidates while only the certain .ram is declared. With kronos_use_beetle_saves enabled the same two saves move to Beetle Saturn's flat spellings in the save root — <stem>.bkr for the internal RAM (:1710) and <stem>.bcr for the cartridge (:1304) — so a library shared between the two cores reads one set of files. That switch names the 4 Mbit backup cartridge whatever kronos_addon_cartridge says (:1301-1305), but the auto-selection still runs: YabauseInit hands the cartridge type to DBLookup (ctrl/src/yabause.c:392-393), whose table replaces it for the discs it lists (utils/src/db.c:14-47 and :57-79), so the .bcr too is an observation candidate beside the declared .bkr; the option registers 'disabled' as its default and the probe reads it.\n\nST-V content (a zip the driver list identifies, :1646-1650) ignores the option: the machine's backup RAM is kronos/stv/<stem>.ram (:1684) and the board's eeprom is written beside it as <romset>.nv (ctrl/src/stv.c:3075) — named after the identified romset, which equals the stem for sets named as the driver list names them, and the scope says so.",
         "status": {
           "disabled": "[D] Read from source at the revision the shipped binary names, and this build's own default. Not live-observed.",
           "enabled": "[D] Read from source at the same revision. Beetle Saturn's spellings, chosen to share a library with that core. Not live-observed."
@@ -2825,7 +2845,11 @@
                   "Mcd002.ps2"
                 ],
                 "granularity": "shared-card",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "Mcd001.ps2": "1",
+                  "Mcd002.ps2": "2"
+                }
               }
             ]
           },
@@ -2838,7 +2862,10 @@
                   "<rom_stem>.ps2"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.ps2": "1"
+                }
               }
             ]
           }
@@ -3773,6 +3800,9 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.srm": "1"
+                },
                 "written_by_frontend": {
                   "memory": "save_ram",
                   "size": {
@@ -3792,6 +3822,9 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.srm": "1"
+                },
                 "written_by_frontend": {
                   "memory": "save_ram",
                   "size": {
@@ -3805,7 +3838,10 @@
                   "duckstation_shared_card_2.mcd"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "duckstation_shared_card_2.mcd": "2"
+                }
               }
             ]
           },
@@ -3818,6 +3854,9 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.srm": "1"
+                },
                 "written_by_frontend": {
                   "memory": "save_ram",
                   "size": {
@@ -3838,7 +3877,10 @@
                   "spelling": "path-segment"
                 },
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<save_id>_2.mcd": "2"
+                }
               }
             ]
           },
@@ -3851,6 +3893,9 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.srm": "1"
+                },
                 "written_by_frontend": {
                   "memory": "save_ram",
                   "size": {
@@ -3864,7 +3909,10 @@
                   "<rom_stem>_2.mcd"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>_2.mcd": "2"
+                }
               }
             ]
           },
@@ -3876,7 +3924,10 @@
                   "duckstation_shared_card_1.mcd"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "duckstation_shared_card_1.mcd": "1"
+                }
               }
             ]
           },
@@ -3889,7 +3940,11 @@
                   "duckstation_shared_card_2.mcd"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "duckstation_shared_card_1.mcd": "1",
+                  "duckstation_shared_card_2.mcd": "2"
+                }
               }
             ]
           },
@@ -3901,7 +3956,10 @@
                   "duckstation_shared_card_1.mcd"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "duckstation_shared_card_1.mcd": "1"
+                }
               },
               {
                 "files": [
@@ -3915,7 +3973,10 @@
                   "spelling": "path-segment"
                 },
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<save_id>_2.mcd": "2"
+                }
               }
             ]
           },
@@ -3927,14 +3988,20 @@
                   "duckstation_shared_card_1.mcd"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "duckstation_shared_card_1.mcd": "1"
+                }
               },
               {
                 "files": [
                   "<rom_stem>_2.mcd"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>_2.mcd": "2"
+                }
               }
             ]
           },
@@ -3953,7 +4020,10 @@
                   "spelling": "path-segment"
                 },
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<save_id>_1.mcd": "1"
+                }
               }
             ]
           },
@@ -3972,14 +4042,20 @@
                   "spelling": "path-segment"
                 },
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<save_id>_1.mcd": "1"
+                }
               },
               {
                 "files": [
                   "duckstation_shared_card_2.mcd"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "duckstation_shared_card_2.mcd": "2"
+                }
               }
             ]
           },
@@ -4000,7 +4076,11 @@
                   "spelling": "path-segment"
                 },
                 "granularity": "per-game-files",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<save_id>_1.mcd": "1",
+                  "<save_id>_2.mcd": "2"
+                }
               }
             ]
           },
@@ -4019,14 +4099,20 @@
                   "spelling": "path-segment"
                 },
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<save_id>_1.mcd": "1"
+                }
               },
               {
                 "files": [
                   "<rom_stem>_2.mcd"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>_2.mcd": "2"
+                }
               }
             ]
           },
@@ -4038,7 +4124,10 @@
                   "<rom_stem>_1.mcd"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>_1.mcd": "1"
+                }
               }
             ]
           },
@@ -4050,14 +4139,20 @@
                   "<rom_stem>_1.mcd"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>_1.mcd": "1"
+                }
               },
               {
                 "files": [
                   "duckstation_shared_card_2.mcd"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "duckstation_shared_card_2.mcd": "2"
+                }
               }
             ]
           },
@@ -4069,7 +4164,10 @@
                   "<rom_stem>_1.mcd"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>_1.mcd": "1"
+                }
               },
               {
                 "files": [
@@ -4083,7 +4181,10 @@
                   "spelling": "path-segment"
                 },
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<save_id>_2.mcd": "2"
+                }
               }
             ]
           },
@@ -4096,7 +4197,11 @@
                   "<rom_stem>_2.mcd"
                 ],
                 "granularity": "per-game-files",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>_1.mcd": "1",
+                  "<rom_stem>_2.mcd": "2"
+                }
               }
             ]
           },
@@ -4112,7 +4217,10 @@
                   "duckstation_shared_card_2.mcd"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "duckstation_shared_card_2.mcd": "2"
+                }
               }
             ]
           },
@@ -4131,7 +4239,10 @@
                   "spelling": "path-segment"
                 },
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<save_id>_2.mcd": "2"
+                }
               }
             ]
           },
@@ -4143,7 +4254,10 @@
                   "<rom_stem>_2.mcd"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>_2.mcd": "2"
+                }
               }
             ]
           }
@@ -4273,6 +4387,9 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.srm": "1"
+                },
                 "written_by_frontend": {
                   "memory": "save_ram",
                   "size": {
@@ -4286,7 +4403,10 @@
                   "<rom_stem>.1.mcr"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.1.mcr": "2"
+                }
               }
             ]
           },
@@ -4299,6 +4419,9 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.srm": "1"
+                },
                 "written_by_frontend": {
                   "memory": "save_ram",
                   "size": {
@@ -4312,7 +4435,10 @@
                   "mednafen_psx_libretro_shared.1.mcr"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "mednafen_psx_libretro_shared.1.mcr": "2"
+                }
               }
             ]
           },
@@ -4325,6 +4451,9 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.srm": "1"
+                },
                 "written_by_frontend": {
                   "memory": "save_ram",
                   "size": {
@@ -4344,7 +4473,11 @@
                   "<rom_stem>.1.mcr"
                 ],
                 "granularity": "per-game-files",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.0.mcr": "1",
+                  "<rom_stem>.1.mcr": "2"
+                }
               }
             ]
           },
@@ -4357,7 +4490,11 @@
                   "mednafen_psx_libretro_shared.1.mcr"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "mednafen_psx_libretro_shared.0.mcr": "1",
+                  "mednafen_psx_libretro_shared.1.mcr": "2"
+                }
               }
             ]
           },
@@ -4369,7 +4506,10 @@
                   "<rom_stem>.0.mcr"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.0.mcr": "1"
+                }
               }
             ]
           },
@@ -4381,7 +4521,10 @@
                   "mednafen_psx_libretro_shared.0.mcr"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "mednafen_psx_libretro_shared.0.mcr": "1"
+                }
               }
             ]
           }
@@ -4476,6 +4619,9 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.srm": "1"
+                },
                 "written_by_frontend": {
                   "memory": "save_ram",
                   "size": {
@@ -4489,7 +4635,10 @@
                   "<rom_stem>.1.mcr"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.1.mcr": "2"
+                }
               }
             ]
           },
@@ -4502,6 +4651,9 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.srm": "1"
+                },
                 "written_by_frontend": {
                   "memory": "save_ram",
                   "size": {
@@ -4515,7 +4667,10 @@
                   "mednafen_psx_libretro_shared.1.mcr"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "mednafen_psx_libretro_shared.1.mcr": "2"
+                }
               }
             ]
           },
@@ -4528,6 +4683,9 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.srm": "1"
+                },
                 "written_by_frontend": {
                   "memory": "save_ram",
                   "size": {
@@ -4547,7 +4705,11 @@
                   "<rom_stem>.1.mcr"
                 ],
                 "granularity": "per-game-files",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.0.mcr": "1",
+                  "<rom_stem>.1.mcr": "2"
+                }
               }
             ]
           },
@@ -4560,7 +4722,11 @@
                   "mednafen_psx_libretro_shared.1.mcr"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "mednafen_psx_libretro_shared.0.mcr": "1",
+                  "mednafen_psx_libretro_shared.1.mcr": "2"
+                }
               }
             ]
           },
@@ -4572,7 +4738,10 @@
                   "<rom_stem>.0.mcr"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.0.mcr": "1"
+                }
               }
             ]
           },
@@ -4584,7 +4753,10 @@
                   "mednafen_psx_libretro_shared.0.mcr"
                 ],
                 "granularity": "shared-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "mednafen_psx_libretro_shared.0.mcr": "1"
+                }
               }
             ]
           }
@@ -5407,6 +5579,9 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.srm": "1"
+                },
                 "written_by_frontend": {
                   "memory": "save_ram",
                   "size": {
@@ -5426,6 +5601,9 @@
                 ],
                 "granularity": "per-game-file",
                 "role": "memory-card",
+                "slots": {
+                  "<rom_stem>.srm": "1"
+                },
                 "written_by_frontend": {
                   "memory": "save_ram",
                   "size": {
@@ -5439,7 +5617,10 @@
                   "pcsx-card2.mcd"
                 ],
                 "granularity": "shared-card",
-                "role": "memory-card"
+                "role": "memory-card",
+                "slots": {
+                  "pcsx-card2.mcd": "2"
+                }
               }
             ]
           }

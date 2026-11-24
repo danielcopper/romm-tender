@@ -1,28 +1,26 @@
-"""atlas's own system vocabulary — the ids every question about a system takes.
+"""The system names one pinned catalogue declares — ``gb``, ``n64``, ``dreamcast``, RetroDECK's ``primehack``.
 
-Those ids are **ES-DE's system names** — ``gb``, ``n64``, ``dreamcast`` —
-because that is what a frontend catalogue on the machine declares, and a
-resolver that reads the machine should speak the machine's names. The ids are
-pinned to the ``es_systems.xml`` of a stated build (``data/system_ids.json``),
-which is what makes membership checkable rather than an opinion: a name that
-file does not declare is not an id, however plausible it looks.
+The names are pinned to the ``es_systems.xml`` of a stated build
+(``data/system_ids.json``), which is what makes membership checkable rather
+than an opinion: a name that file does not declare is not among them, however
+plausible it looks. They are one catalogue's state, not the set a question
+takes: a question about a system takes a name in the installation's own
+catalogue source, read live, or (source, key) pairs of any source the platform
+table holds (#784 D43, D44).
 
 What this module deliberately does **not** do is translate. Translation lives
-in :mod:`atlas.platforms` and is split exactly along the boundary rule: which
-public identities a *platform* has is cited world knowledge (the crosswalk
-table), and which platform a *system* belongs to is read off the machine —
-every catalogue system carries a ``<platform>`` tag, and the resolvers read it
-live. What this file adds to that split is the snapshot column: the stated
-build's platform tags per system (``platforms``), the fallback for a system
+in :mod:`atlas.platforms` and is split exactly along the boundary rule: what
+another source calls a system is cited world knowledge (the platform table),
+and which systems an installation declares, and with which ``<platform>``
+tags, is read off the machine — the resolvers read it live. What this file
+adds to that split is the snapshot column: the stated build's platform tags
+per system (``platforms``), the fallback for a system
 whose tags cannot be read live — a sealed catalogue, a system this
 installation does not declare — always marked as vocabulary knowledge when
 used, never passed off as a read.
 
-:func:`known_systems` hands over the target set, :func:`from_esde_system` says
-whether one name is in it. The failure they prevent is the expensive one: an
-identifier no catalogue declares reaches a question, the question answers "no
-emulator for that system", and a vocabulary mistake has been read as a fact
-about the machine.
+:func:`known_systems` hands over that build's names, :func:`from_esde_system`
+says whether one name is among them.
 """
 
 from __future__ import annotations
@@ -118,24 +116,21 @@ def vocabulary_platform_tags(system: str) -> tuple[str, ...] | None:
 
 
 def known_systems() -> tuple[str, ...]:
-    """Every canonical system id, sorted — the vocabulary the questions take.
+    """Every system name the pinned catalogue declares, sorted.
 
-    The target set for a caller who maintains a mapping out of some other
-    vocabulary: check yours against this and the day a name stops being an id
-    is the day your own tests say so, instead of the day a question comes back
-    empty for a system that is right there on the machine.
+    One catalogue's state, not every system a question can take (#784 D43):
+    another source's key is asked as a pair, and the platform table translates
+    it.
     """
     return tuple(sorted(_ids()))
 
 
 def from_esde_system(name: str) -> str | None:
-    """*name* if it is a canonical system id, else ``None``.
+    """*name* if the pinned catalogue declares it, else ``None``.
 
-    ES-DE's names *are* the canonical ids, so this translates nothing — it
-    answers "is this an id atlas can be asked about", which is the question a
-    caller holding a name from anywhere else actually has. It is also the only
-    honest way to check membership from outside: the id set is packaged data
-    that moves with atlas releases, never a literal a client should carry.
+    This translates nothing — it answers whether *name* is one of the
+    names :func:`known_systems` lists. The set is packaged data that moves with
+    atlas releases, never a literal a client should carry.
 
     >>> from_esde_system("dreamcast")
     'dreamcast'

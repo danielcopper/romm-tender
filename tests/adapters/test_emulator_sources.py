@@ -54,7 +54,7 @@ class _Installation:
         self.kind = kind
         self._issues = issues
         self._root = root
-        self._systems = systems if systems is not None else SystemsAnswer(systems=("gba",))
+        self._systems = systems if systems is not None else SystemsAnswer(systems=(("esde", "gba"),))
         self._health_raises = health_raises
         self._rom_dirs = rom_dirs if rom_dirs is not None else {}
         # The systems the per-system ROM-folder question was put for.
@@ -84,7 +84,7 @@ class _Installation:
         listed = self.systems()
         return RomLocationsAnswer(
             tuple(
-                SystemRomPlacement(system, RomPlacement(dir=self._rom_dirs.get(system))) for system in listed.systems
+                SystemRomPlacement(system, RomPlacement(dir=self._rom_dirs.get(system[1]))) for system in listed.systems
             ),
             listed.sources,
             listed.caveats,
@@ -242,7 +242,9 @@ class TestDescribe:
         emudeck = _Installation(
             "emudeck",
             root="/run/media/deck/Emulation/Emulation",
-            systems=SystemsAnswer(systems=("psx",), caveats=(Caveat(CAVEAT_EMULATOR_CATALOGUE_SEALED, "prose"),)),
+            systems=SystemsAnswer(
+                systems=(("esde", "psx"),), caveats=(Caveat(CAVEAT_EMULATOR_CATALOGUE_SEALED, "prose"),)
+            ),
         )
         holder = _holder(_Detect(retrodeck, emudeck), traces, {"emulator_sources_off": ["emudeck"]})
 
@@ -365,7 +367,7 @@ class TestRomFolders:
         (roms / "ps2").symlink_to(elsewhere)
         retrodeck = _Installation(
             "retrodeck",
-            systems=SystemsAnswer(systems=("psx", "ps2", "n64")),
+            systems=SystemsAnswer(systems=(("esde", "psx"), ("esde", "ps2"), ("esde", "n64"))),
             roots=_roms_root(str(roms)),
             rom_dirs={"psx": str(roms / "psx"), "ps2": str(roms / "ps2"), "n64": None},
         )
@@ -381,7 +383,7 @@ class TestRomFolders:
     def test_each_source_is_asked_for_all_its_system_folders_in_one_question(self, traces):
         retrodeck = _Installation(
             "retrodeck",
-            systems=SystemsAnswer(systems=("psx", "ps2")),
+            systems=SystemsAnswer(systems=(("esde", "psx"), ("esde", "ps2"))),
             roots=_roms_root("/roms"),
             rom_dirs={"psx": "/roms/psx", "ps2": "/roms/ps2"},
         )

@@ -4,6 +4,7 @@ import type { SaveStatus, SlotDeleteInfo, SlotSaveFile } from "../types";
 import { detach } from "./detach";
 import { useExpandedPanel, useMountedRef, useRomSaveSyncListener } from "./savePanelHooks";
 import { executeSlotSwitch, loadSlotDeleteInfo } from "./saveSlotFlow";
+import { slotSavesUnreadMessage } from "./saveSlotWording";
 import { showToast } from "./toast";
 
 interface UseSlotPanelStateOptions {
@@ -20,6 +21,8 @@ export interface SlotPanelState {
   expanded: boolean;
   slotFiles: SlotSaveFile[] | null;
   loadingSlot: boolean;
+  /** Why the slot's saves could not be read, which stands in place of the list. */
+  slotLoadError: string | null;
   switching: boolean;
   switchError: string | null;
   deleting: boolean;
@@ -27,6 +30,23 @@ export interface SlotPanelState {
   handleToggle: () => void;
   handleActivate: () => Promise<void>;
   handleDelete: (runConfirmAndDelete: (info: SlotDeleteInfo) => Promise<void> | void) => Promise<void>;
+}
+
+/** An inactive slot's saves, or the line saying why they could not be read; a failure is logged, never thrown. */
+async function readSlotSaves(
+  romId: number,
+  slotName: string,
+  logPrefix: string,
+): Promise<{ files: SlotSaveFile[] } | { error: string }> {
+  try {
+    const result = await getSlotSaves(romId, slotName);
+    if (result.success) return { files: result.saves };
+    logWarn(`${logPrefix}: slot '${slotName}' saves could not be read: ${result.message}`);
+    return { error: slotSavesUnreadMessage(result.message) };
+  } catch (e) {
+    logWarn(`${logPrefix}: slot '${slotName}' saves could not be read: ${e}`);
+    return { error: slotSavesUnreadMessage() };
+  }
 }
 
 export function useSlotPanelState({
@@ -41,6 +61,7 @@ export function useSlotPanelState({
   const { expanded, expandedRef, toggle } = useExpandedPanel(defaultExpanded);
   const [slotFiles, setSlotFiles] = useState<SlotSaveFile[] | null>(null);
   const [loadingSlot, setLoadingSlot] = useState(false);
+  const [slotLoadError, setSlotLoadError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -56,32 +77,22 @@ export function useSlotPanelState({
 
   const isMounted = useCallback(() => mountedRef.current, [mountedRef]);
 
+  // A failed read leaves the saves unread, so the next expand asks again.
   const loadInactiveSlotSaves = useCallback(async () => {
     const seq = ++slotSavesSeqRef.current;
     setLoadingSlot(true);
-    try {
-      const result = await getSlotSaves(romId, slotName);
-      if (!mountedRef.current || seq !== slotSavesSeqRef.current) return;
-      if (result.success) {
-        setSlotFiles(result.saves);
-      } else {
-        logWarn(
-          `${logPrefix}: getSlotSaves for romId=${romId} slot='${slotName}' failed (${result.reason}): ${result.message}`,
-        );
-        setSlotFiles([]);
-      }
-    } catch (e) {
-      logWarn(`${logPrefix}: failed to load slot saves for romId=${romId} slot='${slotName}': ${e}`);
-      if (!mountedRef.current || seq !== slotSavesSeqRef.current) return;
-      setSlotFiles([]);
-    } finally {
-      if (mountedRef.current && seq === slotSavesSeqRef.current) setLoadingSlot(false);
-    }
+    setSlotLoadError(null);
+    const answer = await readSlotSaves(romId, slotName, logPrefix);
+    if (!mountedRef.current || seq !== slotSavesSeqRef.current) return;
+    if ("files" in answer) setSlotFiles(answer.files);
+    else setSlotLoadError(answer.error);
+    setLoadingSlot(false);
   }, [logPrefix, mountedRef, romId, slotName]);
 
   const onRomSaveSync = useCallback(() => {
     slotSavesSeqRef.current += 1;
     setSlotFiles(null);
+    setSlotLoadError(null);
     if (expandedRef.current) {
       detach(loadInactiveSlotSaves());
     } else {
@@ -104,8 +115,7 @@ export function useSlotPanelState({
     setSwitchError(null);
     try {
       const outcome = await executeSlotSwitch(romId, slotName, "activate");
-      // Called even after an unmount: Big Picture's tab switch unmounts this
-      // panel, and the callback is what writes the new active slot.
+      // Even after an unmount: a tab switch unmounts this panel, and the callback writes the new active slot.
       if (outcome.ok) {
         await onSlotActivated(outcome.saveStatus);
         return;
@@ -145,6 +155,7 @@ export function useSlotPanelState({
     expanded,
     slotFiles,
     loadingSlot,
+    slotLoadError,
     switching,
     switchError,
     deleting,

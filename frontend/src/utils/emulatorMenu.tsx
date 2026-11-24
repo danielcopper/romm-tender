@@ -17,7 +17,14 @@
 
 import { useSyncExternalStore, type FC, type ReactNode } from "react";
 import { Menu, MenuItem, MenuSeparator } from "@decky/ui";
-import type { AnsweringSource, EmulatorDataReason, EmulatorOption, GameLaunch, PlatformSystemAnswer } from "../types";
+import type {
+  AnsweringSource,
+  EmulatorDataReason,
+  EmulatorOption,
+  GameLaunch,
+  PlatformSystemAnswer,
+  UnlistedSystem,
+} from "../types";
 import { emulatorDataReasonSentence } from "./emulatorSourceWording";
 import { entryForLabel } from "./emulatorEntries";
 import { notEstablishedNote } from "./emulatorInstallation";
@@ -39,7 +46,7 @@ export function emulatorEntryNotes(e: EmulatorOption): string {
 
 /** Format the per-entry launch verdict line once `askEntryLaunches` has settled for *launch*. */
 export function entryLaunchVerdictLine(launch: GameLaunch, source: AnsweringSource | null): string | null {
-  const verdict = startVerdictLine(launch.start_verdict ?? null);
+  const verdict = startVerdictLine(launch.start_verdict ?? null, { source, platform: launch.platform_name });
   return entryLaunchLine(launch, source, verdict.tenderStarts, verdict.line);
 }
 
@@ -78,6 +85,8 @@ export interface EmulatorMenuConfig {
    *  says why, from the two fields below, instead of showing an empty list. */
   emulatorDataAvailable: boolean;
   emulatorDataReason: EmulatorDataReason | null;
+  /** The system a `system_unknown` reason names. */
+  emulatorDataSystem: UnlistedSystem | null;
   emulatorSource: AnsweringSource | null;
   emulatorPlatformSystem: PlatformSystemAnswer | null;
   /** The active emulator's label — marked with a checkmark, its text drawn in `activeColor`. */
@@ -171,7 +180,12 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     return (
       <Menu label="Emulator">
         <MenuItem key="unavailable" disabled={true}>
-          {emulatorDataReasonSentence(config.emulatorDataReason, config.emulatorSource, config.emulatorPlatformSystem)}
+          {emulatorDataReasonSentence(
+            config.emulatorDataReason,
+            config.emulatorSource,
+            config.emulatorPlatformSystem,
+            config.emulatorDataSystem,
+          )}
         </MenuItem>
       </Menu>
     );

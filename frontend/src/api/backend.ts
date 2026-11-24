@@ -1,7 +1,9 @@
 import { endpoint } from "./host";
 import { detach } from "../utils/detach";
 import type {
+  AnsweringSource,
   DataInventory,
+  PlatformSystemAnswer,
   Settings,
   SyncStats,
   SyncRunsAnswer,
@@ -200,6 +202,8 @@ export interface BiosAnswer {
         active_core_label?: string | null;
         cached_at?: number;
         files?: BiosFileStatus[];
+        platform_system?: PlatformSystemAnswer | null;
+        emulator_source?: AnsweringSource | null;
       } & EmulatorAnswer)
     | null;
   bios_level?: BiosLevel | null;

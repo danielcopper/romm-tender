@@ -53,7 +53,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
             "label": "mGBA",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -97,7 +100,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -150,7 +163,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -199,7 +215,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -252,7 +278,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -278,7 +307,17 @@
                 "option": "-i"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -331,7 +370,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "adam",
+            "system": {
+              "source": "esde",
+              "key": "adam"
+            },
             "label": "MAME [Diskette] (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -381,7 +423,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "adam"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -434,7 +486,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
             "label": "mGBA",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -482,7 +537,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -536,7 +601,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
             "label": "xemu (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -589,7 +657,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -642,7 +720,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
             "label": "xemu (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -690,7 +771,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -746,7 +837,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
             "label": "xemu (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -772,7 +866,17 @@
                 "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/xbox/Game.esprefix"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -830,7 +934,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
             "label": "xemu (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -856,7 +963,17 @@
                 "limit": "inject-file-size"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -910,7 +1027,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
             "label": "xemu (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -936,7 +1056,17 @@
                 "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/xbox/Game.esprefix"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -990,7 +1120,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "ps3",
+            "system": {
+              "source": "esde",
+              "key": "ps3"
+            },
             "label": "RPCS3 Game Serial (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -1044,7 +1177,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "ps3"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1097,7 +1240,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
             "label": "mGBA",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -1123,7 +1269,17 @@
                 "construct": "pipe"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1176,7 +1332,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
             "label": "mGBA",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -1202,7 +1361,17 @@
                 "construct": "expansion"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1255,7 +1424,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "desktop",
+            "system": {
+              "source": "esde",
+              "key": "desktop"
+            },
             "label": "Suspend ES-DE",
             "kind": "standalone",
             "core_so": null,
@@ -1288,7 +1460,17 @@
                 "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/desktop/Game.desktop"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "desktop"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1341,7 +1523,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "desktop",
+            "system": {
+              "source": "esde",
+              "key": "desktop"
+            },
             "label": "Suspend ES-DE",
             "kind": "standalone",
             "core_so": null,
@@ -1390,7 +1575,17 @@
                 "blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "desktop"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1444,7 +1639,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "Beetle",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -1490,7 +1688,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1544,7 +1752,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "adam",
+            "system": {
+              "source": "esde",
+              "key": "adam"
+            },
             "label": "MAME [Tape] (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -1594,7 +1805,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "adam"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1648,7 +1869,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "adam",
+            "system": {
+              "source": "esde",
+              "key": "adam"
+            },
             "label": "MAME [Tape] (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -1698,7 +1922,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "adam"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1757,11 +1991,22 @@
             {
               "code": "launch-command-label-unknown",
               "data": {
-                "system": "adam",
+                "source": "esde",
+                "key": "adam",
                 "label": "MAME [Cartridge] (Standalone)"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "adam"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1814,7 +2059,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "ports",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
             "label": "Script",
             "kind": "standalone",
             "core_so": null,
@@ -1856,7 +2104,17 @@
                 "blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1909,7 +2167,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
             "label": "Missing",
             "kind": "standalone",
             "core_so": null,
@@ -1932,7 +2193,17 @@
             ]
           },
           "command": null,
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -1985,7 +2256,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
             "label": "mGBA",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -2011,7 +2285,17 @@
                 "version": "retrodeck-main-20991231-000000"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2063,7 +2347,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
             "label": "mGBA",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -2087,7 +2374,17 @@
               "code": "frontend-build-unpinned",
               "data": {}
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2140,7 +2437,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
             "label": "mGBA",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -2190,7 +2490,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2243,7 +2553,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "ports",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
             "label": "Script",
             "kind": "standalone",
             "core_so": null,
@@ -2293,7 +2606,17 @@
                 "blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2346,7 +2669,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "ports",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
             "label": "Script",
             "kind": "standalone",
             "core_so": null,
@@ -2379,7 +2705,17 @@
                 "placeholder": "%ROM%"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2432,7 +2768,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "ports",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
             "label": "Script",
             "kind": "standalone",
             "core_so": null,
@@ -2465,7 +2804,17 @@
                 "placeholder": "%ROM%"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2518,7 +2867,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "ports",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
             "label": "Script",
             "kind": "standalone",
             "core_so": null,
@@ -2551,7 +2903,17 @@
                 "placeholder": "%ROM%"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2604,7 +2966,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "ports",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
             "label": "Script",
             "kind": "standalone",
             "core_so": null,
@@ -2637,7 +3002,17 @@
                 "placeholder": "%ROM%"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2690,7 +3065,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "ports",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
             "label": "Script",
             "kind": "standalone",
             "core_so": null,
@@ -2723,7 +3101,17 @@
                 "placeholder": "%ROM%"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2776,7 +3164,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "ports",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
             "label": "Script",
             "kind": "standalone",
             "core_so": null,
@@ -2809,7 +3200,17 @@
                 "placeholder": "%ROMRAW%"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2862,7 +3263,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "ports",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
             "label": "Script",
             "kind": "standalone",
             "core_so": null,
@@ -2895,7 +3299,17 @@
                 "placeholder": "%ROM%"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -2948,7 +3362,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "ports",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
             "label": "Script",
             "kind": "standalone",
             "core_so": null,
@@ -2981,7 +3398,17 @@
                 "placeholder": "%ROMRAW%"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3034,7 +3461,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "vsmile",
+            "system": {
+              "source": "esde",
+              "key": "vsmile"
+            },
             "label": "MAME",
             "kind": "libretro",
             "core_so": "mame_libretro.so",
@@ -3078,7 +3508,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "vsmile"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3131,7 +3571,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
             "label": "xemu",
             "kind": "standalone",
             "core_so": null,
@@ -3181,7 +3624,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3234,7 +3687,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
             "label": "xemu",
             "kind": "standalone",
             "core_so": null,
@@ -3265,7 +3721,17 @@
               "code": "launch-command-no-program",
               "data": {}
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3318,7 +3784,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "vsmile",
+            "system": {
+              "source": "esde",
+              "key": "vsmile"
+            },
             "label": "MAME",
             "kind": "libretro",
             "core_so": "mame_libretro.so",
@@ -3362,7 +3831,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "vsmile"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3415,7 +3894,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
             "label": "mGBA",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -3441,13 +3923,23 @@
                 "placeholder": "%STARTDIR%"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
     {
       "name": "launch-command-a-system-the-catalogue-does-not-declare-has-no-entry",
-      "rationale": "The catalogue was read and declares no such system: no entry, no command, and the answer says so.",
+      "rationale": "The catalogue was read and declares no such system: it resolves unknown, with no entry and no command, and system-unknown says why (#784 D53).",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -3497,18 +3989,20 @@
           "command": null,
           "caveats": [
             {
-              "code": "rom-path-undeclared",
-              "data": {
-                "system": "n64"
-              }
-            },
-            {
               "code": "system-unknown",
               "data": {
-                "system": "n64"
+                "source": "esde",
+                "key": "n64"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "unknown",
+            "system": null,
+            "relation": null,
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3572,7 +4066,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "vsmile",
+            "system": {
+              "source": "esde",
+              "key": "vsmile"
+            },
             "label": "MAME",
             "kind": "libretro",
             "core_so": "mame_libretro.so",
@@ -3595,7 +4092,8 @@
             {
               "code": "frontend-settings-unreadable",
               "data": {
-                "system": "vsmile",
+                "source": "esde",
+                "key": "vsmile",
                 "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
                 "status": "unreadable"
               }
@@ -3604,7 +4102,17 @@
               "code": "launch-command-rom-root-unestablished",
               "data": {}
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "vsmile"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3657,7 +4165,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
             "label": "mGBA",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -3707,7 +4218,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3760,7 +4281,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
             "label": "mGBA",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -3814,7 +4338,17 @@
                 "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3859,7 +4393,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "atarijaguar",
+            "system": {
+              "source": "esde",
+              "key": "atarijaguar"
+            },
             "label": "Virtual Jaguar",
             "kind": "libretro",
             "core_so": "virtualjaguar_libretro.so",
@@ -3883,10 +4420,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "atarijaguar"
+                "source": "esde",
+                "key": "atarijaguar"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "atarijaguar"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -3897,7 +4445,7 @@
         "home": "/home/user",
         "files": {
           "/home/user/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"~/saves\"\nlibretro_directory = \"/home/user/.var/app/org.libretro.RetroArch/config/retroarch/cores\"\nlibretro_info_path = \"/home/user/.var/app/org.libretro.RetroArch/config/retroarch/cores\"\n",
-          "/home/user/.var/app/org.libretro.RetroArch/config/retroarch/cores/mgba_libretro.info": "display_name = \"Nintendo - Game Boy Advance (mGBA)\"\ncorename = \"mGBA\"\nsystemname = \"Game Boy Advance\"\nsystemid = \"game_boy_advance\"\nfirmware_count = \"0\"\n",
+          "/home/user/.var/app/org.libretro.RetroArch/config/retroarch/cores/mgba_libretro.info": "display_name = \"Nintendo - Game Boy Advance (mGBA)\"\ncorename = \"mGBA\"\nsystemname = \"Game Boy Advance\"\nsystemid = \"game_boy_advance\"\ndatabase = \"Nintendo - Game Boy Advance\"\nfirmware_count = \"0\"\n",
           "/home/user/.var/app/org.libretro.RetroArch/config/retroarch/cores/gambatte_libretro.info": "display_name = \"Nintendo - Game Boy Color (Gambatte)\"\ncorename = \"Gambatte\"\nsystemname = \"Nintendo - Game Boy Color\"\nfirmware_count = \"0\"\n"
         },
         "cores": {
@@ -3909,7 +4457,10 @@
           }
         },
         "launch_command_query": {
-          "system": "gba",
+          "system": [
+            "esde",
+            "gba"
+          ],
           "content_path": "/home/user/roms/gba/Game.gba"
         }
       },
@@ -3927,7 +4478,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "libretro",
+              "key": "Nintendo - Game Boy Advance"
+            },
             "label": "mGBA",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -3951,13 +4505,15 @@
             {
               "code": "emulator-catalogue-unavailable",
               "data": {
-                "system": "gba"
+                "source": "libretro",
+                "key": "Nintendo - Game Boy Advance"
               }
             },
             {
               "code": "emulator-list-derived",
               "data": {
-                "system": "gba"
+                "source": "libretro",
+                "key": "Nintendo - Game Boy Advance"
               }
             },
             {
@@ -3966,7 +4522,318 @@
                 "kind": "bare_retroarch_flatpak"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "libretro",
+              "key": "Nintendo - Game Boy Advance"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": {
+              "table_version": 1,
+              "pairs": [
+                {
+                  "source": "esde",
+                  "key": "gba",
+                  "version": null,
+                  "status": "known",
+                  "sources": [
+                    {
+                      "source": "esde",
+                      "status": "keys",
+                      "keys": [
+                        {
+                          "key": "gba",
+                          "relation": "exactMatch"
+                        }
+                      ]
+                    },
+                    {
+                      "source": "esde-platform",
+                      "status": "keys",
+                      "keys": [
+                        {
+                          "key": "gba",
+                          "relation": "exactMatch"
+                        }
+                      ]
+                    },
+                    {
+                      "source": "retrodeck",
+                      "status": "keys",
+                      "keys": [
+                        {
+                          "key": "gba",
+                          "relation": "exactMatch"
+                        }
+                      ]
+                    },
+                    {
+                      "source": "emudeck",
+                      "status": "keys",
+                      "keys": [
+                        {
+                          "key": "gba",
+                          "relation": "exactMatch"
+                        }
+                      ]
+                    },
+                    {
+                      "source": "romm",
+                      "status": "keys",
+                      "keys": [
+                        {
+                          "key": "gba",
+                          "relation": "exactMatch"
+                        }
+                      ]
+                    },
+                    {
+                      "source": "romm-folder",
+                      "status": "keys",
+                      "keys": [
+                        {
+                          "key": "gba",
+                          "relation": "exactMatch"
+                        },
+                        {
+                          "key": "gba2players",
+                          "relation": "exactMatch"
+                        }
+                      ]
+                    },
+                    {
+                      "source": "libretro",
+                      "status": "keys",
+                      "keys": [
+                        {
+                          "key": "Nintendo - Game Boy Advance",
+                          "relation": "exactMatch"
+                        },
+                        {
+                          "key": "Nintendo - Game Boy Advance (e-Cards)",
+                          "relation": "narrowMatch"
+                        }
+                      ]
+                    },
+                    {
+                      "source": "batocera",
+                      "status": "keys",
+                      "keys": [
+                        {
+                          "key": "gba",
+                          "relation": "exactMatch"
+                        }
+                      ]
+                    },
+                    {
+                      "source": "knulli",
+                      "status": "keys",
+                      "keys": [
+                        {
+                          "key": "gba",
+                          "relation": "exactMatch"
+                        }
+                      ]
+                    },
+                    {
+                      "source": "rocknix",
+                      "status": "keys",
+                      "keys": [
+                        {
+                          "key": "gba",
+                          "relation": "exactMatch"
+                        }
+                      ]
+                    },
+                    {
+                      "source": "igdb",
+                      "status": "keys",
+                      "keys": [
+                        {
+                          "key": "24",
+                          "relation": "exactMatch"
+                        },
+                        {
+                          "key": "gba",
+                          "relation": "exactMatch"
+                        }
+                      ]
+                    },
+                    {
+                      "source": "screenscraper",
+                      "status": "keys",
+                      "keys": [
+                        {
+                          "key": "12",
+                          "relation": "exactMatch"
+                        }
+                      ]
+                    },
+                    {
+                      "source": "thegamesdb",
+                      "status": "keys",
+                      "keys": [
+                        {
+                          "key": "5",
+                          "relation": "exactMatch"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "intersection_status": "agreed",
+              "intersection": [
+                {
+                  "source": "esde",
+                  "status": "keys",
+                  "keys": [
+                    {
+                      "key": "gba",
+                      "relation": "exactMatch"
+                    }
+                  ]
+                },
+                {
+                  "source": "esde-platform",
+                  "status": "keys",
+                  "keys": [
+                    {
+                      "key": "gba",
+                      "relation": "exactMatch"
+                    }
+                  ]
+                },
+                {
+                  "source": "retrodeck",
+                  "status": "keys",
+                  "keys": [
+                    {
+                      "key": "gba",
+                      "relation": "exactMatch"
+                    }
+                  ]
+                },
+                {
+                  "source": "emudeck",
+                  "status": "keys",
+                  "keys": [
+                    {
+                      "key": "gba",
+                      "relation": "exactMatch"
+                    }
+                  ]
+                },
+                {
+                  "source": "romm",
+                  "status": "keys",
+                  "keys": [
+                    {
+                      "key": "gba",
+                      "relation": "exactMatch"
+                    }
+                  ]
+                },
+                {
+                  "source": "romm-folder",
+                  "status": "keys",
+                  "keys": [
+                    {
+                      "key": "gba",
+                      "relation": "exactMatch"
+                    },
+                    {
+                      "key": "gba2players",
+                      "relation": "exactMatch"
+                    }
+                  ]
+                },
+                {
+                  "source": "libretro",
+                  "status": "keys",
+                  "keys": [
+                    {
+                      "key": "Nintendo - Game Boy Advance",
+                      "relation": "exactMatch"
+                    },
+                    {
+                      "key": "Nintendo - Game Boy Advance (e-Cards)",
+                      "relation": "narrowMatch"
+                    }
+                  ]
+                },
+                {
+                  "source": "batocera",
+                  "status": "keys",
+                  "keys": [
+                    {
+                      "key": "gba",
+                      "relation": "exactMatch"
+                    }
+                  ]
+                },
+                {
+                  "source": "knulli",
+                  "status": "keys",
+                  "keys": [
+                    {
+                      "key": "gba",
+                      "relation": "exactMatch"
+                    }
+                  ]
+                },
+                {
+                  "source": "rocknix",
+                  "status": "keys",
+                  "keys": [
+                    {
+                      "key": "gba",
+                      "relation": "exactMatch"
+                    }
+                  ]
+                },
+                {
+                  "source": "igdb",
+                  "status": "keys",
+                  "keys": [
+                    {
+                      "key": "24",
+                      "relation": "exactMatch"
+                    },
+                    {
+                      "key": "gba",
+                      "relation": "exactMatch"
+                    }
+                  ]
+                },
+                {
+                  "source": "screenscraper",
+                  "status": "keys",
+                  "keys": [
+                    {
+                      "key": "12",
+                      "relation": "exactMatch"
+                    }
+                  ]
+                },
+                {
+                  "source": "thegamesdb",
+                  "status": "keys",
+                  "keys": [
+                    {
+                      "key": "5",
+                      "relation": "exactMatch"
+                    }
+                  ]
+                }
+              ],
+              "conflict": [],
+              "caveats": []
+            }
+          }
         }
       }
     },
@@ -4021,7 +4888,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -4062,14 +4932,25 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "psx"
+                "source": "esde",
+                "key": "psx"
               }
             },
             {
               "code": "frontend-build-unpinned",
               "data": {}
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4129,7 +5010,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -4187,10 +5071,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "psx"
+                "source": "esde",
+                "key": "psx"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4251,7 +5146,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "ps2",
+            "system": {
+              "source": "esde",
+              "key": "ps2"
+            },
             "label": "PCSX2 (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -4308,10 +5206,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "ps2"
+                "source": "esde",
+                "key": "ps2"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "ps2"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4371,7 +5280,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -4412,7 +5324,8 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "psx"
+                "source": "esde",
+                "key": "psx"
               }
             },
             {
@@ -4421,7 +5334,17 @@
                 "version": "3.5.0"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4483,7 +5406,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox360",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
             "label": "Xenia (Proton)",
             "kind": "standalone",
             "core_so": null,
@@ -4506,7 +5432,8 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "xbox360"
+                "source": "esde",
+                "key": "xbox360"
               }
             },
             {
@@ -4515,7 +5442,17 @@
                 "path": "/home/deck/Emulation/tools/launchers/xenia.sh"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4577,7 +5514,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin",
             "kind": "standalone",
             "core_so": null,
@@ -4600,7 +5540,8 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "gc"
+                "source": "esde",
+                "key": "gc"
               }
             },
             {
@@ -4609,7 +5550,17 @@
                 "path": "/home/deck/Emulation/tools/launchers/dolphin-emu.sh"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4669,7 +5620,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -4710,7 +5664,8 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "psx"
+                "source": "esde",
+                "key": "psx"
               }
             },
             {
@@ -4719,7 +5674,17 @@
                 "path": "%ESPATH%"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4785,7 +5750,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
             "label": "mGBA",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -4809,16 +5777,28 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "gba"
+                "source": "esde",
+                "key": "gba"
               }
             },
             {
               "code": "emulator-list-derived",
               "data": {
-                "system": "gba"
+                "source": "esde",
+                "key": "gba"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4884,7 +5864,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin",
             "kind": "standalone",
             "core_so": null,
@@ -4915,7 +5898,8 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "gc"
+                "source": "esde",
+                "key": "gc"
               }
             },
             {
@@ -4924,7 +5908,17 @@
                 "path": "/run/media/deck/SD/Emulation/tools/launchers/dolphin-emu.sh"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -4985,7 +5979,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox360",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
             "label": "Shell",
             "kind": "standalone",
             "core_so": null,
@@ -5009,10 +6006,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "xbox360"
+                "source": "esde",
+                "key": "xbox360"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5074,7 +6082,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox360",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
             "label": "Custom",
             "kind": "standalone",
             "core_so": null,
@@ -5113,10 +6124,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "xbox360"
+                "source": "esde",
+                "key": "xbox360"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5178,7 +6200,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin",
             "kind": "standalone",
             "core_so": null,
@@ -5201,7 +6226,8 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "gc"
+                "source": "esde",
+                "key": "gc"
               }
             },
             {
@@ -5210,7 +6236,17 @@
                 "path": "/opt/emudeck/tools/launchers/dolphin-emu.sh"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5272,7 +6308,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox360",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
             "label": "Custom",
             "kind": "standalone",
             "core_so": null,
@@ -5311,10 +6350,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "xbox360"
+                "source": "esde",
+                "key": "xbox360"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5371,7 +6421,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox360",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
             "label": "Xenia (Proton)",
             "kind": "standalone",
             "core_so": null,
@@ -5394,7 +6447,8 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "xbox360"
+                "source": "esde",
+                "key": "xbox360"
               }
             },
             {
@@ -5403,7 +6457,17 @@
                 "path": "/home/deck/Emulation/tools/launchers/xenia.sh"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5454,7 +6518,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "psx",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
             "label": "SwanStation",
             "kind": "libretro",
             "core_so": "swanstation_libretro.so",
@@ -5495,14 +6562,25 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "psx"
+                "source": "esde",
+                "key": "psx"
               }
             },
             {
               "code": "frontend-build-sealed",
               "data": {}
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "psx"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -5875,7 +6953,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin",
             "kind": "standalone",
             "core_so": null,
@@ -5957,10 +7038,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "gc"
+                "source": "esde",
+                "key": "gc"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -6336,7 +7428,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin",
             "kind": "standalone",
             "core_so": null,
@@ -6418,10 +7513,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "gc"
+                "source": "esde",
+                "key": "gc"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -6797,7 +7903,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin",
             "kind": "standalone",
             "core_so": null,
@@ -6879,10 +7988,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "gc"
+                "source": "esde",
+                "key": "gc"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -7255,7 +8375,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin",
             "kind": "standalone",
             "core_so": null,
@@ -7337,10 +8460,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "gc"
+                "source": "esde",
+                "key": "gc"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -7713,7 +8847,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox360",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
             "label": "Xenia (Proton)",
             "kind": "standalone",
             "core_so": null,
@@ -7802,10 +8939,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "xbox360"
+                "source": "esde",
+                "key": "xbox360"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -8178,7 +9326,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin",
             "kind": "standalone",
             "core_so": null,
@@ -8201,7 +9352,8 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "gc"
+                "source": "esde",
+                "key": "gc"
               }
             },
             {
@@ -8211,7 +9363,17 @@
                 "helper": "/home/deck/.config/EmuDeck/backend/functions/ToolScripts/emuDeckCloudSync.sh"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -8581,7 +9743,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "xbox360",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
             "label": "Xenia (Proton)",
             "kind": "standalone",
             "core_so": null,
@@ -8604,7 +9769,8 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "xbox360"
+                "source": "esde",
+                "key": "xbox360"
               }
             },
             {
@@ -8614,7 +9780,17 @@
                 "helper": "/home/deck/Emulation/tools/proton-launch.sh"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "xbox360"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -8988,7 +10164,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin",
             "kind": "standalone",
             "core_so": null,
@@ -9070,10 +10249,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "gc"
+                "source": "esde",
+                "key": "gc"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -9447,7 +10637,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin",
             "kind": "standalone",
             "core_so": null,
@@ -9529,10 +10722,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "gc"
+                "source": "esde",
+                "key": "gc"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -9906,7 +11110,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin",
             "kind": "standalone",
             "core_so": null,
@@ -9988,10 +11195,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "gc"
+                "source": "esde",
+                "key": "gc"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -10367,7 +11585,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin",
             "kind": "standalone",
             "core_so": null,
@@ -10449,10 +11670,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "gc"
+                "source": "esde",
+                "key": "gc"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -10881,7 +12113,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "switch",
+            "system": {
+              "source": "esde",
+              "key": "switch"
+            },
             "label": "Ryujinx (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -10969,10 +12204,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "switch"
+                "source": "esde",
+                "key": "switch"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "switch"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -11401,7 +12647,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "switch",
+            "system": {
+              "source": "esde",
+              "key": "switch"
+            },
             "label": "Ryujinx (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -11489,10 +12738,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "switch"
+                "source": "esde",
+                "key": "switch"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "switch"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -11923,7 +13183,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "switch",
+            "system": {
+              "source": "esde",
+              "key": "switch"
+            },
             "label": "Ryujinx (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -12011,10 +13274,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "switch"
+                "source": "esde",
+                "key": "switch"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "switch"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -12442,7 +13716,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "switch",
+            "system": {
+              "source": "esde",
+              "key": "switch"
+            },
             "label": "Ryujinx (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -12530,10 +13807,21 @@
             {
               "code": "emulator-catalogue-sealed",
               "data": {
-                "system": "switch"
+                "source": "esde",
+                "key": "switch"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "switch"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -12591,7 +13879,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -12640,7 +13931,17 @@
               }
             ]
           },
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -12697,7 +13998,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -12746,7 +14050,17 @@
               }
             ]
           },
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -12802,7 +14116,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gba",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
             "label": "mGBA",
             "kind": "libretro",
             "core_so": "mgba_libretro.so",
@@ -12845,7 +14162,17 @@
               }
             ]
           },
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gba"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -12903,7 +14230,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -12952,7 +14282,17 @@
               }
             ]
           },
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -13011,7 +14351,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -13060,7 +14403,17 @@
               }
             ]
           },
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -13118,7 +14471,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -13167,7 +14523,17 @@
               }
             ]
           },
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -13224,7 +14590,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -13273,7 +14642,17 @@
               }
             ]
           },
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -13333,7 +14712,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -13390,7 +14772,17 @@
                 "file": "/var/lib/flatpak/runtime/org.kde.Platform/x86_64/6.11/active/metadata"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -13450,7 +14842,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "tanodragon",
+            "system": {
+              "source": "esde",
+              "key": "tanodragon"
+            },
             "label": "XRoar (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -13506,7 +14901,17 @@
               }
             ]
           },
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "tanodragon"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -13566,7 +14971,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "tanodragon",
+            "system": {
+              "source": "esde",
+              "key": "tanodragon"
+            },
             "label": "XRoar (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -13622,7 +15030,17 @@
               }
             ]
           },
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "tanodragon"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -13681,7 +15099,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "tanodragon",
+            "system": {
+              "source": "esde",
+              "key": "tanodragon"
+            },
             "label": "XRoar (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -13737,7 +15158,17 @@
               }
             ]
           },
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "tanodragon"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -13793,7 +15224,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "gc",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
             "label": "Dolphin (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -13839,7 +15273,17 @@
                 "start_blob": "d11ab7a84ca58845fbb78483b79e147e5a47253c"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "gc"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -13897,7 +15341,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "pico8",
+            "system": {
+              "source": "esde",
+              "key": "pico8"
+            },
             "label": "PICO-8 (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -13952,7 +15399,17 @@
               }
             ]
           },
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "pico8"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -14010,7 +15467,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "pico8",
+            "system": {
+              "source": "esde",
+              "key": "pico8"
+            },
             "label": "PICO-8 (Standalone)",
             "kind": "standalone",
             "core_so": null,
@@ -14065,7 +15525,17 @@
               }
             ]
           },
-          "caveats": []
+          "caveats": [],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "pico8"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     },
@@ -14119,7 +15589,10 @@
         ],
         "launch_command": {
           "entry": {
-            "system": "ports",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
             "label": "Dolphin through bash",
             "kind": "standalone",
             "core_so": null,
@@ -14166,7 +15639,17 @@
                 "path": "bash"
               }
             }
-          ]
+          ],
+          "resolution": {
+            "status": "resolved",
+            "system": {
+              "source": "esde",
+              "key": "ports"
+            },
+            "relation": "exactMatch",
+            "candidates": [],
+            "translation": null
+          }
         }
       }
     }

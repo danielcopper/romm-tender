@@ -593,7 +593,7 @@ Five properties are worth knowing before changing anything there:
   `available: false` in Big Picture's SAVES tab and, in the desktop dev build,
   `frontend/src/desktop/gameview/SaveManagementCard.tsx`, each carrying those same fields), read the same as the notice
   whichever endpoint answered. The backend's own sentence for a missing saves folder stands only in the toast after a
-  game exits and in Sync All's line. A download refused for a platform with no switched-on system gets the sentence the
+  game exits and in Sync All's line. A download refused for a platform with no system to use gets the sentence the
   platform's pages show (`withPlatformSystemSentence`). Every other answer comes back as it was sent. The suite stubs
   this module, so `api/host.test.ts` is where the rewording is pinned.
 

@@ -31,6 +31,7 @@ import {
   ATTENTION_AMBER,
   BODY_TEXT_COLOR,
   CONFLICT_RED,
+  DANGER_TEXT_RED,
   MUTED_PILL_BADGE_STYLE,
   SUBTLE_LABEL_COLOR,
   actionButtonStyle,
@@ -396,9 +397,10 @@ const InactiveSlotFilesList: FC<{
   slotName: string;
   slotFiles: SlotSaveFile[] | null;
   loadingSlot: boolean;
+  loadError: string | null;
   isOffline: boolean;
   onCopySave: (saveId: number, sourceSlot: string) => void;
-}> = ({ slotName, slotFiles, loadingSlot, isOffline, onCopySave }) => {
+}> = ({ slotName, slotFiles, loadingSlot, loadError, isOffline, onCopySave }) => {
   if (loadingSlot) {
     return (
       <div
@@ -413,6 +415,16 @@ const InactiveSlotFilesList: FC<{
       >
         <SvgThrobber style={{ width: "12px", height: "12px" }} />
         <span>Loading saves…</span>
+      </div>
+    );
+  }
+  if (loadError !== null) {
+    return (
+      <div
+        data-testid="desktop-slot-load-error"
+        style={{ color: DANGER_TEXT_RED, fontSize: "11px", marginBottom: "12px" }}
+      >
+        {loadError}
       </div>
     );
   }
@@ -483,6 +495,7 @@ const InactiveSlotSection: FC<InactiveSlotSectionProps> = ({
         slotName={slotName}
         slotFiles={panel.slotFiles}
         loadingSlot={panel.loadingSlot}
+        loadError={panel.slotLoadError}
         isOffline={isOffline}
         onCopySave={onCopySave}
       />

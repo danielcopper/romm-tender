@@ -424,6 +424,7 @@ jobs:
             !CHANGELOG.md
             !site
             !tests/adapters/atlas_vectors/vectors
+            !backend/_vendor/atlas
 
   markdown-format:
     runs-on: ubuntu-latest

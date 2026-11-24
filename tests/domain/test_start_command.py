@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
+from domain import start_command
 from domain.start_command import SOURCE_STARTS_NO_GAMES, StartRefused, source_refusal, start_verdict
 
 
@@ -26,3 +30,21 @@ class TestSourceRefusal:
             "remarks": [],
             "source": "emudeck",
         }
+
+
+class TestThePanelWordsEveryCommandRefusal:
+    """The panel's ``StartCommandReason`` is the domain's list of command refusals, no more and no less."""
+
+    _TYPES = Path(__file__).resolve().parents[2] / "frontend" / "src" / "types" / "firmware.ts"
+
+    def test_the_two_lists_are_equal(self):
+        source = self._TYPES.read_text(encoding="utf-8")
+        start = source.index("export type StartCommandReason =")
+        panel = set(re.findall(r'"(\w+)"', source[start : source.index(";", start)]))
+        # The two words that are no command refusal: the source Tender starts no
+        # game through (its own union), and a remark beside a start.
+        domain = {value for name, value in vars(start_command).items() if name.isupper() and isinstance(value, str)} - {
+            start_command.SOURCE_STARTS_NO_GAMES,
+            start_command.PLACEHOLDER_UNFILLED,
+        }
+        assert panel == domain

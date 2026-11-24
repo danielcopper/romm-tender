@@ -20,12 +20,12 @@ from fakes.fake_core_info_provider import (
     libretro_option,
     standalone_option,
 )
-from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
+from fakes.fake_platform_systems import FakePlatformSystems, platform_answer
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.emulator_choice import DEFAULT, GAME_PICK
 from domain.emulator_pick import StoredPick
-from domain.platform_system import NO_SYSTEM, PlatformSystem
+from domain.platform_system import NO_SYSTEM
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
@@ -477,7 +477,7 @@ def test_a_platform_with_no_system_falls_back_to_the_plain_launch() -> None:
     core_info = FakeCoreInfoProvider(
         available_cores=[{"core_so": "vice_libretro", "label": "VICE", "is_default": True}]
     )
-    platform = PlatformSystem(NO_SYSTEM, "vic-20", "VIC-20", source=RETRODECK_SOURCE)
+    platform = platform_answer(NO_SYSTEM, "vic-20", name="VIC-20")
     resolver, _ = _make_resolver(
         uow=uow, core_info=core_info, platform_systems=FakePlatformSystems(answers={"vic-20": platform})
     )

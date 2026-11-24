@@ -51,8 +51,12 @@ export type EmulatorSourceDirection = "up" | "down";
 
 /** Why an emulator list could not be given: no source answers (`no_source`,
  *  `switched_off`), the answering source's catalogue was refused, the
- *  platform has no switched-on system there (`no_platform_system`,
- *  `platform_system_off`), or RomM could not be read for the platform's ids
+ *  platform has no system to use there — none matched (`platform_unmatched`),
+ *  RomM's slug and folder naming different systems (`platform_pairs_contradict`),
+ *  none the source's frontend has (`no_platform_system`), one this machine has
+ *  not set up (`platform_system_not_here`), a switched-off one
+ *  (`platform_system_off`), or several that answer differently, of which the
+ *  resolver names none (`platform_systems_several`) — or RomM could not be read for the platform
  *  (one of {@link RommErrorReason}, `server_unreachable` while it is offline). */
 export type EmulatorDataReason =
   | RommErrorReason
@@ -62,16 +66,39 @@ export type EmulatorDataReason =
   | "catalogue_invalid"
   | "not_set_up"
   | "unavailable"
-  | "no_platform_system"
-  | "platform_system_off";
+  | "system_unknown"
+  | PlatformSystemReason;
 
-/** The system a RomM platform is in the source asked: the one taken, the
- *  switched-off one named, or none. `platform` is RomM's display name. */
+/** Why a platform has no system to use in the source that answered (#2751 D2). */
+export type PlatformSystemReason =
+  | "no_platform_system"
+  | "platform_system_off"
+  | "platform_system_not_here"
+  | "platform_unmatched"
+  | "platform_pairs_contradict"
+  | "platform_systems_several";
+
+/** The system an emulator list is not given for because its source does not list it: its keys, and whether a
+ *  game's install record holds it, which the sentence says. */
+export interface UnlistedSystem {
+  system_keys: string[];
+  installed: boolean;
+}
+
+/** The system a RomM platform is in the source asked: the one taken, several
+ *  none of which is taken, switched-off ones, ones this machine has not set up,
+ *  none the source's frontend has, a slug and a folder that name different
+ *  systems, or a platform the resolver cannot match (#2751 D2). `systems` is
+ *  every one the state names, each by its key;
+ *  `platform` is RomM's display name, `slug` RomM's slug for it and `folder`
+ *  the folder in RomM it was asked with, `null` where it was asked without one. */
 export interface PlatformSystemAnswer {
-  state: "found" | "switched_off" | "no_system";
+  state: "found" | "several" | "switched_off" | "not_here" | "no_system" | "unmatched" | "contradicted";
   source: string;
-  system: string | null;
+  systems: string[];
   platform: string;
+  slug: string;
+  folder: string | null;
 }
 
 /** The source an emulator answer came from, and whether Tender starts games through it. */

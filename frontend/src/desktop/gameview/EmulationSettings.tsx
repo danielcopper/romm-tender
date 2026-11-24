@@ -27,6 +27,7 @@ import {
   IDENTIFYING,
   biosPlaceLines,
   libraryRowLines,
+  storeOnlyAnswerOf,
   storeOnlySentence,
 } from "../../utils/biosPlaceWords";
 import {
@@ -544,7 +545,12 @@ const DesktopEmulatorSection: FC<{
   if (!detail.emulatorDataAvailable) {
     emulatorBody = (
       <div data-testid="desktop-emulator-unavailable" style={MUTED_TEXT_STYLE}>
-        {emulatorDataReasonSentence(detail.emulatorDataReason, detail.emulatorSource, detail.emulatorPlatformSystem)}
+        {emulatorDataReasonSentence(
+          detail.emulatorDataReason,
+          detail.emulatorSource,
+          detail.emulatorPlatformSystem,
+          detail.emulatorDataSystem,
+        )}
       </div>
     );
   } else if (detail.emulators.length > 0) {
@@ -1066,6 +1072,7 @@ const DesktopBiosAnsweredContent: FC<{
     biosStatus.store_only,
     biosStatus.active_core_label ?? detail.activeCoreLabel,
     platformDisplayName,
+    storeOnlyAnswerOf(biosStatus, { source: detail.emulatorSource, platformSystem: detail.emulatorPlatformSystem }),
   );
   const serverOffline = biosStatus.server_offline ?? false;
   const legendEntries = biosLegendEntries([...shownRows, ...libraryRows]);

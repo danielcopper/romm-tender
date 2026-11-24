@@ -39,6 +39,7 @@ function makeFile(overrides: Partial<SlotSaveFile> = {}): SlotSaveFile {
 function defaultProps(overrides: Partial<InactiveSlotBodyProps> = {}): InactiveSlotBodyProps {
   return {
     loadingSlot: false,
+    loadError: null,
     slotFiles: null,
     switching: false,
     switchError: null,

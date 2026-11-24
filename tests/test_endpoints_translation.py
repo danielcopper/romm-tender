@@ -77,6 +77,7 @@ from adapters.update_attempt import UpdateAttemptFileAdapter
 from adapters.update_staging import UpdateStagingAdapter
 from bootstrap import LibraryWiring, ServicesBundle, wire_library
 from domain.bios_file import BiosFile
+from domain.platform_system import system_key
 from domain.refusal import DomainRefused, NamedDomainRefused
 from domain.rom import Rom
 from domain.rom_install import RomInstall
@@ -2059,7 +2060,9 @@ def _dispatcher_over_adoption(world: _AdoptionWorld) -> CallDispatcher:
             retrodeck_folders=folders,
             install_recorder=recorder,
             m3u_support=lambda system_name: True,
-            system_extensions=lambda system_name, reading=None: world.system_extensions.get(system_name, frozenset()),
+            system_extensions=lambda system_name, reading=None: world.system_extensions.get(
+                system_key(system_name) or "", frozenset()
+            ),
             system_known=lambda system_name: None,
             save_locations=FakeSaveLocationReader(saves_root="/saves", states_root="/states"),
             active_core=FakeActiveCoreResolver(default=(None, None)),

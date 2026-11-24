@@ -7,6 +7,7 @@ import logging
 from fakes.fake_download_file_store import FakeDownloadFileStore
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
+from domain.platform_system import system_key
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from services.ps3_folder_naming import (
@@ -33,7 +34,9 @@ class _Harness:
             config=Ps3FolderNamingServiceConfig(
                 uow_factory=FakeUnitOfWorkFactory(self.uow),
                 file_store=self.store,
-                system_extensions=lambda system_name, reading=None: self.accepted.get(system_name, frozenset()),
+                system_extensions=lambda system_name, reading=None: self.accepted.get(
+                    system_key(system_name) or "", frozenset()
+                ),
                 logger=logging.getLogger("test_ps3_folder_naming"),
             )
         )

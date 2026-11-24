@@ -397,6 +397,7 @@ describe("RomMPlaySection", () => {
       activeCoreIsDefault: true,
       emulatorDataAvailable: true,
       emulatorDataReason: null,
+      emulatorDataSystem: null,
       emulatorSource: { kind: "retrodeck", starts_games: true },
       emulatorPlatformSystem: null,
       emulators: [],
@@ -415,6 +416,7 @@ describe("RomMPlaySection", () => {
         coreInfoFixture({
           emulator_data_available: true,
           emulator_data_reason: null,
+          emulator_data_system: null,
           emulator_source: { kind: "retrodeck", starts_games: true },
           platform_system: null,
           emulators: [],
@@ -437,6 +439,7 @@ describe("RomMPlaySection", () => {
       coreInfoFixture({
         emulator_data_available: true,
         emulator_data_reason: null,
+        emulator_data_system: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
         platform_system: null,
         emulators: [],
@@ -2417,11 +2420,13 @@ describe("RomMPlaySection", () => {
       const before = domListenerCount("romm_data_changed");
       const { unmount } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
-      // Three listeners: the game-detail store's, opened by this section's
+      // Four listeners: the game-detail store's, opened by this section's
       // subscription, + the child VersionPicker's (it also refreshes on
-      // version_switched, #1297) + this section's own, which announces the save
-      // verdict after an emulator source change. All are removed on unmount.
-      expect(domListenerCount("romm_data_changed")).toBe(before + 3);
+      // version_switched, #1297) + the child DiscSelector's (it reads the bound
+      // ROM's discs again on version_switched) + this section's own, which
+      // announces the save verdict after an emulator source change. All are
+      // removed on unmount.
+      expect(domListenerCount("romm_data_changed")).toBe(before + 4);
       unmount();
       expect(domListenerCount("romm_data_changed")).toBe(before);
     });
@@ -2544,6 +2549,7 @@ describe("RomMPlaySection", () => {
           has_game_override: false,
           emulator_data_available: true,
           emulator_data_reason: null,
+          emulator_data_system: null,
           emulator_source: { kind: "retrodeck", starts_games: true },
           platform_system: null,
           emulators: [
@@ -2621,6 +2627,7 @@ describe("RomMPlaySection", () => {
           has_game_override: false,
           emulator_data_available: true,
           emulator_data_reason: null,
+          emulator_data_system: null,
           emulator_source: { kind: "retrodeck", starts_games: true },
           platform_system: null,
           emulators: [
@@ -3709,6 +3716,7 @@ describe("RomMPlaySection", () => {
           has_game_override: false,
           emulator_data_available: true,
           emulator_data_reason: null,
+          emulator_data_system: null,
           emulator_source: { kind: "retrodeck", starts_games: true },
           platform_system: null,
           emulators: [
@@ -3740,6 +3748,7 @@ describe("RomMPlaySection", () => {
         activeCoreIsDefault: true,
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
         emulators: [
@@ -3867,6 +3876,7 @@ describe("RomMPlaySection", () => {
         activeCoreIsDefault: true,
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
         emulators: [
@@ -4009,6 +4019,7 @@ describe("RomMPlaySection", () => {
           has_game_override: true,
           emulator_data_available: true,
           emulator_data_reason: null,
+          emulator_data_system: null,
           emulator_source: { kind: "retrodeck", starts_games: true },
           platform_system: null,
           emulators: [
@@ -4042,6 +4053,7 @@ describe("RomMPlaySection", () => {
         activeCoreIsDefault: false,
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
         emulators: [
@@ -4200,6 +4212,7 @@ describe("RomMPlaySection", () => {
       activeCoreIsDefault: true,
       emulatorDataAvailable: true,
       emulatorDataReason: null,
+      emulatorDataSystem: null,
       emulatorSource: { kind: "retrodeck", starts_games: true },
       emulatorPlatformSystem: null,
       emulators: [
@@ -4338,6 +4351,7 @@ describe("RomMPlaySection", () => {
         ],
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
         platformCoreLabel: null,
@@ -4471,6 +4485,7 @@ describe("RomMPlaySection", () => {
         activeCoreIsDefault: true,
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
         emulators: [
@@ -4520,6 +4535,7 @@ describe("RomMPlaySection", () => {
         activeCoreIsDefault: false,
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
         emulators: [
@@ -4567,6 +4583,7 @@ describe("RomMPlaySection", () => {
         activeCoreIsDefault: true,
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
         emulators: [
@@ -4612,6 +4629,7 @@ describe("RomMPlaySection", () => {
         activeCoreIsDefault: false,
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
         emulators: [
@@ -4653,6 +4671,7 @@ describe("RomMPlaySection", () => {
         activeCoreIsDefault: false,
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
         emulators: [
@@ -4698,6 +4717,7 @@ describe("RomMPlaySection", () => {
         activeCoreIsDefault: false,
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
         emulators: [
@@ -4985,6 +5005,7 @@ describe("RomMPlaySection", () => {
         activeCoreIsDefault: true,
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
         emulators: [
@@ -5017,6 +5038,7 @@ describe("RomMPlaySection", () => {
       activeCoreIsDefault: true,
       emulatorDataAvailable: false,
       emulatorDataReason: reason,
+      emulatorDataSystem: null,
       emulatorSource: source,
       emulatorPlatformSystem: null,
       emulators: [],
@@ -5077,6 +5099,7 @@ describe("RomMPlaySection", () => {
         has_game_override: true,
         emulator_data_available: true,
         emulator_data_reason: null,
+        emulator_data_system: null,
         emulator_source: { kind: "retrodeck" as const, starts_games: true },
         platform_system: null,
         emulators: [
@@ -5118,6 +5141,7 @@ describe("RomMPlaySection", () => {
         activeCoreIsDefault: false,
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: core.emulator_source,
         emulatorPlatformSystem: null,
         emulators: core.emulators,
@@ -5189,6 +5213,7 @@ describe("RomMPlaySection", () => {
         activeCoreIsDefault: false,
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
         emulators: TWO,
@@ -5280,6 +5305,43 @@ describe("RomMPlaySection", () => {
       const notes = [...container.querySelectorAll<HTMLElement>('.romm-play-section-row [data-testid="start-note"]')];
       expect(notes.map((note) => note.textContent)).toContain("ES-DE leaves %RPCS3_GAMEID% unfilled in this command.");
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBeNull();
+    });
+
+    describe("a platform several of the source's systems answer (#2225 D8)", () => {
+      const SEVERAL = {
+        state: "several",
+        source: "retrodeck",
+        systems: ["mark3", "mastersystem"],
+        platform: "Master System",
+        slug: "sms",
+        folder: "sms",
+      } as const;
+      const NOTE =
+        "RetroDECK has several systems for Master System (mark3, mastersystem), and Tender links its games into none of them.";
+
+      it("says under the row why the game is linked into no frontend folder", async () => {
+        const { container } = await mountWith({
+          emulatorPlatformSystem: { ...SEVERAL, systems: [...SEVERAL.systems] },
+        });
+
+        const notes = [...container.querySelectorAll<HTMLElement>('.romm-play-section-row [data-testid="start-note"]')];
+        expect(notes.map((note) => note.textContent)).toContain(NOTE);
+      });
+
+      it("where the emulator list could not be given, says so too, with no start to refuse", async () => {
+        const { container } = await mountWith({
+          emulatorPlatformSystem: { ...SEVERAL, systems: [...SEVERAL.systems] },
+          emulatorDataAvailable: false,
+          emulatorDataReason: "platform_systems_several",
+          emulatorDataSystem: null,
+          emulators: [],
+          emulatorStart: null,
+        });
+
+        const notes = [...container.querySelectorAll<HTMLElement>('.romm-play-section-row [data-testid="start-note"]')];
+        expect(notes.map((note) => note.textContent)).toContain(NOTE);
+        expect(container.querySelector('[data-testid="emulator-refusal"]')).toBeNull();
+      });
     });
 
     it("tells Play while the page's check still runs (#2195 D32)", async () => {
@@ -5379,6 +5441,7 @@ describe("RomMPlaySection", () => {
         activeCoreIsDefault: true,
         emulatorDataAvailable: true,
         emulatorDataReason: null,
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
         emulators: [],

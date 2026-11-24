@@ -26,7 +26,7 @@ from fakes.fake_core_info_provider import FakeCoreInfoProvider, libretro_option,
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
-from fakes.fake_platform_systems import FakePlatformSystems
+from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems, platform_answer
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
@@ -34,8 +34,21 @@ from fakes.system_time import FakeClock
 
 from adapters.firmware_file import FirmwareFileAdapter
 from domain.bios_file import BiosFile
+from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, NO_SOURCE_DETECTED
 from domain.firmware_wants import IDENTITY_ARCHIVE, IDENTITY_FILE, FolderFile
-from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, UNASKED, PlatformSystem
+from domain.platform_system import (
+    CONTRADICTED,
+    FOUND,
+    NO_SYSTEM,
+    NOT_HERE,
+    SEVERAL,
+    SWITCHED_OFF,
+    UNASKED,
+    UNMATCHED,
+    PlatformKeys,
+    SystemPair,
+    system_key,
+)
 from domain.source_roots import SourceRoot, SourceRoots
 from lib.errors import Refused
 from services.firmware import FirmwareService, FirmwareServiceConfig
@@ -43,6 +56,7 @@ from services.firmware.store import FirmwareStore, FirmwareStoreConfig
 
 if TYPE_CHECKING:
     from domain.firmware_store import FirmwareLink
+    from domain.platform_system import SystemArgument
 
 _YABA = "yabasanshiro_libretro.so"
 _KRONOS = "kronos_libretro.so"
@@ -96,12 +110,13 @@ class _LaunchReadingResolver(FakeFirmwareResolver):
     sealed_in: frozenset[str] = frozenset()
     unread_in: frozenset[str] = frozenset()
 
-    def __call__(self, system: str | None = None):
-        missing = self.not_installed_in.get(system or "", self.not_installed)
+    def __call__(self, system: SystemArgument | None = None):
+        key = None if system is None else system_key(system)
+        missing = self.not_installed_in.get(key or "", self.not_installed)
         catalogue = replace(
-            super().__call__(system), not_installed=missing, sealed=self.sealed or system in self.sealed_in
+            super().__call__(system), not_installed=missing, sealed=self.sealed or key in self.sealed_in
         )
-        if system in self.unread_in:
+        if key in self.unread_in:
             return replace(catalogue, placements=(), resolved=False, source=None, roots=None)
         return catalogue
 
@@ -905,7 +920,7 @@ class TestALinkAnotherPlatformMayStillWant:
         await machine.service.download_all_firmware("gb", "gb")
         assert place.is_symlink()
         machine.resolver.not_installed_in = {"gb": frozenset({_YABA})}
-        machine.platform_systems.listed = frozenset({"gb", "gbc"})
+        machine.platform_systems.listed = frozenset({PlatformKeys("gb", "gb"), PlatformKeys("gbc", "gbc")})
         return place
 
     def _gbc_wants_nothing(self, machine: _Machine) -> None:
@@ -926,6 +941,25 @@ class TestALinkAnotherPlatformMayStillWant:
 
         self._stays(machine, place)
 
+    @pytest.mark.parametrize(
+        "system",
+        ["gbc", (SystemPair("esde", "gbc"), SystemPair("esde", "sgb"))],
+        ids=["one system", "several systems"],
+    )
+    async def test_another_folder_of_the_same_slug_that_wants_the_place_keeps_it(self, machine, system):
+        """#2217 D16: a folder sharing the slug may be another system, so it is asked too."""
+        place = await self._unwanted_on_gb(machine)
+        self._gbc_wants_nothing(machine)
+        machine.resolver.not_installed_in = {"gb": frozenset({_YABA})}
+        japan = PlatformKeys("gb", "gbjp")
+        machine.platform_systems.listed = frozenset({PlatformKeys("gb", "gb"), japan})
+        several = isinstance(system, tuple) and not isinstance(system, SystemPair)
+        machine.platform_systems.answers["gbjp"] = platform_answer(SEVERAL if several else FOUND, japan, system)
+
+        await machine.service.update_bios_links("gb", "gb")
+
+        self._stays(machine, place)
+
     async def test_it_goes_once_no_listed_platform_wants_it(self, machine):
         place = await self._unwanted_on_gb(machine)
         self._gbc_wants_nothing(machine)
@@ -937,7 +971,9 @@ class TestALinkAnotherPlatformMayStillWant:
     async def test_a_platform_whose_system_could_not_be_asked_keeps_it(self, machine):
         place = await self._unwanted_on_gb(machine)
         self._gbc_wants_nothing(machine)
-        machine.platform_systems.answers["gbc"] = PlatformSystem(UNASKED, "gbc", "gbc", unasked="server_unreachable")
+        machine.platform_systems.answers["gbc"] = platform_answer(
+            UNASKED, "gbc", name="gbc", source=None, unasked="server_unreachable"
+        )
 
         await machine.service.update_bios_links("gb", "gb")
 
@@ -971,7 +1007,7 @@ class TestALinkAnotherPlatformMayStillWant:
 
     async def test_a_platform_whose_system_is_switched_off_is_asked_all_the_same(self, machine):
         place = await self._unwanted_on_gb(machine)
-        machine.platform_systems.answers["gbc"] = PlatformSystem(SWITCHED_OFF, "gbc", "gbc", system="gbc")
+        machine.platform_systems.answers["gbc"] = platform_answer(SWITCHED_OFF, "gbc", "gbc", name="gbc", source=None)
 
         await machine.service.update_bios_links("gb", "gb")
 
@@ -979,7 +1015,7 @@ class TestALinkAnotherPlatformMayStillWant:
 
     async def test_a_platform_with_no_system_wants_nothing(self, machine):
         place = await self._unwanted_on_gb(machine)
-        machine.platform_systems.answers["gbc"] = PlatformSystem(NO_SYSTEM, "gbc", "gbc")
+        machine.platform_systems.answers["gbc"] = platform_answer(NO_SYSTEM, "gbc", name="gbc", source=None)
 
         await machine.service.update_bios_links("gb", "gb")
 
@@ -988,7 +1024,9 @@ class TestALinkAnotherPlatformMayStillWant:
     async def test_each_system_is_read_once_however_many_platforms_share_it(self, machine):
         await self._unwanted_on_gb(machine)
         self._gbc_wants_nothing(machine)
-        machine.platform_systems.listed = frozenset({"gb", "gbc", "gbc-hacks"})
+        machine.platform_systems.listed = frozenset(
+            {PlatformKeys("gb", "gb"), PlatformKeys("gbc", "gbc"), PlatformKeys("gbc-hacks", "gbc-hacks")}
+        )
         machine.platform_systems.mapping = {"gbc-hacks": "gbc"}
         machine.resolver.calls.clear()
 
@@ -998,7 +1036,9 @@ class TestALinkAnotherPlatformMayStillWant:
 
     async def test_the_asking_stops_once_every_link_is_known_to_be_wanted(self, machine):
         place = await self._unwanted_on_gb(machine)
-        machine.platform_systems.listed = frozenset({"gb", "gbc", "sgb"})
+        machine.platform_systems.listed = frozenset(
+            {PlatformKeys("gb", "gb"), PlatformKeys("gbc", "gbc"), PlatformKeys("sgb", "sgb")}
+        )
         machine.resolver.calls.clear()
 
         await machine.service.update_bios_links("gb", "gb")
@@ -1024,7 +1064,9 @@ class TestALinkAnotherPlatformMayStillWant:
             machine.romm.add(firmware_id, "ps2", name, data)
         await machine.service.download_all_firmware("ps2", "ps2")
         machine.resolver.not_installed_in = {"ps2": frozenset({"pcsx2_libretro.so"})}
-        machine.platform_systems.listed = frozenset({"ps2", "ps2-homebrew"})
+        machine.platform_systems.listed = frozenset(
+            {PlatformKeys("ps2", "ps2"), PlatformKeys("ps2-homebrew", "ps2-homebrew")}
+        )
         # The folder another platform's emulator reads recognises the USA image only.
         machine.resolver.placements = [
             replace(placement, folder_md5s=frozenset({_md5(b"usa")})) for placement in machine.resolver.placements
@@ -1242,7 +1284,9 @@ class TestOnlyTheStore:
         assert entry["store_only"] == "unsupported"
 
     async def test_for_a_platform_no_source_answers_for_a_download_lands_in_the_store_only(self, machine):
-        machine.platform_systems.answers["switch"] = PlatformSystem(NO_SYSTEM, "switch", "switch")
+        machine.platform_systems.answers["switch"] = platform_answer(
+            UNASKED, "switch", name="switch", source=None, unasked=NO_SOURCE_DETECTED
+        )
         machine.romm.add(1, "switch", "prod.keys", b"keys")
 
         result = await machine.service.download_all_firmware("switch", "switch")
@@ -1251,6 +1295,76 @@ class TestOnlyTheStore:
         assert result["downloaded"] == 1
         assert machine.store_path("switch", "prod.keys").exists()
         assert entry["store_only"] == "no_source"
+
+    @pytest.mark.parametrize(
+        ("unasked", "source", "unanswered", "reason"),
+        [
+            (ALL_SOURCES_SWITCHED_OFF, None, None, "switched_off"),
+            ("server_unreachable", None, NO_SOURCE_DETECTED, "no_source"),
+            ("server_unreachable", None, ALL_SOURCES_SWITCHED_OFF, "switched_off"),
+            ("catalogue_invalid", RETRODECK_SOURCE, None, "catalogue_invalid"),
+            ("server_unreachable", RETRODECK_SOURCE, None, "server_unreachable"),
+        ],
+    )
+    async def test_a_platform_no_source_was_asked_for_says_why_it_was_not(
+        self, machine, unasked, source, unanswered, reason
+    ):
+        machine.platform_systems.answers["switch"] = platform_answer(
+            UNASKED, "switch", name="switch", source=source, unasked=unasked, unanswered=unanswered
+        )
+
+        entry = (await machine.service.get_platform_firmware_status("switch", "switch"))["platform"]
+
+        assert entry["store_only"] == reason
+
+    @pytest.mark.parametrize(
+        ("state", "system", "reason"),
+        [
+            (NO_SYSTEM, None, "no_platform_system"),
+            (UNMATCHED, None, "platform_unmatched"),
+            (CONTRADICTED, None, "platform_pairs_contradict"),
+            (SWITCHED_OFF, "switch", "platform_system_off"),
+            (NOT_HERE, "switch", "platform_system_not_here"),
+        ],
+    )
+    async def test_a_platform_with_no_system_to_use_says_its_own_reason_never_no_source(
+        self, machine, state, system, reason
+    ):
+        """The source answered; what it answered is why the download is linked nowhere."""
+        machine.platform_systems.answers["switch"] = platform_answer(state, "switch", system, name="switch")
+        machine.romm.add(1, "switch", "prod.keys", b"keys")
+
+        await machine.service.download_all_firmware("switch", "switch")
+        entry = (await machine.service.get_platform_firmware_status("switch", "switch"))["platform"]
+
+        assert machine.store_path("switch", "prod.keys").exists()
+        assert entry["store_only"] == reason
+
+    async def test_a_platform_of_several_systems_is_linked_nowhere_and_says_so(self, machine):
+        """#2225 D8: a link lands in one system's place, so several systems take the store only."""
+        _saturn(machine)
+        several = (SystemPair("esde", "saturn"), SystemPair("esde", "saturnjp"))
+        machine.platform_systems.answers["saturn"] = platform_answer(SEVERAL, "saturn", several, name="saturn")
+        machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
+
+        result = await machine.service.download_all_firmware("saturn", "saturn")
+        links = await machine.service.update_bios_links("saturn", "saturn")
+        entry = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
+
+        assert machine.store_path("saturn", "sega_101.bin").exists()
+        assert [path for path in machine.bios.rglob("*") if path.is_symlink()] == []
+        assert (result["placed"], links["placed"]) == (0, 0)
+        assert entry["store_only"] == "platform_systems_several"
+
+    async def test_a_game_s_answer_carries_what_its_store_only_line_is_worded_from(self, machine):
+        several = (SystemPair("esde", "saturn"), SystemPair("esde", "saturnjp"))
+        machine.platform_systems.answers["saturn"] = platform_answer(SEVERAL, "saturn", several, name="Saturn")
+
+        answer = await machine.service.check_platform_bios("saturn", "saturn")
+
+        assert answer["store_only"] == "platform_systems_several"
+        assert answer["platform_system"]["systems"] == ["saturn", "saturnjp"]
+        assert answer["emulator_source"] == {"kind": "retrodeck", "starts_games": True}
 
     async def test_download_all_fetches_a_file_no_emulator_asks_for_and_lists_it_as_used_by_none(self, machine):
         _saturn(machine)

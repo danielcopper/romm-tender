@@ -39,13 +39,17 @@ const PS3_PKG = launch({
   install_in: ["RPCS3 Game Serial (Standalone)"],
 });
 const DREAMCAST_TRACK = launch({
-  state: "not_a_launch_file",
+  state: "not_established",
   entry: "Flycast",
   system: "dreamcast",
   platform_name: "Sega Dreamcast",
   file: "track03.bin",
   extension: ".bin",
   starts_from: [".chd", ".cue", ".gdi"],
+  statements: [
+    { reason: "format_unestablished", file: null },
+    { reason: "frontend_would_not_list", file: null },
+  ],
 });
 const NOT_THIS_EMULATOR = launch({
   state: "not_this_emulator",
@@ -81,16 +85,15 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
     expect(launchRefusal(launch({ ...PS3_PKG, install_in: [] }), true)).toBe("This game has to be installed first.");
   });
 
-  it("a single Dreamcast track is not the file the platform starts from, named as the game page names it (D36)", () => {
-    expect(launchRefusal(DREAMCAST_TRACK, true)).toBe(
-      "track03.bin is not the file Sega Dreamcast starts from; it starts from .chd, .cue, .gdi.",
-    );
+  it("a single Dreamcast track refuses nothing: whether it starts is not established (#2195 D2, changed)", () => {
+    expect(launchRefusal(DREAMCAST_TRACK, true)).toBeNull();
+    expect(launchRefused(DREAMCAST_TRACK)).toBe(false);
   });
 
   it("lists an extension ES-DE spells in both cases once, as the resolver spells it first", () => {
     const dreamcast = { ...DREAMCAST_TRACK, starts_from: [".cdi", ".CDI", ".chd", ".CHD", ".Cue", ".cue", ".CUE"] };
-    expect(launchRefusal(dreamcast, true)).toBe(
-      "track03.bin is not the file Sega Dreamcast starts from; it starts from .cdi, .chd, .Cue.",
+    expect(launchNotes(dreamcast, RETRODECK)).toContain(
+      "ES-DE would not list track03.bin under this name; it lists files ending in .cdi, .chd, .Cue.",
     );
   });
 
@@ -126,10 +129,18 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
     ["entry_unknown", "RetroDECK has no emulator named RPCS3 Directory (Standalone)"],
     ["catalogue_unread", "RetroDECK's list of emulators could not be read"],
     ["no_source", "no emulator source is installed and switched on"],
-    [null, "RetroDECK gave no answer"],
   ] as const)("an unestablished verdict for %s names the source as the user knows it (D36)", (reason, words) => {
     expect(launchNote(launch({ state: "not_established", reason }), RETRODECK)).toBe(
       `Whether Game.ps3 starts cannot be established: ${words}.`,
+    );
+  });
+
+  it("an unestablished verdict the backend states no reason for says no more than that", () => {
+    expect(launchNote(launch({ state: "not_established", reason: null }), RETRODECK)).toBe(
+      "Whether Game.ps3 starts cannot be established.",
+    );
+    expect(entryLaunchLine(launch({ state: "not_established", reason: null }), RETRODECK)).toBe(
+      "whether it starts cannot be established",
     );
   });
 
@@ -179,7 +190,7 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
 
 describe("launchRefused", () => {
   it("refuses exactly the three verdicts that refuse a start", () => {
-    expect([PS3_PKG, DREAMCAST_TRACK, NOT_THIS_EMULATOR].map(launchRefused)).toEqual([true, true, true]);
+    expect([PS3_PKG, NOT_THIS_EMULATOR].map(launchRefused)).toEqual([true, true]);
     expect([launch(), NOT_ESTABLISHED, null].map(launchRefused)).toEqual([false, false, false]);
   });
 });
@@ -190,7 +201,7 @@ describe("entryLaunchLine — the emulator menu's line per entry (#2195 D22, D29
     [launch({ format_unestablished: true }), "whether it reads .ps3 is not established"],
     [launch({ file: "Game.zip", contents_unread: true }), "what is inside Game.zip was not read"],
     [PS3_PKG, "cannot start it: the game has to be installed first"],
-    [DREAMCAST_TRACK, "Sega Dreamcast does not start from .bin"],
+    [DREAMCAST_TRACK, "whether it reads .bin is not established +1 more"],
     [NOT_THIS_EMULATOR, "cannot start .n64 files"],
     [NOT_ESTABLISHED, "whether it starts cannot be established: RetroDECK does not list the system Sega Dreamcast"],
   ])("words %o as %s", (verdict, words) => {
@@ -616,5 +627,160 @@ describe("entryLaunchLine for an entry Tender cannot start (#2195 D42)", () => {
     expect(entryLaunchLine(launch({ state: "not_this_emulator", reason: "takes_no_folder" }), RETRODECK, false)).toBe(
       "cannot start a game installed as a folder",
     );
+  });
+});
+
+describe("a launch the resolver could not establish (#2195 D2, D40, D41 changed)", () => {
+  const UNESTABLISHED = launch({
+    state: "not_established",
+    entry: "Genesis Plus GX",
+    file: "Game.cue",
+    extension: ".cue",
+    starts_from: [".chd", ".cue"],
+    statements: [
+      { reason: "path_too_long_unchecked", file: "Game.cue" },
+      { reason: "goes_on_file_missing", file: "Track 02.bin" },
+      { reason: "playlist_discs_past_limit", file: "Game.m3u" },
+      { reason: "format_unestablished", file: null },
+      { reason: "folder_route_unread", file: null },
+    ],
+  });
+
+  it("keeps Play on", () => {
+    expect(launchRefused(UNESTABLISHED)).toBe(false);
+    expect(launchRefusal(UNESTABLISHED, true)).toBeNull();
+  });
+
+  it("names each thing that could not be established, one note each", () => {
+    expect(launchNotes(UNESTABLISHED, RETRODECK)).toEqual([
+      "Whether Genesis Plus GX starts this game cannot be established: the path of Game.cue is too long for it to read in full, and what it does then was not checked.",
+      "Whether Genesis Plus GX starts this game cannot be established; it would go on without Track 02.bin: it is missing.",
+      "Whether Genesis Plus GX starts this game cannot be established; it does not read every disc Game.m3u lists.",
+      "Whether Genesis Plus GX reads .cue files is not established.",
+      "Whether Genesis Plus GX starts this game cannot be established: how Genesis Plus GX takes a game installed as a folder was not checked.",
+    ]);
+  });
+
+  it("nowhere says the game can start", () => {
+    const said = [...launchNotes(UNESTABLISHED, RETRODECK), entryLaunchLine(UNESTABLISHED, RETRODECK) ?? ""];
+
+    expect(said.join(" ")).not.toMatch(/can start/);
+  });
+
+  it("names the file a goes-on statement is about without saying the game starts", () => {
+    expect(launchNotes(UNESTABLISHED, RETRODECK)[1]).toContain("Track 02.bin");
+  });
+
+  it("falls back to the reason where it states nothing Tender words", () => {
+    expect(launchNotes(launch({ state: "not_established", reason: "system_unknown" }), RETRODECK)).toEqual([
+      "Whether Game.ps3 starts cannot be established: RetroDECK does not list the system PlayStation 3.",
+    ]);
+  });
+
+  it("says several systems answer where the resolver names none", () => {
+    const several = launch({
+      state: "not_established",
+      reason: "systems_several",
+      platform_name: "Sega Master System",
+    });
+
+    expect(launchNotes(several, RETRODECK)).toEqual([
+      "Whether RPCS3 Directory (Standalone) starts this game cannot be established: RetroDECK has several systems for Sega Master System and names none of them.",
+    ]);
+  });
+});
+
+describe("a name the frontend would not list the file under (#2195 D2)", () => {
+  const UNLISTED = launch({
+    file: "Game.GBA",
+    extension: ".GBA",
+    starts_from: [".gba"],
+    statements: [{ reason: "frontend_would_not_list", file: null }],
+  });
+
+  it("is a note beside a start, which it does not refuse", () => {
+    expect(launchRefused(UNLISTED)).toBe(false);
+    expect(launchNotes(UNLISTED, RETRODECK)).toEqual([
+      "ES-DE would not list Game.GBA under this name; it lists files ending in .gba.",
+    ]);
+  });
+
+  it("is the emulator menu's line too", () => {
+    expect(entryLaunchLine(UNLISTED, RETRODECK)).toBe("ES-DE would not list Game.GBA under this name");
+  });
+});
+
+describe("a folder holding files the entry takes as games of their own", () => {
+  it("names those files", () => {
+    const holds = launch({ statements: [{ reason: "folder_holds_games", file: "Game.iso, Other.iso" }] });
+
+    expect(launchNotes(holds, RETRODECK)).toEqual([
+      "Game.ps3 holds files RPCS3 Directory (Standalone) would take as games of their own: Game.iso, Other.iso.",
+    ]);
+    expect(entryLaunchLine(holds, RETRODECK)).toBe("the folder holds games of their own: Game.iso, Other.iso");
+  });
+});
+
+describe("a verdict not established always says so first (#2195 D2, D40)", () => {
+  // The shapes of the recorded machines a-file-the-core-does-not-claim-and-the-list-leaves-out-is-attempted,
+  // ppsspp-a-folder-that-cannot-be-listed-is-not-established and a-path-the-sandbox-cannot-be-told-about-is-not-established.
+  const UNCLAIMED = launch({
+    state: "not_established",
+    entry: "Gambatte",
+    file: "Game.txt",
+    extension: ".txt",
+    starts_from: [".gb", ".gbc", ".sgb", ".zip"],
+    statements: [
+      { reason: "format_unclaimed", file: null },
+      { reason: "frontend_would_not_list", file: null },
+    ],
+  });
+  const UNLISTED_FOLDER = launch({
+    state: "not_established",
+    entry: "PPSSPP (Standalone)",
+    file: "Game",
+    extension: ".",
+    starts_from: [".iso", ".cso"],
+    statements: [
+      { reason: "sandbox_path_unestablished", file: null },
+      { reason: "frontend_would_not_list", file: null },
+    ],
+  });
+  const UNSEEN = launch({
+    state: "not_established",
+    entry: "Gambatte",
+    file: "Game.sgb",
+    statements: [{ reason: "sandbox_path_unestablished", file: null }],
+  });
+
+  it("leads with the verdict before the notes on an extension the core does not list", () => {
+    const notes = launchNotes(UNCLAIMED, RETRODECK);
+
+    expect(notes).toHaveLength(3);
+    expect(notes[0]).toBe("Whether Game.txt starts cannot be established.");
+    expect(notes[1]).toBe(
+      "Gambatte does not list .txt among the files it takes, but would be handed the file all the same.",
+    );
+    expect(notes[2]).toMatch(/^ES-DE would not list /);
+  });
+
+  it("says what the sandbox leaves open first, then the frontend's note", () => {
+    expect(launchNotes(UNLISTED_FOLDER, RETRODECK)).toEqual([
+      "Whether PPSSPP (Standalone) can reach Game inside RetroDECK's sandbox could not be established.",
+      expect.stringMatching(/^ES-DE would not list Game /),
+    ]);
+  });
+
+  it("says the sandbox sentence alone where it is the only thing to say", () => {
+    expect(launchNotes(UNSEEN, RETRODECK)).toEqual([
+      "Whether Gambatte can reach Game.sgb inside RetroDECK's sandbox could not be established.",
+    ]);
+    expect(entryLaunchLine(UNSEEN, RETRODECK)).toBe("whether it can reach the file in the sandbox is not established");
+  });
+
+  it("leads the emulator menu's line too, counting the notes", () => {
+    const line = entryLaunchLine(UNCLAIMED, RETRODECK) ?? "";
+
+    expect(line).toMatch(/^whether it starts cannot be established \+2 more$/);
   });
 });

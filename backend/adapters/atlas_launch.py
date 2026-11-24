@@ -49,7 +49,7 @@ from _vendor.atlas import (
     VARIANT_FLATPAK,
 )
 
-from adapters.atlas_catalogue import installation_word
+from adapters.atlas_catalogue import installation_word, resolution_trace, unresolved_reason
 from domain.start_command import (
     COMMAND_TOO_LONG,
     COMMAND_UNREAD,
@@ -74,6 +74,7 @@ if TYPE_CHECKING:
 
     from adapters.emulator_sources import EmulatorSourcesAdapter
     from domain.emulator_sources import SourcesReading
+    from domain.platform_system import SystemArgument
 
 # Why the resolver gives no command, each in Tender's word; a refusal this map
 # does not hold reads as :data:`COMMAND_UNREAD`. An EmuDeck launcher script no
@@ -115,7 +116,16 @@ _ENV = "env"
 
 
 def _refusal(answer: Any) -> StartRefused:
-    """Why *answer* gives no command: the chosen entry's installation where it cannot start, else the refusal."""
+    """Why *answer* gives no command: the chosen entry's installation where it cannot start, else the refusal.
+
+    An answer that does not hold for the platform (:func:`~adapters.atlas_catalogue.answer_holds`)
+    names no entry and no refusal of its own: the refusal says which —
+    several of the source's systems answer differently and the resolver names
+    none, or the source does not list it.
+    """
+    unresolved = unresolved_reason(answer)
+    if unresolved is not None:
+        return StartRefused(unresolved)
     entry = answer.entry
     if entry is not None and entry.availability != AVAILABILITY_STARTABLE:
         word = installation_word(entry)
@@ -209,7 +219,7 @@ class AtlasLaunchAdapter:
 
     def start_command(
         self,
-        system: str,
+        system: SystemArgument,
         content_path: str,
         *,
         label: str,
@@ -240,5 +250,6 @@ class AtlasLaunchAdapter:
         if answer is None:
             return StartRefused(COMMAND_UNREAD)
         codes = sorted({caveat.code for caveat in answer.caveats} - _CHANGES_NOTHING)
-        self._log_debug(f"[launch] {system}/{label}: command={answer.command is not None} caveats={codes}")
+        command = answer.command is not None
+        self._log_debug(f"[launch] {system}/{label}: command={command} {resolution_trace(answer)} caveats={codes}")
         return read_start(answer, writable=writable, read_only=read_only)

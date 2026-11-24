@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from domain.emulator_choice import ResolvedEmulator
     from domain.emulator_commands import EmulatorOption, LaunchingEmulator
     from domain.emulator_sources import SourcesReading
+    from domain.platform_system import PlatformKeys
     from domain.rom_install import RomInstall
     from domain.update_release import LatestRelease
     from lib.partial_failure import PartialFailure
@@ -274,7 +275,7 @@ class AdoptionCandidateProbeFn(Protocol):
     game already owns — so the caller resolves it outside any open Unit of Work.
     """
 
-    def __call__(self, platform_slug: str, fs_name: str) -> bool: ...
+    def __call__(self, keys: PlatformKeys, fs_name: str) -> bool: ...
 
 
 class RetryStrategy(Protocol):

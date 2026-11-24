@@ -375,16 +375,38 @@ settings `~/retrodeck/roms/gba/`, or the same folder on the drive you moved Retr
 folder if it is not there yet, as ES-DE would; it never creates the ROM folder above it.
 
 **A game's system is your emulator source's answer.** Which system — and so which folder — a platform's games belong to
-is asked of the emulator source, with the ids RomM holds for the platform; Tender keeps no table of platforms of its
-own. A download, and everything about where one would land, asks RetroDECK; the game's page and the platform's page ask
-the source that answers, which is RetroDECK while it is switched on. Where _source_ has no system for the platform,
-**Download** is refused and the pages say **"_Source_ has no system for _platform_, so Tender cannot download its
-games."**; where the platform's only systems are switched off in _source_, they say **"System _system_ is switched off
-in _source_."** A platform's BIOS downloads are not refused: they land in Tender's firmware store and are linked once a
-source has a system for the platform ([Where downloads go](bios-management.md#where-downloads-go)). A game you already
-installed keeps the system it was downloaded under, and the buttons on its **BIOS** tab fetch and link the files for
-that system. Where several systems fit one platform — SNES is `sfc`, `snes` and `snesna` in RetroDECK — Tender takes the
-one named like the platform (`snes`); the platform's page names it.
+is asked of the emulator source, with the platform's slug in RomM and the folder the game lies in on RomM — two folders
+that share a slug, such as `megadrive` and `megadrivejp` under `genesis`, can be two systems; Tender keeps no table of
+platforms of its own. A download, and everything about where one would land, asks RetroDECK; the game's page and the
+platform's page ask the source that answers, which is RetroDECK while it is switched on. Where the platform has no
+system to use, **Download** is refused and the pages say which case holds:
+
+- **"Tender cannot match _platform_ to a system yet, so it cannot download its games."** — neither the platform's slug
+  nor its folder is one Tender's emulator knowledge knows.
+- **"RomM's slug "_slug_" and folder "_folder_" point to different systems, so Tender cannot match _platform_ to a
+  system."** — the platform's folder in RomM is named after another system than its slug; renaming the folder in RomM
+  resolves it.
+- **"_Source_ has no system for _platform_, so Tender cannot download its games."** — no system of the source's frontend
+  is the platform.
+- **"_Source_ has a system for _platform_ (_system_), but it is not set up on this machine, so Tender cannot download
+  its games."** — the frontend knows the system, and your installation does not have it.
+- **"System _system_ is switched off in _source_."** — none of the platform's systems is switched on in the source, and
+  this one is switched off there.
+
+Where the emulator source's own list of systems could not be read, **Download** is refused for that, and the pages say
+**"_Source_ has not been set up yet, so Tender cannot download its games."**, **"_Source_: ES-DE's systems file is
+broken, so Tender cannot download its games."** or **"_Source_'s emulator list cannot be read yet, so Tender cannot
+download its games."**
+
+Where the platform's slug and folder leave several systems of the source — RetroDECK keeps `mark3` and `mastersystem`
+for the Master System — Tender picks none of them: until downloads land in Tender's own library, **Download** is
+refused, and the pages say **"_Source_ has several systems for _platform_ (_systems_), so Tender cannot download its
+games yet."** Where those systems answer alike — the same emulators, the same BIOS files — the pages show their shared
+emulator list and BIOS table. The platform's games are linked into no frontend folder, and a game's page says under
+**Play**: **"_Source_ has several systems for _platform_ (_systems_), and Tender links its games into none of them."** A
+platform's BIOS downloads are not refused: they land in Tender's firmware store and are linked into none of its systems,
+and the BIOS table says so ([Where downloads go](bios-management.md#where-downloads-go)). A game you already installed
+keeps the system it was downloaded under, and the buttons on its **BIOS** tab fetch and link the files for that system.
 
 **A download needs RetroDECK.** **Download** is refused, saying why, while RetroDECK is not installed (**Downloads need
 RetroDECK, which is not installed.**), while it is switched off in **Settings › Emulator sources** (**Downloads need
@@ -669,15 +691,13 @@ again.
 Not every download is something an emulator starts as it is. A few titles are distributed as an **installer** — most
 commonly a PS3 game shipped as a `.pkg` (plus a `.rap` licence file), where the game stays sealed inside the package
 until an emulator installs it. A disc rip can arrive as raw `.bin` tracks with no `.cue` or `.gdi` beside them, which is
-not a file the system starts from. And a file one emulator of a system does not take, another may.
+not something every emulator starts. And a file one emulator of a system does not take, another may.
 
 Whenever a game's page opens, Tender asks whether its file starts with the emulator the game starts with. Where it does
 and nothing about it is in doubt, nothing is said; otherwise the answer stands under the **Play** button:
 
 - **"This game has to be installed in RPCS3 Game Serial (Standalone) first."** — the file is a package to install in the
   emulator named, before anything starts it. **Play** is off.
-- **"track03.bin is not the file Sega Dreamcast starts from; it starts from .cdi, .chd, .cue, …"** — the download holds
-  no file the system starts. **Play** is off.
 - **"Azahar (Standalone) does not start .zip; other emulators of this system do. Choose another emulator in the emulator
   menu."** — **Play** is off until you do.
 - **"RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) or RPCS3 ISO
@@ -699,9 +719,10 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   with the emulator in effect, and the reason says what is missing: how ES-DE starts it could not be read, it starts
   through a `.desktop` file, a file its command reads in could not be read, its command names no program, where its
   games are kept could not be established, its command is longer than can be read, which ES-DE build the source ships
-  could not be read, what it needs from RetroDECK's start could not be read or is not known yet, or the folder it starts
-  in could not be placed. Where the emulator's own reading of the game refuses it too, that sentence comes first.
-  **Play** is off; choose another emulator in the emulator menu, whose rows say the same of each emulator.
+  could not be read, what it needs from RetroDECK's start could not be read or is not known yet, the folder it starts in
+  could not be placed, _Source_ has several systems for _platform_ and names none of them, or the source does not list
+  this game's system. Where the emulator's own reading of the game refuses it too, that sentence comes first. **Play**
+  is off; choose another emulator in the emulator menu, whose rows say the same of each emulator.
 - **"Whether _emulator_ is installed could not be established: _cause_."** — the emulator source gives no command for an
   emulator whose installation it cannot establish, so Tender cannot start it. **Play** is off; the emulator menu marks
   the same emulator "installation not established".
@@ -711,14 +732,29 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
 - **"No emulator starts this game."** — no emulator is in effect for the game. **Play** is off.
 - **"ES-DE leaves _placeholder_ unfilled in this command."** — the command starts, with a placeholder ES-DE does not
   fill in left as it is written. **Play** stays on.
-- **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
-  **Play** stays on.
+- **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason; where
+  it gives none, the sentence ends after "established". **Play** stays on.
+- **"Whether _emulator_ starts this game cannot be established: _Source_ has several systems for _platform_ and names
+  none of them."** — several systems fit the game's platform and answer it differently, so the emulator source names
+  none of them for the question. **Play** stays on.
+- **"Game.ps3 holds files RPCS3 Directory (Standalone) would take as games of their own: _files_."** — a game kept as a
+  folder holds files the emulator would start on their own. **Play** stays on.
+- **"ES-DE would not list track03.bin under this name; it lists files ending in .cdi, .chd, .cue, …"** — whether the
+  emulator starts the file is its own answer, but ES-DE's game list would not show the file under its name. **Play**
+  stays on.
+- **"Gambatte does not list .txt among the files it takes, but would be handed the file all the same."** — the emulator
+  does not claim that kind of file, and it would get it anyway; it follows the sentence that whether the game starts
+  cannot be established. **Play** stays on.
+- **"Whether _emulator_ can reach _file_ inside _Source_'s sandbox could not be established."** — the game lies where
+  the emulator source's sandbox may not let the emulator see it. **Play** stays on.
 - **"What is inside Game.zip was not read, …"** — the file is an archive the emulator opens, and whether it holds a game
   it starts was not read. **Play** stays on.
 - **"Whether RPCS3 Directory (Standalone) starts this game cannot be established: …"** — nothing is known to stand in
   the way, but the answer could not follow the start all the way, and the sentence says where it stopped: the folder was
   not found, whether a disc image is encrypted or its key file fits could not be checked, the emulator's version decides
-  whether it reads that kind of file, or a file a disc game opens could not be checked. **Play** stays on.
+  whether it reads that kind of file, a file a disc game opens could not be checked, or how it takes a game installed as
+  a folder was not checked. Nothing then says the game can start: a file it would go on without reads **"Whether
+  _emulator_ starts this game cannot be established; it would go on without _file_: …"**. **Play** stays on.
 - **"Whether _emulator_ reads _.ext_ files is not established."** — nobody has established which files the emulator
   reads. **Play** stays on.
 
@@ -735,7 +771,7 @@ where not, why. Every emulator stays choosable meanwhile.
 
 **Your download is kept.** The files stay on disk where the ROM would normally live, and **Uninstall** works as usual —
 because installing the package by hand in the emulator is exactly what you would do next. See
-[the troubleshooting entry](troubleshooting.md#the-download-has-no-launchable-file) for how.
+[the troubleshooting entry](troubleshooting.md#the-download-has-to-be-installed-first) for how.
 
 **A PS3 game downloaded as a folder** is named `<game>.ps3`, the name ES-DE expects for a PS3 game kept as a folder. A
 PS3 folder downloaded before this version is renamed so once, when Tender next starts; a folder whose new name is
@@ -779,12 +815,16 @@ so you'll never be offered a disc image the emulator can't open.
 The selected disc is **saved**, and it survives the things that would otherwise reset it:
 
 - **A library re-sync** never changes your pick.
-- **Uninstalling and re-downloading** the game restores it — the choice is remembered against the game, not the
+- **Uninstalling and re-downloading** the game restores it — the choice is remembered against the version, not the
   downloaded files, so a reinstall re-applies it automatically.
 - A **RetroDECK path migration** (moving your RetroDECK home) keeps it too.
 
 If the specific disc you pinned ever goes missing (for example a partial re-download), the game quietly falls back to
 the default disc rather than failing to launch.
+
+Each [version](#versions) of a game keeps its own pick. After a version switch the dropdown shows the discs and the pick
+of the version now bound — or disappears, where that version has a single disc or is not downloaded — and a disc you
+pick from then on is the one that version starts with.
 
 ### Where it applies
 

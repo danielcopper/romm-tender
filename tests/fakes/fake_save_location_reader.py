@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import replace
 
+from domain.platform_system import SystemArgument, system_key
 from domain.save_answer import (
     SaveAnswer,
     SaveComponent,
@@ -82,8 +83,8 @@ class FakeSaveLocationReader:
         self.installation = True
         self._by_system: dict[str, SaveAnswer] = {}
         self._states_by_system: dict[str, SavestateLocation | NoSavestates | None] = {}
-        self.calls: list[tuple[str, str, str | None]] = []
-        self.savestate_calls: list[tuple[str, str, str | None]] = []
+        self.calls: list[tuple[SystemArgument, str, str | None]] = []
+        self.savestate_calls: list[tuple[SystemArgument, str, str | None]] = []
 
     def answer_with(self, system: str, answer: SaveAnswer) -> None:
         """Seed the answer *system* gives, whatever the ROM or the emulator."""
@@ -106,9 +107,10 @@ class FakeSaveLocationReader:
         self._states_by_system[system] = answer
 
     def resolve_save_answer(
-        self, *, system: str, content_path: str, emulator_label: str | None, content_installed: bool = True
+        self, *, system: SystemArgument, content_path: str, emulator_label: str | None, content_installed: bool = True
     ) -> SaveAnswer:
         self.calls.append((system, content_path, emulator_label))
+        system = system_key(system) or ""
         if not self.installation:
             # What the real adapter answers with nothing detected to ask.
             return unestablished_answer(content_installed=content_installed)
@@ -148,9 +150,10 @@ class FakeSaveLocationReader:
         )
 
     def resolve_savestate_location(
-        self, *, system: str, content_path: str, emulator_label: str | None
+        self, *, system: SystemArgument, content_path: str, emulator_label: str | None
     ) -> SavestateLocation | NoSavestates | None:
         self.savestate_calls.append((system, content_path, emulator_label))
+        system = system_key(system) or ""
         if system in self._states_by_system:
             return self._states_by_system[system]
         if self.beside_content:

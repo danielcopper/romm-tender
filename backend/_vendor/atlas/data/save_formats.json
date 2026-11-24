@@ -1,0 +1,1426 @@
+{
+  "schema": 1,
+  "spec": "docs/research/save-portability.md",
+  "formats": {
+    "psx-card-raw": "A PlayStation memory card as one raw image of the card's 128 KiB (sixteen 8 KiB blocks of 128-byte frames), with no header before it.",
+    "ps2-file-card": "A PlayStation 2 memory card as one file: the card's pages of 512 data bytes each followed by their 16 bytes of ECC, the card's size read off the file's length.",
+    "ps2-folder-card": "PCSX2's folder memory card: a directory standing for one card, its saves kept as the files and folders the card's file system holds.",
+    "saturn-backup-ram": "The Saturn's internal backup RAM: the 32 KiB that sit on the odd bytes of its bus window, stored packed and raw.",
+    "saturn-backup-cartridge-4mbit": "A 4 Mbit Saturn backup cartridge: the 512 KiB on the odd bytes of its bus window, stored packed and raw.",
+    "saturn-backup-cartridge-8mbit": "An 8 Mbit Saturn backup cartridge as Kronos keeps it: 1 MiB on the odd bytes of its bus window, stored packed and raw.",
+    "saturn-backup-cartridge-16mbit": "A 16 Mbit Saturn backup cartridge as Kronos keeps it: 2 MiB on the odd bytes of its bus window, stored packed and raw.",
+    "saturn-backup-cartridge-32mbit": "A 32 Mbit Saturn backup cartridge as Kronos keeps it: 4 MiB on the odd bytes of its bus window, stored packed and raw.",
+    "gb-cartridge-ram": "A Game Boy cartridge's save memory as one raw image from its first address: the RAM banks in order, one byte per address (an MBC2 cartridge's 512 four-bit cells one to a byte), and an MBC7 EEPROM's 16-bit words high byte first. Each emulator sizes the image its own way, and RetroArch loads what fits, so two lengths of this layout hold the same data where the cartridge's memory fits both.",
+    "gb-cartridge-ram-mbc2-packed": "mGBA's MBC2 RAM: the 512 four-bit cells packed two to a byte, the even cell in the low nibble, 256 bytes.",
+    "gb-cartridge-ram-mbc6-with-flash": "mGBA's MBC6 save: the cartridge's RAM followed by its flash in one image.",
+    "gb-cartridge-ram-mbc7-low-byte-first": "SameBoy's MBC7 EEPROM: its 16-bit words low byte first.",
+    "gb-cartridge-ram-first-four-banks": "Gearboy's Pocket Camera RAM: only the first four 8 KiB banks of the camera's 128 KiB, the banks Gearboy's MBC3 rule keeps.",
+    "gb-cartridge-ram-tama5-mgba": "mGBA's TAMA5 memory: the mapper's 32 bytes, one byte per TAMA5 RAM address.",
+    "gb-clock-gambatte": "Gambatte's cartridge clock: the 64-bit base time its clock's counters are derived from, 8 bytes.",
+    "gb-clock-sameboy": "SameBoy's clock section: the real and the latched clock registers, the last second it counted and its cycle count, laid out as its save state's rtc section.",
+    "gb-clock-tgbdual": "TGB Dual's clock: one 32-bit time the core keeps for every game, 4 bytes.",
+    "gb-clock-vba-mbc3": "An MBC3 clock as VBA-M lays it out: ten 32-bit registers (seconds, minutes, hours, days and control, then the same five latched) and a 64-bit time, 48 bytes. Gearboy keeps the time as 32 bits followed by a word it sets to zero, the same bytes while the time fits in 32 bits.",
+    "gb-clock-vbam-huc3": "VBA-M's HuC3 clock: the time it last read the clock at, as one time_t.",
+    "gb-clock-vbam-tama5": "VBA-M's TAMA5 clock: fourteen 32-bit clock registers and a 64-bit time.",
+    "nds-card-raw": "A DS game card's save memory, such as its EEPROM, FRAM, flash or NAND, as one raw image from its first address, one byte per byte of the chip, as long as the emulator sizes the card's chip.",
+    "nds-dsv": "DeSmuME's .dsv: the card's save memory as one raw image from its first address, padded with 0xFF to the next size of DeSmuME's table at or above the highest address the game wrote, followed by a 122-byte footer: an 82-byte line of text, six little-endian 32-bit fields (the size written, the padded size, the save type, the address size, the memory size and the version, 0) and the 16-byte cookie |-DESMUME SAVE-|.",
+    "gc-card-raw": "A GameCube memory card as one raw image of the card's 8 KiB blocks, its header, directory and block maps first, as long as the card's size.",
+    "gc-gci-folder": "Dolphin's GCI folder: a directory standing for one card, each save a .gci file of its 64-byte directory entry followed by its 8 KiB blocks.",
+    "wii-nand-title-data": "A Wii title's save as Dolphin keeps it in its NAND tree: the files of the title's data directory, one host file per NAND file. The NAND's own record of each file's owner and modes (fst.bin) is no part of it; a file it does not list is given read and write for everyone."
+  },
+  "retroarch": {
+    "compressed": "[V] save.c:644-657 at RetroArch a79435a — with save_file_compression on, RetroArch writes a file it saves through a core's memory id as an RZIP stream (rzipstream_write_file), and reads every such file back through rzipstream_read_file, which reads an uncompressed file as well (save.c:511-518). An emulator that does not load the file through RetroArch reads the compressed bytes, so the file has to be decompressed first, by no rule a client applies itself.",
+    "loads_raw": "[V] save.c:492-541 at RetroArch a79435a — content_load_ram_file reads a file it keeps for a core's memory id and copies it byte for byte into the core's buffer, a longer file cut at the buffer's size and a shorter one filling its start (:523-533); nothing converts it, so a file laid out another way is read as the core's own layout."
+  },
+  "conversions": [
+    {
+      "from": "ps2-folder-card",
+      "to": "ps2-file-card",
+      "rule": null,
+      "citation": "[V] pcsx2-qt/Settings/MemoryCardConvertWorker.cpp:36-100 at PCSX2 v2.8.2 (fd9d310c) — ConvertToFile opens the folder card and reads it page by page, ECC included, into a new file card."
+    },
+    {
+      "from": "ps2-file-card",
+      "to": "ps2-folder-card",
+      "rule": null,
+      "citation": "[V] pcsx2-qt/Settings/MemoryCardConvertWorker.cpp:102-167 at PCSX2 v2.8.2 (fd9d310c) — ConvertToFolder reads a file card into memory and saves it page by page into a new folder card."
+    },
+    {
+      "from": "gc-card-raw",
+      "to": "gc-gci-folder",
+      "rule": null,
+      "citation": "[V] Source/Core/DolphinQt/GCMemcardManager.cpp:331-350 and :407-501 at Dolphin f84df020 — the memory card manager opens a raw card and exports its saves as .gci files, each its directory entry and its blocks (Memcard::WriteSavefile); a GCI folder loads such files as they are, re-signing the copy-protected saves to its own card (Source/Core/Core/HW/GCMemcard/GCMemcardDirectory.cpp:110-114)."
+    },
+    {
+      "from": "gc-gci-folder",
+      "to": "gc-card-raw",
+      "rule": null,
+      "citation": "[V] Source/Core/DolphinQt/GCMemcardManager.cpp:503-575 and :577-619 at Dolphin f84df020 — the memory card manager reads .gci files and imports each into an open raw card, which it then saves; the import re-signs the copy-protected saves to that card (Source/Core/Core/HW/GCMemcard/GCMemcard.cpp:713-784, :757-758)."
+    }
+  ],
+  "emulators": {
+    "swanstation": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["1.0.0 4d309c0"],
+        "names": "commit",
+        "revision": "4d309c0",
+        "citation": "src/libretro/libretro_host_interface.cpp:72 at 4d309c0 sets library_version to \"1.0.0 \" GIT_VERSION, the core's own short hash (atlas/data/core_firmware.json, swanstation's build block)."
+      },
+      "systems": {
+        "psx": {
+          "parts": [
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "psx-card-raw",
+              "names": ["<rom_stem>.srm"],
+              "frontend": true,
+              "modes": "^card1-libretro\\+",
+              "citation": "[V] src/libretro/libretro_host_interface.cpp:754-762 and :778-784 at 4d309c0 — in the Libretro card type slot 1's RETRO_MEMORY_SAVE_RAM is the card's own data array, 128 KiB long, so RetroArch writes that array as the .srm and loads the file back into it, truncated where longer (save.c:492-541 at RetroArch a79435a); the array is MemoryCardImage::DataArray, 128 KiB with no header (src/core/memory_card_image.h:12-16)."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "psx-card-raw",
+              "names": ["duckstation_shared_card_1.mcd", "<save_id>_1.mcd", "<rom_stem>_1.mcd"],
+              "modes": "^card1-(shared|per-code|per-title)\\+",
+              "citation": "[V] src/core/memory_card_image.cpp:36-49 and :51-64 at 4d309c0 — a card file is loaded only where it is exactly DATA_SIZE (128 KiB) long and saved as the whole raw array (src/core/memory_card_image.h:12-16)."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "2",
+              "format": "psx-card-raw",
+              "names": ["duckstation_shared_card_2.mcd", "<save_id>_2.mcd", "<rom_stem>_2.mcd"],
+              "modes": "\\+card2-(shared|per-code|per-title)$",
+              "citation": "[V] src/core/memory_card_image.cpp:36-49 and :51-64 at 4d309c0 — a card file is loaded only where it is exactly DATA_SIZE (128 KiB) long and saved as the whole raw array (src/core/memory_card_image.h:12-16)."
+            }
+          ]
+        }
+      }
+    },
+    "mednafen_psx": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["0.9.44.1 d6383bf"],
+        "names": "commit",
+        "revision": "d6383bf",
+        "citation": "The build RetroDECK deploys answers library_version '0.9.44.1 d6383bf' (atlas/data/core_firmware.json, mednafen_psx's build block)."
+      },
+      "systems": {
+        "psx": {
+          "parts": [
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "psx-card-raw",
+              "names": ["<rom_stem>.srm"],
+              "frontend": true,
+              "modes": "^srm",
+              "citation": "[V] libretro.cpp:5137-5139 and :5153-5155 at beetle-psx-libretro d6383bf — RETRO_MEMORY_SAVE_RAM is card 0's card_data, 1 << 17 bytes (mednafen/psx/input/memcard.cpp:57, :478-480), so RetroArch writes it as the .srm and loads the file back into it, truncated where longer (save.c:492-541 at RetroArch a79435a)."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "psx-card-raw",
+              "names": ["<rom_stem>.0.mcr", "mednafen_psx_libretro_shared.0.mcr"],
+              "modes": "^mcr",
+              "citation": "[V] mednafen/psx/frontio.cpp:950-977 and :991-1011 at beetle-psx-libretro d6383bf — a card file is read and written as the card's raw 1 << 17 bytes (mednafen/psx/input/memcard.cpp:57)."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "2",
+              "format": "psx-card-raw",
+              "names": ["<rom_stem>.1.mcr", "mednafen_psx_libretro_shared.1.mcr"],
+              "modes": "\\+second-card",
+              "citation": "[V] mednafen/psx/frontio.cpp:950-977 and :991-1011 at beetle-psx-libretro d6383bf — a card file is read and written as the card's raw 1 << 17 bytes (mednafen/psx/input/memcard.cpp:57)."
+            }
+          ]
+        }
+      }
+    },
+    "mednafen_psx_hw": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["0.9.44.1 d6383bf"],
+        "names": "commit",
+        "revision": "d6383bf",
+        "citation": "The build RetroDECK deploys answers library_version '0.9.44.1 d6383bf' (atlas/data/core_firmware.json, mednafen_psx_hw's build block) — one implementation with mednafen_psx at one revision."
+      },
+      "systems": {
+        "psx": {
+          "parts": [
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "psx-card-raw",
+              "names": ["<rom_stem>.srm"],
+              "frontend": true,
+              "modes": "^srm",
+              "citation": "[V] libretro.cpp:5137-5139 and :5153-5155 at beetle-psx-libretro d6383bf — RETRO_MEMORY_SAVE_RAM is card 0's card_data, 1 << 17 bytes (mednafen/psx/input/memcard.cpp:57, :478-480), so RetroArch writes it as the .srm and loads the file back into it, truncated where longer (save.c:492-541 at RetroArch a79435a)."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "psx-card-raw",
+              "names": ["<rom_stem>.0.mcr", "mednafen_psx_libretro_shared.0.mcr"],
+              "modes": "^mcr",
+              "citation": "[V] mednafen/psx/frontio.cpp:950-977 and :991-1011 at beetle-psx-libretro d6383bf — a card file is read and written as the card's raw 1 << 17 bytes (mednafen/psx/input/memcard.cpp:57)."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "2",
+              "format": "psx-card-raw",
+              "names": ["<rom_stem>.1.mcr", "mednafen_psx_libretro_shared.1.mcr"],
+              "modes": "\\+second-card",
+              "citation": "[V] mednafen/psx/frontio.cpp:950-977 and :991-1011 at beetle-psx-libretro d6383bf — a card file is read and written as the card's raw 1 << 17 bytes (mednafen/psx/input/memcard.cpp:57)."
+            }
+          ]
+        }
+      }
+    },
+    "pcsx_rearmed": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["r25 228c14e"],
+        "names": "commit",
+        "revision": "228c14e",
+        "citation": "The shipped binary names 'r25 228c14e' in its library_version (atlas/data/core_oddities.json, pcsx_rearmed's provenance)."
+      },
+      "systems": {
+        "psx": {
+          "parts": [
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "psx-card-raw",
+              "names": ["<rom_stem>.srm"],
+              "frontend": true,
+              "citation": "[V] frontend/libretro.c:2052-2053 and :2062-2063 at pcsx_rearmed 228c14e — RETRO_MEMORY_SAVE_RAM is Mcd1Data, MCD_SIZE = 128 KiB (libpcsxcore/sio.h:34-36), so RetroArch writes it as the .srm and loads the file back into it, truncated where longer (save.c:492-541 at RetroArch a79435a)."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "2",
+              "format": "psx-card-raw",
+              "names": ["pcsx-card2.mcd"],
+              "modes": "^enabled$",
+              "citation": "[V] libpcsxcore/sio.c:335-407, :414-447 and :450-470 at pcsx_rearmed 228c14e — card 2 is read as MCD_SIZE raw bytes, past a 64- or 3904-byte header only where the file is that much longer, written back in place, and created raw for a name that is not a .gme (frontend/libretro.c:3487-3516 names it pcsx-card2.mcd)."
+            }
+          ]
+        }
+      }
+    },
+    "DUCKSTATION": {
+      "kind": "standalone",
+      "build": {
+        "pins": ["preview"],
+        "names": "channel",
+        "revision": "1f6de046b",
+        "citation": "RetroDECK's DuckStation component names its build 'preview' in component_version, and the card's pinned build is RetroDECK/Duckstation at 1f6de046b (atlas/data/standalone_saves.json, DUCKSTATION's builds)."
+      },
+      "systems": {
+        "psx": {
+          "parts": [
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "psx-card-raw",
+              "names": ["shared_card_1.mcd"],
+              "reading": "Card1Path",
+              "modes": "^Shared\\+",
+              "citation": "[V] src/core/memory_card_image.cpp:99-122 and :124-136 at RetroDECK/Duckstation 1f6de046b — a card file is loaded only where it is exactly DATA_SIZE (128 KiB) long and saved as the whole raw array (src/core/memory_card_image.h:17)."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "psx-card-raw",
+              "names": ["<save_id>_1.mcd"],
+              "modes": "^PerGame[A-Za-z]*\\+",
+              "citation": "[V] src/core/memory_card_image.cpp:99-122 and :124-136 at RetroDECK/Duckstation 1f6de046b — a card file is loaded only where it is exactly DATA_SIZE (128 KiB) long and saved as the whole raw array (src/core/memory_card_image.h:17)."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "2",
+              "format": "psx-card-raw",
+              "names": ["shared_card_2.mcd"],
+              "reading": "Card2Path",
+              "modes": "\\+Shared$",
+              "citation": "[V] src/core/memory_card_image.cpp:99-122 and :124-136 at RetroDECK/Duckstation 1f6de046b — a card file is loaded only where it is exactly DATA_SIZE (128 KiB) long and saved as the whole raw array (src/core/memory_card_image.h:17)."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "2",
+              "format": "psx-card-raw",
+              "names": ["<save_id>_2.mcd"],
+              "modes": "\\+PerGame[A-Za-z]*$",
+              "citation": "[V] src/core/memory_card_image.cpp:99-122 and :124-136 at RetroDECK/Duckstation 1f6de046b — a card file is loaded only where it is exactly DATA_SIZE (128 KiB) long and saved as the whole raw array (src/core/memory_card_image.h:17)."
+            }
+          ]
+        }
+      }
+    },
+    "pcsx2": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["14d19f8"],
+        "names": "commit",
+        "revision": "14d19f8",
+        "citation": "LRPS2 reports its own short hash as library_version, '14d19f8' on the build RetroDECK deploys (atlas/data/core_firmware.json, pcsx2's build block)."
+      },
+      "systems": {
+        "ps2": {
+          "parts": [
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "ps2-file-card",
+              "names": ["Mcd001.ps2"],
+              "modes": "^enabled$",
+              "citation": "[V] pcsx2/MemoryCardFile.cpp:274-345, :382-401, :408-415 and :428-484 at libretro/ps2 14d19f8 — a file card is opened read-write and addressed by byte, its size taken from the file in pages of 512 data bytes and 16 ECC bytes (MC2_MBSIZE, :35), and a missing one is created at 8 such megabytes."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "2",
+              "format": "ps2-file-card",
+              "names": ["Mcd002.ps2"],
+              "modes": "^enabled$",
+              "citation": "[V] pcsx2/MemoryCardFile.cpp:274-345, :382-401, :408-415 and :428-484 at libretro/ps2 14d19f8 — a file card is opened read-write and addressed by byte, its size taken from the file in pages of 512 data bytes and 16 ECC bytes (MC2_MBSIZE, :35), and a missing one is created at 8 such megabytes."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "ps2-file-card",
+              "names": ["<rom_stem>.ps2"],
+              "modes": "^disabled$",
+              "citation": "[V] pcsx2/MemoryCardFile.cpp:274-345, :382-401, :408-415 and :428-484 at libretro/ps2 14d19f8 — the per-content card is a file card like the shared ones: opened read-write and addressed by byte, sized by the file in pages of 512 data bytes and 16 ECC bytes."
+            }
+          ]
+        }
+      }
+    },
+    "pcee2": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["v2.9.78"],
+        "names": "release",
+        "revision": "340ce04",
+        "citation": "PCEE2 reports the upstream PCSX2 release it is merged up to, v2.9.78, as its library_version, the same across several of its own commits (atlas/data/core_firmware.json, pcee2's build block); its citations here are read at 340ce04."
+      },
+      "systems": {
+        "ps2": {
+          "parts": [
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "ps2-file-card",
+              "names": ["Mcd001.ps2"],
+              "reading": "pcsx2_memcard_slot1_file",
+              "modes": "^(both-slots|slot-1)$",
+              "citation": "[V] pcsx2/SIO/Memcard/MemoryCardFile.cpp:262-345, :379-398, :405-413 and :426-508 at pcee2-libretro 340ce04 — the same file card as PCSX2's: opened read-write and addressed by byte, sized by the file in pages of 512 data bytes and 16 ECC bytes (MC2_MBSIZE, :31), created at 8 such megabytes."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "2",
+              "format": "ps2-file-card",
+              "names": ["Mcd002.ps2"],
+              "reading": "pcsx2_memcard_slot2_file",
+              "modes": "^(both-slots|slot-2)$",
+              "citation": "[V] pcsx2/SIO/Memcard/MemoryCardFile.cpp:262-345, :379-398, :405-413 and :426-508 at pcee2-libretro 340ce04 — the same file card as PCSX2's: opened read-write and addressed by byte, sized by the file in pages of 512 data bytes and 16 ECC bytes (MC2_MBSIZE, :31), created at 8 such megabytes."
+            }
+          ]
+        }
+      }
+    },
+    "PCSX2": {
+      "kind": "standalone",
+      "build": {
+        "pins": ["v2.8.2"],
+        "names": "release",
+        "revision": "fd9d310c",
+        "citation": "RetroDECK's PCSX2 component names its build 'v2.8.2' in component_version, the card's pinned build at fd9d310c (atlas/data/standalone_saves.json, PCSX2's builds)."
+      },
+      "systems": {
+        "ps2": {
+          "parts": [
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "ps2-file-card",
+              "names": ["Mcd001.ps2"],
+              "reading": "Slot1_Filename",
+              "modes": "^file\\+",
+              "citation": "[V] pcsx2/SIO/Memcard/MemoryCardFile.cpp:262-345, :379-398, :405-413 and :426-508 at PCSX2 v2.8.2 (fd9d310c) — a file card is opened read-write and addressed by byte, sized by the file in pages of 512 data bytes and 16 ECC bytes (MC2_MBSIZE, :31), created at 8 such megabytes."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "1",
+              "format": "ps2-folder-card",
+              "names": ["Mcd001.ps2"],
+              "reading": "Slot1_Filename",
+              "folder": true,
+              "modes": "^folder\\+",
+              "citation": "[V] pcsx2/SIO/Memcard/MemoryCardFile.cpp:584-604 at PCSX2 v2.8.2 (fd9d310c) — FileMcd_SetType makes a slot whose path is a directory a MemoryCardType::Folder card, the FolderMemoryCard that keeps the card's file system as files rather than as one image."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "2",
+              "format": "ps2-file-card",
+              "names": ["Mcd002.ps2"],
+              "reading": "Slot2_Filename",
+              "modes": "^[^+]+\\+file",
+              "citation": "[V] pcsx2/SIO/Memcard/MemoryCardFile.cpp:262-345, :379-398, :405-413 and :426-508 at PCSX2 v2.8.2 (fd9d310c) — a file card is opened read-write and addressed by byte, sized by the file in pages of 512 data bytes and 16 ECC bytes (MC2_MBSIZE, :31), created at 8 such megabytes."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "2",
+              "format": "ps2-folder-card",
+              "names": ["Mcd002.ps2"],
+              "reading": "Slot2_Filename",
+              "folder": true,
+              "modes": "^[^+]+\\+folder",
+              "citation": "[V] pcsx2/SIO/Memcard/MemoryCardFile.cpp:584-604 at PCSX2 v2.8.2 (fd9d310c) — FileMcd_SetType makes a slot whose path is a directory a MemoryCardType::Folder card, the FolderMemoryCard that keeps the card's file system as files rather than as one image."
+            }
+          ]
+        }
+      }
+    },
+    "mednafen_saturn": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["v1.29.0 ccba526"],
+        "names": "commit",
+        "revision": "ccba526",
+        "citation": "The shipped binary names 'v1.29.0 ccba526' in its library_version (atlas/data/core_audit.json, mednafen_saturn's RetroDECK verification)."
+      },
+      "systems": {
+        "saturn": {
+          "parts": [
+            {
+              "memory": "internal-backup-ram",
+              "slot": null,
+              "format": "saturn-backup-ram",
+              "names": ["<rom_stem>.bkr", "mednafen_saturn_libretro_shared.bkr"],
+              "citation": "[V] mednafen/ss/ss.cpp:98, :244-249, :1037-1044 and :1046-1057 at beetle-saturn-libretro ccba526 — BackupRAM holds the byte of each odd bus address at (A >> 1) & 0x7FFF, 32768 bytes, written and read raw as the .bkr."
+            },
+            {
+              "memory": "cartridge-backup-ram",
+              "slot": null,
+              "format": "saturn-backup-cartridge-4mbit",
+              "names": ["<rom_stem>.bcr", "mednafen_saturn_libretro_shared.bcr"],
+              "citation": "[V] mednafen/ss/cart/backup.cpp:25, :30-48 and :60-66 at beetle-saturn-libretro ccba526 — the backup cartridge holds the byte of each odd bus address at (A >> 1) & 0x7FFFF, 512 KiB, which ss.cpp:1077-1111 and :1113-1138 read and write raw as the .bcr (nv16 false)."
+            }
+          ],
+          "ignore": [
+            {
+              "names": ["<rom_stem>.smpc", "mednafen_saturn_libretro_shared.smpc"],
+              "citation": "[V] mednafen/ss/ss.cpp:1140-1153 and mednafen/ss/smpc.cpp:357-369 at beetle-saturn-libretro ccba526 — the .smpc is SMPC_SaveNV's validity byte, the console clock's raw registers and the SMPC's save memory (its language setting): the console's own state, which each emulator keeps its own way, not a game's progress, so losing it costs none (#577 D13)."
+            }
+          ]
+        },
+        "saturnjp": {
+          "same_as": "saturn"
+        }
+      }
+    },
+    "kronos": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["v2.7.0 6709c1d"],
+        "names": "commit",
+        "revision": "6709c1d",
+        "citation": "The shipped binary names 'v2.7.0 6709c1d' in its library_version (atlas/data/core_oddities.json, kronos's provenance)."
+      },
+      "systems": {
+        "saturn": {
+          "parts": [
+            {
+              "memory": "internal-backup-ram",
+              "slot": null,
+              "format": "saturn-backup-ram",
+              "names": ["<rom_stem>.bkr"],
+              "modes": "^enabled$",
+              "citation": "[V] yabause/src/sys/memory/src/memory.c:507-531, :549-570 and :1282-1325 at Kronos 6709c1d — BupRam is 0x8000 bytes holding the byte of each odd bus address at addr >> 1, loaded and saved byte for byte (T123Load and T123Save with type 1, sys/memory/include/memory.h:219-354); with kronos_use_beetle_saves enabled the file is <save dir>/<stem>.bkr (yabause/src/libretro/libretro.c:1709-1712). A file of the extended size switches the build to its extended layout (memory.c:1283-1298), which the libretro port never asks for (libretro.c:1587)."
+            },
+            {
+              "memory": "internal-backup-ram",
+              "slot": null,
+              "format": "saturn-backup-ram",
+              "names": ["<rom_stem>.ram"],
+              "modes": "^disabled$",
+              "citation": "[V] yabause/src/sys/memory/src/memory.c:507-531, :549-570 and :1282-1325 at Kronos 6709c1d — BupRam is 0x8000 bytes holding the byte of each odd bus address at addr >> 1, loaded and saved byte for byte (T123Load and T123Save with type 1, sys/memory/include/memory.h:219-354); with kronos_use_beetle_saves disabled the file is kronos/saturn/<stem>.ram (yabause/src/libretro/libretro.c:1709-1712). A file of the extended size switches the build to its extended layout (memory.c:1283-1298), which the libretro port never asks for (libretro.c:1587)."
+            },
+            {
+              "memory": "cartridge-backup-ram",
+              "slot": null,
+              "format": "saturn-backup-cartridge-4mbit",
+              "names": ["<rom_stem>.bcr"],
+              "modes": "^enabled$",
+              "citation": "[V] yabause/src/sys/memory/src/cs0.c:892-900, :920-927 and :1393-1411 at Kronos 6709c1d — the 4 Mbit backup cartridge is CART_BUP4MBIT_SIZE (0x80000, sys/memory/include/cs0.h:46) bytes holding each odd bus address's byte at addr >> 1, loaded and saved byte for byte; with kronos_use_beetle_saves enabled the core puts that cartridge in at <save dir>/<stem>.bcr (yabause/src/libretro/libretro.c:1299-1305)."
+            },
+            {
+              "memory": "cartridge-backup-ram",
+              "slot": null,
+              "format": "saturn-backup-cartridge-4mbit",
+              "names": ["<rom_stem>-ext512K.ram"],
+              "modes": "^disabled$",
+              "citation": "[V] yabause/src/sys/memory/src/cs0.c:892-900, :920-927 and :1393-1411 at Kronos 6709c1d — the 4 Mbit backup cartridge is 0x80000 bytes holding each odd bus address's byte at addr >> 1, loaded and saved byte for byte; with kronos_use_beetle_saves disabled and kronos_addon_cartridge selecting it the file is kronos/saturn/<stem>-ext512K.ram (yabause/src/libretro/libretro.c:1306-1309, :926-945)."
+            },
+            {
+              "memory": "cartridge-backup-ram",
+              "slot": null,
+              "format": "saturn-backup-cartridge-8mbit",
+              "names": ["<rom_stem>-ext1M.ram"],
+              "modes": "^disabled$",
+              "citation": "[V] yabause/src/sys/memory/src/cs0.c:947-952, :975-980 and :1413-1431 at Kronos 6709c1d — the 8 Mbit backup cartridge holds 1 MiB the same way; kronos_addon_cartridge selects it and the file is kronos/saturn/<stem>-ext1M.ram (yabause/src/libretro/libretro.c:1310-1311)."
+            },
+            {
+              "memory": "cartridge-backup-ram",
+              "slot": null,
+              "format": "saturn-backup-cartridge-16mbit",
+              "names": ["<rom_stem>-ext2M.ram"],
+              "modes": "^disabled$",
+              "citation": "[V] yabause/src/sys/memory/src/cs0.c:1433-1451 at Kronos 6709c1d — the 16 Mbit backup cartridge holds 2 MiB the same way; kronos_addon_cartridge selects it and the file is kronos/saturn/<stem>-ext2M.ram (yabause/src/libretro/libretro.c:1312-1313)."
+            },
+            {
+              "memory": "cartridge-backup-ram",
+              "slot": null,
+              "format": "saturn-backup-cartridge-32mbit",
+              "names": ["<rom_stem>-ext4M.ram"],
+              "modes": "^disabled$",
+              "citation": "[V] yabause/src/sys/memory/src/cs0.c:1453-1469 at Kronos 6709c1d — the 32 Mbit backup cartridge holds 4 MiB the same way; kronos_addon_cartridge selects it and the file is kronos/saturn/<stem>-ext4M.ram (yabause/src/libretro/libretro.c:1314-1315)."
+            }
+          ],
+          "ignore": [
+            {
+              "dir_suffix": "kronos/stv",
+              "citation": "[V] yabause/src/libretro/libretro.c:1645-1690 at Kronos 6709c1d — the kronos/stv files are written only where the content is an ST-V romset (stv_mode), never for a Saturn disc."
+            }
+          ]
+        },
+        "saturnjp": {
+          "same_as": "saturn"
+        }
+      }
+    },
+    "gambatte": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["v0.5.0-netlink 6924c76"],
+        "names": "commit",
+        "revision": "6924c76",
+        "citation": "The shipped build names this string in its library_version, the verified_core atlas/data/save_memory.json pins for the core's Game Boy systems; the reads are at gambatte-libretro 6924c76."
+      },
+      "systems": {
+        "gb": {
+          "parts": [
+            {
+              "memory": "cartridge-ram",
+              "slot": null,
+              "format": "gb-cartridge-ram",
+              "names": ["<rom_stem>.srm"],
+              "frontend": true,
+              "citation": "[V] libgambatte/src/mem/cartridge_libretro.cpp:43-56 and libgambatte/src/mem/cartridge.cpp:589-607 at gambatte-libretro 6924c76 — SAVE_RAM is rambankdata, the RAM banks of 0x2000 bytes the header allocates (one bank for an MBC2 cartridge and for a 2 KiB one), mapped straight onto the RAM window (memptrs.setRambank, cartridge.cpp:202-216), and each mapper's bank select (cartridge.cpp:83, :244 and :424 for MBC1, MBC3 and MBC5) maps bank n at n × 0x2000 (libgambatte/src/mem/memptrs.cpp:88-96), so each address is one byte at its bank's offset.",
+              "kinds": {
+                "mbc2": "gb-cartridge-ram",
+                "mbc3-timer": "gb-cartridge-ram",
+                "mbc3": "gb-cartridge-ram"
+              },
+              "unread": [
+                {
+                  "kinds": ["rom-ram"],
+                  "citation": "[O] libgambatte/src/mem/cartridge.cpp:559-560 and :208-213 at gambatte-libretro 6924c76 — a cartridge with RAM and no mapper runs on the MBC2 mapper, whose RAM is locked until a game writes the enable value, which such a game has no reason to; whether its RAM is kept as it would be is not read."
+                },
+                {
+                  "kinds": ["huc3"],
+                  "citation": "[O] libgambatte/src/mem/cartridge.cpp at gambatte-libretro 6924c76 — the HuC3 mapper's RAM banking was not read."
+                },
+                {
+                  "kinds": ["huc1"],
+                  "citation": "[O] libgambatte/src/mem/cartridge.cpp:298-330 at gambatte-libretro 6924c76 — HuC1 RAM banks switch on a mode write here where other cores bank on every write; which bank a save lands in was not compared."
+                },
+                {
+                  "kinds": ["mbc5-rumble"],
+                  "citation": "[O] libgambatte/src/mem/cartridge.cpp:450-458 at gambatte-libretro 6924c76 — the motor bit is masked off the MBC5 RAM bank only for a write at 0x4000-0x4FFF; a write at 0x5000-0x5FFF keeps it, so where a rumble cartridge's save lands depends on the game."
+                }
+              ]
+            },
+            {
+              "memory": "cartridge-clock",
+              "slot": null,
+              "format": null,
+              "names": ["<rom_stem>.rtc"],
+              "frontend": true,
+              "citation": "[V] libgambatte/src/mem/cartridge_libretro.cpp:30-41 and :58-80 at gambatte-libretro 6924c76 — RTC is the clock's 64-bit base time (rtc.h:81, huc3.h:60), only for header bytes 0x0F, 0x10 and 0xFE.",
+              "kinds": {
+                "mbc3-timer": "gb-clock-gambatte",
+                "huc3": "gb-clock-gambatte"
+              }
+            }
+          ],
+          "not_run": [
+            {
+              "kinds": ["mmm01", "mbc6", "mbc7", "tpp1", "pocket-camera", "tama5"],
+              "citation": "[V] libgambatte/src/mem/cartridge.cpp:562-564 and :579-586 at gambatte-libretro 6924c76 — the loader refuses MMM01, MBC6, MBC7, Pocket Camera and Bandai TAMA5 cartridges by name and every type it does not name, TPP1 among them (return -1)."
+            }
+          ],
+          "mirrors": [
+            {
+              "kinds": ["mbc2"],
+              "handling": "stores-unfolded",
+              "citation": "[V] libgambatte/src/mem/cartridge.cpp:589-595 and libgambatte/src/mem/memptrs.cpp:93 at gambatte-libretro 6924c76 — an MBC2 cartridge gets one 8 KiB RAM bank mapped over the whole window, so a write through a mirror of its 512 cells is kept at its window offset."
+            }
+          ]
+        },
+        "gbc": {
+          "same_as": "gb"
+        }
+      }
+    },
+    "sameboy": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["1.0.2 be2c352"],
+        "names": "commit",
+        "revision": "be2c352",
+        "citation": "The shipped build names this string in its library_version, the verified_core atlas/data/save_memory.json pins for the core's Game Boy systems; the reads are at libretro/SameBoy be2c352."
+      },
+      "systems": {
+        "gb": {
+          "parts": [
+            {
+              "memory": "cartridge-ram",
+              "slot": null,
+              "format": "gb-cartridge-ram",
+              "names": ["<rom_stem>.srm"],
+              "frontend": true,
+              "citation": "[V] Core/mbc.c:207-235 and Core/memory.c:454 and :1293 at libretro/SameBoy be2c352 — SAVE_RAM is mbc_ram, sized from the header (0x200 for MBC2, 0x100 for MBC7), each address one byte at bank n × 0x2000 plus its offset (Core/memory.c:1293), a cartridge without a mapper at bank 0, the 512 MBC2 cells mirrored onto it; the MBC7 EEPROM's words are read and written low byte first (Core/memory.c:1142, :1159-1203); a rumble cartridge's motor bit is masked off the MBC5 RAM bank (Core/memory.c:876-883).",
+              "kinds": {
+                "mbc2": "gb-cartridge-ram",
+                "rom-ram": "gb-cartridge-ram",
+                "mbc3-timer": "gb-cartridge-ram",
+                "mbc3": "gb-cartridge-ram",
+                "mbc5-rumble": "gb-cartridge-ram",
+                "mbc7": "gb-cartridge-ram-mbc7-low-byte-first"
+              },
+              "unread": [
+                {
+                  "kinds": ["mmm01"],
+                  "citation": "[O] Core/mbc.c:104-131 and Core/memory.c:920-926 at libretro/SameBoy be2c352 — the MMM01 RAM bank math masks and locks banks its own way; it was not compared with the other cores'."
+                },
+                {
+                  "kinds": ["tpp1", "pocket-camera"],
+                  "citation": "[O] Core/mbc.c:148-151 at libretro/SameBoy be2c352 — the TPP1 and Pocket Camera RAM banking was not read beyond the generic mapping."
+                },
+                {
+                  "kinds": ["huc3"],
+                  "citation": "[O] Core/memory.c at libretro/SameBoy be2c352 — the HuC3 RAM banking was not read."
+                },
+                {
+                  "kinds": ["huc1"],
+                  "citation": "[O] Core/mbc.c:140-143 and Core/memory.c:939-944 at libretro/SameBoy be2c352 — HuC1 RAM banks follow its own bank_high register; which bank a save lands in was not compared with the other cores'."
+                }
+              ]
+            },
+            {
+              "memory": "cartridge-clock",
+              "slot": null,
+              "format": "gb-clock-sameboy",
+              "names": ["<rom_stem>.rtc"],
+              "frontend": true,
+              "citation": "[V] libretro/libretro.c:1690-1693 and :1763-1766 and Core/gb.h:554-559 at libretro/SameBoy be2c352 — RTC is the rtc section, GB_SECTION_SIZE(rtc), for every cartridge with a battery.",
+              "kinds": {
+                "mbc3-timer": "gb-clock-sameboy",
+                "tpp1": "gb-clock-sameboy"
+              },
+              "unread": [
+                {
+                  "kinds": ["huc3"],
+                  "citation": "[O] Core/gb.h:554-559 at libretro/SameBoy be2c352 — the rtc section is the MBC3 and TPP1 clock's; what it holds for a HuC3 cartridge was not read."
+                }
+              ]
+            }
+          ],
+          "not_run": [
+            {
+              "kinds": ["mbc6", "tama5"],
+              "citation": "[V] Core/mbc.c:5-46 at libretro/SameBoy be2c352 — GB_cart_defs has no MBC6 entry (header byte 0x20) and lists the Bandai TAMA5 as not supported, both without a mapper or a battery."
+            }
+          ],
+          "mirrors": [
+            {
+              "kinds": ["mbc2"],
+              "handling": "folds",
+              "citation": "[V] Core/memory.c:1293 at libretro/SameBoy be2c352 — every RAM write is masked by the RAM's size, so a write through a mirror of MBC2's 512 cells lands on the cell itself."
+            }
+          ]
+        },
+        "gbc": {
+          "same_as": "gb"
+        }
+      }
+    },
+    "gearboy": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["3.7.4-8-g37c21f7"],
+        "names": "commit",
+        "revision": "37c21f7",
+        "citation": "The shipped build names this string in its library_version, the verified_core atlas/data/save_memory.json pins for the core's Game Boy systems; the reads are at drhelius/Gearboy 37c21f7."
+      },
+      "systems": {
+        "gb": {
+          "parts": [
+            {
+              "memory": "cartridge-ram",
+              "slot": null,
+              "format": "gb-cartridge-ram",
+              "names": ["<rom_stem>.srm"],
+              "frontend": true,
+              "citation": "[V] src/MBC1MemoryRule.cpp:246-249, src/MBC2MemoryRule.cpp:120-140 and :188-196, src/MBC3MemoryRule.cpp:374-377 and src/MBC5MemoryRule.cpp:189-192 and src/RomOnlyMemoryRule.cpp:117-125 at drhelius/Gearboy 37c21f7 — SAVE_RAM is the rule's RAM banks of 0x2000 bytes each (always 0x8000 for MBC3; a cartridge without a mapper keeps its RAM at 0xA000), each address one byte at bank n × 0x2000 plus its offset (src/MBC1MemoryRule.cpp:137-139, src/MBC3MemoryRule.cpp:172-176, src/MBC5MemoryRule.cpp:118-120), an MBC2 cell a byte at 0xA000-0xA1FF; a Pocket Camera runs as an MBC3 (src/Cartridge.cpp:362-365), whose RAM bank select stops at bank 3 (src/MBC3MemoryRule.cpp:165-176), so only the camera's first four banks are kept.",
+              "kinds": {
+                "mbc2": "gb-cartridge-ram",
+                "rom-ram": "gb-cartridge-ram",
+                "pocket-camera": "gb-cartridge-ram-first-four-banks"
+              },
+              "unread": [
+                {
+                  "kinds": ["mbc3-timer", "mbc3"],
+                  "citation": "[O] src/MBC3MemoryRule.cpp:172-181 at drhelius/Gearboy 37c21f7 — the MBC3 RAM bank select takes only banks 0-3 and logs 4-7, in a buffer fixed at 0x8000, so an MBC30 cartridge's 64 KiB of RAM lands elsewhere than in the cores that bank it to 7 (SameBoy's is_mbc30, VBA-M and mGBA take up to eight banks); whether a cartridge is an MBC30 is its header's, which atlas does not read."
+                },
+                {
+                  "kinds": ["huc1"],
+                  "citation": "[O] src/Cartridge.cpp:330-333 at drhelius/Gearboy 37c21f7 — a HuC1 cartridge runs on the MBC1 rule, whose RAM banking is not HuC1's; which bank a save lands in was not compared."
+                },
+                {
+                  "kinds": ["mbc5-rumble"],
+                  "citation": "[O] src/MBC5MemoryRule.cpp:116-121 at drhelius/Gearboy 37c21f7 — the MBC5 RAM bank is value & 0x0F masked by the header's bank count, so the motor bit drops only where the header declares at most eight banks."
+                }
+              ]
+            },
+            {
+              "memory": "cartridge-clock",
+              "slot": null,
+              "format": null,
+              "names": ["<rom_stem>.rtc"],
+              "frontend": true,
+              "citation": "[V] src/MBC3MemoryRule.h:25-39 and src/MBC3MemoryRule.cpp:40-64, :379-382 and :420-423 at drhelius/Gearboy 37c21f7 — RTC is RTC_Registers, ten s32 registers, an s32 time and a padding word reset to zero, only for an MBC3 cartridge with a clock.",
+              "kinds": {
+                "mbc3-timer": "gb-clock-vba-mbc3"
+              }
+            }
+          ],
+          "not_run": [
+            {
+              "kinds": ["mmm01", "mbc6", "mbc7", "tpp1", "tama5", "huc3"],
+              "citation": "[V] src/Cartridge.cpp:386-394 and :400-421 at drhelius/Gearboy 37c21f7 — MMM01, MBC7, TAMA5 and HuC3 cartridges are CartridgeNotSupported, and so is every type the switch does not name, MBC6 (0x20) and TPP1 among them."
+            }
+          ],
+          "mirrors": [
+            {
+              "kinds": ["mbc2"],
+              "handling": "drops",
+              "citation": "[V] src/MBC2MemoryRule.cpp:128-141 at drhelius/Gearboy 37c21f7 — an MBC2 RAM write is kept only below 0xA200 and logged above it, so a write through a mirror is not kept."
+            }
+          ]
+        },
+        "gbc": {
+          "same_as": "gb"
+        }
+      }
+    },
+    "tgbdual": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["v0.8.3 933707c"],
+        "names": "commit",
+        "revision": "933707c",
+        "citation": "The shipped build names this string in its library_version, the verified_core atlas/data/save_memory.json pins for the core's Game Boy systems; the reads are at libretro/tgbdual-libretro 933707c."
+      },
+      "systems": {
+        "gb": {
+          "parts": [
+            {
+              "memory": "cartridge-ram",
+              "slot": null,
+              "format": "gb-cartridge-ram",
+              "names": ["<rom_stem>.srm"],
+              "frontend": true,
+              "citation": "[V] gb_core/rom.cpp:53-57, gb_core/cpu.cpp:141 and :184 and gb_core/mbc.cpp:230-231 at libretro/tgbdual-libretro 933707c — SAVE_RAM is the cartridge's sram, 0x2000 bytes per header bank, each address one byte at bank n × 0x2000 plus its offset (gb_core/mbc.cpp:515, :550, and :596 and :603 for MBC5) (an MBC2 cell a byte, a cartridge without a mapper at bank 0), and the MBC7 EEPROM's words high byte first; its TAMA5 mapper write is an empty stub (gb_core/mbc.cpp:728-732), so a TAMA5 cartridge's memory is never kept; a rumble cartridge's MBC5 RAM bank takes the low three bits, the motor bit masked off (gb_core/mbc.cpp:593-596).",
+              "kinds": {
+                "mbc2": "gb-cartridge-ram",
+                "rom-ram": "gb-cartridge-ram",
+                "mbc3-timer": "gb-cartridge-ram",
+                "mbc3": "gb-cartridge-ram",
+                "mbc5-rumble": "gb-cartridge-ram",
+                "mbc7": "gb-cartridge-ram",
+                "tama5": null
+              },
+              "unread": [
+                {
+                  "kinds": ["mmm01"],
+                  "citation": "[O] gb_core/rom.cpp:76-78 at libretro/tgbdual-libretro 933707c — the header-byte dispatch has no MMM01 case, but the one title the code names, MOMOCOL, runs on its MMM01 mapper, and atlas does not read the title; that mapper's RAM layout was not compared with the other cores'."
+                },
+                {
+                  "kinds": ["huc3"],
+                  "citation": "[O] gb_core/mbc.cpp at libretro/tgbdual-libretro 933707c — the HuC3 mapper's RAM banking was not read."
+                },
+                {
+                  "kinds": ["huc1"],
+                  "citation": "[O] gb_core/mbc.cpp:631-660 at libretro/tgbdual-libretro 933707c — HuC1 RAM banks switch its own way; which bank a save lands in was not compared with the other cores'."
+                }
+              ]
+            },
+            {
+              "memory": "cartridge-clock",
+              "slot": null,
+              "format": "gb-clock-tgbdual",
+              "names": ["<rom_stem>.rtc"],
+              "frontend": true,
+              "citation": "[V] libretro/libretro.cpp:493-496 and libretro/dmy_renderer.h:40 at libretro/tgbdual-libretro 933707c — RTC is the renderer's fixed_time, a 4-byte dword, for every game; the TAMA5 mapper write is an empty stub, so no TAMA5 clock is kept.",
+              "kinds": {
+                "mbc3-timer": "gb-clock-tgbdual",
+                "tama5": null
+              },
+              "unread": [
+                {
+                  "kinds": ["huc3"],
+                  "citation": "[O] gb_core/mbc.cpp at libretro/tgbdual-libretro 933707c — whether the HuC3 mapper's clock runs on the renderer's fixed_time was not read."
+                }
+              ]
+            }
+          ],
+          "not_run": [
+            {
+              "kinds": ["mbc6", "tpp1", "pocket-camera"],
+              "citation": "[V] gb_core/mbc.cpp:72-114 at libretro/tgbdual-libretro 933707c — the mapper dispatch has no case for MBC6 (0x20) or the Pocket Camera (0xFC), and the source names no TPP1 mapper anywhere."
+            }
+          ],
+          "mirrors": [
+            {
+              "kinds": ["mbc2"],
+              "handling": "stores-unfolded",
+              "citation": "[V] gb_core/rom.cpp:55-56 and gb_core/cpu.cpp:184 at libretro/tgbdual-libretro 933707c — an MBC2 cartridge gets an 8 KiB sram written at adr & 0x1FFF, so a write through a mirror of its 512 cells is kept at its window offset."
+            }
+          ]
+        },
+        "gbc": {
+          "same_as": "gb"
+        }
+      }
+    },
+    "DoubleCherryGB": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["v0.17.0 5dbc8c9"],
+        "names": "commit",
+        "revision": "5dbc8c9",
+        "citation": "The shipped build names this string in its library_version, the verified_core atlas/data/save_memory.json pins for the core's Game Boy systems; the reads are at TimOelrichs/doublecherryGB-libretro 5dbc8c9."
+      },
+      "systems": {
+        "gb": {
+          "parts": [
+            {
+              "memory": "cartridge-ram",
+              "slot": null,
+              "format": "gb-cartridge-ram",
+              "names": ["<rom_stem>.srm"],
+              "frontend": true,
+              "citation": "[V] gb_core/cpu.cpp:168 and :216 and gb_core/mbc.cpp:255-256 at TimOelrichs/doublecherryGB-libretro 5dbc8c9 — the tgbdual core's sram, each address one byte at bank n × 0x2000 plus its offset (gb_core/mbc.cpp:540, :575, and :621 and :628 for MBC5) (an MBC2 cell a byte, a cartridge without a mapper at bank 0), and the MBC7 EEPROM's words high byte first; its TAMA5 mapper write is an empty stub (gb_core/mbc.cpp:1045-1049), so a TAMA5 cartridge's memory is never kept; a rumble cartridge's MBC5 RAM bank takes the low three bits, the motor bit masked off (gb_core/mbc.cpp:618-621).",
+              "kinds": {
+                "mbc2": "gb-cartridge-ram",
+                "rom-ram": "gb-cartridge-ram",
+                "mbc3-timer": "gb-cartridge-ram",
+                "mbc3": "gb-cartridge-ram",
+                "mbc5-rumble": "gb-cartridge-ram",
+                "mbc7": "gb-cartridge-ram",
+                "tama5": null
+              },
+              "unread": [
+                {
+                  "kinds": ["mmm01"],
+                  "citation": "[O] gb_core/rom.cpp:93-95 at TimOelrichs/doublecherryGB-libretro 5dbc8c9 — the header-byte dispatch has no MMM01 case, but the one title the code names, MOMOCOL, runs on its MMM01 mapper, and atlas does not read the title; that mapper's RAM layout was not compared with the other cores'."
+                },
+                {
+                  "kinds": ["huc3"],
+                  "citation": "[O] gb_core/mbc.cpp at TimOelrichs/doublecherryGB-libretro 5dbc8c9 — the HuC3 mapper's RAM banking was not read."
+                },
+                {
+                  "kinds": ["huc1"],
+                  "citation": "[O] gb_core/mbc.cpp:656-685 at TimOelrichs/doublecherryGB-libretro 5dbc8c9 — HuC1 RAM banks switch its own way; which bank a save lands in was not compared with the other cores'."
+                }
+              ]
+            },
+            {
+              "memory": "cartridge-clock",
+              "slot": null,
+              "format": "gb-clock-tgbdual",
+              "names": ["<rom_stem>.rtc"],
+              "frontend": true,
+              "citation": "[V] libretro/libretro.cpp:434-436 and libretro/dmy_renderer.h:237 at TimOelrichs/doublecherryGB-libretro 5dbc8c9 — RTC is a renderer's fixed_time, a 4-byte dword, for every game; the TAMA5 mapper write is an empty stub, so no TAMA5 clock is kept.",
+              "kinds": {
+                "mbc3-timer": "gb-clock-tgbdual",
+                "tama5": null
+              },
+              "unread": [
+                {
+                  "kinds": ["huc3"],
+                  "citation": "[O] gb_core/mbc.cpp at TimOelrichs/doublecherryGB-libretro 5dbc8c9 — whether the HuC3 mapper's clock runs on the renderer's fixed_time was not read."
+                }
+              ]
+            }
+          ],
+          "not_run": [
+            {
+              "kinds": ["mbc6", "tpp1", "pocket-camera"],
+              "citation": "[V] gb_core/mbc.cpp:95-136 at TimOelrichs/doublecherryGB-libretro 5dbc8c9 — the mapper dispatch has no case for MBC6 (0x20) or the Pocket Camera (0xFC), and the source names no TPP1 mapper anywhere."
+            }
+          ],
+          "mirrors": [
+            {
+              "kinds": ["mbc2"],
+              "handling": "stores-unfolded",
+              "citation": "[V] gb_core/cpu.cpp:216 at TimOelrichs/doublecherryGB-libretro 5dbc8c9 — the sram is written at adr & 0x1FFF, so a write through a mirror of MBC2's 512 cells is kept at its window offset."
+            }
+          ]
+        },
+        "gbc": {
+          "same_as": "gb"
+        }
+      }
+    },
+    "mesen-s": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["0.4.0"],
+        "names": "release",
+        "revision": "9e4fdeb",
+        "citation": "The shipped build names the release '0.4.0' in its library_version (Libretro/libretro.cpp:750), the verified_core atlas/data/save_memory.json pins for the core's Game Boy systems; the reads are at libretro/Mesen-S 9e4fdeb, a revision that release string does not name."
+      },
+      "systems": {
+        "gb": {
+          "parts": [
+            {
+              "memory": "cartridge-ram",
+              "slot": null,
+              "format": "gb-cartridge-ram",
+              "names": ["<rom_stem>.srm"],
+              "frontend": true,
+              "citation": "[V] Core/GameboyHeader.h:29-45 and Core/GbMbc2.h:34 and :54 at libretro/Mesen-S 9e4fdeb — SAVE_RAM is the Game Boy cartridge's RAM sized from the header (0x200 for MBC2), each address one byte at bank n × 0x2000 plus its offset for MBC1 and MBC5 (Core/GbMbc1.h:33, Core/GbMbc5.h:29), the 512 MBC2 cells mirrored onto it.",
+              "kinds": {
+                "mbc2": "gb-cartridge-ram"
+              },
+              "unread": [
+                {
+                  "kinds": ["mbc3-timer", "mbc3"],
+                  "citation": "[O] Core/GbMbc3.h:36 at libretro/Mesen-S 9e4fdeb — the MBC3 mapper maps RAM bank n at byte offset n (offsets taken as bytes by Core/GbMemoryManager.cpp:107-117): bank 0 lies at offset 0 as in every core, so a single-bank save carries over, and every further bank overlaps the one before; whether a save uses them is the header's bank count, which atlas does not read."
+                },
+                {
+                  "kinds": ["mbc5-rumble"],
+                  "citation": "[O] Core/GbMbc5.h:59-62 at libretro/Mesen-S 9e4fdeb — the MBC5 RAM bank is value & 0x0F with no motor bit masked off, wrapped only by the RAM's size (Core/GbMemoryManager.cpp:107-117), so where a rumble cartridge's save lands depends on its header."
+                }
+              ]
+            }
+          ],
+          "not_run": [
+            {
+              "kinds": ["rom-ram", "mmm01", "mbc6", "mbc7", "tpp1", "pocket-camera", "tama5", "huc3", "huc1"],
+              "citation": "[V] Core/GbCartFactory.h:14-34 at libretro/Mesen-S 9e4fdeb — the factory builds a plain ROM, MBC1, MBC2, MBC3 and MBC5 cartridges and no other — no ROM with RAM (0x08, 0x09), MMM01, Pocket Camera or Hudson mapper."
+            }
+          ],
+          "mirrors": [
+            {
+              "kinds": ["mbc2"],
+              "handling": "folds",
+              "citation": "[V] Core/GbMbc2.h:36 and :51-54 at libretro/Mesen-S 9e4fdeb — with RAM enabled the whole window is mapped as write registers, and every write to it lands in _cartRam[addr & 0x1FF] (reached through Core/GbMemoryManager.cpp:192-193 and :419), so a write through a mirror lands on the cell itself."
+            }
+          ]
+        },
+        "gbc": {
+          "same_as": "gb"
+        }
+      }
+    },
+    "mgba": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["0.11-dev c758314"],
+        "names": "commit",
+        "revision": "c758314",
+        "citation": "The shipped build names this string in its library_version, the verified_core atlas/data/save_memory.json pins for the core's Game Boy systems; the reads are at libretro/mgba c758314."
+      },
+      "systems": {
+        "gb": {
+          "parts": [
+            {
+              "memory": "cartridge-ram",
+              "slot": null,
+              "format": "gb-cartridge-ram",
+              "names": ["<rom_stem>.srm"],
+              "frontend": true,
+              "citation": "[V] src/gb/mbc.c:277-304 at libretro/mgba c758314 — SAVE_RAM is sramSize from the header (0x2000 for a 2 KiB cartridge), each address one byte at bank n × 0x2000 plus its offset (GBMBCSwitchSramBank, src/gb/mbc.c:247-255) and the MBC7 EEPROM's words high byte first (src/gb/mbc/mbc.c:518-519); MBC2 packs two cells to a byte in 0x100 bytes (src/gb/mbc.c:399-404, src/gb/mbc/mbc.c:123-174), MBC6 appends its flash to the RAM (src/gb/mbc.c:414-421), and TAMA5 keeps its mapper's 0x20 bytes there one byte per address (src/gb/mbc.c:438-445, src/gb/mbc/tama5.c:205-215).",
+              "kinds": {
+                "mbc2": "gb-cartridge-ram-mbc2-packed",
+                "mbc3-timer": "gb-cartridge-ram",
+                "mbc3": "gb-cartridge-ram",
+                "mbc6": "gb-cartridge-ram-mbc6-with-flash",
+                "mbc7": "gb-cartridge-ram",
+                "tama5": "gb-cartridge-ram-tama5-mgba"
+              },
+              "unread": [
+                {
+                  "kinds": ["rom-ram", "pocket-camera", "huc3"],
+                  "citation": "[O] src/gb/mbc.c at libretro/mgba c758314 — the RAM mapping of a cartridge without a mapper, the Pocket Camera and HuC3 was not read beyond sramSize."
+                },
+                {
+                  "kinds": ["mmm01"],
+                  "citation": "[O] src/gb/mbc/licensed.c:44-46 at libretro/mgba c758314 — the MMM01 banking offsets every bank by the selected game's; it was not compared with the other cores'."
+                },
+                {
+                  "kinds": ["huc1"],
+                  "citation": "[O] src/gb/mbc/licensed.c:58-81 at libretro/mgba c758314 — HuC1 RAM banks switch its own way; which bank a save lands in was not compared with the other cores'."
+                },
+                {
+                  "kinds": ["mbc5-rumble"],
+                  "citation": "[O] src/gb/mbc/mbc.c:253-262 at libretro/mgba c758314 — the motor bit is masked off the MBC5 RAM bank only while a rumble interface is attached; without one it selects a bank, so where a rumble cartridge's save lands depends on the frontend."
+                }
+              ]
+            },
+            {
+              "memory": "cartridge-clock",
+              "slot": null,
+              "format": null,
+              "names": ["<rom_stem>.rtc"],
+              "frontend": true,
+              "citation": "[V] src/platform/libretro/libretro.c:2357-2366 and include/mgba/internal/gb/mbc.h:34-46 at libretro/mgba c758314 — RTC is struct GBMBCRTCSaveBuffer, ten u32 registers and a u64 time, for a GB_MBC3_RTC cartridge alone; HuC3 and TAMA5 cartridges get no RTC memory.",
+              "kinds": {
+                "mbc3-timer": "gb-clock-vba-mbc3",
+                "huc3": null,
+                "tama5": null
+              }
+            }
+          ],
+          "not_run": [
+            {
+              "kinds": ["tpp1"],
+              "citation": "[V] src/gb/mbc.c:130 at libretro/mgba c758314 — TPP1 appears only as a GBX mapper label left to autodetection, marked TODO; no TPP1 mapper is implemented."
+            }
+          ],
+          "mirrors": [
+            {
+              "kinds": ["mbc2"],
+              "handling": "folds",
+              "citation": "[V] src/gb/mbc/mbc.c:155 and :171 at libretro/mgba c758314 — an MBC2 address is masked to 0x1FF before it reaches the RAM, so a write through a mirror lands on the cell itself."
+            }
+          ]
+        },
+        "gbc": {
+          "same_as": "gb"
+        }
+      }
+    },
+    "vbam": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["2.2.3 d0787ae"],
+        "names": "commit",
+        "revision": "d0787ae",
+        "citation": "The shipped build names this string in its library_version, the verified_core atlas/data/save_memory.json pins for the core's Game Boy systems; the reads are at libretro/vbam-libretro d0787ae."
+      },
+      "systems": {
+        "gb": {
+          "parts": [
+            {
+              "memory": "cartridge-ram",
+              "slot": null,
+              "format": "gb-cartridge-ram",
+              "names": ["<rom_stem>.srm"],
+              "frontend": true,
+              "citation": "[V] src/core/gb/gbCartData.cpp:446-465 and :275-281, src/core/gb/gbMemory.cpp:258-267 and :701-702 at libretro/vbam-libretro d0787ae — SAVE_RAM is gbRam, sized from the header (512 bytes for MBC2), each address one byte at bank n × 0x2000 plus its offset (src/core/gb/gbMemory.cpp:83-87, :377-380 and :548-552 for MBC1, MBC3 and MBC5), and the MBC7 EEPROM's words high byte first; a TAMA5 cartridge's memory is gbTAMA5ram (src/core/gb/gbMemory.cpp:1390-1396), which no memory id exposes (src/libretro/libretro.cpp:336-341, :384-391), so its save holds none of it; a Pocket Camera gets no battery (src/core/gb/gbCartData.cpp:380-382), so SAVE_RAM answers no size for it (src/libretro/libretro.cpp:338-339, :386-387) and its save holds none of its RAM; a rumble cartridge's motor bit is masked off the MBC5 RAM bank (src/core/gb/gbMemory.cpp:540-545).",
+              "kinds": {
+                "mbc2": "gb-cartridge-ram",
+                "mbc3-timer": "gb-cartridge-ram",
+                "mbc3": "gb-cartridge-ram",
+                "mbc5-rumble": "gb-cartridge-ram",
+                "mbc7": "gb-cartridge-ram",
+                "pocket-camera": null,
+                "tama5": null
+              },
+              "unread": [
+                {
+                  "kinds": ["rom-ram", "huc3"],
+                  "citation": "[O] src/core/gb/gbMemory.cpp at libretro/vbam-libretro d0787ae — the RAM mapping of a cartridge without a mapper and of HuC3 was not read."
+                },
+                {
+                  "kinds": ["mmm01"],
+                  "citation": "[O] src/core/gb/gbMemory.cpp:1508-1520 at libretro/vbam-libretro d0787ae — the MMM01 mapping offsets its banks by the selected game; it was not compared with the other cores'."
+                },
+                {
+                  "kinds": ["huc1"],
+                  "citation": "[O] src/core/gb/gbMemory.cpp:876-890 at libretro/vbam-libretro d0787ae — HuC1 RAM banks switch only in its 4/32 memory model; which bank a save lands in was not compared with the other cores'."
+                }
+              ]
+            },
+            {
+              "memory": "cartridge-clock",
+              "slot": null,
+              "format": null,
+              "names": ["<rom_stem>.rtc"],
+              "frontend": true,
+              "citation": "[V] src/libretro/libretro.cpp:166-216 and src/core/gb/gbMemory.h:206-208 at libretro/vbam-libretro d0787ae — RTC starts at the mapper's mapperSeconds: ten int registers and a 64-bit time for MBC3, fourteen and a 64-bit time for TAMA5, and HuC3's last time alone.",
+              "kinds": {
+                "mbc3-timer": "gb-clock-vba-mbc3",
+                "huc3": "gb-clock-vbam-huc3",
+                "tama5": "gb-clock-vbam-tama5"
+              }
+            }
+          ],
+          "not_run": [
+            {
+              "kinds": ["mbc6", "tpp1"],
+              "citation": "[V] src/core/gb/gbCartData.cpp:352-353 and src/core/gb/gb.cpp:3600-3604 at libretro/vbam-libretro d0787ae — an MBC6 cartridge gets no battery and no memory map, and the source names no TPP1 mapper anywhere."
+            }
+          ],
+          "mirrors": [
+            {
+              "kinds": ["mbc2"],
+              "handling": "drops",
+              "citation": "[V] src/core/gb/gbMemory.cpp:259-267 at libretro/vbam-libretro d0787ae — an MBC2 RAM write is kept only below 0xA200, so a write through a mirror is not kept."
+            }
+          ]
+        },
+        "gbc": {
+          "same_as": "gb"
+        }
+      }
+    },
+    "desmume": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["git 7f05a8d"],
+        "names": "commit",
+        "revision": "7f05a8d",
+        "citation": "The shipped binary names 'git 7f05a8d' in its library_version (atlas/data/core_oddities.json, desmume's provenance)."
+      },
+      "systems": {
+        "nds": {
+          "parts": [
+            {
+              "memory": "cartridge-ram",
+              "slot": null,
+              "format": "nds-dsv",
+              "names": ["<rom_stem>.dsv"],
+              "length": {
+                "rule": "written-extent",
+                "citation": "[V] desmume/src/mc.cpp:935-972, :1409-1424 and :77-90 at DeSmuME 7f05a8d — the file grows as the game writes, to the next size of saveSizes at or above the highest address written, and the footer states that padded size; a .dsv is read back at its own footer's size (:336-347, :414-457), whatever the game, so how long a save is follows from how far the game wrote, not from a list of games. A raw <rom_stem>.sav is imported only while no .dsv exists, and given its footer only where its length is exactly one of the save_types sizes, which name no 128 KiB chip (:94-109, :270-325, :641-649); otherwise the footer is missing and the data is not used (:341-347). That import is DeSmuME's own and is not counted as reading another emulator's format (#577 D19)."
+              },
+              "citation": "[V] desmume/src/mc.cpp:232-235, :935-972 and :414-457 at DeSmuME 7f05a8d — the core keeps the card's save memory in <rom_stem>.dsv, written in place at each address the game writes, padded with uninitializedValue (0xFF, :228) and closed by the footer DESMUME_BACKUP_FOOTER_TXT (:74), the five BackupDeviceFileInfo fields, the version 0 and the cookie (:75), 82 + 24 + 16 = 122 bytes (GetDSVFooterSize, :1702-1705; desmume/src/mc.h:55-70); on load the footer is read and its length set aside (:336-347)."
+            }
+          ]
+        }
+      }
+    },
+    "desmume2015": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["git af397ff"],
+        "names": "commit",
+        "revision": "af397ff",
+        "citation": "The shipped binary names 'git af397ff' in its library_version (atlas/data/core_oddities.json, desmume2015's provenance)."
+      },
+      "systems": {
+        "nds": {
+          "parts": [
+            {
+              "memory": "cartridge-ram",
+              "slot": null,
+              "format": "nds-dsv",
+              "names": ["<rom_stem>.dsv"],
+              "length": {
+                "rule": "written-extent",
+                "citation": "[V] desmume/src/mc.cpp:893-930, :1360-1375 and :73-86 at DeSmuME 2015 af397ff — the file grows as the game writes, to the next size of saveSizes (the same table as DeSmuME 7f05a8d's) at or above the highest address written, and the footer states that padded size; a .dsv is read back at its own footer's size (:318-332, :397-434), whatever the game. A raw <rom_stem>.sav is imported only while no .dsv exists, with its trailing 0xFF rows trimmed first, and given its footer only where its length is exactly one of the save_types sizes (:270-315); that import is DeSmuME's own and is not counted as reading another emulator's format (#577 D19)."
+              },
+              "citation": "[V] desmume/src/mc.cpp:236-240, :893-930 and :397-434 at DeSmuME 2015 af397ff — the core keeps the card's save memory in <rom_stem>.dsv, written in place at each address the game writes, padded with uninitializedValue (0xFF, :233) and closed by the same footer as DeSmuME 7f05a8d's: the text (:70), the five BackupDeviceFileInfo fields, the version 0 and the cookie (:71); on load the footer is read and strlen(cookie) + strlen(text) + 24 = 122 bytes set aside (:318-332). The load path reads the same fields in the same order as 7f05a8d's (:397-434 against 7f05a8d :414-457)."
+            }
+          ]
+        }
+      }
+    },
+    "melonds": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["0.9.3 7a3c11f"],
+        "names": "commit",
+        "revision": "7a3c11f",
+        "citation": "The shipped binary names '0.9.3 7a3c11f' in its library_version (atlas/data/core_oddities.json, melonds's provenance)."
+      },
+      "systems": {
+        "nds": {
+          "parts": [
+            {
+              "memory": "cartridge-ram",
+              "slot": null,
+              "format": "nds-card-raw",
+              "names": ["<rom_stem>.sav"],
+              "length": {
+                "rule": "rom-list",
+                "revision": "7a3c11f",
+                "citation": "[V] src/NDSCart.cpp:446-454 and :1554-1565 at melonDS 7a3c11f — the save is as long as the save type the ROM list gives the game's code (src/ROMList.h:30), 0, 512, 8 KiB, 64 KiB, 128 KiB, 256 KiB, 512 KiB, 1 MiB, 8 MiB, 16 MiB or 64 MiB, and 8 KiB, a 64 kbit EEPROM's, for a code the list lacks; the ROM lists of melonDS 1.1 (b86390e4) and of the melonDS that melonDS DS 1.2.0 builds (f6692df) give some game codes another type (#577 D19)."
+              },
+              "citation": "[V] src/libretro/libretro.cpp:887-895, src/NDSCart.cpp:438-472 and src/NDSCart_SRAMManager.cpp:76-94, :153-180 at melonDS 7a3c11f — the core keeps the card's save memory raw in <save dir>/<rom_stem>.sav: the file is read into SRAM from its first byte up to SRAMLength over a 0xFF fill and handed to the SRAM manager at that length (NDSCart.cpp:472), and every flush the core asks for at the end of a frame (libretro.cpp:769) writes the whole buffer, SRAMLength bytes (NDSCart_SRAMManager.cpp:173)."
+            }
+          ]
+        }
+      }
+    },
+    "melondsds": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["1.2.0"],
+        "names": "release",
+        "revision": "33c4826",
+        "citation": "The shipped binary names the release '1.2.0' in its library_version, the verified_core atlas/data/save_memory.json pins for nds; the reads are at JesseTG/melonds-ds v1.2.0, commit 33c4826, which builds JesseTG/melonDS f6692df (cmake/FetchDependencies.cmake:44)."
+      },
+      "systems": {
+        "nds": {
+          "parts": [
+            {
+              "memory": "cartridge-ram",
+              "slot": null,
+              "format": "nds-card-raw",
+              "names": ["<rom_stem>.srm"],
+              "frontend": true,
+              "length": {
+                "rule": "rom-list",
+                "revision": "f6692df",
+                "citation": "[V] src/libretro/sram.cpp:118-127 at melonDS DS 33c4826, and src/NDSCart.cpp:387-413 and :1616-1628 at JesseTG/melonDS f6692df, the melonDS it builds — the save buffer is as long as the cartridge's GetSaveMemoryLength, the save type the ROM list gives the game's code (src/ROMList.cpp:23) or 8 KiB, a 64 kbit EEPROM's, for a code the list lacks; that list gives some game codes another type than melonDS 0.9.3's (7a3c11f) and melonDS 1.1's (b86390e4) (#577 D19)."
+              },
+              "citation": "[V] src/libretro/core/core.cpp:361-371 and :937-960, src/libretro/sram.cpp:52-55 and :75-96 at melonDS DS 33c4826 — RETRO_MEMORY_SAVE_RAM is the card's save memory, raw from its first address and SramLength() long, which RetroArch writes as <rom_stem>.srm. The buffer is allocated zeroed, and RetroArch loads the file into it from its first byte, a shorter file leaving the rest 0x00 and a longer one cut at the buffer (save.c:492-541, :523-533 at RetroArch a79435a); the first frame installs the whole buffer in the card (core.cpp:367-370, CartRetail::SetSaveMemory at JesseTG/melonDS f6692df src/NDSCart.cpp:476-482)."
+            }
+          ]
+        }
+      }
+    },
+    "MELONDS": {
+      "kind": "standalone",
+      "build": {
+        "pins": ["9c8ac146f909e365673fdf2eb711f588c0fdf72fce11fc05c9db698a88d269ba"],
+        "names": "release",
+        "revision": "b86390e4",
+        "citation": "RetroDECK's melonDS component names its build by the Flathub commit 9c8ac146f909e365673fdf2eb711f588c0fdf72fce11fc05c9db698a88d269ba in component_version, the card's pinned build of melonDS 1.1 at b86390e4 (atlas/data/standalone_saves.json, MELONDS's builds)."
+      },
+      "systems": {
+        "nds": {
+          "parts": [
+            {
+              "memory": "cartridge-ram",
+              "slot": null,
+              "format": "nds-card-raw",
+              "names": ["<rom_stem>.sav"],
+              "length": {
+                "rule": "rom-list",
+                "revision": "b86390e4",
+                "citation": "[V] src/NDSCart.cpp:402-428 and :1633-1645 at melonDS b86390e4 — the save is as long as the save type the ROM list gives the game's code (src/ROMList.cpp:23) or 8 KiB, a 64 kbit EEPROM's, for a code the list lacks; that list gives some game codes another type than melonDS 0.9.3's (7a3c11f) and than the melonDS that melonDS DS 1.2.0 builds (f6692df) (#577 D19)."
+              },
+              "citation": "[V] src/frontend/qt_sdl/EmuInstance.cpp:1889-1915, src/NDSCart.cpp:402-428 and src/frontend/qt_sdl/SaveManager.cpp:97-122 and :166-193 at melonDS b86390e4 — the emulator reads <rom_stem>.sav whole, the card copies it from its first byte up to SRAMLength over a 0xFF fill, and every flush writes the whole save raw."
+            }
+          ]
+        }
+      }
+    },
+    "dolphin": {
+      "kind": "libretro",
+      "build": {
+        "pins": ["fd1aca3a"],
+        "names": "commit",
+        "revision": "fd1aca3a",
+        "citation": "The shipped binary names 'fd1aca3a' in its library_version (atlas/data/core_oddities.json, dolphin's provenance)."
+      },
+      "systems": {
+        "gc": {
+          "parts": [
+            {
+              "memory": "memory-card",
+              "slot": "A",
+              "format": "gc-gci-folder",
+              "names": ["<region>/Card A"],
+              "folder": true,
+              "modes": "^folder\\+",
+              "citation": "[V] Source/Core/Core/HW/GCMemcard/GCMemcardDirectory.cpp:181-260, :65-124, :621-718 and GCIFile.cpp:13-67 at libretro/dolphin fd1aca3a — a GCI folder is a directory standing for one card of one region: each save is a .gci of its directory entry, DENTRY_SIZE 0x40 bytes, followed by its blocks of BLOCK_SIZE 0x2000 (GCMemcard.h:104, :89), read in whole at load and written back the same way (GCMemcardDirectory.cpp:663-665); the default folder is <GC user>/<region>/Card <slot>."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "B",
+              "format": "gc-gci-folder",
+              "names": ["<region>/Card B"],
+              "folder": true,
+              "modes": "\\+folder$",
+              "citation": "[V] Source/Core/Core/HW/GCMemcard/GCMemcardDirectory.cpp:181-260, :65-124, :621-718 and GCIFile.cpp:13-67 at libretro/dolphin fd1aca3a — a GCI folder is a directory standing for one card of one region: each save is a .gci of its directory entry, DENTRY_SIZE 0x40 bytes, followed by its blocks of BLOCK_SIZE 0x2000 (GCMemcard.h:104, :89), read in whole at load and written back the same way (GCMemcardDirectory.cpp:663-665); the default folder is <GC user>/<region>/Card <slot>."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "A",
+              "format": "gc-card-raw",
+              "names": ["<card>.<region>.<ext>"],
+              "modes": "^card\\+",
+              "citation": "[V] Source/Core/Core/HW/GCMemcard/GCMemcardRaw.cpp:38-83 at libretro/dolphin fd1aca3a — a raw card is read whole at the file's own size and written back whole by its flush thread (:95-163); the default card is <GC user>/MemoryCard<slot>.<region>.raw, one card per region; a configured MemcardAPath names the slot's card under any name, the running disc's region in place of its region word or before its extension (GetMemcardPath, Source/Core/Core/Config/MainSettings.cpp:668-722), and the save answer states which slot reads each card, so the rule claims a card by that slot and reads only the region word off its name."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "B",
+              "format": "gc-card-raw",
+              "names": ["<card>.<region>.<ext>"],
+              "modes": "\\+card$",
+              "citation": "[V] Source/Core/Core/HW/GCMemcard/GCMemcardRaw.cpp:38-83 at libretro/dolphin fd1aca3a — a raw card is read whole at the file's own size and written back whole by its flush thread (:95-163); the default card is <GC user>/MemoryCard<slot>.<region>.raw, one card per region; a configured MemcardBPath names the slot's card under any name, the running disc's region in place of its region word or before its extension (GetMemcardPath, Source/Core/Core/Config/MainSettings.cpp:668-722), and the save answer states which slot reads each card, so the rule claims a card by that slot and reads only the region word off its name."
+            }
+          ],
+          "regionless": {
+            "extensions": [".dol", ".elf"],
+            "citation": "[V] Source/Core/Core/Boot/Boot.cpp:251-275 and Source/Core/Core/ConfigManager.cpp:360-365, :456-457 at libretro/dolphin fd1aca3a — a .dol or .elf, the extension compared lowercased, that does not open as a disc image boots as an executable, whose region is Unknown, and an Unknown region becomes [Core] FallbackRegion, by default the region of the system's locale (Source/Core/Core/Config/MainSettings.cpp:268-269); atlas reads neither, so which region's card such content uses is not established."
+          }
+        },
+        "wii": {
+          "parts": [
+            {
+              "memory": "internal-storage",
+              "slot": null,
+              "format": "wii-nand-title-data",
+              "names": ["title/<save_id>/data"],
+              "folder": true,
+              "citation": "[V] Source/Core/Common/NandPaths.cpp:63-72 and Source/Core/Core/IOS/FS/HostBackend/FS.cpp:33-53, :236-280 at libretro/dolphin fd1aca3a — a title's save is its data directory below the NAND root, title/<hi>/<lo>/data, each NAND file a host file at the same path; a file the NAND's fst.bin does not list is given read and write for owner, group and others, \"to avoid breaking existing filesystems\", so a data directory copied in from another NAND is read as it lies."
+            }
+          ]
+        }
+      }
+    },
+    "DOLPHIN": {
+      "kind": "standalone",
+      "build": {
+        "pins": ["594afeb78ede945c8fe0e774649443cf12b0706188ce03bb3cd49e3004659e5b"],
+        "names": "release",
+        "revision": "f84df020",
+        "citation": "RetroDECK's Dolphin component names its build by the Flathub commit 594afeb78ede945c8fe0e774649443cf12b0706188ce03bb3cd49e3004659e5b in component_version, the card's pinned build of Dolphin 2609 at f84df020 (atlas/data/standalone_saves.json, DOLPHIN's builds)."
+      },
+      "systems": {
+        "gc": {
+          "parts": [
+            {
+              "memory": "memory-card",
+              "slot": "A",
+              "format": "gc-gci-folder",
+              "names": ["<region>/Card A"],
+              "folder": true,
+              "modes": "^folder\\+",
+              "citation": "[V] Source/Core/Core/HW/GCMemcard/GCMemcardDirectory.cpp:180-259, :64-123, :626-723 and GCIFile.cpp:13-67 at Dolphin f84df020 — a GCI folder is a directory standing for one card of one region: each save is a .gci of its directory entry, DENTRY_SIZE 0x40 bytes, followed by its blocks of BLOCK_SIZE 0x2000 (GCMemcard.h:104, :89), read in whole at load and written back the same way (GCMemcardDirectory.cpp:668-670); the default folder is <GC user>/<region>/Card <slot>."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "B",
+              "format": "gc-gci-folder",
+              "names": ["<region>/Card B"],
+              "folder": true,
+              "modes": "\\+folder$",
+              "citation": "[V] Source/Core/Core/HW/GCMemcard/GCMemcardDirectory.cpp:180-259, :64-123, :626-723 and GCIFile.cpp:13-67 at Dolphin f84df020 — a GCI folder is a directory standing for one card of one region: each save is a .gci of its directory entry, DENTRY_SIZE 0x40 bytes, followed by its blocks of BLOCK_SIZE 0x2000 (GCMemcard.h:104, :89), read in whole at load and written back the same way (GCMemcardDirectory.cpp:668-670); the default folder is <GC user>/<region>/Card <slot>."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "A",
+              "format": "gc-card-raw",
+              "names": ["<card>.<region>.<ext>"],
+              "modes": "^card\\+",
+              "citation": "[V] Source/Core/Core/HW/GCMemcard/GCMemcardRaw.cpp:38-82 at Dolphin f84df020 — a raw card is read whole at the file's own size and written back whole by its flush thread (:94-162); the default card is <GC user>/MemoryCard<slot>.<region>.raw, one card per region; a configured MemcardAPath names the slot's card under any name, the running disc's region in place of its region word or before its extension (GetMemcardPath, Source/Core/Core/Config/MainSettings.cpp:776-836), and the save answer states which slot reads each card, so the rule claims a card by that slot and reads only the region word off its name."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "B",
+              "format": "gc-card-raw",
+              "names": ["<card>.<region>.<ext>"],
+              "modes": "\\+card$",
+              "citation": "[V] Source/Core/Core/HW/GCMemcard/GCMemcardRaw.cpp:38-82 at Dolphin f84df020 — a raw card is read whole at the file's own size and written back whole by its flush thread (:94-162); the default card is <GC user>/MemoryCard<slot>.<region>.raw, one card per region; a configured MemcardBPath names the slot's card under any name, the running disc's region in place of its region word or before its extension (GetMemcardPath, Source/Core/Core/Config/MainSettings.cpp:776-836), and the save answer states which slot reads each card, so the rule claims a card by that slot and reads only the region word off its name."
+            }
+          ],
+          "regionless": {
+            "extensions": [".dol", ".elf"],
+            "citation": "[V] Source/Core/Core/Boot/Boot.cpp:243-267 and Source/Core/Core/ConfigManager.cpp:382-387, :489-490 at Dolphin f84df020 — a .dol or .elf, the extension compared lowercased, that does not open as a disc image boots as an executable, whose region is Unknown, and an Unknown region becomes [Core] FallbackRegion, by default the region of the system's locale (Source/Core/Core/Config/MainSettings.cpp:280-281, Source/Core/Core/Config/DefaultLocale.cpp:188-192); atlas reads neither, so which region's card such content uses is not established."
+          }
+        },
+        "wii": {
+          "parts": [
+            {
+              "memory": "internal-storage",
+              "slot": null,
+              "format": "wii-nand-title-data",
+              "names": ["title/<save_id>/data"],
+              "folder": true,
+              "citation": "[V] Source/Core/Common/NandPaths.cpp:63-72 and Source/Core/Core/IOS/FS/HostBackend/FS.cpp:32-52, :234-278 at Dolphin f84df020 — a title's save is its data directory below the NAND root, title/<hi>/<lo>/data, each NAND file a host file at the same path; a file the NAND's fst.bin does not list is given read and write for owner, group and others, \"to avoid breaking existing filesystems\", so a data directory copied in from another NAND is read as it lies."
+            }
+          ]
+        }
+      }
+    },
+    "PRIMEHACK": {
+      "kind": "standalone",
+      "build": {
+        "pins": ["master-230724.27"],
+        "names": "release",
+        "revision": "81bfb96",
+        "citation": "RetroDECK's PrimeHack component names its build 'master-230724.27' in component_version, the card's pinned build of shiiion/dolphin at 81bfb96 (atlas/data/standalone_saves.json, PRIMEHACK's builds)."
+      },
+      "systems": {
+        "gc": {
+          "parts": [
+            {
+              "memory": "memory-card",
+              "slot": "A",
+              "format": "gc-gci-folder",
+              "names": ["<region>/Card A"],
+              "folder": true,
+              "modes": "^folder\\+",
+              "citation": "[V] Source/Core/Core/HW/GCMemcard/GCMemcardDirectory.cpp:181-260, :65-124, :621-718 and GCIFile.cpp:13-67 at shiiion/dolphin 81bfb96 — a GCI folder is a directory standing for one card of one region: each save is a .gci of its directory entry, DENTRY_SIZE 0x40 bytes, followed by its blocks of BLOCK_SIZE 0x2000 (GCMemcard.h:104, :89), read in whole at load and written back the same way (GCMemcardDirectory.cpp:663-665); the default folder is <GC user>/<region>/Card <slot>."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "B",
+              "format": "gc-gci-folder",
+              "names": ["<region>/Card B"],
+              "folder": true,
+              "modes": "\\+folder$",
+              "citation": "[V] Source/Core/Core/HW/GCMemcard/GCMemcardDirectory.cpp:181-260, :65-124, :621-718 and GCIFile.cpp:13-67 at shiiion/dolphin 81bfb96 — a GCI folder is a directory standing for one card of one region: each save is a .gci of its directory entry, DENTRY_SIZE 0x40 bytes, followed by its blocks of BLOCK_SIZE 0x2000 (GCMemcard.h:104, :89), read in whole at load and written back the same way (GCMemcardDirectory.cpp:663-665); the default folder is <GC user>/<region>/Card <slot>."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "A",
+              "format": "gc-card-raw",
+              "names": ["<card>.<region>.<ext>"],
+              "modes": "^card\\+",
+              "citation": "[V] Source/Core/Core/HW/GCMemcard/GCMemcardRaw.cpp:38-83 at shiiion/dolphin 81bfb96 — a raw card is read whole at the file's own size and written back whole by its flush thread (:95-163); the default card is <GC user>/MemoryCard<slot>.<region>.raw, one card per region; a configured MemcardAPath names the slot's card under any name, the running disc's region in place of its region word or before its extension (GetMemcardPath, Source/Core/Core/Config/MainSettings.cpp:635-689), and the save answer states which slot reads each card, so the rule claims a card by that slot and reads only the region word off its name."
+            },
+            {
+              "memory": "memory-card",
+              "slot": "B",
+              "format": "gc-card-raw",
+              "names": ["<card>.<region>.<ext>"],
+              "modes": "\\+card$",
+              "citation": "[V] Source/Core/Core/HW/GCMemcard/GCMemcardRaw.cpp:38-83 at shiiion/dolphin 81bfb96 — a raw card is read whole at the file's own size and written back whole by its flush thread (:95-163); the default card is <GC user>/MemoryCard<slot>.<region>.raw, one card per region; a configured MemcardBPath names the slot's card under any name, the running disc's region in place of its region word or before its extension (GetMemcardPath, Source/Core/Core/Config/MainSettings.cpp:635-689), and the save answer states which slot reads each card, so the rule claims a card by that slot and reads only the region word off its name."
+            }
+          ],
+          "regionless": {
+            "extensions": [".dol", ".elf"],
+            "citation": "[V] Source/Core/Core/Boot/Boot.cpp:234-257 and Source/Core/Core/ConfigManager.cpp:245-250, :340-341 at shiiion/dolphin 81bfb96 — a .dol or .elf, the extension compared lowercased, that does not open as a disc image boots as an executable, whose region is Unknown, and an Unknown region becomes [Core] FallbackRegion, by default the region of the system's locale (Source/Core/Core/Config/MainSettings.cpp:252-253); atlas reads neither, so which region's card such content uses is not established."
+          }
+        },
+        "wii": {
+          "parts": [
+            {
+              "memory": "internal-storage",
+              "slot": null,
+              "format": "wii-nand-title-data",
+              "names": ["title/<save_id>/data"],
+              "folder": true,
+              "citation": "[V] Source/Core/Common/NandPaths.cpp:49-58 and Source/Core/Core/IOS/FS/HostBackend/FS.cpp:32-50, :238-283 at shiiion/dolphin 81bfb96 — a title's save is its data directory below the NAND root, title/<hi>/<lo>/data, each NAND file a host file at the same path; a file the NAND's fst.bin does not list is given read and write for owner, group and others, \"to avoid breaking existing filesystems\", so a data directory copied in from another NAND is read as it lies."
+            }
+          ]
+        }
+      }
+    }
+  }
+}

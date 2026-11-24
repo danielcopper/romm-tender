@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from _factories import (
@@ -20,7 +20,7 @@ from _factories import (
 from _spawns import record_spawns
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
-from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
+from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems, platform_answer
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -29,7 +29,7 @@ from fakes.system_time import FakeClock
 from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.download_file import DownloadFileAdapter
 from adapters.rom_files import RomFileAdapter
-from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
+from domain.platform_system import NO_SYSTEM, SEVERAL, SWITCHED_OFF, PlatformKeys, PlatformSystem, SystemPair
 from domain.refusal import DomainRefused
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused, finding_refusal, switched_off
 from domain.rom import Rom
@@ -403,6 +403,42 @@ def downloads(make_downloads) -> DownloadsHarness:
 
 
 class TestStartDownload:
+    @pytest.mark.asyncio
+    async def test_the_folder_is_asked_with_the_pair_the_platform_named_and_the_transfer_keeps_its_key(
+        self, make_downloads, tmp_path
+    ):
+        """#2217 D16: the folder is asked by the pair the answer named; the install record will keep its key."""
+        snes = SystemPair("esde", "snes")
+        folders = FakeRetroDeckFolders(roms=str(tmp_path / "retrodeck" / "roms"))
+        downloads = make_downloads(
+            retrodeck_folders=folders,
+            removal_folders=FakeRetroDeckFolders(roms=str(tmp_path / "retrodeck" / "roms")),
+            platform_systems=FakePlatformSystems({"snes": snes}),
+            loop=MagicMock(),
+        )
+        rom_detail = {"id": 43, "name": "Mario", "fs_name": "mario.sfc", "fs_size_bytes": 1024, "platform_slug": "snes"}
+        downloads.loop.run_in_executor = _hops_answering(rom_detail)
+
+        def _close_coro_task(coro, _name):
+            coro.close()
+            return MagicMock()
+
+        downloads.service._tasks.spawn = _close_coro_task
+        downloads.download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
+
+        transferred: list[str] = []
+
+        def run(rom_id, rom_detail, target_path, system, file_name, control, *, platform_name, resume=False):
+            transferred.append(system)
+            return asyncio.sleep(0)
+
+        with patch.object(downloads.transfer, "run", new=run):
+            result = await downloads.service.start_download(43)
+
+        assert result["success"] is True
+        assert folders.download_asked == [snes]
+        assert transferred == ["snes"]
+
     @pytest.mark.asyncio
     async def test_starts_download_task(self, make_downloads, tmp_path):
 
@@ -3697,7 +3733,7 @@ class TestAPlatformWithNoSystemDownloadsNothing:
     )
     @pytest.mark.asyncio
     async def test_it_is_refused_naming_why(self, make_downloads, tmp_path, state, system, reason):
-        platform = PlatformSystem(state, "xbox-360", "Xbox 360", system=system, source=RETRODECK_SOURCE)
+        platform = platform_answer(state, "xbox-360", system, name="Xbox 360")
         downloads = make_downloads(platform_systems=FakePlatformSystems(answers={"xbox-360": platform}))
         made_dirs: list[str] = []
         downloads.download_file_store.make_dirs = lambda p: made_dirs.append(p)
@@ -3718,10 +3754,54 @@ class TestAPlatformWithNoSystemDownloadsNothing:
             await downloads.service.start_download(78)
 
         assert refused.value.reason == reason
-        assert refused.value.details == {"source": "retrodeck", "platform": "Xbox 360", "system": system}
+        assert refused.value.details == {
+            "source": "retrodeck",
+            "platform": "Xbox 360",
+            "systems": [] if system is None else [system],
+            "slug": "xbox-360",
+            "folder": None,
+        }
         assert made_dirs == []
         assert 78 not in downloads.queue.entries
         assert 78 not in downloads.state.in_progress
+
+    @pytest.mark.asyncio
+    async def test_a_platform_of_several_systems_downloads_into_none_of_them(self, make_downloads):
+        """#2225 D8: Tender picks none of several systems, and a download lands in one system's folder."""
+        pairs = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
+        named = (SystemPair("esde", "mark3"), SystemPair("esde", "mastersystem"))
+        platform = PlatformSystem(
+            SEVERAL, PlatformKeys("sms"), "Master System", source=RETRODECK_SOURCE, named=named, asked=pairs
+        )
+        downloads = make_downloads(platform_systems=FakePlatformSystems(answers={"sms": platform}))
+        made_dirs: list[str] = []
+        downloads.download_file_store.make_dirs = lambda p: made_dirs.append(p)
+        rom_detail = {
+            "id": 79,
+            "name": "Alex Kidd",
+            "fs_name": "alex.sms",
+            "fs_size_bytes": 1024,
+            "platform_slug": "sms",
+        }
+
+        from unittest.mock import patch
+
+        with (
+            patch.object(downloads.romm_api, "get_rom", return_value=rom_detail),
+            pytest.raises(FolderRefused) as refused,
+        ):
+            await downloads.service.start_download(79)
+
+        assert refused.value.reason == "platform_systems_several"
+        assert refused.value.details == {
+            "source": "retrodeck",
+            "platform": "Master System",
+            "systems": ["mark3", "mastersystem"],
+            "slug": "sms",
+            "folder": None,
+        }
+        assert made_dirs == []
+        assert 79 not in downloads.queue.entries
 
     @pytest.mark.asyncio
     async def test_the_question_is_asked_off_the_loop(self, make_downloads):
@@ -3731,9 +3811,9 @@ class TestAPlatformWithNoSystemDownloadsNothing:
         platform_systems = FakePlatformSystems()
         original = platform_systems.platform_system
 
-        def recording(platform_slug, *, source=None, reading=None, ask_romm=True):
+        def recording(keys, *, source=None, reading=None, ask_romm=True):
             threads.append(threading.current_thread())
-            return original(platform_slug, source=source, reading=reading, ask_romm=ask_romm)
+            return original(keys, source=source, reading=reading, ask_romm=ask_romm)
 
         platform_systems.platform_system = recording
         downloads = make_downloads(platform_systems=platform_systems)

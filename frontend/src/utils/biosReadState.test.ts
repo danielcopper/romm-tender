@@ -84,7 +84,7 @@ describe("biosFieldsFromCache", () => {
       all_downloaded: false,
     };
     expect(biosFieldsFromCache({ bios_status: status, bios_level: "missing", bios_label: "1/2" })).toEqual({
-      biosStatus: { needs_bios: true, ...status },
+      biosStatus: { needs_bios: true, platform_system: null, emulator_source: null, ...status },
       biosLevel: "missing",
     });
   });

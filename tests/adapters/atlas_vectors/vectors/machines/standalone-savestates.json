@@ -1263,7 +1263,8 @@
             "code": "standalone-unsupported",
             "data": {
               "label": "XRoar CoCo 2 NTSC (Standalone)",
-              "system": "coco"
+              "source": "esde",
+              "key": "coco"
             }
           }
         }
@@ -1307,7 +1308,8 @@
             "code": "standalone-unsupported",
             "data": {
               "label": "XRoar CoCo 2 NTSC (Standalone)",
-              "system": "coco"
+              "source": "esde",
+              "key": "coco"
             }
           }
         }
@@ -1418,7 +1420,8 @@
             "code": "standalone-variant-unestablished",
             "data": {
               "label": "DuckStation (Proton)",
-              "system": "psx",
+              "source": "esde",
+              "key": "psx",
               "variant": "proton"
             }
           }

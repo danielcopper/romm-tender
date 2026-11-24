@@ -53,7 +53,12 @@ export function biosAnswerStale(held: boolean, failed: boolean): boolean {
  *  requirement could not be established (`bios_status_unknown` with the
  *  `"unknown"` level), alongside `files: []` so no file rows render while the
  *  answer's own emulator tabs and delete counts stand. */
-const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_unknown: true };
+const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = {
+  needs_bios: false,
+  bios_status_unknown: true,
+  platform_system: null,
+  emulator_source: null,
+};
 
 /** Project a game-detail BIOS answer — from a cached game detail or a live
  *  `get_bios_status` read, which ship the identical shape — into
@@ -77,7 +82,8 @@ export function biosFieldsFromCache(
   }
   if (!cached.bios_status) return null;
   return {
-    biosStatus: { needs_bios: true, ...cached.bios_status },
+    // An answer from before it carried what its store-only line is worded from has neither.
+    biosStatus: { needs_bios: true, platform_system: null, emulator_source: null, ...cached.bios_status },
     biosLevel: cached.bios_level ?? null,
   };
 }

@@ -73,8 +73,9 @@ description = "Lint Markdown with markdownlint-cli2 (CI parity)"
 # dependency of the frontend package because that is where this repo's only
 # node_modules lives — not because linting Markdown belongs to the frontend; most
 # of what it reads is under docs/. Why the resolver's recorded machines are left
-# out: tests/adapters/atlas_vectors/README.md.
-run = "frontend/node_modules/.bin/markdownlint-cli2 \"**/*.md\" \"!**/node_modules\" \"!**/.venv\" \"!.claude/worktrees\" \"!CHANGELOG.md\" \"!site\" \"!tests/adapters/atlas_vectors/vectors\""
+# out: tests/adapters/atlas_vectors/README.md; why the vendored atlas tree is:
+# backend/_vendor/README.md, "Markdown".
+run = "frontend/node_modules/.bin/markdownlint-cli2 \"**/*.md\" \"!**/node_modules\" \"!**/.venv\" \"!.claude/worktrees\" \"!CHANGELOG.md\" \"!site\" \"!tests/adapters/atlas_vectors/vectors\" \"!backend/_vendor/atlas\""
 
 [tasks.lint]
 description = "Check Cosmic Python architecture rules (layer imports + forbidden service calls) and Markdown"

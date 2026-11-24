@@ -274,6 +274,15 @@ class SaveGroup:
     root: str | None = None
     save_id: SaveIdFill | None = None
     frontend: FrontendFile | None = None
+    slots: Mapping[str, tuple[str, ...]] = MappingProxyType({})
+    """The slot that reads each of the group's names, keyed by the name as the card spells it (``files`` and
+    ``observe``), where the emulator keeps a memory per slot (#577 D23): a group that holds two slots' files is
+    stated by the resolver as one group per slot. Empty where the emulator keeps no slots."""
+    unnamed_slots: tuple[str, ...] | None = ()
+    """The slots whose cards an ``unnamed`` group holds, which only the card's rule can state: it is the rule that
+    reads which slots are switched on (PCEE2's folder whose card names follow from nothing atlas reads). Empty where
+    the group is named, or where its emulator keeps no slots (#577 D23), and ``None`` where the rule cannot establish
+    them (#577 D24)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1005,7 +1014,24 @@ def _save_group(mode: Any, where: str) -> SaveGroup:
         unnamed=unnamed,
         save_id=_save_id_fill(mode.get("save_id"), names, where),
         frontend=_frontend_file(mode.get("written_by_frontend"), names, where),
+        slots=_group_slots(mode.get("slots"), (*(names or ()), *(observed or ())), where),
     )
+
+
+def _group_slots(value: Any, names: tuple[str, ...], where: str) -> Mapping[str, tuple[str, ...]]:
+    """A group's ``slots``: every name it spells mapped to the one slot that reads it, or no map at all."""
+    if value is None:
+        return MappingProxyType({})
+    if not isinstance(value, dict) or not value:
+        raise ValueError(f"{where}: slots must be a non-empty object mapping each file name to its slot")
+    if set(value) != set(names):
+        raise ValueError(
+            f"{where}: slots must map exactly the group's file names {sorted(set(names))}, got {sorted(value)}"
+        )
+    blank = next((name for name, slot in value.items() if not isinstance(slot, str) or not slot.strip()), None)
+    if blank is not None:
+        raise ValueError(f"{where}: slots[{blank!r}] must be a non-blank string, got {value[blank]!r}")
+    return MappingProxyType({name: (slot,) for name, slot in value.items()})
 
 
 def recorded_vocabulary(

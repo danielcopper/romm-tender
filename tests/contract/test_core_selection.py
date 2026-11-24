@@ -157,6 +157,7 @@ async def test_get_platform_core_info_payload_shape(harness):
         "emulators",
         "emulator_data_available",
         "emulator_data_reason",
+        "emulator_data_system",
         "emulator_source",
         "platform_system",
         "active_core",
@@ -201,6 +202,7 @@ async def test_get_system_core_info_payload_shape(harness):
         "emulators",
         "emulator_data_available",
         "emulator_data_reason",
+        "emulator_data_system",
         "emulator_source",
         "platform_system",
         "active_core_label",
@@ -431,6 +433,7 @@ _NEOGEOCD_ES_SYSTEMS_XML = """\
   <system>
     <name>neogeocd</name>
     <path>%ROMPATH%/neogeocd</path>
+    <extension>.chd .CHD .cue .CUE .7z .7Z .zip .ZIP</extension>
     <command label="FinalBurn Neo">%EMULATOR_RETROARCH% --subsystem neocd -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%\
 </command>
     <command label="NeoCD">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/neocd_libretro.so %ROM%</command>

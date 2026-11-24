@@ -174,7 +174,12 @@ function coreOffer(core: CoreAnswer, readRefusal: string | undefined): CoreOffer
     return { kind: "blocked", reason: failed, notice: failed };
   }
   if (!core.emulator_data_available) {
-    const absent = emulatorDataReasonSentence(core.emulator_data_reason, core.emulator_source, core.platform_system);
+    const absent = emulatorDataReasonSentence(
+      core.emulator_data_reason,
+      core.emulator_source,
+      core.platform_system,
+      core.emulator_data_system,
+    );
     return { kind: "blocked", reason: absent, notice: absent };
   }
   // An EMPTY menu first, because it is the one case where no game of the
@@ -316,7 +321,10 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // `bios/BiosFiles.tsx`.
   const nothingEstablished = firmware.bios_level === "unknown" && firmware.emulator_read === false;
   // Why a download here lands in Tender's firmware store and is linked nowhere.
-  const storeOnly = storeOnlySentence(firmware.store_only, firmware.active_core_label ?? null, row.name);
+  const storeOnly = storeOnlySentence(firmware.store_only, firmware.active_core_label ?? null, row.name, {
+    source: firmware.emulator_source,
+    platformSystem: firmware.platform_system,
+  });
 
   return (
     <div ref={attachRoot}>
@@ -497,6 +505,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
                 emulators: offer.core.emulators,
                 emulatorDataAvailable: offer.core.emulator_data_available,
                 emulatorDataReason: offer.core.emulator_data_reason,
+                emulatorDataSystem: offer.core.emulator_data_system,
                 emulatorSource: offer.core.emulator_source,
                 emulatorPlatformSystem: offer.core.platform_system,
                 activeLabel: offer.core.active_core_label,

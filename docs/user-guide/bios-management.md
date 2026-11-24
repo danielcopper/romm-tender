@@ -327,13 +327,14 @@ holds every platform your RomM server reports with at least one ROM, or whose co
    nothing to choose — no emulator for the platform, or an emulator list that could not be established (no emulator
    source found, every source switched off, a broken ES-DE systems file, a RetroDECK that has not been set up yet, a
    list that cannot be read yet, or not established for another reason) — a line under the header says so as well, since
-   a tooltip needs a mouse. A platform your emulator source has no system for says **"_Source_ has no system for
-   _platform_, so Tender cannot download its games."**, and one whose only systems are switched off there says **"System
-   _system_ is switched off in _source_."**, naming the source that answers — see
+   a tooltip needs a mouse. A platform with no system to use in your emulator source says which case holds — Tender
+   cannot match it to a system yet, its slug and folder in RomM point to different systems, the source has no system for
+   it, the source has one that is not set up on this machine, none of its systems is switched on and one is switched
+   off, or several systems fit it and Tender picks none — naming the source that answers; the sentences are in
    [Managing Games](managing-games.md#downloading-roms). Where Tender has not learned a platform's system yet and RomM
    cannot be reached to tell it, the line, a game's BIOS tab and its emulator menu say **"RomM cannot be reached, so
    Tender does not know this platform's system yet."**; where RomM answers but does not give it — a failed sign-in, say
-   — they say **"RomM did not give this platform's ids, so Tender does not know its system yet."**
+   — they say **"RomM did not give its list of platforms, so Tender does not know this platform's system yet."**
 7. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
    otherwise names the emulator and says it marks none of its BIOS files as required. Under that heading is the same
    sentence the game page shows, with your RomM library's own inventory behind it (e.g. "(3/5 RomM library files)").
@@ -479,10 +480,28 @@ Some places are left alone for a reason the row names:
 - _Could not place a link at …: …_ — placing the link failed, and the reason follows. It is said by the latest attempt
   on the page and is gone once you leave it.
 
-Where the emulator the platform launches with is one Tender's emulator knowledge does not cover yet, or no emulator
-source is set up for the platform, a download lands in the store only, and one sentence above the table says so:
-_Ryubing is not supported yet. Downloads are kept in Tender's firmware store and linked once it is._, or _No emulator
-source is set up for PC-98. Downloads are kept in Tender's firmware store and linked once one is._
+Where the emulator the platform launches with is one Tender's emulator knowledge does not cover yet, no emulator source
+is set up for the platform, or the emulator source has no one system for it, a download lands in the store only, and one
+sentence above the table says so: _Ryubing is not supported yet. Downloads are kept in Tender's firmware store and
+linked once it is._, or _No emulator source is set up for PC-98. Downloads are kept in Tender's firmware store and
+linked once one is._ Where the source has no one system for the platform, the sentence says which case holds, then when
+the files are linked:
+
+- _RetroDECK has no system for PC-98. Downloads are kept in Tender's firmware store and linked once it has one._
+- _Tender cannot match PC-98 to a system yet. Downloads are kept in Tender's firmware store and linked once it can._
+- _RomM's slug "_slug_" and folder "_folder_" point to different systems. Downloads are kept in Tender's firmware store
+  and linked once they agree._
+- _RetroDECK has a system for Nintendo 64 (n64), but it is not set up on this machine. Downloads are kept in Tender's
+  firmware store and linked once it is._
+- _System xbox360 is switched off in RetroDECK. Downloads are kept in Tender's firmware store and linked once it is
+  switched on._
+- _RetroDECK has several systems for Master System (mark3, mastersystem). Downloads are kept in Tender's firmware store
+  and linked into none of them._ — a link lands in one system's place, so none is placed.
+
+Where every emulator source is switched off, the sentence is _Every emulator source is switched off in Settings ›
+Emulator sources. Downloads are kept in Tender's firmware store and linked once a source is switched on._ Where Tender
+could not ask the emulator source — RomM could not be reached for the platform's system, say — the sentence says why,
+then _Downloads are kept in Tender's firmware store and linked once the platform's system is known._
 
 BIOS files Tender downloaded straight into RetroDECK's BIOS folder before the firmware store existed stay where they
 are, and their **Delete** still removes them there — only inside the BIOS folder RetroDECK names now (see _Deleting BIOS

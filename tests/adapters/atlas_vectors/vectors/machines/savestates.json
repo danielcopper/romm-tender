@@ -1359,7 +1359,8 @@
             "code": "standalone-unsupported",
             "data": {
               "label": "mGBA (Standalone)",
-              "system": "gba"
+              "source": "esde",
+              "key": "gba"
             }
           }
         }

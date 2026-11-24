@@ -148,9 +148,9 @@ class RuleReading:
     ``ModeChoice.reads_cwd``; PUAE's member check resolves against the same
     directory and does not take it yet (``_puae_class_of``, #597).
 
-    ``system`` is the content's system in ES-DE's vocabulary where the asker
-    named one — the catalogue routes always do — and ``None`` where it did
-    not: the Dolphin core keeps a GameCube game's saves and a Wii game's in
+    ``system`` is the content's system by its ES-DE name, the name a core's
+    recorded file set is keyed by, and ``None`` where the asker named none or
+    the one named has no single ES-DE name: the Dolphin core keeps a GameCube game's saves and a Wii game's in
     different parts of one tree, and only the system says which.
     """
 
@@ -219,6 +219,14 @@ class ModeChoice:
     fills: Mapping[str, tuple[str, ...]] = _NO_FILLS
     reads_cwd: bool = False
     handed: Mapping[str, str] = _NO_HANDED
+    fill_slots: Mapping[str, Mapping[str, tuple[str, ...]]] = MappingProxyType({})
+    """For a filled template, the slots that read each value it was filled with, where the rule fills a card per
+    slot (PCEE2's ``<memory_card_file>``): two slots on one card are one value read by both (#577 D23)."""
+    unnamed_slots: tuple[str, ...] | None = ()
+    """The slots whose cards the mode's ``unnamed`` groups hold, where the rule reads which slots are on but no
+    card's name follows (PCEE2's folder it cannot list): the answer's group for the folder carries them (#577 D23).
+    ``None`` where the complete set is not established (PCEE2 under a PCSX2 ini, whose multitap cards an unread
+    setting may add, #577 D24)."""
 
 
 def _value_unestablished(core: str, option_key: str) -> Caveat:
@@ -2487,6 +2495,8 @@ _PCEE2_SLOTS = (
     ("pcsx2_memcard_slot1_enable", "pcsx2_memcard_slot1_file", "Mcd001.ps2"),
     ("pcsx2_memcard_slot2_enable", "pcsx2_memcard_slot2_file", "Mcd002.ps2"),
 )
+# The console's two ports, as the save answer names the slot each card is read in.
+_PCEE2_SLOT_WORDS = ("1", "2")
 _PCEE2_CARD_FOLDER = "pcsx2/memcards"
 _PCEE2_STANDALONE_INI = "pcsx2/inis/PCSX2.ini"
 _PCEE2_CARD_SUFFIX = ".ps2"
@@ -2551,6 +2561,24 @@ def _pcee2_card(
     )
 
 
+def _pcee2_unnamed_slots(mode: str, slot1: bool, slot2: bool) -> tuple[str, ...] | None:
+    """The slots whose cards PCEE2's nameless card folder holds (#577 D23, D24).
+
+    Where the folder cannot be listed, the switched-on slots. Under a
+    standalone PCSX2.ini the two main slots still follow the switches, set
+    after the ini is merged (Libretro.cpp:1057-1060, ReadCoreOptions at :2093
+    at 340ce04), but the ini's own multitap entries may open cards beside
+    them wherever ``pcsx2_multitap`` enables the port (:957-961;
+    Pcsx2Config.cpp:2095-2096), and atlas reads neither, so the complete set
+    is not established.
+    """
+    if mode == _PCEE2_STANDALONE_INI_MODE:
+        return None
+    if mode == _PCEE2_FOLDER_UNLISTED:
+        return tuple(word for word, enabled in zip(_PCEE2_SLOT_WORDS, (slot1, slot2)) if enabled)
+    return ()
+
+
 def _pcee2(reading: RuleReading) -> ModeChoice:
     switches = tuple(reading.option_values[enable] for enable, _, _ in _PCEE2_SLOTS)
     pairs = tuple((enable, value) for (enable, _, _), value in zip(_PCEE2_SLOTS, switches))
@@ -2577,16 +2605,18 @@ def _pcee2(reading: RuleReading) -> ModeChoice:
         if other != mode
     )
     if files is None or mode in _PCEE2_NO_FILL:
-        return ModeChoice(mode, alternatives=alternatives)
+        return ModeChoice(mode, alternatives=alternatives, unnamed_slots=_pcee2_unnamed_slots(mode, slot1, slot2))
     offered = _pcee2_offered(files)
     names: list[str] = []
     caveats: list[Caveat] = []
     handed: dict[str, str] = {}
-    for (_, file_key, default), on in zip(_PCEE2_SLOTS, (slot1, slot2)):
+    read_by: dict[str, list[str]] = {}
+    for slot_word, (_, file_key, default), on in zip(_PCEE2_SLOT_WORDS, _PCEE2_SLOTS, (slot1, slot2)):
         if not on:
             continue
         name, passed_over = _pcee2_card(reading, file_key, default, offered)
         names.append(name)
+        read_by.setdefault(name, []).append(slot_word)
         caveats.extend(passed_over)
         if offered:
             handed[file_key] = name
@@ -2596,6 +2626,7 @@ def _pcee2(reading: RuleReading) -> ModeChoice:
         caveats=tuple(caveats),
         fills={TEMPLATE_MEMORY_CARD_FILE: tuple(dict.fromkeys(names))},
         handed=handed,
+        fill_slots={TEMPLATE_MEMORY_CARD_FILE: {name: tuple(words) for name, words in read_by.items()}},
     )
 
 

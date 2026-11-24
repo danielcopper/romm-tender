@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     import logging
 
     from domain.firmware_wants import FirmwareCatalogue, FirmwarePlacement
+    from domain.platform_system import SystemArgument
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
     from services.firmware.store import FirmwareStore
@@ -66,7 +67,7 @@ class FirmwareReplacer:
         self._logger = config.logger
 
     async def replace_bios_file(
-        self, platform_slug: str, platform_folder: str, place: str, system: str | None
+        self, platform_slug: str, platform_folder: str, place: str, system: SystemArgument | None
     ) -> dict[str, Any]:
         """Replace the file at *place* with Tender's copy in *platform_folder*'s store; answer where the old file went.
 
@@ -90,15 +91,13 @@ class FirmwareReplacer:
         backup = await self._loop.run_in_executor(
             None, self._replace_io, platform_slug, platform_folder, place, firmware, source
         )
-        links = await self._loop.run_in_executor(
-            None, self._store.do_update_links, platform_slug, platform_folder, system
-        )
+        links = await self._loop.run_in_executor(None, self._store.do_update_links, platform_folder, system)
         self._listing.invalidate()
         self._logger.info(f"Replaced {place} with Tender's copy; the old file is at {backup}")
         return {"success": True, "backup_path": backup, **links.payload(), "placed": links.placed + 1}
 
     def _replaceable(
-        self, system: str | None, place: str, platform_firmware: list[dict[str, Any]]
+        self, system: SystemArgument | None, place: str, platform_firmware: list[dict[str, Any]]
     ) -> tuple[dict[str, Any], str]:
         """The library file of *platform_firmware* that replaces what lies at *place*, off a fresh reading. Blocking."""
         catalogue = self._demand.platform_catalogue(system)

@@ -990,17 +990,20 @@ roots the resolver only assumed in one notice per source (`domain/source_roots.p
 code whose finding lacks a fact its sentence needs, reads "Problem with _source_: _code_". Where the answering source
 gives no emulator list, the platform page, the emulator menu and a game's BIOS tab say why from the answer's `reason` —
 no source detected, every source switched off, a broken ES-DE systems file, a RetroDECK that has not been set up yet,
-EmuDeck's list that cannot be read yet, a platform the source has no system for (`no_platform_system`), a platform whose
-systems are all switched off there (`platform_system_off`), a platform whose system is not known because RomM, which
-gives its ids, cannot be reached (`server_unreachable`) or refused the read (any other of RomM's failure reasons, worded
-as one), or any other refusal — and never "no emulator". **_Source_ is switched on in Settings › Emulator sources, but
-Tender cannot start games through it yet.** stands on Main once for every switched-on source Tender cannot start games
-through, whether or not it is the one that answers, and is the one source notice drawn smaller and without the warning
-sign: it states a fact about Tender rather than something wrong. The source's card under Settings › Emulator sources
-says **Tender cannot start games through _source_ yet.**, switched on or off, and a switched-off source says it only
-there. Where such a source answers, the platform page, the emulator menu and a game's BIOS tab keep saying why there is
-no emulator list — today no such source gives one. Showing **Tender cannot start games through _source_ yet.** there
-beside a list such a source does give is #2222's work; no code does it today.
+EmuDeck's list that cannot be read yet, a platform with no system to use there, each case in a sentence of its own
+([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)) — a platform whose system is not known
+because RomM, which lists it, cannot be reached (`server_unreachable`) or refused the read (any other of RomM's failure
+reasons, worded as one), or any other refusal — and never "no emulator". Where several systems answer a game's platform
+and nothing refuses its start, its page says under Play that it is linked into none of them, a sentence of its own
+beside the one a refused download of it says ([#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8).
+**_Source_ is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.** stands on Main
+once for every switched-on source Tender cannot start games through, whether or not it is the one that answers, and is
+the one source notice drawn smaller and without the warning sign: it states a fact about Tender rather than something
+wrong. The source's card under Settings › Emulator sources says **Tender cannot start games through _source_ yet.**,
+switched on or off, and a switched-off source says it only there. Where such a source answers, the platform page, the
+emulator menu and a game's BIOS tab keep saying why there is no emulator list — today no such source gives one. Showing
+**Tender cannot start games through _source_ yet.** there beside a list such a source does give is #2222's work; no code
+does it today.
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -1642,8 +1645,8 @@ it, for the focused platform:
     **red**, the line asks for a choice with the cause where one is known, and the chip stays open where an entry can be
     pinned.
   - **No options at all** — `get_emulator_options` answers `available: true` with an empty list for a system whose
-    catalogue entry lists no command. A platform with no switched-on system in the answering source is not this case:
-    its list is not available, with the reason `no_platform_system` or `platform_system_off`
+    catalogue entry lists no command. A platform with no system to use in the answering source is not this case: its
+    list is not available, with that case's reason
     ([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). The clause reads `no emulator` in
     **red** and the line says the games will not launch, because they will not.
 
@@ -1795,36 +1798,38 @@ it, for the focused platform:
   table composition `useBiosTable`, bulk offer `biosBulkOffer`, and presses in `frontend/src/utils/useBiosActions.ts`,
   shared with `frontend/src/desktop/gameview/EmulationSettings.tsx`;
   [#2429](https://github.com/danielcopper/romm-tender/issues/2429) D3). Above the table, a sentence says where a
-  download lands in the store only (`store_only`: an emulator the resolver does not cover, or no emulator source for the
-  platform). The library's own section words each row by what the resolver's identification says its content is —
-  "Checking…" until the answer arrives, then "Not recognised" or "Recognised as `<names>`" — asked one file at a time
-  after the page is shown, because the resolver's identification takes about 0.25 s a file on the reference machine,
-  kept by MD5 for the page and at most thirty minutes (`frontend/src/utils/firmwareIdentifications.ts`), and a store
-  copy no emulator uses reads "In Tender's firmware store, used by no emulator" with its Delete. When a platform's pane
-  is first shown with an answer, and after an emulator switch, the pane asks for the platform's links to be brought up
-  to date (`update_bios_links`) and reads the platform again where that placed or removed one; a download's, a
-  replacement's and that update's result say, in the status line, "`<n>` placed, `<m>` left in place: another file lies
-  there" where something stayed in the way. Focus never falls back to the top of the page here (#2190 D32;
-  `bios/useBiosFocus.ts`), which is where Steam puts focus that was lost, scrolling the pane there. A button that greys
-  out keeps the focus: as Steam's shipped client code shows (`steamui/sp.js`), its `DialogButton` never disables its
-  element — it adds the class `Disabled`, unwires its handlers and hides its A legend — so a press on it does nothing.
-  That grey is the whole look of a greyed button: the red of a Delete label, and of "Failed", is drawn only while the
-  button can be pressed. While a row's download or delete, or one of the bulk buttons below, runs, the pressed button
-  stays enabled and every other one waits greyed; Steam's dialog hands no focus back, so a confirmed or cancelled delete
-  puts it back on the pressed button; and where the work leaves the row nothing to press, focus goes to the row itself.
-  Steam also scrolls the pane to every element focus lands on, so the position the pane stood at when the button was
-  pressed — before its dialog, for a delete — is put back at once and again after Steam's own scroll has run, each time
-  only while focus is still in the BIOS part. After a step of the selector, focus that was on a row of the table stays
-  on the same file's row where the new emulator lists it, goes to the new table's top row where it does not, and to the
-  carousel's shown entry where the new emulator lists no file; focus anywhere else stays where it is. Below the table
-  one button, `Download required for
-  <emulator> (N)`, over the shown emulator's rows, sending that emulator's
-  identity. _N_ counts those rows that are fetchable and that the backend marks `fetch_for_required` — the rule the
-  download applies too, which takes the options of a one-of group's uncovered regions as well as the files the emulator
-  requires. Under a sub-heading of their own, `For all of <platform>` — `SubHeading` in `layout/pane.tsx`, smaller and
-  quieter than a section title, so it reads as part of the BIOS section (#2190 D30) — the platform-wide pair, which no
-  emulator choice touches: `Download all`, every file the library holds for the platform, fetched into Tender's firmware
-  store and linked for every emulator that asks for it and is not stated not installed (#2191 D21, D36), and
+  download lands in the store only (`store_only`: an emulator the resolver does not cover, no emulator source for the
+  platform, why the source that would answer was not asked, or the platform's own reason where the source answered with
+  no one system for it — several systems among them, since a link lands in one system's place). The library's own
+  section words each row by what the resolver's identification says its content is — "Checking…" until the answer
+  arrives, then "Not recognised" or "Recognised as `<names>`" — asked one file at a time after the page is shown,
+  because the resolver's identification takes about 0.25 s a file on the reference machine, kept by MD5 for the page and
+  at most thirty minutes (`frontend/src/utils/firmwareIdentifications.ts`), and a store copy no emulator uses reads "In
+  Tender's firmware store, used by no emulator" with its Delete. When a platform's pane is first shown with an answer,
+  and after an emulator switch, the pane asks for the platform's links to be brought up to date (`update_bios_links`)
+  and reads the platform again where that placed or removed one; a download's, a replacement's and that update's result
+  say, in the status line, "`<n>` placed, `<m>` left in place: another file lies there" where something stayed in the
+  way. Focus never falls back to the top of the page here (#2190 D32; `bios/useBiosFocus.ts`), which is where Steam puts
+  focus that was lost, scrolling the pane there. A button that greys out keeps the focus: as Steam's shipped client code
+  shows (`steamui/sp.js`), its `DialogButton` never disables its element — it adds the class `Disabled`, unwires its
+  handlers and hides its A legend — so a press on it does nothing. That grey is the whole look of a greyed button: the
+  red of a Delete label, and of "Failed", is drawn only while the button can be pressed. While a row's download or
+  delete, or one of the bulk buttons below, runs, the pressed button stays enabled and every other one waits greyed;
+  Steam's dialog hands no focus back, so a confirmed or cancelled delete puts it back on the pressed button; and where
+  the work leaves the row nothing to press, focus goes to the row itself. Steam also scrolls the pane to every element
+  focus lands on, so the position the pane stood at when the button was pressed — before its dialog, for a delete — is
+  put back at once and again after Steam's own scroll has run, each time only while focus is still in the BIOS part.
+  After a step of the selector, focus that was on a row of the table stays on the same file's row where the new emulator
+  lists it, goes to the new table's top row where it does not, and to the carousel's shown entry where the new emulator
+  lists no file; focus anywhere else stays where it is. Below the table one button,
+  `Download required for
+  <emulator> (N)`, over the shown emulator's rows, sending that emulator's identity. _N_ counts
+  those rows that are fetchable and that the backend marks `fetch_for_required` — the rule the download applies too,
+  which takes the options of a one-of group's uncovered regions as well as the files the emulator requires. Under a
+  sub-heading of their own, `For all of <platform>` — `SubHeading` in `layout/pane.tsx`, smaller and quieter than a
+  section title, so it reads as part of the BIOS section (#2190 D30) — the platform-wide pair, which no emulator choice
+  touches: `Download all`, every file the library holds for the platform, fetched into Tender's firmware store and
+  linked for every emulator that asks for it and is not stated not installed (#2191 D21, D36), and
   `Delete downloads (N)` behind a `ConfirmModal`, whose title and text say it takes only Tender's own downloads (#2190
   D24). Each of the three is as wide as its label, never stretched across its row (#2429 D3). Then the library section,
   under the sub-heading "In your RomM library, asked for by no emulator here", with the same table and per-row buttons

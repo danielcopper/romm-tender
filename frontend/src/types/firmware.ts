@@ -3,7 +3,7 @@
  * file status, and the available-cores selection presented in the UI.
  */
 
-import type { AnsweringSource, EmulatorDataReason, PlatformSystemAnswer } from "./emulatorSources";
+import type { AnsweringSource, EmulatorDataReason, PlatformSystemAnswer, UnlistedSystem } from "./emulatorSources";
 
 /**
  * What the machine answers about one firmware file, in the four values the
@@ -282,10 +282,12 @@ export interface PlaceRefusal {
 
 /**
  * Why a download on this page lands in Tender's firmware store and is linked
- * nowhere: the launching emulator is one the resolver does not cover, or no
- * emulator source answers for the platform. `null` where links follow.
+ * nowhere: the launching emulator is one the resolver does not cover, no
+ * emulator source answers for the platform, why the one that would answer was
+ * not asked, or — where the source that answered has no one system for it —
+ * its {@link PlatformSystemReason}. `null` where links follow.
  */
-export type StoreOnly = "unsupported" | "no_source";
+export type StoreOnly = "unsupported" | "no_source" | EmulatorDataReason;
 
 /** What a Delete left in place: a link of Tender's into the store under a
  *  root that could not be read, or a file an older version downloaded that
@@ -438,7 +440,9 @@ export type StartCommandReason =
   | "environment_unread"
   | "environment_unknown"
   | "folder_unplaced"
-  | "entry_unknown";
+  | "entry_unknown"
+  | "systems_several"
+  | "system_unknown";
 
 /**
  * Why the entry's installation could not be established, where the resolver gives no command for that reason —
@@ -490,7 +494,8 @@ export interface StartCommandVerdict {
 }
 
 /** Why a launch verdict could not be established, in Tender's words. */
-export type LaunchNotEstablishedReason = "system_unknown" | "entry_unknown" | "catalogue_unread" | "no_source";
+export type LaunchNotEstablishedReason =
+  "system_unknown" | "systems_several" | "entry_unknown" | "catalogue_unread" | "no_source";
 
 /**
  * Why the entry does not start the file, where the resolver states a reason of its own, in Tender's words —
@@ -522,7 +527,16 @@ export type LaunchNoteReason = "playlist_discs_past_limit";
 
 /** One statement said beside a verdict (#2698 D8): its word, and the name of the file it is about, or `null`. */
 export interface LaunchStatement {
-  reason: LaunchStoppedShortReason | LaunchGoesOnReason | LaunchNoteReason | "format_unestablished" | "contents_unread";
+  reason:
+    | LaunchStoppedShortReason
+    | LaunchGoesOnReason
+    | LaunchNoteReason
+    | "format_unestablished"
+    | "contents_unread"
+    | "frontend_would_not_list"
+    | "folder_holds_games"
+    | "format_unclaimed"
+    | "sandbox_path_unestablished";
   file: string | null;
 }
 
@@ -548,38 +562,39 @@ export type LaunchStoppedShortReason =
   | "opened_file_unread"
   | "patch_setting_unread"
   | "opens_past_bound"
-  | "path_too_long_unchecked";
+  | "path_too_long_unchecked"
+  | "folder_route_unread";
 
 /**
  * Whether one installed game's file starts with one emulator entry, as the
  * resolver answers it (#2195 D2); which states refuse a start is
- * `utils/gameLaunch.ts`'s. `entry` is the label it was asked with, `system` the system it was
- * asked as, `platform_name` the name the game page shows the game's platform
- * under, which the sentences name (D36), and `file` the file's name;
- * `starts_from` is the system's extension list (for `not_a_launch_file`),
+ * `utils/gameLaunch.ts`'s. `entry` is the label it was asked with, `system` the key of the system it was
+ * asked as (`null` where it was asked by several pairs), `platform_name` the name the game page shows the
+ * game's platform under, which the sentences name (D36), and `file` the file's name;
+ * `starts_from` is the system's extension list, the names the frontend lists (for `frontend_would_not_list`),
  * `other_entries` the entries established to start the file (for
  * `not_this_emulator`), and `install_in` the system's entries that install
  * it — for `needs_installing` alone, empty where the system has an entry for
  * none of the emulators known to, `null` otherwise.
  * `reason` is the resolver's reason in Tender's words, `null` where it named
- * none Tender words: why a verdict was `not_established`, why the entry does not
+ * none Tender words: why no verdict could be given (`not_established`), why the entry does not
  * start the file on `not_this_emulator`, and what could not be established
  * about a file that `starts` (#2195 D40), what its start goes on without, or that the emulator does not read
  * every disc a playlist lists (#2698 D7); on a start, the first such statement, the format and archive notes left
  * out — what a start says is `statements`.
  * `reason_file` is the name of the file that reason is about, where the resolver names one; absent or `null`
  * otherwise. `statements` is everything said beside the verdict, in the resolver's order (#2698 D8): each
- * statement beside a start, and beside a refused start each file it would have gone on without, what else it is
- * established to do, and each thing the resolver could not establish; an answer without it is read from `reason` and
- * the two notes below.
+ * statement beside a start, and beside a refused start or a verdict not established each file it would go on
+ * without, what else it is established to do, and each thing the resolver could not establish; an answer without it
+ * is read from `reason` and the two notes below.
  * `contents_unread` says the file is an archive whose
  * contents were not read; `format_unestablished` that whether the entry reads
  * this format was not established.
  */
 export interface GameLaunch {
-  state: "starts" | "needs_installing" | "not_a_launch_file" | "not_this_emulator" | "not_established";
+  state: "starts" | "needs_installing" | "not_this_emulator" | "not_established";
   entry: string;
-  system: string;
+  system: string | null;
   platform_name: string;
   file: string;
   extension: string;
@@ -644,6 +659,8 @@ export interface CoreInfo {
   emulator_data_available: boolean;
   /** Why `emulators` could not be given; `null` while it is available. */
   emulator_data_reason: EmulatorDataReason | null;
+  /** The system a `system_unknown` reason is about, which its sentence names; `null` for any other. */
+  emulator_data_system: UnlistedSystem | null;
   /** The source the answer came from; `null` where no source answers. */
   emulator_source: AnsweringSource | null;
   /** The system the emulator list is about — an installed game's own, otherwise
@@ -693,6 +710,7 @@ export interface SystemCoreInfo {
   emulator_data_available: boolean;
   /** As on {@link CoreInfo}. */
   emulator_data_reason: EmulatorDataReason | null;
+  emulator_data_system: UnlistedSystem | null;
   emulator_source: AnsweringSource | null;
   /** The platform's system in the answering source, which the page names. */
   platform_system: PlatformSystemAnswer | null;
@@ -731,6 +749,7 @@ export interface FirmwarePlatformExt extends EmulatorAnswer {
   emulators?: EmulatorOption[];
   emulator_data_available?: boolean;
   emulator_data_reason: EmulatorDataReason | null;
+  emulator_data_system: UnlistedSystem | null;
   emulator_source: AnsweringSource | null;
   platform_system: PlatformSystemAnswer | null;
   // The backend's level — the resolver's verdict for the launching emulator
@@ -986,6 +1005,9 @@ export interface BiosStatus extends EmulatorAnswer {
   bios_status_unknown?: boolean;
   /** See {@link StoreOnly}. */
   store_only?: StoreOnly | null;
+  /** What the store-only line is worded from: the platform's system and the source that answered. */
+  platform_system: PlatformSystemAnswer | null;
+  emulator_source: AnsweringSource | null;
   /** As on {@link FirmwarePlatformExt}. */
   backup_root?: string;
   /** As on {@link FirmwarePlatformExt}. */

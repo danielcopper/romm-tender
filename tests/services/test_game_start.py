@@ -35,6 +35,7 @@ from services.game_start import START_FOLDER, GameStartService, GameStartService
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from domain.platform_system import SystemArgument
     from domain.start_command import StartAnswer
     from domain.tender_folder import TenderPlace as Place
     from lib.prune_conflicts import PruneConflicts
@@ -52,7 +53,7 @@ class _Commands:
         self.answer = answer if answer is not None else StartCommand(argv=_COMMAND, folder=None)
         self.asked: list[dict[str, Any]] = []
 
-    def start_command(self, system: str, content_path: str, **asked: Any) -> StartAnswer:
+    def start_command(self, system: SystemArgument, content_path: str, **asked: Any) -> StartAnswer:
         self.asked.append({"system": system, "content_path": content_path, **asked})
         return self.answer
 

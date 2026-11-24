@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from domain.emulator_commands import CORE, PROGRAM, EmulatorOption
 from domain.emulator_sources import ArrangedSource
 from domain.launchability import STARTS, Launchability
+from domain.platform_system import SystemArgument, system_key
 from fakes.fake_emulator_sources import FakeSourcesReading
 
 if TYPE_CHECKING:
@@ -89,14 +90,14 @@ class FakeCoreInfoProvider:
         self.available = available
         self.reason = reason
         self.source = source
-        self.active_core_calls: list[str] = []
-        self.emulator_options_calls: list[str] = []
+        self.active_core_calls: list[SystemArgument] = []
+        self.emulator_options_calls: list[SystemArgument] = []
         self.readings: list[SourcesReading | None] = []
         self.options_calls: list[dict[str, str | None]] = []
         # The verdict ``launchability`` answers for each label it is asked
         # with; a label it does not hold starts its file. Each call is recorded.
         self.launch_verdicts: dict[str, Launchability] = {}
-        self.launchability_calls: list[tuple[str, str, str]] = []
+        self.launchability_calls: list[tuple[SystemArgument, str, str]] = []
 
     @property
     def available_cores(self) -> list[dict[str, Any]]:
@@ -109,7 +110,7 @@ class FakeCoreInfoProvider:
         self.options = [libretro_option(c["core_so"], c["label"]) for c in value if "core_so" in c]
 
     def get_active_core(
-        self, system_name: str, *, reading: SourcesReading | None = None
+        self, system_name: SystemArgument, *, reading: SourcesReading | None = None
     ) -> tuple[str | None, str | None]:
         self.active_core_calls.append(system_name)
         return self.active_core
@@ -119,7 +120,7 @@ class FakeCoreInfoProvider:
 
     def get_emulator_options(
         self,
-        system_name: str,
+        system_name: SystemArgument,
         *,
         reading: SourcesReading | None = None,
         content_path: str | None = None,
@@ -139,7 +140,7 @@ class FakeCoreInfoProvider:
         }
 
     def launchability(
-        self, system_name: str, content_path: str, *, label: str, reading: SourcesReading | None = None
+        self, system_name: SystemArgument, content_path: str, *, label: str, reading: SourcesReading | None = None
     ) -> Launchability:
         self.launchability_calls.append((system_name, content_path, label))
         verdict = self.launch_verdicts.get(label)
@@ -148,7 +149,7 @@ class FakeCoreInfoProvider:
         return Launchability(
             state=STARTS,
             entry=label,
-            system=system_name,
+            system=system_key(system_name),
             file=os.path.basename(content_path),
             extension=os.path.splitext(content_path)[1],
         )
