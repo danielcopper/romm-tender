@@ -10,11 +10,12 @@ paths:
 
 No mechanical check exists for any of this. It holds only if it is carried at the point of writing.
 
-This file covers every comment, including docstrings and a TypeScript module's header comment. What a Python docstring
-must _contain_ — the contract it states — is `python-conventions.md`'s; what no comment may contain is this file's.
+This file covers every comment in Python and TypeScript alike: inline comments, Python docstrings, JSDoc and a module's
+header comment. When one is written and what it may say is this file's; `python-conventions.md` adds only what is
+Python's alone.
 
-Code names the **what**. A comment that restates the code is deleted on sight, not improved. If a comment is needed to
-explain what the code does, the code is the problem — fix the code and drop the comment.
+Code names the **what**. A comment that restates the code is deleted, not improved. If a comment is needed to explain
+what the code does, the code is the problem — fix the code and drop the comment.
 
 A comment earns its place only by carrying knowledge that **cannot be put into code**:
 
@@ -23,8 +24,31 @@ A comment earns its place only by carrying knowledge that **cannot be put into c
 - **A road not taken** — the obvious alternative and why it is wrong. Without it the next person builds it.
 - **A constraint the code cannot express** — an ordering that must hold, a call that must never happen twice.
 
+An inline comment says it in one line.
+
 A comment that would be equally true on a `docs/` page belongs on that page, under the heading that owns the topic.
 Inline is the last resort, not the first.
+
+## Docstrings and JSDoc
+
+**A function's or method's docstring states a contract its signature, names and types do not show** — what it raises or
+rejects and when, what a caller must hold before the call, a side effect beyond the return value. Without such a
+contract there is no docstring. It never restates the parameters, their types or the return value: the signature already
+carries them, and a copy drifts from it unseen. An `Args:` / `Returns:` section or a `@param` / `@returns` tag that
+repeats the signature is such a copy.
+
+**A module or class docstring, or a module's header comment, is written only where the purpose is not clear from the
+name and the place.** When it is, it names what belongs there, not what the file holds today — a listing of the current
+contents rots when the next one lands.
+
+- Bad: `"""Owns save_sync_state.json — persistence, migrations, default construction."""` (wrong once a fourth
+  responsibility lands)
+- Good: `"""Owns save_sync_state.json — single source of truth for on-disk save-sync state."""`
+
+**A docstring named elsewhere as the home of a fact stays**, however long — a script's blind spots, the scope of the
+test isolation in `tests/conftest.py`, the convention in `lib/list_result.py`. It is a contract no signature shows.
+
+## One home, and no history
 
 **A fact has one home.** State it once — on the `docs/` page that owns the topic if a person needs it, at the one site
 that depends on it if only the code does — and let every other place name that home instead of repeating it. Copies are
@@ -41,9 +65,15 @@ outside-world fact lets a reader re-verify the fact — keep it. An issue or PR 
 where an open question is tracked, stops meaning anything when that thread closes — drop it, and say what is unknown
 rather than where it is filed.
 
-**When you touch a line, re-read the comment above it.** If it no longer matches, correct or delete it in the same
-change. A stale comment is worse than none, because it is believed: it is read as current truth by everyone who arrives
-later, and nothing in the toolchain will ever contradict it.
-
 Avoid entirely: "mechanical extraction from X", "during the transition", "moved from Y", "added for the Z flow", "see PR
 #123", "measured in #456", "on this cut's device list" — commit-message content that rots in source.
+
+## Where a change touches code
+
+**When you touch a line, re-read the comment above it and the docstring of the function or class it sits in.** One that
+no longer matches is corrected in the same change; one that fails this file is cut to what the code cannot show, or
+deleted. A stale comment is worse than none, because it is believed: it is read as current truth by everyone who arrives
+later, and nothing in the toolchain will ever contradict it.
+
+Comments and docstrings in code no change touches wait for the change that does — they are never removed in a sweep of
+their own.

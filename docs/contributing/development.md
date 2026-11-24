@@ -705,11 +705,11 @@ Three places, split by how often they apply:
   paragraph below.
 - **`docs/architecture/invariants/`** — the invariant register's entries, one file per area; the map in its
   [index](../architecture/invariants/index.md) names each area's paths and file.
-- **`.claude/rules/*.md`** — the per-area conventions (services, adapters/domain, Python naming and docstrings, endpoint
-  shapes, bootstrap wiring, the host, RomM HTTP, comments, the desktop surface, vendored assets, backend and frontend
-  testing). Each file carries a `paths:` frontmatter glob. They are plain Markdown, not a harness-specific format: an
-  agent that supports path-scoped rules gets one loaded when a matching file is read, and every other agent must open
-  the file itself. Either way it arrives a beat late for a file being created rather than edited.
+- **`.claude/rules/*.md`** — the per-area conventions (services, adapters/domain, Python naming and layout, endpoint
+  shapes, bootstrap wiring, the host, RomM HTTP, comments and docstrings, the desktop surface, vendored assets, backend
+  and frontend testing). Each file carries a `paths:` frontmatter glob. They are plain Markdown, not a harness-specific
+  format: an agent that supports path-scoped rules gets one loaded when a matching file is read, and every other agent
+  must open the file itself. Either way it arrives a beat late for a file being created rather than edited.
 
 `CLAUDE.md` holds three things and nothing else: traps, where an agent would confidently do the wrong thing and have no
 reason to go look first; cross-cutting invariants, whose breach no single diff shows; and how work is done here, which
@@ -719,8 +719,9 @@ the enforcement; a rule without one needs its full statement in the rule file or
 because nothing else will catch it. `CLAUDE.md` cites no ADR: an ADR is frozen history and may be `Proposed` or
 superseded, which is invisible at the citation site, so it is reached through the page that owns the topic.
 
-Most of what lives in `.claude/rules/` has no mechanical check — Protocol suffixes, constructor shape, docstring intent,
-verb-named mutations — so those rules hold only if they are carried while writing.
+Most of what lives in `.claude/rules/` has no mechanical check — Protocol suffixes, constructor shape, a comment or
+docstring only for what the code cannot show, verb-named mutations — so those rules hold only if they are carried while
+writing.
 
 Note that `.gitignore` ignores `.claude/*` (worktrees, local agents, `settings.local.json`) and re-includes
 `.claude/rules/` explicitly. Adding a rule file works; adding anything else under `.claude/` will silently not be
