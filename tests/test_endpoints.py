@@ -9,7 +9,6 @@ from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
 from adapters.steam_config import SteamConfigAdapter
-from host import HostStatus
 from host.dispatch import route_names
 from main import Endpoints
 from services.settings import SettingsService, SettingsServiceConfig
@@ -37,7 +36,7 @@ def services(logger, home, settings):
 
 @pytest.fixture
 def endpoints(services):
-    return Endpoints(_make_application(services), HostStatus())
+    return Endpoints(_make_application(services))
 
 
 class TestLogLevel:

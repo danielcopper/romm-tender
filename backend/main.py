@@ -136,9 +136,8 @@ class Endpoints:
     error.
     """
 
-    def __init__(self, app: Application, host_status: HostStatus) -> None:
+    def __init__(self, app: Application) -> None:
         self._services = app.services
-        self._host_status = host_status
 
     @route
     async def test_connection(self):
@@ -1246,7 +1245,7 @@ async def build_backend(
     app.run_startup_repairs(status.record_failed_step)
     logger.info("Tender backend loaded")
     return BackendBuild(
-        dispatcher=CallDispatcher(Endpoints(app, status), logger),
+        dispatcher=CallDispatcher(Endpoints(app), logger),
         server_identity=app.user_agent,
         shutdown=app.shutdown,
         before_detach=app.services.controller_focus_service.release_pin,

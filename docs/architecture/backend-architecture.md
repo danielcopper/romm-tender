@@ -30,7 +30,7 @@ answer: [Running an installed one](../contributing/development.md#running-an-ins
 
 ```python
 class Endpoints:
-    # Holds: the Application's services and the host's status record, both handed in
+    # Holds: the Application's services, handed in
     # Owns: the endpoints — one public method marked @route each
     # Delegates: every use case to a service, every I/O to an adapter behind it
 ```

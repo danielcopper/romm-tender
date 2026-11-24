@@ -23,7 +23,6 @@ from unittest.mock import AsyncMock
 import pytest
 from _factories import _make_application, _make_services_bundle
 
-from host import HostStatus
 from lib.errors import Refused
 from main import Endpoints
 
@@ -37,7 +36,7 @@ def services():
 @pytest.fixture
 def endpoints(services):
     """The real ``Endpoints`` over an ``Application`` holding *services*."""
-    return Endpoints(_make_application(services), HostStatus())
+    return Endpoints(_make_application(services))
 
 
 # ── Settings / connection / log-level endpoints ───────────────────────

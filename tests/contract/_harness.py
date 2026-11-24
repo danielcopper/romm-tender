@@ -76,7 +76,6 @@ from domain.identity import MIN_ROMM_VERSION
 from domain.sync_run_kind import SyncRunKind
 from domain.sync_state import SyncState
 from domain.update_release import UpdateSource
-from host import HostStatus
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -321,7 +320,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
     app = Application(services, logger=logger, user_agent=result.user_agent)
 
     return ContractHarness(
-        endpoints=Endpoints(app, HostStatus()),
+        endpoints=Endpoints(app),
         app=app,
         settings=result.stores.settings,
         romm=fake_romm,
