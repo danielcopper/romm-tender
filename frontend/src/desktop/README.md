@@ -35,9 +35,11 @@ page, and the rules every change to that page follows, are in
   panel and entries of the menus that open under them, the game menu's and the selector's.
 
 **Dev build only.** `rollup.config.js` builds the panel from `./src/index.tsx` — the module that mounts the bigpicture
-surface — and nothing there imports this directory, so `pnpm build`, `build:dev`, CI and the release tarball ship none
-of it. The one build that does is `build:desktop` (`rollup.desktop.config.js`), which rewrites `index.tsx` as it is
-bundled to call `startDesktopSurface()`
+surface. The start-up check imports `desktop/desktopWindow` for the dev build's entry (`boot/steamModules.ts`), and a
+release build leaves it out: the `virtual:tender-desktop-surface` stamp folds that entry away and
+`withoutDesktopSideEffects` drops the module itself (`rollup.config.js`), which `scripts/check-bundle-shape.mjs` checks.
+So `pnpm build`, `build:dev`, CI and the release tarball ship none of it. The one build that does is `build:desktop`
+(`rollup.desktop.config.js`), which rewrites `index.tsx` as it is bundled to call `startDesktopSurface()`
 ([the desktop dev build](../../../docs/architecture/frontend-bundles.md#the-desktop-dev-build-dev-build-only)). How to
 run it is in
 [Frontend dev loop](../../../docs/contributing/frontend-dev-loop.md#desktop-surface-dev-loop-dev-build-only).

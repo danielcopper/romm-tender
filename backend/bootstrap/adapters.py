@@ -411,8 +411,7 @@ def bootstrap(
         raise
 
     # The runtime Unit-of-Work factory: each call opens a fresh sync sqlite3
-    # connection on db_path (ADR-0004). Wired here but not yet threaded into any
-    # service config — the service cutover (#784) consumes it.
+    # connection on db_path (ADR-0004).
     uow_factory: UnitOfWorkFactory = functools.partial(SqliteUnitOfWork, db_path)
 
     persistence = PersistenceAdapter(directories.config_dir, logger, clock=clock)

@@ -9,7 +9,6 @@ import {
   type DownloadWithAdoption,
 } from "./adoptFlow";
 import { mountPruneLeaseOwner, releasePruneLeasesByOwner } from "./pruneLease";
-import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 import type {
   AdoptResult,
   CandidatesFoundResult,
@@ -23,10 +22,6 @@ vi.mock("../api/backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/backend")>()),
   logWarn: vi.fn(),
   logError: vi.fn(),
-}));
-
-vi.mock("./steamShortcuts", () => ({
-  setLaunchOptionsConfirmed: vi.fn().mockResolvedValue(true),
 }));
 
 const ROM_ID = 42;
@@ -135,7 +130,6 @@ beforeEach(() => {
   vi.mocked(backend.releasePruneConflictLease).mockClear();
   vi.mocked(backend.logWarn).mockClear();
   vi.mocked(backend.logError).mockClear();
-  vi.mocked(setLaunchOptionsConfirmed).mockClear();
   vi.mocked(toaster.toast).mockClear();
   mountPruneLeaseOwner(OWNER);
 });
@@ -243,7 +237,7 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     ]);
   });
 
-  it("adopt records the install, writes nothing to the shortcut and tells the caller in order", async () => {
+  it("adopt records the install and tells the caller in order", async () => {
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
     vi.mocked(backend.adoptExistingRom).mockResolvedValue(ADOPTED);
     const { flow, dialogs } = makeFlow();
@@ -258,8 +252,6 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     }
 
     expect(vi.mocked(backend.adoptExistingRom).mock.calls).toEqual([[ROM_ID, "/roms/n64/game.z64", null]]);
-    // The shortcut carries its appId; the next start asks with the adopted install.
-    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     expect(log).toEqual([
       "busy:true",
       "occupied:true",
@@ -274,39 +266,6 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     expect(toastBodies()).toEqual(["Test ROM is ready to play"]);
   });
 
-  it("an adoption whose launch-options write rejects is still adopted", async () => {
-    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
-    vi.mocked(backend.adoptExistingRom).mockResolvedValue(ADOPTED);
-    vi.mocked(setLaunchOptionsConfirmed).mockRejectedValueOnce(new Error("SteamClient threw"));
-    const { flow, dialogs } = makeFlow();
-    dialogs.showExisting.mockResolvedValue("adopt");
-
-    // The backend has recorded the install by now, so a failed Steam write is
-    // not a failed adoption and must not be toasted as one.
-    await expect(runDownloadWithAdoption(flow)).resolves.toBe("adopted");
-
-    expect(toastBodies()).toEqual(["Test ROM is ready to play"]);
-  });
-
-  it("holds the adopt's Steam write to the owner generation the press was made in", async () => {
-    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
-    let answer!: (result: AdoptResult) => void;
-    vi.mocked(backend.adoptExistingRom).mockReturnValue(new Promise<AdoptResult>((resolve) => (answer = resolve)));
-    const { flow, dialogs } = makeFlow();
-    dialogs.showExisting.mockResolvedValue("adopt");
-
-    const run = runDownloadWithAdoption(flow);
-    await vi.waitFor(() => expect(vi.mocked(backend.adoptExistingRom)).toHaveBeenCalled());
-    // The page is left and opened again while the request is out: a capture
-    // taken after it answers would see the new generation and write anyway.
-    await releasePruneLeasesByOwner(OWNER);
-    mountPruneLeaseOwner(OWNER);
-    answer(ADOPTED);
-    await run;
-
-    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
-  });
-
   it("names the ROM generically when the caller has no name for it", async () => {
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
     vi.mocked(backend.adoptExistingRom).mockResolvedValue(ADOPTED);
@@ -318,7 +277,7 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     expect(toastBodies()).toEqual(["ROM is ready to play"]);
   });
 
-  it("an unbound adoption writes no launch options and releases no lease", async () => {
+  it("an unbound adoption releases no lease", async () => {
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
     vi.mocked(backend.adoptExistingRom).mockResolvedValue({
       ...ADOPTED,
@@ -328,11 +287,10 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
 
     await expect(runDownloadWithAdoption(flow)).resolves.toBe("adopted");
 
-    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     expect(vi.mocked(backend.releasePruneConflictLease)).not.toHaveBeenCalled();
   });
 
-  it("an adoption with no launch command writes none", async () => {
+  it("an adoption that answers no rom_dir is adopted", async () => {
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
     vi.mocked(backend.adoptExistingRom).mockResolvedValue({
       success: true,
@@ -344,8 +302,6 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     dialogs.showExisting.mockResolvedValue("adopt");
 
     await expect(runDownloadWithAdoption(flow)).resolves.toBe("adopted");
-
-    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
   });
 
   it("a refused adoption toasts its message, is logged as a warning and leaves the flags alone", async () => {
@@ -629,7 +585,6 @@ describe("runDownloadWithAdoption — names already taken", () => {
 
     expect(vi.mocked(backend.adoptExistingRom)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
-    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     expect(log[log.length - 1]).toBe("busy:false");
   });
 

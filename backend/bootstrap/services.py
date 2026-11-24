@@ -110,13 +110,12 @@ class WiringConfig:
     program's directories are, resolved from the environment by the entry
     point rather than derived. It is the same value ``bootstrap()`` was
     handed, carried on so that a service's wiring reads a directory rather
-    than composing one — the entry point is the only caller of
-    ``resolve_directories``, and nothing downstream of it builds a root out
-    of a home. ``launcher`` sits beside it for the same reason: it says
+    than composing one — nothing downstream of the entry point builds a root
+    out of a home. ``launcher`` sits beside it for the same reason: it says
     where the launcher a Steam shortcut runs through lives, and whether this
-    start got it there. Its path is the data directory's only where this
-    start actually put the launcher under it — otherwise it is the copy the
-    release ships. ``update_source`` is the entry point's other environment
+    start got it there. Its path is in the bin root only where this start
+    actually put the launcher there — otherwise it is the copy the release
+    ships. ``update_source`` is the entry point's other environment
     answer — where releases are asked for, and whether this process is the
     installed program — handed to ``bootstrap()`` too. ``installer_environment``
     is the third: the variables an installer started from the panel runs with,

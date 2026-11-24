@@ -7,8 +7,9 @@ membership predicate that drives the platform-collection diff, and the platform
 name a ROM is filed under.
 
 State reads (registry, last_synced_*), setting reads, network fetches, and
-Steam interaction stay in LibraryService; this module receives the relevant
-slices as primitive parameters and returns primitives or NamedTuple results.
+Steam interaction are the library sub-services'; this module receives the
+relevant slices as primitive parameters and returns primitives or NamedTuple
+results.
 """
 
 from __future__ import annotations

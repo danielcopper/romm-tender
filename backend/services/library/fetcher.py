@@ -5,10 +5,10 @@ platforms, listing collections, the per-unit work-queue construction, and a
 platform unit's incremental/full ROM pagination loop. A collection unit's ROMs
 are :class:`~services.library.collection_fetcher.CollectionFetcher`'s. Settings reads/writes about which
 platforms/collections are enabled live here too, since they shape the
-fetch query. Anything that transforms fetched ROMs into Steam-shortcut
-shape belongs on the façade or downstream sub-services; this file
-stops at "we now have the ROM list". The metadata-cache is stamped
-elsewhere (per applied unit) so a fetch never mutates the cache.
+fetch query. Turning fetched ROMs into Steam-shortcut shape is the
+downstream sub-services'; this file stops at "we now have the ROM list".
+The metadata-cache is stamped elsewhere (per applied unit) so a fetch
+never mutates the cache.
 """
 
 from __future__ import annotations
