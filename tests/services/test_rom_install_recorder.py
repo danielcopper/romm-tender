@@ -81,9 +81,8 @@ class TestEveryInstallIsRecordedAndBaked:
         assert install is not None
         assert install.rom_dir == "/roms/ps3/Puppeteer"
 
-    def test_a_ps3_folder_starts_with_its_directory_end_to_end(self, harness):
-        # Recorded, then resolved through the real DiscLaunchResolver a start
-        # uses: the folder, named as ES-DE scans it, is the path asked with.
+    def test_a_ps3_game_kept_as_a_folder_is_asked_about_its_recorded_launch_file_end_to_end(self, harness):
+        # The folder the emulator gets is the resolver's answer, never this seam's (#2221 D3).
         from services.disc_launch_resolver import DiscLaunchResolver, DiscLaunchResolverConfig
 
         rom_dir = "/roms/ps3/MyGame.ps3"
@@ -100,7 +99,7 @@ class TestEveryInstallIsRecordedAndBaked:
                 logger=logging.getLogger("test_rom_install_recorder"),
             ),
         )
-        assert resolver.resolve_for_install(install, None) == rom_dir
+        assert resolver.resolve_for_install(install, None) == eboot
 
 
 class TestTheSizeAnInstallRecords:
