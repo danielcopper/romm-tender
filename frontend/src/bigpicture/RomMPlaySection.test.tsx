@@ -5585,7 +5585,7 @@ describe("RomMPlaySection", () => {
 
       // The status a card would have read did land, so its absence is the card's.
       expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledWith(42);
-      expect(container.textContent).not.toContain("Save sync off");
+      expect(container.textContent).not.toContain("No saves");
       expect(container.textContent).not.toContain("Write Saves to Content Directory");
       expect(container.firstElementChild).toBe(container.querySelector(".romm-play-section-row"));
     });

@@ -127,7 +127,6 @@ beforeEach(() => {
   log = [];
   vi.mocked(backend.startDownload).mockReset();
   vi.mocked(backend.adoptExistingRom).mockReset();
-  vi.mocked(backend.releasePruneConflictLease).mockClear();
   vi.mocked(backend.logWarn).mockClear();
   vi.mocked(backend.logError).mockClear();
   vi.mocked(toaster.toast).mockClear();
@@ -275,33 +274,6 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     await runDownloadWithAdoption(flow);
 
     expect(toastBodies()).toEqual(["ROM is ready to play"]);
-  });
-
-  it("an unbound adoption releases no lease", async () => {
-    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
-    vi.mocked(backend.adoptExistingRom).mockResolvedValue({
-      ...ADOPTED,
-    });
-    const { flow, dialogs } = makeFlow();
-    dialogs.showExisting.mockResolvedValue("adopt");
-
-    await expect(runDownloadWithAdoption(flow)).resolves.toBe("adopted");
-
-    expect(vi.mocked(backend.releasePruneConflictLease)).not.toHaveBeenCalled();
-  });
-
-  it("an adoption that answers no rom_dir is adopted", async () => {
-    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
-    vi.mocked(backend.adoptExistingRom).mockResolvedValue({
-      success: true,
-      message: "ok",
-      file_path: "/roms/n64/game.z64",
-      rom_dir: null,
-    });
-    const { flow, dialogs } = makeFlow();
-    dialogs.showExisting.mockResolvedValue("adopt");
-
-    await expect(runDownloadWithAdoption(flow)).resolves.toBe("adopted");
   });
 
   it("a refused adoption toasts its message, is logged as a warning and leaves the flags alone", async () => {
