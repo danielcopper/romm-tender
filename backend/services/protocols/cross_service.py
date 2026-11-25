@@ -376,8 +376,8 @@ class DiscResolver(Protocol):
 
     The composition root satisfies this with ``DiscLaunchResolver``. The start
     check, the questions a game's page asks about its start and the disc-picker
-    use cases ask "which file does this installed ROM launch with, given its
-    persisted disc pick?" and operate entirely in path space.
+    use cases ask "which path is this installed ROM's launch verdict asked
+    with, given its persisted disc pick?" and operate entirely in path space.
     :meth:`enumerate_discs` lists the launchable discs in disc order (empty for a
     single-file ROM); :meth:`resolve_disc_path` resolves the pin over that list;
     :meth:`resolve_for_install` is the convenience that does both. A

@@ -1,7 +1,7 @@
 """Tests for DiscLaunchResolver — the single read-path disc-resolution seam.
 
 Covers enumeration (single-file → empty, folder-backed → disc list, es_systems
-intersection, fallback when es_systems is unavailable) and the path a start is asked with
+intersection, fallback when es_systems is unavailable) and the path a launch verdict is asked with
 (non-multi-disc → file_path unchanged, pinned → that disc, stale pin → default +
 WARNING).
 """
@@ -199,7 +199,7 @@ class TestResolveForInstall:
 
 
 class TestEveryInstallHasAPathToStartWith:
-    """Every installed game gets a path a start is asked with, whether or not its file starts (#2195 D28).
+    """Every installed game gets a path a launch verdict is asked with, whether or not its file starts (#2195 D28).
 
     Whether it starts is asked when the game's page reads it, never by this seam.
     """

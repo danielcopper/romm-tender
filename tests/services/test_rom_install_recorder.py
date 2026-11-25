@@ -1,4 +1,4 @@
-"""RomInstallRecorder — the row, the path a start is asked with, and the size it records.
+"""RomInstallRecorder — the row, the path a launch verdict is asked with, and the size it records.
 
 The recorder is the one path both a completed download and an adoption reach an
 install through, so these cases hold for both.
