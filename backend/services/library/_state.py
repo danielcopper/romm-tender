@@ -68,11 +68,8 @@ def _default_progress() -> dict[str, Any]:
 class CollectionMembership:
     """One enabled collection's full member rom_ids, tagged with its display name.
 
-    The value type of the run's collection-membership accumulator
-    (``collection_memberships`` in ``SyncOrchestrator``), whose key is a
-    collision-free ``(collection_kind, collection_id)`` identity so two
-    collections that merely SHARE a display name never overwrite each other's
-    members in the finalize accumulator. The name rides here in the value because
+    The name rides here in the value rather than in the accumulator's key
+    (:func:`~services.library._unit_roms.collection_membership_key`) because
     Steam's collection namespace is by-name: the run finalizer groups same-named
     memberships and UNIONs their resolved appIds into the one
     ``RomM: [<name>] (host)`` Steam collection (RomM permits same-named collections

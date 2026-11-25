@@ -82,9 +82,8 @@ class RunFinalizer:
         resolved by its ``fs_slug`` from *platform_names*, falling back to the
         ``fs_slug`` when absent; a row with no ``fs_slug`` recorded is filed under none.
 
-        RomM collections keep the per-run membership accumulator (keyed by a
-        collision-free ``(collection_kind, collection_id)`` identity, name in the
-        value) and resolve each member ``rom_id`` to a Steam appId with a
+        RomM collections take their members from the per-run membership
+        accumulator and resolve each member ``rom_id`` to a Steam appId with a
         **sibling-group fallback** (ADR-0021): a bound member uses its own
         binding; an unbound member maps to its group's bound sibling's appId, so
         favouriting / collecting ANY version of a game puts the game's single

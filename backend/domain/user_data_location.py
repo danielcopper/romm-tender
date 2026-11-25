@@ -1,4 +1,4 @@
-"""Where Tender's user data lives.
+"""The name Tender's own directories carry, and where its launcher sits.
 
 Contract: the name every directory this program derives for itself carries, and
 the two ways the launcher's path is composed. Nothing here touches the
@@ -11,13 +11,10 @@ from __future__ import annotations
 
 import os
 
-# The name every directory this program derives for itself carries — five of
-# the seven in ``domain/app_directories.py``. Never derived from
-# ``domain/identity.py``'s ``PACKAGE_NAME``, which happens to spell it
-# identically: that one names the package a server is told about and is free to
-# be renamed with it, and a one-line edit there would then move every user's
-# library on the next start, with nothing failing and nothing said.
-# ``domain/identity.py`` carries the rest of that split.
+# Never derived from ``domain/identity.py``'s ``PACKAGE_NAME``, which spells it
+# identically: a one-line edit there would then move every user's library on the
+# next start, with nothing failing and nothing said. That module's docstring
+# carries the rest of the split.
 APP_DIR_NAME = "romm-tender"
 
 # The launcher's own file name, the directory name it sits in where a root is

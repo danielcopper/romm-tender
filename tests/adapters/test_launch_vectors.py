@@ -65,7 +65,7 @@ from domain.launchability import (
 )
 
 # Tender's states that turn Play off (``frontend/src/utils/gameLaunch.ts``,
-# ``REFUSING``), each the reading of one refusing verdict.
+# ``launchRefusal``), each the reading of one refusing verdict.
 _REFUSING = {
     VERDICT_ENTRY_NOT_ACCEPTED: NOT_THIS_EMULATOR,
     VERDICT_NEEDS_INSTALLATION: NEEDS_INSTALLING,
