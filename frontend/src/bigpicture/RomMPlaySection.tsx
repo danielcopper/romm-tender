@@ -55,11 +55,12 @@ import {
   refreshCoverArtwork,
   setArtworkSlotAutomatic,
   refreshSgdbArtwork,
-  deleteLocalSaves,
   debugLog,
 } from "../api/backend";
 import { isStrandedPanelFailure } from "../api/host";
 import { executeManualSaveSync } from "../utils/manualSaveSync";
+import { executeDeleteLocalSaves } from "../utils/saveSlotFlow";
+import { DELETE_LOCAL_SAVES_DESCRIPTION, DELETE_LOCAL_SAVES_TITLE } from "../utils/saveSlotWording";
 import { executeRomUninstall } from "../utils/romUninstall";
 import {
   capturePruneLeaseAdmission,
@@ -82,13 +83,7 @@ import { buildEmulatorMenu } from "../utils/emulatorMenu";
 import { formatBytes } from "../utils/formatters";
 import { BIOS_MISSING_RED } from "../utils/biosColor";
 import { timeoutMs } from "../utils/playSection";
-import {
-  getGameDetail,
-  noteSaveSyncDisplay,
-  refreshCoreAndBios,
-  refreshSaveStatus,
-  useGameDetail,
-} from "../utils/gameDetailStore";
+import { getGameDetail, refreshCoreAndBios, refreshSaveStatus, useGameDetail } from "../utils/gameDetailStore";
 
 /** How long the authoritative connection check may run before the wait itself is
  *  worth a log line. It is NOT a deadline after which the server counts as
@@ -244,7 +239,6 @@ import { useMigrationStatus } from "../utils/migrationStore";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { detach } from "../utils/detach";
 import type { WireReason } from "../types/reasons";
-import { announceSaveSync } from "../utils/saveSyncEvents";
 import { announceCoreChange } from "../utils/coreChangedEvent";
 
 // S3776 is raised on the declaration line, so its NOSONAR must stay there. prettier-ignore stops
@@ -632,8 +626,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     const romId = detail.romId;
     showModal(
       <ConfirmModal
-        strTitle="Delete Local Saves"
-        strDescription="This will delete local save files for this game. Make sure saves are synced to RomM first — the next sync will re-download them from the server."
+        strTitle={DELETE_LOCAL_SAVES_TITLE}
+        strDescription={DELETE_LOCAL_SAVES_DESCRIPTION}
         strOKButtonText="Delete"
         strCancelButtonText="Cancel"
         onOK={() => {
@@ -641,17 +635,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
             (async () => {
               setActionPending("deletesaves");
               try {
-                const result = await deleteLocalSaves(romId);
-                if (result.success) {
-                  showToast(result.message);
-                  // Directly update the shown status — no local saves remain
-                  noteSaveSyncDisplay(appId, romId, { status: "none", label: "No saves", last_sync_check_at: null });
-                  announceSaveSync(romId);
-                } else {
-                  showToast(result.message || "Failed to delete saves");
-                }
-              } catch {
-                showToast("Failed to delete saves");
+                await executeDeleteLocalSaves(appId, romId);
               } finally {
                 setActionPending(null);
               }

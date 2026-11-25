@@ -4,150 +4,45 @@
  * fallback to the standard sync-conflict modal).
  */
 
-import { useState, useEffect, useRef, FC, type ReactElement } from "react";
+import { FC, type CSSProperties, type ReactElement } from "react";
 import { DialogButton } from "@decky/ui";
-import { showToast } from "../../utils/toast";
-import { debugLog, isEndpointFailure, savesListFileVersions, savesRollbackToVersion } from "../../api/backend";
-import type { SaveVersionEntry, ListFileVersionsResult } from "../../types";
+import type { SaveVersionEntry } from "../../types";
 import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
 import { formatAttributionSegment, pickLastSyncer } from "../../utils/saveHelpers";
-import { rollbackFeedback } from "../../utils/saveSlotWording";
+import { NO_OLDER_VERSIONS_TEXT, VERSIONS_OFFLINE_TEXT } from "../../utils/saveSlotWording";
+import { useFileVersionHistory, type FileVersionHistoryTarget } from "../../utils/useFileVersionHistory";
 import { renderCopyToSlotButton, type CopyToSlotHandler } from "./CopyToSlotButton";
 import { detach } from "../../utils/detach";
 import { ThrobberLabel } from "../../shared/Throbber";
 
-interface VersionHistoryPanelProps {
-  romId: number;
-  slot: string;
-  filename: string;
-  isOffline: boolean;
-  onRestored: () => void;
+const MUTED_NOTE_STYLE: CSSProperties = { fontSize: "11px", color: "#8f98a0", fontStyle: "italic" };
+const MUTED_TEXT_STYLE: CSSProperties = { fontSize: "11px", color: "#8f98a0" };
+const COMPACT_BUTTON_STYLE: CSSProperties = {
+  padding: "2px 8px",
+  minWidth: "auto",
+  fontSize: "11px",
+  width: "auto",
+  flexShrink: 0,
+};
+
+interface VersionHistoryPanelProps extends FileVersionHistoryTarget {
   /** Opens the copy-to-slot picker for a version row's save id (source = this slot). */
   onCopy?: CopyToSlotHandler;
 }
 
-export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
-  romId,
-  slot,
-  filename,
-  isOffline,
-  onRestored,
-  onCopy,
-}) => {
-  const [expanded, setExpanded] = useState(false);
-  // The open state as of this moment, for the change listener below: a restore
-  // closes the panel and announces the change in the same turn, before React
-  // re-renders, so the listener's own `expanded` would still read it as open
-  // and reload the list the restore just dropped.
-  const expandedRef = useRef(false);
-  const setOpen = (open: boolean) => {
-    expandedRef.current = open;
-    setExpanded(open);
-  };
-  const [versions, setVersions] = useState<SaveVersionEntry[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [restoring, setRestoring] = useState<number | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const loadVersions = async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const result: ListFileVersionsResult = await savesListFileVersions(romId, slot, filename);
-      if (result.status === "ok" || result.status === "multi_file_unsupported") {
-        // multi_file_unsupported carries an empty list — a multi-file slot's
-        // siblings are components, not prior versions (#908). The panel is
-        // hidden for multi-file slots anyway; this is the defensive backstop.
-        setVersions(result.versions);
-      } else if (result.status === "not_found") {
-        // The server answered — blaming the connection here would be a lie (#1570).
-        detach(debugLog(`VersionHistoryPanel: server has no such entry for ${filename}: ${result.message}`));
-        setVersions(null);
-        setLoadError("RomM couldn't find this game's save data.");
-      } else if (result.status === "romm_refused") {
-        setVersions(null);
-        setLoadError(`Couldn't load the versions: ${result.message}`);
-      } else if (result.status === "device_not_registered") {
-        detach(debugLog(`VersionHistoryPanel: device not registered for ${filename}: ${result.message}`));
-        setVersions(null);
-        setLoadError("This device could not be registered with RomM. Tap retry.");
-      } else {
-        detach(debugLog(`VersionHistoryPanel: server unreachable for ${filename}: ${result.message}`));
-        setVersions(null);
-        setLoadError("Couldn't reach RomM. Tap retry.");
-      }
-    } catch (e) {
-      detach(debugLog(`VersionHistoryPanel: failed to load versions for ${filename}: ${e}`));
-      setVersions(null);
-      setLoadError("Couldn't reach RomM. Tap retry.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleToggle = async () => {
-    const willExpand = !expanded;
-    setOpen(willExpand);
-    if (willExpand && versions === null && loadError === null && !isOffline) {
-      await loadVersions();
-    }
-  };
-
-  // Self-refresh when this ROM's saves change. A copy into this slot, a restore
-  // on this tab, or a sync adds or removes a version, but the list is cached on
-  // first expand — without this it stays stale in-session until the game page is
-  // re-entered. The signal is a DOM CustomEvent (`globalThis.dispatchEvent`),
-  // NOT a backend emit, so we listen on `globalThis`. Invalidate on any
-  // change for this ROM; reload immediately when the panel is open, otherwise the
-  // next expand lazy-loads the fresh list.
-  useEffect(() => {
-    const onDataChanged = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.rom_id !== romId) return;
-      setVersions(null);
-      setLoadError(null);
-      if (expandedRef.current && !isOffline) detach(loadVersions());
-    };
-    globalThis.addEventListener("romm_data_changed", onDataChanged);
-    return () => globalThis.removeEventListener("romm_data_changed", onDataChanged);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadVersions is stable per (romId, slot, filename); romId/isOffline are the real deps
-  }, [romId, isOffline]);
-
-  const handleRestore = async (version: SaveVersionEntry) => {
-    setRestoring(version.id);
-    try {
-      const result = await savesRollbackToVersion(romId, slot, version.id);
-      const feedback = rollbackFeedback(result, version.updated_at);
-      if (feedback === null) return;
-      if (feedback.kind === "conflict") {
-        await showSyncConflictModal(feedback.conflict);
-      } else {
-        showToast(feedback.message);
-      }
-      // `put_failed` refreshes too: the local download succeeded and only the
-      // server-side bump did not, so the switch is locally complete — it just
-      // won't reach other devices yet.
-      if (!isEndpointFailure(result) && (result.status === "ok" || result.status === "put_failed")) {
-        setVersions(null);
-        setOpen(false);
-        onRestored();
-      }
-    } catch (e) {
-      detach(debugLog(`VersionHistoryPanel: restore error for save ${version.id}: ${e}`));
-      showToast("Couldn't confirm the restore.", { subtext: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setRestoring(null);
-    }
-  };
+export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = (props) => {
+  const { slot, filename, onCopy, isOffline } = props;
+  const { expanded, versions, loading, restoringVersionId, loadError, handleToggle, fetchVersions, handleRestore } =
+    useFileVersionHistory(props, showSyncConflictModal);
 
   const versionCount = versions?.length ?? 0;
 
   const renderVersionRow = (v: SaveVersionEntry): ReactElement => {
     const lastSyncer = pickLastSyncer(v.device_syncs);
     const deviceName = lastSyncer?.device_name ?? null;
-    const isThisRestoring = restoring === v.id;
+    const isThisRestoring = restoringVersionId === v.id;
 
     // Line 1: #id · emulator · size
     const headerParts: string[] = [`#${v.id}`];
@@ -203,19 +98,11 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
           {/* Restore button (disabled when offline) */}
           <DialogButton
             key="restore"
-            style={{
-              padding: "2px 8px",
-              minWidth: "auto",
-              fontSize: "11px",
-              width: "auto",
-              flexShrink: 0,
-            }}
+            style={COMPACT_BUTTON_STYLE}
             noFocusRing={false}
             onFocus={scrollFocusedToCenter}
-            disabled={isThisRestoring || restoring !== null || isOffline}
-            onClick={() => {
-              detach(handleRestore(v));
-            }}
+            disabled={isThisRestoring || restoringVersionId !== null || isOffline}
+            onClick={() => detach(handleRestore(v))}
           >
             <ThrobberLabel busy={isThisRestoring}>{isThisRestoring ? "Restoring..." : "Restore"}</ThrobberLabel>
           </DialogButton>
@@ -228,15 +115,11 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
 
   const renderBody = (): ReactElement | ReactElement[] => {
     if (isOffline) {
-      return (
-        <div style={{ fontSize: "11px", color: "#8f98a0", fontStyle: "italic" as const }}>
-          Offline — versions unavailable
-        </div>
-      );
+      return <div style={MUTED_NOTE_STYLE}>{VERSIONS_OFFLINE_TEXT}</div>;
     }
     if (loading) {
       return (
-        <div style={{ fontSize: "11px", color: "#8f98a0" }}>
+        <div style={MUTED_TEXT_STYLE}>
           <ThrobberLabel busy>Loading...</ThrobberLabel>
         </div>
       );
@@ -249,12 +132,10 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <span style={{ fontSize: "11px", color: "#c46161", fontStyle: "italic" as const }}>{loadError}</span>
           <DialogButton
-            style={{ padding: "2px 8px", minWidth: "auto", fontSize: "11px", width: "auto", flexShrink: 0 }}
+            style={COMPACT_BUTTON_STYLE}
             noFocusRing={false}
             onFocus={scrollFocusedToCenter}
-            onClick={() => {
-              detach(loadVersions());
-            }}
+            onClick={() => detach(fetchVersions())}
           >
             Retry
           </DialogButton>
@@ -262,11 +143,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
       );
     }
     if (versionCount === 0) {
-      return (
-        <div style={{ fontSize: "11px", color: "#8f98a0", fontStyle: "italic" as const }}>
-          No older versions available
-        </div>
-      );
+      return <div style={MUTED_NOTE_STYLE}>{NO_OLDER_VERSIONS_TEXT}</div>;
     }
     return (versions ?? []).map(renderVersionRow);
   };
@@ -290,9 +167,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
         }}
         noFocusRing={false}
         onFocus={scrollFocusedToCenter}
-        onClick={() => {
-          detach(handleToggle());
-        }}
+        onClick={handleToggle}
       >
         <span>{expanded ? "▾" : "▸"}</span>
         <span>{expanded && versions !== null ? `Previous Versions (${versionCount})` : "Previous Versions"}</span>

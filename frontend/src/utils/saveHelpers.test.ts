@@ -1,16 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
+  attributionLabel,
+  buildLastSyncedValue,
+  changesSaveAnswers,
   computeSyncSummary,
   displaySlot,
-  formatSaveTimeAgo,
-  pickLastSyncer,
-  attributionLabel,
-  formatAttributionSegment,
-  statusLabel,
-  sortSaveSlots,
+  eligibleCopyTargetSlots,
   filterSaveSlotsForDisplay,
+  formatAttributionSegment,
+  formatSaveTimeAgo,
+  isSaveSyncForRom,
+  lastSyncedParts,
+  pickLastSyncer,
+  saveFileRowFacts,
+  slotFileCount,
+  sortSaveSlots,
+  statusLabel,
 } from "./saveHelpers";
-import type { DeviceSyncInfo, SaveStatus, SyncConflict, SaveSlotSummary } from "../types";
+import type { DeviceSyncInfo, SaveFileStatus, SaveSlotSummary, SaveStatus, SyncConflict } from "../types";
 
 describe("displaySlot", () => {
   it("returns 'Manual archive' for null", () => {
@@ -30,12 +37,16 @@ describe("displaySlot", () => {
   });
 });
 
-describe("formatSaveTimeAgo", () => {
+function useJuneFixedClock(): void {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2025-06-15T12:00:00Z"));
   });
   afterEach(() => vi.useRealTimers());
+}
+
+describe("formatSaveTimeAgo", () => {
+  useJuneFixedClock();
 
   it("returns empty string for null", () => {
     expect(formatSaveTimeAgo(null)).toBe("");
@@ -62,8 +73,8 @@ describe("formatSaveTimeAgo", () => {
   });
 
   it("returns 'D Mon' for older dates", () => {
-    // 10 days back puts us in early June; only the day + month tokens matter.
-    const out = formatSaveTimeAgo("2025-06-05T12:00:00Z");
+    // 10 days back at 06:00Z keeps the same calendar day across all tested timezones (through UTC+14).
+    const out = formatSaveTimeAgo("2025-06-05T06:00:00Z");
     expect(out).toBe("5 Jun");
   });
 });
@@ -502,5 +513,144 @@ describe("sortSaveSlots and filterSaveSlotsForDisplay", () => {
     const sorted = sortSaveSlots(slots, "alpha", true);
     const filtered = filterSaveSlotsForDisplay(sorted, "alpha");
     expect(filtered.map((s) => s.slot)).toEqual(["alpha", "beta", ""]);
+  });
+});
+
+describe("buildLastSyncedValue", () => {
+  useJuneFixedClock();
+
+  const makeFile = (overrides: Partial<SaveFileStatus> = {}): SaveFileStatus => ({
+    filename: "save.srm",
+    local_path: null,
+    local_hash: null,
+    local_mtime: null,
+    local_size: null,
+    server_save_id: null,
+    server_file_name: null,
+    server_emulator: null,
+    server_updated_at: null,
+    server_size: null,
+    last_sync_at: null,
+    status: "synced",
+    ...overrides,
+  });
+
+  it("joins relative time, attribution with checkmark when synced, and newer-server hint", () => {
+    const file = makeFile({
+      last_sync_at: "2025-06-15T11:30:00Z",
+      uploaded_by_us: true,
+      is_current: false,
+      device_syncs: [
+        { device_id: "d1", device_name: "deck", is_current: true, last_synced_at: "2025-06-15T11:30:00Z" },
+      ],
+    });
+    expect(buildLastSyncedValue(file, true)).toBe("30m ago · deck (this device) ✓ · Newer version available on server");
+  });
+
+  it("renders Never without checkmark when un-synced with no timestamp", () => {
+    expect(buildLastSyncedValue(makeFile({ last_sync_at: null, status: "upload" }), false)).toBe("Never");
+  });
+});
+
+describe("lastSyncedParts", () => {
+  useJuneFixedClock();
+
+  const makeFile = (overrides: Partial<SaveFileStatus> = {}): SaveFileStatus => ({
+    filename: "save.srm",
+    local_path: null,
+    local_hash: null,
+    local_mtime: null,
+    local_size: null,
+    server_save_id: null,
+    server_file_name: null,
+    server_emulator: null,
+    server_updated_at: null,
+    server_size: null,
+    last_sync_at: null,
+    status: "synced",
+    ...overrides,
+  });
+
+  it("keeps a device name holding ✓ whole and the check apart from it", () => {
+    const file = makeFile({
+      last_sync_at: "2025-06-15T11:30:00Z",
+      uploaded_by_us: null,
+      device_syncs: [{ device_id: "d1", device_name: "deck ✓", is_current: true, last_synced_at: null }],
+    });
+    expect(lastSyncedParts(file, true)).toEqual({
+      time: "30m ago",
+      attribution: { text: "deck ✓", check: true },
+      staleHint: null,
+    });
+  });
+
+  it("answers no time for a file never synced, whatever follows it", () => {
+    const file = makeFile({ uploaded_by_us: false, is_current: false });
+    expect(lastSyncedParts(file, false)).toEqual({
+      time: null,
+      attribution: { text: "(not this device)", check: false },
+      staleHint: "Newer version available on server",
+    });
+  });
+});
+
+describe("saveFileRowFacts", () => {
+  const file = (status: string): SaveFileStatus =>
+    ({ filename: "save.srm", last_sync_at: null, status }) as unknown as SaveFileStatus;
+
+  it("shows the check time only for a file not at rest, and a conflict from either source", () => {
+    expect(saveFileRowFacts(file("synced"), undefined, "2025-06-15T11:30:00Z")).toMatchObject({
+      isSynced: true,
+      conflictActive: false,
+      checkedHint: null,
+    });
+    expect(saveFileRowFacts(file("upload"), undefined, null)).toMatchObject({ isSynced: false, checkedHint: null });
+    expect(saveFileRowFacts(file("conflict"), undefined, null).conflictActive).toBe(true);
+    expect(saveFileRowFacts(file("skip"), {} as SyncConflict, null)).toMatchObject({
+      isSynced: true,
+      conflictActive: true,
+    });
+  });
+});
+
+describe("slotFileCount", () => {
+  const status = { files: [{}, {}] } as unknown as SaveStatus;
+
+  it("prefers the active slot's server count, falling back to its tracked files", () => {
+    expect(slotFileCount(true, 5, status, null)).toBe(5);
+    expect(slotFileCount(true, 0, status, null)).toBe(2);
+    expect(slotFileCount(true, 0, null, null)).toBe(0);
+  });
+
+  it("counts an inactive slot's loaded files, else its summary", () => {
+    expect(slotFileCount(false, 3, status, null)).toBe(3);
+    expect(slotFileCount(false, 3, status, [1])).toBe(1);
+  });
+});
+
+describe("eligibleCopyTargetSlots", () => {
+  const mk = (slot: string): SaveSlotSummary => ({ slot, source: "server", count: 1, latest_updated_at: null });
+
+  it("excludes source and legacy '', deduplicates, and sorts alphabetically", () => {
+    const slots = [mk("zeta"), mk("backup"), mk(""), mk("alpha"), mk("zeta")];
+    expect(eligibleCopyTargetSlots(slots, "backup")).toEqual(["alpha", "zeta"]);
+  });
+});
+
+describe("isSaveSyncForRom & changesSaveAnswers", () => {
+  it("matches save_sync events with matching or omitted rom_id and ignores other ROMs", () => {
+    expect(isSaveSyncForRom({ type: "save_sync", rom_id: 42 }, 42)).toBe(true);
+    expect(isSaveSyncForRom({ type: "save_sync" }, 42)).toBe(true);
+    expect(isSaveSyncForRom({ type: "save_sync", rom_id: 99 }, 42)).toBe(false);
+    expect(isSaveSyncForRom({ type: "core_changed", platform_fs_slug: "gba" }, 42)).toBe(false);
+  });
+
+  it("treats core_changed, emulator_sources, and matching save_sync as save-answer updates", () => {
+    expect(changesSaveAnswers({ type: "core_changed", platform_fs_slug: "gba" }, 42)).toBe(true);
+    expect(changesSaveAnswers({ type: "emulator_sources" }, 42)).toBe(true);
+    expect(changesSaveAnswers({ type: "save_sync", rom_id: 42 }, 42)).toBe(true);
+    expect(changesSaveAnswers({ type: "save_sync" }, 42)).toBe(true);
+    expect(changesSaveAnswers({ type: "save_sync", rom_id: 99 }, 42)).toBe(false);
+    expect(changesSaveAnswers({ type: "metadata", rom_id: 42 }, 42)).toBe(false);
   });
 });

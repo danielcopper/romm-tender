@@ -1,36 +1,47 @@
 /**
  * The save-slot surfaces' round trips: the stranded-version check, switching
- * into a slot, and deleting one. Each surface keeps its own state, timers and
- * dialogs; the sentences are `saveSlotWording.ts`'s.
+ * into a slot, deleting one, listing and restoring a file's versions, copying a
+ * version into a slot, and deleting local saves. Each surface keeps its own
+ * state, timers and dialogs; the sentences are `saveSlotWording.ts`'s.
  */
 
 import {
   checkLocalDrift,
-  debugLog,
+  copySaveToSlot,
+  deleteLocalSaves,
   deleteSlot,
   getSlotDeleteInfo,
   getVersionList,
+  isEndpointFailure,
   logWarn,
+  savesListFileVersions,
+  savesRollbackToVersion,
   switchSlot,
   type SaveStranding,
 } from "../api/backend";
 import { reportServerReachable } from "./connectionState";
-import { detach } from "./detach";
+import { noteSaveSyncDisplay } from "./gameDetailStore";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import { announceSaveSync } from "./saveSyncEvents";
 import { showToast } from "./toast";
 import { withTimeout } from "./withTimeout";
 import {
+  COPY_SAVE_ERROR_TOAST,
   CREATE_SLOT_ERROR_MESSAGE,
+  DELETE_LOCAL_SAVES_ERROR_TOAST,
   DELETE_SLOT_ERROR_MESSAGE,
+  RESTORE_CONFIRM_ERROR_TOAST,
   SLOT_DELETE_INFO_ERROR_MESSAGE,
   SWITCH_SLOT_ERROR_MESSAGE,
+  copyToSlotFeedback,
   createSlotFailureMessage,
   partialSlotSwitchMessage,
+  rollbackFeedback,
   slotDeletedMessage,
   switchSlotFailureMessage,
+  versionHistoryLoadError,
 } from "./saveSlotWording";
-import type { SaveStatus, SlotDeleteInfo, WireReason } from "../types";
+import type { SaveStatus, SaveVersionEntry, SlotDeleteInfo, SyncConflict, WireReason } from "../types";
 
 /** A version the stranded-version check found, by its display name, and the check's verdict on it. */
 export interface StrandedVersion {
@@ -75,7 +86,7 @@ export type SlotSwitchPurpose = "activate" | "create";
 
 /**
  * `reason` is the failure answer's, and `null` when the call threw. `partial`
- * marks a switch that stopped partway after changing what the SAVES tab shows.
+ * marks a switch that stopped partway after changing what the save surface shows.
  */
 type SlotSwitchOutcome =
   { ok: true; saveStatus: SaveStatus } | { ok: false; reason: WireReason | null; message: string; partial?: true };
@@ -83,7 +94,7 @@ type SlotSwitchOutcome =
 /**
  * Switch `romId` into `slot`, telling the connection store what the answer
  * showed about RomM's reachability. A switch that stopped partway also
- * announces the ROM's save sync, so the SAVES tab reads back the slot and the
+ * announces the ROM's save sync, so the save surface reads back the slot and the
  * files the backend saved. Never throws: a throw is logged and comes back as
  * `{ ok: false, reason: null }`.
  */
@@ -111,9 +122,12 @@ export async function executeSlotSwitch(
       purpose === "create"
         ? createSlotFailureMessage(result.reason, result.message)
         : switchSlotFailureMessage(result.reason, result.message);
+    logWarn(
+      `saveSlotFlow: switchSlot for rom ${romId} to '${slot}' (${purpose}) failed (${result.reason}): ${result.message}`,
+    );
     return { ok: false, reason: result.reason, message };
   } catch (e) {
-    detach(debugLog(`saveSlotFlow: switchSlot to '${slot}' (${purpose}) threw: ${e}`));
+    logWarn(`saveSlotFlow: switchSlot for rom ${romId} to '${slot}' (${purpose}) threw: ${e}`);
     return {
       ok: false,
       reason: null,
@@ -130,12 +144,15 @@ export async function loadSlotDeleteInfo(romId: number, slot: string): Promise<S
   try {
     const info = await getSlotDeleteInfo(romId, slot);
     if (!info.success) {
+      logWarn(
+        `saveSlotFlow: getSlotDeleteInfo for rom ${romId} slot '${slot}' failed (${info.reason}): ${info.message}`,
+      );
       showToast(info.message);
       return null;
     }
     return info;
   } catch (e) {
-    detach(debugLog(`saveSlotFlow: getSlotDeleteInfo for '${slot}' threw: ${e}`));
+    logWarn(`saveSlotFlow: getSlotDeleteInfo for rom ${romId} slot '${slot}' threw: ${e}`);
     showToast(SLOT_DELETE_INFO_ERROR_MESSAGE);
     return null;
   }
@@ -149,11 +166,139 @@ export async function executeSlotDelete(romId: number, slot: string): Promise<bo
       showToast(slotDeletedMessage(slot));
       return true;
     }
+    logWarn(`saveSlotFlow: deleteSlot for rom ${romId} slot '${slot}' failed (${result.reason}): ${result.message}`);
     showToast(result.message);
     return false;
   } catch (e) {
-    detach(debugLog(`saveSlotFlow: deleteSlot for '${slot}' threw: ${e}`));
+    logWarn(`saveSlotFlow: deleteSlot for rom ${romId} slot '${slot}' threw: ${e}`);
     showToast(DELETE_SLOT_ERROR_MESSAGE);
     return false;
+  }
+}
+
+/**
+ * Load prior server versions of `filename` in `slot` for `romId`. Returns
+ * `{ ok: true }` on `ok` and `multi_file_unsupported`; never throws: other
+ * non-ok answers and rejections are mapped via {@link versionHistoryLoadError},
+ * and each is logged.
+ */
+export async function loadFileVersions(
+  romId: number,
+  slot: string,
+  filename: string,
+): Promise<{ ok: true; versions: SaveVersionEntry[] } | { ok: false; error: string }> {
+  try {
+    const result = await savesListFileVersions(romId, slot, filename);
+    if (result.status === "ok" || result.status === "multi_file_unsupported") {
+      // multi_file_unsupported carries an empty list — a multi-file slot's
+      // siblings are components, not prior versions (#908).
+      return { ok: true, versions: result.versions };
+    }
+    if (result.status === "not_found") {
+      logWarn(
+        `saveSlotFlow: server has no such entry for rom ${romId} slot '${slot}' file ${filename}: ${result.message}`,
+      );
+    } else if (result.status === "device_not_registered") {
+      logWarn(
+        `saveSlotFlow: device not registered for rom ${romId} slot '${slot}' file ${filename}: ${result.message}`,
+      );
+    } else if (result.status === "romm_refused") {
+      logWarn(
+        `saveSlotFlow: RomM refused version list for rom ${romId} slot '${slot}' file ${filename}: ${result.message}`,
+      );
+    } else {
+      logWarn(`saveSlotFlow: server unreachable for rom ${romId} slot '${slot}' file ${filename}: ${result.message}`);
+    }
+    return { ok: false, error: versionHistoryLoadError(result) };
+  } catch (e) {
+    logWarn(`saveSlotFlow: failed to load versions for rom ${romId} slot '${slot}' file ${filename}: ${e}`);
+    return { ok: false, error: versionHistoryLoadError(null) };
+  }
+}
+
+/**
+ * Copy server save `saveId` into `targetSlot` and surface the outcome via
+ * toast or `showConflict`. Dispatches `romm_data_changed` on `ok` and
+ * `upload_failed` (`already_present` copied nothing). Catches and toasts copy
+ * RPC rejections.
+ */
+export async function executeCopySaveToSlot(
+  romId: number,
+  saveId: number,
+  targetSlot: string,
+  showConflict: (conflict: SyncConflict) => Promise<unknown>,
+): Promise<void> {
+  let result: Awaited<ReturnType<typeof copySaveToSlot>>;
+  try {
+    result = await copySaveToSlot(romId, saveId, targetSlot);
+  } catch (e) {
+    logWarn(`saveSlotFlow: copy failed for rom ${romId} save ${saveId} into '${targetSlot}': ${e}`);
+    showToast(COPY_SAVE_ERROR_TOAST);
+    return;
+  }
+  const feedback = copyToSlotFeedback(result, targetSlot);
+  if (feedback === null) return;
+  if (feedback.kind === "conflict") {
+    await showConflict(feedback.conflict);
+    return;
+  }
+  showToast(feedback.message);
+  // Only a copy refreshes the slot views: `already_present` copied nothing.
+  if (!isEndpointFailure(result) && (result.status === "ok" || result.status === "upload_failed")) {
+    announceSaveSync(romId);
+  }
+}
+
+/**
+ * Roll back `slot` to `version` and surface the outcome via toast or
+ * `showConflict`. Returns `true` when the local restore landed (`ok` or
+ * `put_failed`). Catches and toasts rollback RPC rejections.
+ */
+export async function executeVersionRestore(
+  romId: number,
+  slot: string,
+  version: SaveVersionEntry,
+  showConflict: (conflict: SyncConflict) => Promise<unknown>,
+): Promise<boolean> {
+  let result: Awaited<ReturnType<typeof savesRollbackToVersion>>;
+  try {
+    result = await savesRollbackToVersion(romId, slot, version.id);
+  } catch (e) {
+    logWarn(`saveSlotFlow: restore error for rom ${romId} slot '${slot}' save ${version.id}: ${e}`);
+    showToast(RESTORE_CONFIRM_ERROR_TOAST, { subtext: e instanceof Error ? e.message : String(e) });
+    return false;
+  }
+  const feedback = rollbackFeedback(result, version.updated_at);
+  if (feedback === null) return false;
+  if (feedback.kind === "conflict") {
+    await showConflict(feedback.conflict);
+  } else {
+    showToast(feedback.message);
+  }
+  // `put_failed` refreshes too: the local download succeeded and only the
+  // server-side bump did not, so the switch is locally complete — it just
+  // won't reach other devices yet.
+  return !isEndpointFailure(result) && (result.status === "ok" || result.status === "put_failed");
+}
+
+/**
+ * Delete local saves for `romId`, toast the result, and update the game's
+ * shared save display + listeners on success. Never throws.
+ */
+export async function executeDeleteLocalSaves(appId: number, romId: number): Promise<void> {
+  try {
+    const result = await deleteLocalSaves(romId);
+    if (result.success) {
+      showToast(result.message);
+      // Directly update the shown status — no local saves remain
+      noteSaveSyncDisplay(appId, romId, { status: "none", label: "No saves", last_sync_check_at: null });
+      announceSaveSync(romId);
+    } else {
+      logWarn(`saveSlotFlow: deleteLocalSaves for rom ${romId} failed: ${result.message}`);
+      showToast(result.message || DELETE_LOCAL_SAVES_ERROR_TOAST);
+    }
+  } catch (e) {
+    logWarn(`saveSlotFlow: deleteLocalSaves for rom ${romId} threw: ${e}`);
+    showToast(DELETE_LOCAL_SAVES_ERROR_TOAST);
   }
 }

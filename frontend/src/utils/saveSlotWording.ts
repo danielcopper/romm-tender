@@ -13,11 +13,30 @@ import type { SlotSwitchPurpose, StrandedVersion } from "./saveSlotFlow";
 import type {
   CopySaveToSlotStatus,
   EndpointFailure,
+  ListFileVersionsResult,
   RollbackStatus,
   SlotDeleteInfo,
   SyncConflict,
   WireReason,
 } from "../types";
+
+export const VERSIONS_OFFLINE_TEXT = "Offline — versions unavailable";
+
+export const NO_OLDER_VERSIONS_TEXT = "No older versions available";
+
+export const NO_SAVES_IN_SLOT_TEXT = "No saves in this slot";
+
+export const NEW_SAVE_SLOT_TITLE = "New Save Slot";
+
+export const CANNOT_BE_UNDONE = "This cannot be undone.";
+
+/** The desktop Saves card's prompt while slot tracking is unconfirmed and no slot is active — the card has no setup
+ *  wizard, so it points at the two presses that confirm a slot. */
+export const NO_ACTIVE_SLOT_SETUP_PROMPT =
+  "Save sync isn't set up for this game yet. Create a slot with + New Slot, or activate an existing one, to start syncing.";
+
+export const SLOT_SWITCHING_OFFLINE_NOTICE =
+  "RomM is offline — slot switching is disabled until the server is reachable. This prevents save sync conflicts.";
 
 /** The toast for a restore refused as unsupported — the backend's own explanation where it gave one. */
 export function unsupportedRestoreMessage(result: Extract<RollbackStatus, { status: "unsupported" }>): string {
@@ -300,5 +319,66 @@ export function formatSlotDeleteLines(info: SlotDeleteInfo): string[] {
 
 /** Build the multi-line confirmation description for deleting a slot. */
 export function formatSlotDeleteDescription(info: SlotDeleteInfo): string {
-  return [...formatSlotDeleteLines(info), "This cannot be undone."].join("\n\n");
+  return [...formatSlotDeleteLines(info), CANNOT_BE_UNDONE].join("\n\n");
+}
+
+export const LEGACY_SLOT_NOTE =
+  "Saves uploaded to RomM without a slot. RomM keeps them as a manual archive and never syncs them between devices.";
+
+export const COPY_TO_SLOT_DESCRIPTION =
+  "Copies this save into the chosen slot, which becomes the active slot. The original save is kept.";
+
+export const COPY_TO_SLOT_EMPTY_TARGETS = "No other slots yet — create one below.";
+
+/**
+ * The line that says what the last-known slot list is. It carries no date on
+ * purpose: nothing on the device records when the slot listing was last
+ * refreshed, and the nearest timestamp (the ROM's last sync check) moves on
+ * its own — it would date these numbers with a moment that is usually much
+ * newer.
+ */
+export const LAST_KNOWN_SLOTS_STALE_NOTE =
+  "Slots as RomM last reported them — counts and times are from that answer, not from now.";
+
+export function multiFileSaveHeading(count: number): string {
+  return `Files in this save (${count})`;
+}
+
+export function multiFileSaveNote(count: number): string {
+  return `This save spans ${count} files. Per-version rollback isn't available for multi-file saves yet.`;
+}
+
+/**
+ * Error line shown when loading a file's previous versions fails (`null` when
+ * the call threw). Distinguishes answered server errors from unreachable RomM.
+ */
+export function versionHistoryLoadError(
+  result: Exclude<ListFileVersionsResult, { status: "ok" | "multi_file_unsupported" }> | null,
+): string {
+  if (result?.status === "not_found") {
+    // The server answered — blaming the connection here would be a lie.
+    return "RomM couldn't find this game's save data.";
+  }
+  if (result?.status === "romm_refused") {
+    return `Couldn't load the versions: ${result.message}`;
+  }
+  if (result?.status === "device_not_registered") {
+    return "This device could not be registered with RomM. Tap retry.";
+  }
+  return "Couldn't reach RomM. Tap retry.";
+}
+
+export const RESTORE_CONFIRM_ERROR_TOAST = "Couldn't confirm the restore.";
+
+export const COPY_SAVE_ERROR_TOAST = "Couldn't copy the save. Check your connection and try again.";
+
+export const DELETE_LOCAL_SAVES_TITLE = "Delete Local Saves";
+
+export const DELETE_LOCAL_SAVES_DESCRIPTION =
+  "This will delete local save files for this game. Make sure saves are synced to RomM first — the next sync will re-download them from the server.";
+
+export const DELETE_LOCAL_SAVES_ERROR_TOAST = "Failed to delete saves";
+
+export function connectingToRommText(label: string, progress: { attempt: number; maxAttempts: number } | null): string {
+  return progress ? `${label}… (attempt ${progress.attempt}/${progress.maxAttempts})` : `${label}…`;
 }

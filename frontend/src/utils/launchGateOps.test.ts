@@ -5,7 +5,12 @@ import { reportServerReachable } from "./connectionState";
 import { getMigrationState } from "./migrationStore";
 import { SERVER_UNREACHABLE_TOAST_BODY } from "./saveSetup";
 import { LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS, SYNC_WAIT_MORE_MS } from "./launchGate";
-import { ensureTrackingConfiguredBigPicture, makeLaunchGateOps, runPreLaunchSync } from "./launchGateOps";
+import {
+  ensureTrackingConfiguredBigPicture,
+  ensureTrackingConfiguredDesktop,
+  makeLaunchGateOps,
+  runPreLaunchSync,
+} from "./launchGateOps";
 import { TimeoutError } from "./withTimeout";
 import type { LaunchPrompts } from "./launchVerdict";
 import type { PreLaunchSyncStartedEvent, SaveSetupInfo, SyncConflict } from "../types";
@@ -447,6 +452,9 @@ describe("ensureTrackingConfiguredBigPicture", () => {
 
     expect(await ensureTrackingConfiguredBigPicture(ROM_ID)).toBe("proceed");
     expect(backend.getSaveSetupInfo).not.toHaveBeenCalled();
+    expect(backend.logError).toHaveBeenCalledWith(
+      `bigpicture start: tracking check for romId=${ROM_ID} failed (assuming configured): Error: net`,
+    );
   });
 
   it("a failed setup read proceeds, switching nothing", async () => {
@@ -460,6 +468,9 @@ describe("ensureTrackingConfiguredBigPicture", () => {
     expect(await ensureTrackingConfiguredBigPicture(ROM_ID)).toBe("proceed");
     expect(tabSwitch).not.toHaveBeenCalled();
     expect(toaster.toast).not.toHaveBeenCalled();
+    expect(backend.logError).toHaveBeenCalledWith(
+      `bigpicture start: save-setup fetch for romId=${ROM_ID} failed (proceeding unconfigured): Error: net`,
+    );
   });
 
   it("an adoptable default is adopted and the start proceeds", async () => {
@@ -579,6 +590,57 @@ describe("ensureTrackingConfiguredBigPicture", () => {
       await outcome;
       expect(tabSwitch).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("ensureTrackingConfiguredDesktop", () => {
+  let tabSwitch: Mock<(e: Event) => void>;
+
+  async function runDesktopTrackingGate(overrides: Partial<SaveSetupInfo> = {}): Promise<"proceed" | "abort"> {
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: false,
+      active_slot: null,
+      setup_needed: true,
+    });
+    vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(setupInfo(overrides));
+    vi.mocked(backend.confirmSlotChoice).mockResolvedValue({
+      success: true,
+      needs_conflict_resolution: false,
+      message: "",
+    });
+    return ensureTrackingConfiguredDesktop(ROM_ID);
+  }
+
+  beforeEach(() => {
+    tabSwitch = vi.fn();
+    globalThis.addEventListener("romm_tab_switch", tabSwitch);
+    return () => globalThis.removeEventListener("romm_tab_switch", tabSwitch);
+  });
+
+  it("aborts with Desktop 'Saves' wording and switches to saves when server is unreachable", async () => {
+    expect(await runDesktopTrackingGate({ recommended_action: "server_unreachable" })).toBe("abort");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(toastBodies()).toEqual(["Cannot configure save slot — RomM server is not reachable. Open Saves to retry."]);
+    expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
+    expect((tabSwitch.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail).toEqual({ tab: "saves" });
+  });
+
+  it("aborts with Desktop 'Saves' wording and switches to saves when user must choose a slot", async () => {
+    const verdict = await runDesktopTrackingGate({
+      recommended_action: "show_wizard",
+      server_slots: [{ slot: "default", saves: [], count: 1, latest_updated_at: "2026-01-01T00:00:00Z" }],
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(verdict).toBe("abort");
+    expect(toastBodies()).toEqual(["Configure save sync in Saves first"]);
+    expect((tabSwitch.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail).toEqual({ tab: "saves" });
+  });
+
+  it("auto-adopts default slot and proceeds when safe", async () => {
+    expect(await runDesktopTrackingGate()).toBe("proceed");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(backend.confirmSlotChoice).toHaveBeenCalledWith(ROM_ID, "slot1", false, null, false);
+    expect(tabSwitch).not.toHaveBeenCalled();
   });
 });
 

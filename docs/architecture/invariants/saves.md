@@ -17,7 +17,8 @@ and binds, and the other areas: [the register's index](index.md).
   the other device's newer save without a conflict; one that keeps the file open writes the session into the copy moved
   aside ([A game that is running](../save-file-sync-architecture.md#a-game-that-is-running)). The exempt paths run
   before the start or after it: a conflict the launch check resolves is passed `before_start` from the launch prompts'
-  `resolveConflicts` — `gamepadLaunchPrompts`', and in the desktop dev build `desktopLaunchPrompts`' — never inferred.
+  `resolveConflicts` — `gamepadLaunchPrompts`', and in the desktop dev build `desktopLaunchPrompts`' — never inferred;
+  outside a start, `desktopResolveConflicts` and `desktopSlotConflictDialog` pass `beforeStart=false`.
   `tests/services/saves/test_running_game.py` pins the sweep's skip and its sentence, each refused press and the same
   press with the game not running, the platform delete, the follow on the status read, the local-save check and the
   platform count, the two exempt syncs, the conflict resolved before a start, and the stop of a sweep's and a Sync
@@ -66,11 +67,11 @@ and binds, and the other areas: [the register's index](index.md).
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes
-  that record each installed ROM's save directory, the local-save check (`check_local_drift`) and the SAVES tab's read
+  that record each installed ROM's save directory, the local-save check (`check_local_drift`) and the save-surface read
   with save sync off (`get_local_save_files`) hold the lock (the count, the record passes, the check and that read for
   the directory follow, not for a write of the save state), and following a moved save directory runs inside the lock of
-  whichever holder calls it. Tests pin the status
-  (`tests/services/saves/test_status.py::TestGetSaveStatusRomLockSerialization`), the three slot mutations
+  whichever holder calls it ([Per-rom asyncio.Lock](../save-file-sync-architecture.md#per-rom-asynciolock)). Tests pin
+  the status (`tests/services/saves/test_status.py::TestGetSaveStatusRomLockSerialization`), the three slot mutations
   (`tests/services/saves/test_slots.py::TestSlotMutationLocking`), the slot list
   (`test_slots.py::TestSaveSlotsUnderRomLock`), a sync
   (`tests/services/saves/test_service.py::TestPerRomLockSerialization::test_per_rom_lock_serializes_concurrent_sync`),
@@ -112,9 +113,9 @@ and binds, and the other areas: [the register's index](index.md).
   nothing pins the list: a sixth write path that keys its refusal on `saves_dir` instead writes into a directory the
   answer never offered a sync. The same holds for following a moved directory first: `SyncEngine.follow_save_directory`
   is called before any local file is looked at by the sync, write, delete, count and status paths that
-  `docs/architecture/save-file-sync-architecture.md` lists: the four sync paths, the five write paths, the two deletes,
-  the two counting reads (`count_platform_saves`, `get_save_status`), the local-save check (`check_local_drift`) and the
-  SAVES tab's read with save sync off (`get_local_save_files`), and a new reader of local save files that skips it looks
+  [Following a Moved Save Directory](../save-file-sync-architecture.md#following-a-moved-save-directory) lists — the
+  four sync paths, the five write paths, the two deletes, the two counting reads, the local-save check and the save
+  surfaces' read with save sync off (`get_local_save_files`) — and a new reader of local save files that skips it looks
   in the directory the files have just left — nothing mechanical finds such a reader. (2) A configuration-role file is
   excluded by `SaveAnswer.synced_files` and included by `owned_files`, which is what a directory move must carry — a
   caller reading `components` directly gets neither rule, and syncing Saturn's `.smpc` overwrites the console settings

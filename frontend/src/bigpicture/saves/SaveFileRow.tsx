@@ -9,7 +9,7 @@ import { DialogButton } from "@decky/ui";
 import type { SaveFileStatus, SyncConflict } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
-import { formatAttributionSegment, formatSaveTimeAgo, pickLastSyncer, statusLabel } from "../../utils/saveHelpers";
+import { buildLastSyncedValue, saveFileRowFacts, statusLabel } from "../../utils/saveHelpers";
 
 // Label column width — keeps values aligned vertically across rows
 const LABEL_WIDTH = "88px";
@@ -30,40 +30,13 @@ export function infoRow(
   );
 }
 
-/**
- * Compose the "Last synced" info-row value: "<time> · <attribution> ✓ · <stale hint>".
- *
- * The time binds to the last SUCCESS (`f.last_sync_at`), never the attempt time,
- * and the ✓ renders only for an at-rest file — a failed post-exit sync shows its
- * old success time with no ✓ (#1334). Appends the server-attribution segment and,
- * when the server has moved past us, the "newer version" hint.
- */
-function buildLastSyncedValue(f: SaveFileStatus, isSynced: boolean): string {
-  const lastSyncer = pickLastSyncer(f.device_syncs);
-  const pieces: string[] = [f.last_sync_at ? formatSaveTimeAgo(f.last_sync_at) || "Never" : "Never"];
-  const attrSegment = formatAttributionSegment(f.uploaded_by_us, lastSyncer?.device_name, isSynced);
-  if (attrSegment !== null) pieces.push(attrSegment);
-  if (f.is_current === false) {
-    pieces.push("Newer version available on server");
-  }
-  return pieces.join(" · ");
-}
-
 export function renderSaveFileRow(
   f: SaveFileStatus,
   conflict: SyncConflict | undefined,
   lastSyncCheckAt: string | null,
 ): ReactElement {
   const { color, label } = statusLabel(f.status, f.last_sync_at);
-  // "synced"/"skip" are the at-rest states; anything else (upload/download/
-  // conflict/unknown) has work pending, so the row must not claim a successful
-  // sync — no ✓, and the "Checked" hint surfaces the attempt time instead (#1334).
-  const isSynced = f.status === "synced" || f.status === "skip";
-  const conflictActive = f.status === "conflict" || !!conflict;
-  // The slot's most recent sync ATTEMPT — surfaced as a separate "Checked" hint
-  // only when this file isn't at rest, so a pending/failed file shows both the
-  // last success and the recent check without duplicating the synced ✓ line.
-  const checkedHint = !isSynced && lastSyncCheckAt ? formatSaveTimeAgo(lastSyncCheckAt) : null;
+  const { isSynced, conflictActive, checkedHint } = saveFileRowFacts(f, conflict, lastSyncCheckAt);
 
   // Header value pieces (right-aligned meta: size + status)
   const headerMeta: (ReactElement | null)[] = [];

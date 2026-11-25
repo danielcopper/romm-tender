@@ -9,6 +9,7 @@ import { DialogButton, Focusable } from "@decky/ui";
 import type { SlotSaveFile } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { MUTED_COLOR } from "../../utils/saveHelpers";
+import { NO_SAVES_IN_SLOT_TEXT } from "../../utils/saveSlotWording";
 import { renderServerSaveRow } from "./ServerSaveRow";
 import type { CopyToSlotRowProps } from "./CopyToSlotButton";
 import { ThrobberLabel } from "../../shared/Throbber";
@@ -59,7 +60,7 @@ function renderSlotSaves(
   if (slotFiles.length > 0) return slotFiles.map((f) => renderServerSaveRow(f, copy));
   return [
     <div key="no-server-files" style={{ fontSize: "13px", color: MUTED_COLOR, fontStyle: "italic" }}>
-      No saves in this slot
+      {NO_SAVES_IN_SLOT_TEXT}
     </div>,
   ];
 }

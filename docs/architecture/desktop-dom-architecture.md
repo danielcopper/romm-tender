@@ -29,9 +29,37 @@ whose confirmation copy (`frontend/src/utils/biosConfirmWording.ts`) opens in th
 `appId` through `frontend/src/api/sharedReads.ts`, calls `getBiosStatus` (`frontend/src/api/backend.ts`) directly on
 later reads (version switches, newly recorded `platformFolder`, core picks, action re-reads, and matching external
 `romm_data_changed` events), tags its held answer by `romId` and orders reads for the same ROM by sequence, and draws
-nothing before the ROM identity is known or on a stranded panel ([invariant register](invariants/panel.md)). While
-`GameView` is drawn it holds two things `RomMPlaySection` holds on Big Picture's game page: the connection heartbeat,
-and the automatic artwork, whose apply in flight it cancels on leaving.
+nothing before the ROM identity is known or on a stranded panel ([invariant register](invariants/panel.md)). The right
+column holds Saves (`frontend/src/desktop/gameview/SaveManagementCard.tsx`, with
+`frontend/src/desktop/gameview/DesktopSlotPanel.tsx` and `frontend/src/desktop/gameview/DesktopVersionHistory.tsx`,
+backed by the shared hooks `frontend/src/utils/useSlotPanelState.ts` and `frontend/src/utils/useFileVersionHistory.ts`),
+which draws what Big Picture's **SAVES** tab (`frontend/src/bigpicture/SavesTab.tsx`,
+`frontend/src/bigpicture/RomMGameInfoPanel.tsx`) and the play section's manual sync and Delete Local Saves
+(`frontend/src/bigpicture/RomMPlaySection.tsx`) offer: the header's Sync now (`executeManualSaveSync`,
+`frontend/src/utils/manualSaveSync.ts`), Delete Local Saves (`executeDeleteLocalSaves`,
+`frontend/src/utils/saveSlotFlow.ts`, behind `desktopDeleteLocalSavesDialog` in
+`frontend/src/desktop/gameview/dialogs/desktopDialogs.tsx`) and + New Slot
+(`frontend/src/desktop/gameview/dialogs/DesktopNewSlotDialog.tsx`, `executeSlotSwitch`), the collapsible slot panels
+(`sortSaveSlots`, `filterSaveSlotsForDisplay`, `frontend/src/utils/saveHelpers.ts`), their tracked-file rows, Copy to
+slot... (`frontend/src/desktop/gameview/dialogs/DesktopCopySlotDialog.tsx`, `executeCopySaveToSlot`), Previous Versions
+(`loadFileVersions`, `executeVersionRestore`, with conflict prompts on `desktopSlotConflictDialog` in
+`frontend/src/desktop/gameview/dialogs/desktopDialogs.tsx`), inactive-slot Activate Slot and Delete
+(`frontend/src/desktop/gameview/dialogs/DesktopDeleteSlotDialog.tsx`, `loadSlotDeleteInfo`, `executeSlotDelete`), the
+inline slot-tracking confirmation banner and active-slot prompt (`confirmSlotChoice`, plus auto-confirm when creating or
+activating a slot while unconfirmed; with tracking unconfirmed and no slot active, a prompt pointing at + New Slot and
+Activate Slot, `NO_ACTIVE_SLOT_SETUP_PROMPT`, since the card has no setup wizard), the stranded-version notice
+(`findStrandedVersion`), the connecting retry indicator (`connectingToRommText`,
+`frontend/src/utils/saveSlotWording.ts`) with its known-offline fast path and reconnect reload (the first slot load is
+`runSlotLoad`, `frontend/src/utils/slotLoadRun.ts`, the one Big Picture's SAVES tab runs), the unslotted local files and
+read-only last-known slots (`frontend/src/utils/slotState.ts`), the downloaded-game refusal and not-downloaded
+statements (`getSaveSyncAvailability`, `frontend/src/utils/saveSyncStatement.ts`), and the save-sync-off local file list
+(`getLocalSaveFiles`). Saves keys its content by `romId`, orders surface (`useRomAnswer`'s `latestRead`,
+`frontend/src/desktop/gameview/useRomAnswer.ts`, the read the play bar's badges share), slot-list (`slotLoadSeqRef`),
+inactive-slot (`slotSavesSeqRef`), and version-history (`readSeqRef`) reads by sequence while cancelling stale effects
+on unmount or input changes, and draws nothing before the ROM identity is known or on a stranded panel
+([invariant register](invariants/panel.md)). While `GameView` is drawn it holds two things `RomMPlaySection` holds on
+Big Picture's game page: the connection heartbeat, and the automatic artwork, whose apply in flight it cancels on
+leaving.
 
 While a RetroDECK migration is pending it draws the migration card
 (`frontend/src/desktop/gameview/MigrationBlockedCard.tsx`) in place of the columns, as the game page's section does on
@@ -115,8 +143,9 @@ cannot sync says why in grey, in the backend's few words for the refusal (`short
 only a downloaded game's refusal stands. Both are asked again when a save sync, a platform's core or the emulator
 sources change, and a read that fails holds no answer rather than the one from before. With nothing established yet the
 badge makes no claim either: it reads **Not checked**, in grey. A time since the last sync moves on while the page stays
-open. BIOS is a button: pressing it dispatches `romm_tab_switch` (`{ tab: "bios" }`), which scrolls the Emulation card
-into view. None of the other badges takes a press.
+open. SAVE SYNC and BIOS are buttons: pressing SAVE SYNC dispatches `romm_tab_switch` (`{ tab: "saves" }`), which
+scrolls the Saves card into view, and pressing BIOS dispatches `romm_tab_switch` (`{ tab: "bios" }`), which scrolls the
+Emulation card into view. None of the other badges takes a press.
 
 The row takes its type and spacing from Steam's own play bar, as measured on a Linux desktop running Steam client build
 1792618285: Save Sync and BIOS keep their own colours, every other value is Steam's. It also behaves as Steam's does

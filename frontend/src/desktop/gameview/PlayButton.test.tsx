@@ -399,26 +399,34 @@ describe("PlayButton", () => {
       expect(toast.showToast).not.toHaveBeenCalled();
     });
 
-    it("starts the game where a slot is the user's to choose, asking and toasting nothing", async () => {
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
-        configured: false,
-        active_slot: null,
-        setup_needed: true,
-      });
-      vi.mocked(backend.getSaveSetupInfo).mockResolvedValue({
-        recommended_action: "show_wizard",
-        default_slot: "default",
-        server_slots: [{ slot: "default" }],
-      } as never);
-      render(<PlayButton appId={APP_ID} />);
+    it("aborts, toasts Desktop Saves copy, and switches to saves where a slot is the user's to choose", async () => {
+      const tabSwitch = vi.fn();
+      globalThis.addEventListener("romm_tab_switch", tabSwitch);
+      try {
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+          configured: false,
+          active_slot: null,
+          setup_needed: true,
+        });
+        vi.mocked(backend.getSaveSetupInfo).mockResolvedValue({
+          recommended_action: "show_wizard",
+          default_slot: "default",
+          server_slots: [{ slot: "default" }],
+        } as never);
+        render(<PlayButton appId={APP_ID} />);
 
-      pressPlay();
+        pressPlay();
 
-      await waitFor(() => expect(mockRunGame).toHaveBeenCalledWith("123", "", -1, 100));
-      expect(backend.getSaveSetupInfo).toHaveBeenCalledWith(100);
-      expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
-      expect(toast.showToast).not.toHaveBeenCalled();
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        await waitFor(() => expect(toast.showToast).toHaveBeenCalledWith("Configure save sync in Saves first"));
+        await new Promise((r) => setTimeout(r, 0));
+        expect(backend.getSaveSetupInfo).toHaveBeenCalledWith(100);
+        expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
+        expect((tabSwitch.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail).toEqual({ tab: "saves" });
+        expect(mockRunGame).not.toHaveBeenCalled();
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      } finally {
+        globalThis.removeEventListener("romm_tab_switch", tabSwitch);
+      }
     });
 
     it("is disabled with the emulator's refusal as its title, pointing at choosing another emulator without naming the emulator menu", () => {

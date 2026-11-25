@@ -1,0 +1,667 @@
+import type { CSSProperties, FC, ReactNode } from "react";
+import { logError } from "../../api/backend";
+import type { SaveFileStatus, SaveSlotSummary, SaveStatus, SlotSaveFile, SyncConflict } from "../../types";
+import { formatBytes, formatTimestamp } from "../../utils/formatters";
+import {
+  LAST_SYNCED_NEVER,
+  MUTED_COLOR,
+  computeSyncSummary,
+  displaySlot,
+  formatSaveTimeAgo,
+  saveFileRowFacts,
+  slotFileCount,
+  statusLabel,
+  type LastSyncedParts,
+} from "../../utils/saveHelpers";
+import { executeSlotDelete } from "../../utils/saveSlotFlow";
+import {
+  LEGACY_SLOT_NOTE,
+  NO_SAVES_IN_SLOT_TEXT,
+  multiFileSaveHeading,
+  multiFileSaveNote,
+} from "../../utils/saveSlotWording";
+import { NO_SAVE_ON_DEVICE } from "../../utils/saveSyncStatement";
+import { useSlotPanelState, type SlotPanelState } from "../../utils/useSlotPanelState";
+import { DesktopAttribution, DesktopCopyToSlotButton, DesktopVersionHistory } from "./DesktopVersionHistory";
+import { SvgThrobber } from "./SvgThrobber";
+import type { AskDialog } from "./dialogs/askDialog";
+import { desktopDeleteSlotDialog } from "./dialogs/desktopDialogs";
+import {
+  ACTIVE_PILL_BADGE_STYLE,
+  ATTENTION_AMBER,
+  BODY_TEXT_COLOR,
+  CONFLICT_RED,
+  DANGER_TEXT_RED,
+  MUTED_PILL_BADGE_STYLE,
+  SUBTLE_LABEL_COLOR,
+  actionButtonStyle,
+  confirmActionButtonStyle,
+  smallActionButtonStyle,
+} from "./styles";
+
+interface DesktopSlotSharedProps {
+  romId: number;
+  saveStatus: SaveStatus | null;
+  isOffline: boolean;
+  slotConfirmed: boolean | null;
+  confirmingSlot: boolean;
+  ask: AskDialog;
+  onConfirmSlot: (slotName: string) => void;
+  onVersionRestored: () => void;
+  onCopySave: (saveId: number, sourceSlot: string) => void;
+}
+
+interface DesktopSlotPanelProps extends DesktopSlotSharedProps {
+  slot: SaveSlotSummary;
+  isActive: boolean;
+  noSaveLine: string;
+  defaultExpanded: boolean;
+  onSlotActivated: (slotName: string, newStatus: SaveStatus) => Promise<void>;
+  onSlotDeleted: () => void;
+}
+
+const INFO_ROW_GRID_STYLE: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "90px minmax(0, 1fr)",
+  gap: "12px",
+};
+
+const DesktopInfoRow: FC<{ label: string; color?: string; children: ReactNode }> = ({
+  label,
+  color = BODY_TEXT_COLOR,
+  children,
+}) => (
+  <div style={INFO_ROW_GRID_STYLE}>
+    <span style={{ color: SUBTLE_LABEL_COLOR }}>{label}</span>
+    <div style={{ color, minWidth: 0 }}>{children}</div>
+  </div>
+);
+
+function renderLastSyncedNode({ time, attribution, staleHint }: LastSyncedParts) {
+  return (
+    <span>
+      {time ?? <span style={{ color: ATTENTION_AMBER }}>{LAST_SYNCED_NEVER}</span>}
+      <DesktopAttribution parts={attribution} />
+      {staleHint === null ? null : ` · ${staleHint}`}
+    </span>
+  );
+}
+
+function formatServerSaveSummary(file: SaveFileStatus): string {
+  const base = file.server_emulator ? `#${file.server_save_id} · ${file.server_emulator}` : `#${file.server_save_id}`;
+  return file.server_size != null ? `${base} (${formatBytes(file.server_size)})` : base;
+}
+
+function formatInactiveFileDetails(f: SlotSaveFile): string {
+  return [
+    `#${f.id}`,
+    f.size != null ? formatBytes(f.size) : null,
+    f.updated_at ? `Updated ${formatSaveTimeAgo(f.updated_at)}` : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+}
+
+/** Shared tracked-file block used both inside the active slot and for unslotted local files. */
+export function renderDesktopSaveFileRow(
+  file: SaveFileStatus,
+  conflict: SyncConflict | undefined,
+  lastSyncCheckAt: string | null,
+  extraFooter?: ReactNode,
+) {
+  const { color: statusColor, label: statusLabelText } = statusLabel(file.status, file.last_sync_at);
+  const { conflictActive, checkedHint, lastSynced } = saveFileRowFacts(file, conflict, lastSyncCheckAt);
+  const sizeBytes = file.local_size ?? file.server_size;
+
+  return (
+    <div
+      key={file.filename}
+      style={{
+        marginBottom: "14px",
+        paddingBottom: "12px",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "10px",
+          marginBottom: "8px",
+        }}
+      >
+        <span style={{ fontWeight: 600, color: "#ffffff", fontSize: "14px", wordBreak: "break-word" }}>
+          {file.filename}
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
+          {sizeBytes != null ? (
+            <span style={{ color: MUTED_COLOR, fontSize: "12px" }}>{formatBytes(sizeBytes)}</span>
+          ) : null}
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+              fontSize: "11px",
+              fontWeight: 600,
+              color: statusColor,
+            }}
+          >
+            <span
+              style={{
+                width: "6px",
+                height: "6px",
+                borderRadius: "50%",
+                backgroundColor: statusColor,
+                display: "inline-block",
+              }}
+            />
+            {statusLabelText}
+          </span>
+        </div>
+      </div>
+
+      {conflictActive ? (
+        <div style={{ color: CONFLICT_RED, fontSize: "12px", fontWeight: 600, marginBottom: "8px" }}>
+          Conflict detected on this file
+        </div>
+      ) : null}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px" }}>
+        <DesktopInfoRow label="Last synced:">{renderLastSyncedNode(lastSynced)}</DesktopInfoRow>
+        {checkedHint ? (
+          <DesktopInfoRow label="Checked:" color={MUTED_COLOR}>
+            {checkedHint}
+          </DesktopInfoRow>
+        ) : null}
+        {file.server_updated_at ? (
+          <DesktopInfoRow label="Last updated:">{formatTimestamp(file.server_updated_at)}</DesktopInfoRow>
+        ) : null}
+        {file.server_save_id != null ? (
+          <DesktopInfoRow label="Server save:">
+            <div>
+              <div>{formatServerSaveSummary(file)}</div>
+              {file.server_file_name ? (
+                <div style={{ color: MUTED_COLOR, fontFamily: "monospace", fontSize: "11px" }}>
+                  {file.server_file_name}
+                </div>
+              ) : null}
+            </div>
+          </DesktopInfoRow>
+        ) : null}
+        {file.local_path ? (
+          <DesktopInfoRow label="Local path:" color={MUTED_COLOR}>
+            <span style={{ fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all" }}>{file.local_path}</span>
+          </DesktopInfoRow>
+        ) : null}
+      </div>
+
+      {extraFooter}
+    </div>
+  );
+}
+
+const SLOT_BODY_STYLE: CSSProperties = {
+  padding: "12px 16px 16px 34px",
+  borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+  fontSize: "13px",
+};
+
+const SlotPanelHeader: FC<{
+  slotName: string;
+  slotSource: SaveSlotSummary["source"];
+  isActive: boolean;
+  expanded: boolean;
+  fileCount: number;
+  onToggle: () => void;
+}> = ({ slotName, slotSource, isActive, expanded, fileCount, onToggle }) => (
+  <button
+    type="button"
+    aria-expanded={expanded}
+    style={{
+      width: "100%",
+      border: "none",
+      textAlign: "left",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "12px",
+      padding: "10px 14px",
+      cursor: "pointer",
+      userSelect: "none",
+      backgroundColor: "transparent",
+      font: "inherit",
+    }}
+    onClick={onToggle}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: "1 1 auto", minWidth: 0 }}>
+      <span aria-hidden="true" style={{ fontSize: "12px", color: MUTED_COLOR, width: "12px", flexShrink: 0 }}>
+        {expanded ? "▾" : "▸"}
+      </span>
+      <span
+        style={{
+          fontSize: "14px",
+          fontWeight: 600,
+          color: isActive ? "#ffffff" : BODY_TEXT_COLOR,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {displaySlot(slotName)}
+      </span>
+      {isActive ? <span style={{ ...ACTIVE_PILL_BADGE_STYLE, flexShrink: 0 }}>ACTIVE</span> : null}
+      <span style={{ ...MUTED_PILL_BADGE_STYLE, flexShrink: 0 }}>{slotSource === "local" ? "LOCAL" : "SERVER"}</span>
+    </div>
+
+    <span style={{ color: MUTED_COLOR, fontSize: "12px", flexShrink: 0, whiteSpace: "nowrap" }}>
+      {`${fileCount} save${fileCount === 1 ? "" : "s"}`}
+    </span>
+  </button>
+);
+
+interface ActiveSlotBodyProps extends DesktopSlotSharedProps {
+  slotName: string;
+  conflicts: SyncConflict[];
+  activeHasSaves: boolean;
+}
+
+const ActiveSlotBody: FC<ActiveSlotBodyProps> = ({
+  romId,
+  slotName,
+  saveStatus,
+  conflicts,
+  isOffline,
+  slotConfirmed,
+  confirmingSlot,
+  activeHasSaves,
+  ask,
+  onConfirmSlot,
+  onVersionRestored,
+  onCopySave,
+}) => {
+  const renderFilesSection = () => {
+    if (!saveStatus) return null;
+    if (saveStatus.files.length === 0) {
+      if (!saveStatus.server_query_failed) return null;
+      return <div style={{ color: MUTED_COLOR, fontStyle: "italic", fontSize: "12px" }}>{NO_SAVE_ON_DEVICE}</div>;
+    }
+
+    return (
+      <>
+        {saveStatus.files.map((file) => {
+          const conflict = conflicts.find((c) => c.filename === file.filename);
+          const footer = saveStatus.multi_file ? null : (
+            <>
+              {file.server_save_id != null ? (
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
+                  <DesktopCopyToSlotButton
+                    style={actionButtonStyle(isOffline)}
+                    disabled={isOffline}
+                    onClick={() => onCopySave(file.server_save_id!, slotName)}
+                  />
+                </div>
+              ) : null}
+              <DesktopVersionHistory
+                romId={romId}
+                slot={slotName}
+                filename={file.filename}
+                isOffline={isOffline}
+                ask={ask}
+                onRestored={onVersionRestored}
+                onCopySave={onCopySave}
+              />
+            </>
+          );
+          return renderDesktopSaveFileRow(file, conflict, saveStatus.last_sync_check_at, footer);
+        })}
+
+        {saveStatus.multi_file ? (
+          <div data-testid="desktop-multi-file-note" style={{ marginTop: "6px" }}>
+            <div style={{ fontSize: "11px", color: MUTED_COLOR, fontWeight: 600 }}>
+              {multiFileSaveHeading((saveStatus.component_files ?? []).length)}
+            </div>
+            {(saveStatus.component_files ?? []).map((fn) => (
+              <div
+                key={`comp-${fn}`}
+                style={{
+                  fontSize: "11px",
+                  color: MUTED_COLOR,
+                  fontFamily: "monospace",
+                  wordBreak: "break-all",
+                  marginTop: "2px",
+                }}
+              >
+                {fn}
+              </div>
+            ))}
+            <div style={{ fontSize: "11px", color: MUTED_COLOR, fontStyle: "italic", marginTop: "4px" }}>
+              {multiFileSaveNote((saveStatus.component_files ?? []).length)}
+            </div>
+          </div>
+        ) : null}
+      </>
+    );
+  };
+
+  const filesSection = renderFilesSection();
+  const showUnconfirmed = slotConfirmed === false;
+  if (!showUnconfirmed && filesSection === null) return null;
+
+  return (
+    <div data-testid="desktop-slot-body" style={SLOT_BODY_STYLE}>
+      {showUnconfirmed ? (
+        <div
+          data-testid="active-slot-unconfirmed-box"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            padding: "8px 12px",
+            marginBottom: "12px",
+            backgroundColor: "rgba(26, 159, 255, 0.1)",
+            border: "1px solid rgba(26, 159, 255, 0.3)",
+            borderRadius: "4px",
+          }}
+        >
+          {activeHasSaves ? (
+            <>
+              <span style={{ fontSize: "12px", color: BODY_TEXT_COLOR }}>
+                This slot is active but not confirmed for save sync.
+              </span>
+              <button
+                type="button"
+                style={confirmActionButtonStyle(isOffline || confirmingSlot)}
+                disabled={isOffline || confirmingSlot}
+                onClick={() => onConfirmSlot(slotName)}
+              >
+                {confirmingSlot ? "Confirming..." : "Confirm Slot"}
+              </button>
+            </>
+          ) : (
+            <span style={{ fontSize: "12px", color: BODY_TEXT_COLOR }}>
+              This slot is active and will be used when a save is present.
+            </span>
+          )}
+        </div>
+      ) : null}
+
+      {filesSection}
+    </div>
+  );
+};
+
+const InactiveSlotFilesList: FC<{
+  slotName: string;
+  slotFiles: SlotSaveFile[] | null;
+  loadingSlot: boolean;
+  loadError: string | null;
+  isOffline: boolean;
+  onCopySave: (saveId: number, sourceSlot: string) => void;
+}> = ({ slotName, slotFiles, loadingSlot, loadError, isOffline, onCopySave }) => {
+  if (loadingSlot) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          color: MUTED_COLOR,
+          fontSize: "12px",
+          marginBottom: "10px",
+        }}
+      >
+        <SvgThrobber style={{ width: "12px", height: "12px" }} />
+        <span>Loading saves…</span>
+      </div>
+    );
+  }
+  if (loadError !== null) {
+    return (
+      <div
+        data-testid="desktop-slot-load-error"
+        style={{ color: DANGER_TEXT_RED, fontSize: "11px", marginBottom: "12px" }}
+      >
+        {loadError}
+      </div>
+    );
+  }
+  if (slotFiles === null) return null;
+  if (slotFiles.length === 0) {
+    return (
+      <div style={{ color: MUTED_COLOR, fontStyle: "italic", fontSize: "12px", marginBottom: "12px" }}>
+        {NO_SAVES_IN_SLOT_TEXT}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "14px" }}>
+      {slotFiles.map((f) => (
+        <div
+          key={`srv-${f.id}`}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "10px",
+            padding: "4px 0",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.04)",
+          }}
+        >
+          <div>
+            <div style={{ color: BODY_TEXT_COLOR, fontWeight: 500, fontSize: "13px" }}>{f.filename}</div>
+            <div style={{ color: MUTED_COLOR, fontSize: "11px" }}>{formatInactiveFileDetails(f)}</div>
+          </div>
+          <DesktopCopyToSlotButton
+            style={smallActionButtonStyle(isOffline)}
+            disabled={isOffline}
+            onClick={() => onCopySave(f.id, slotName)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+};
+
+function hasActiveSlotSaves(saveStatus: SaveStatus | null, slotCount: number): boolean {
+  return (saveStatus?.files.length ?? 0) > 0 || slotCount > 0;
+}
+
+interface InactiveSlotSectionProps {
+  slotName: string;
+  isLegacy: boolean;
+  isOffline: boolean;
+  panel: SlotPanelState;
+  onDelete: () => Promise<void>;
+  onCopySave: (saveId: number, sourceSlot: string) => void;
+}
+
+const InactiveSlotSection: FC<InactiveSlotSectionProps> = ({
+  slotName,
+  isLegacy,
+  isOffline,
+  panel,
+  onDelete,
+  onCopySave,
+}) => {
+  const activateDisabled = panel.switching || panel.deleting || isOffline;
+  const deleteDisabled = panel.deleting || panel.switching;
+  return (
+    <div data-testid="desktop-slot-body" style={SLOT_BODY_STYLE}>
+      <InactiveSlotFilesList
+        slotName={slotName}
+        slotFiles={panel.slotFiles}
+        loadingSlot={panel.loadingSlot}
+        loadError={panel.slotLoadError}
+        isOffline={isOffline}
+        onCopySave={onCopySave}
+      />
+      {!isLegacy ? (
+        <div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button
+              type="button"
+              style={actionButtonStyle(activateDisabled)}
+              disabled={activateDisabled}
+              onClick={() => {
+                panel
+                  .handleActivate()
+                  .catch((e) => logError(`DesktopSlotPanel: slot '${slotName}' threw during its switch: ${e}`));
+              }}
+            >
+              {panel.switching ? <SvgThrobber style={{ width: "12px", height: "12px" }} /> : null}
+              <span>{panel.switching ? "Switching..." : "Activate Slot"}</span>
+            </button>
+            <button
+              type="button"
+              style={actionButtonStyle(deleteDisabled, true)}
+              disabled={deleteDisabled}
+              onClick={() => {
+                onDelete().catch((e) => logError(`DesktopSlotPanel: slot '${slotName}' threw during its delete: ${e}`));
+              }}
+            >
+              {panel.deleting ? <SvgThrobber style={{ width: "12px", height: "12px" }} /> : null}
+              <span>{panel.deleting ? "Deleting..." : "Delete Slot"}</span>
+            </button>
+          </div>
+          {panel.switchError ? (
+            <div style={{ color: CONFLICT_RED, fontSize: "11px", marginTop: "6px" }}>{panel.switchError}</div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const SlotExpandedFrame: FC<{
+  expanded: boolean;
+  isActive: boolean;
+  activeProps: ActiveSlotBodyProps;
+  inactiveProps: InactiveSlotSectionProps;
+}> = ({ expanded, isActive, activeProps, inactiveProps }) => {
+  if (!expanded) return null;
+  return isActive ? <ActiveSlotBody {...activeProps} /> : <InactiveSlotSection {...inactiveProps} />;
+};
+
+export const DesktopSlotPanel: FC<DesktopSlotPanelProps> = ({
+  romId,
+  slot,
+  isActive,
+  saveStatus,
+  noSaveLine,
+  isOffline,
+  defaultExpanded,
+  slotConfirmed,
+  confirmingSlot,
+  ask,
+  onConfirmSlot,
+  onSlotActivated,
+  onSlotDeleted,
+  onVersionRestored,
+  onCopySave,
+}) => {
+  const slotName = slot.slot;
+  const isLegacy = slotName === "";
+  const panel = useSlotPanelState({
+    romId,
+    slotName,
+    isActive,
+    defaultExpanded,
+    refreshOnSaveSync: true,
+    logPrefix: "DesktopSlotPanel",
+    onSlotActivated: (newStatus) => onSlotActivated(slotName, newStatus),
+  });
+
+  const startDeleteFlow = () =>
+    panel.handleDelete(async (info) => {
+      const confirmed = await desktopDeleteSlotDialog(ask)(info);
+      if (!confirmed || !panel.isMounted()) return;
+      if (await executeSlotDelete(romId, slotName)) {
+        onSlotDeleted();
+      }
+    });
+
+  const conflicts: SyncConflict[] = isActive ? (saveStatus?.conflicts ?? []) : [];
+  const { syncSummaryText, syncSummaryColor } = computeSyncSummary(isActive, saveStatus, conflicts, noSaveLine);
+  const fileCount = slotFileCount(isActive, slot.count, saveStatus, panel.slotFiles);
+  const activeHasSaves = hasActiveSlotSaves(saveStatus, slot.count);
+
+  return (
+    <div
+      data-testid={`desktop-slot-panel-${slotName || "legacy"}`}
+      style={{
+        backgroundColor: isActive ? "rgba(0, 0, 0, 0.22)" : "rgba(0, 0, 0, 0.14)",
+        borderRadius: "3px",
+        border: isActive ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid rgba(255, 255, 255, 0.05)",
+        overflow: "hidden",
+      }}
+    >
+      <SlotPanelHeader
+        slotName={slotName}
+        slotSource={slot.source}
+        isActive={isActive}
+        expanded={panel.expanded}
+        fileCount={fileCount}
+        onToggle={panel.handleToggle}
+      />
+
+      {isActive && syncSummaryText ? (
+        <div
+          data-testid="desktop-slot-sync-summary"
+          style={{
+            padding: "0 14px 10px 34px",
+            fontSize: "12px",
+            fontWeight: 500,
+            color: syncSummaryColor,
+            lineHeight: 1.4,
+          }}
+        >
+          {syncSummaryText}
+        </div>
+      ) : null}
+
+      {isLegacy ? (
+        <div
+          style={{
+            padding: "6px 14px 10px 34px",
+            color: MUTED_COLOR,
+            fontStyle: "italic",
+            fontSize: "11px",
+          }}
+        >
+          {LEGACY_SLOT_NOTE}
+        </div>
+      ) : null}
+
+      <SlotExpandedFrame
+        expanded={panel.expanded}
+        isActive={isActive}
+        activeProps={{
+          romId,
+          slotName,
+          saveStatus,
+          conflicts,
+          isOffline,
+          slotConfirmed,
+          confirmingSlot,
+          activeHasSaves,
+          ask,
+          onConfirmSlot,
+          onVersionRestored,
+          onCopySave,
+        }}
+        inactiveProps={{
+          slotName,
+          isLegacy,
+          isOffline,
+          panel,
+          onDelete: startDeleteFlow,
+          onCopySave,
+        }}
+      />
+    </div>
+  );
+};

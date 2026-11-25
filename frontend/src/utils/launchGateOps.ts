@@ -29,7 +29,7 @@ import { getMigrationState } from "./migrationStore";
 import { readStartingSource } from "./startingSource";
 import { announceSaveSync } from "./saveSyncEvents";
 import { saveSyncToastBody } from "./saveSyncToast";
-import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
+import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome, type SaveSetupSurface } from "./saveSetup";
 import { showToast } from "./toast";
 import { TimeoutError, boundedOr, rethrowTimeout, withTimeout } from "./withTimeout";
 
@@ -219,38 +219,54 @@ function shapePreLaunchAnswer(settled: PreLaunchSyncSettled, options: PreLaunchS
 }
 
 /**
- * The tracking-setup step for a start pressed on Big Picture's game-detail
- * page. Nothing is set up where the backend answers that none is needed
- * (`setup_needed`). What the backend's setup answer does to the start is
- * `applyLaunchGateSetupOutcome`'s. A read that throws proceeds; a read or slot
- * confirm that gets no answer in time is let through for the gate.
+ * The tracking-setup step for a start pressed on a game-detail page. Nothing is
+ * set up where the backend answers that none is needed (`setup_needed`). What
+ * the backend's setup answer does to the start is `applyLaunchGateSetupOutcome`'s.
+ * A read that throws proceeds; a read or slot confirm that gets no answer in time
+ * is let through for the gate.
  *
  * The fallbacks guard only the network reads. The branching on their answer sits
  * outside them so that a throw from a side effect (the toast, the tab switch, the
  * slot confirm) is not swallowed into "proceed" here; what a throw means is the
  * gate's.
  */
-export async function ensureTrackingConfiguredBigPicture(romId: number): Promise<"proceed" | "abort"> {
-  const trackingResult = await boundedOr(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS, () => ({
-    setup_needed: false,
-  }));
+async function ensureTrackingConfiguredForSurface(
+  romId: number,
+  surface: SaveSetupSurface = "bigpicture",
+): Promise<"proceed" | "abort"> {
+  const trackingResult = await boundedOr(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS, (e) => {
+    logError(`${surface} start: tracking check for romId=${romId} failed (assuming configured): ${e}`);
+    return { setup_needed: false };
+  });
   if (!trackingResult.setup_needed) return "proceed";
 
-  const setupInfo = await boundedOr(getSaveSetupInfo(romId), SERVER_CALL_LIMIT_MS, () => null);
+  const setupInfo = await boundedOr(getSaveSetupInfo(romId), SERVER_CALL_LIMIT_MS, (e) => {
+    logError(`${surface} start: save-setup fetch for romId=${romId} failed (proceeding unconfigured): ${e}`);
+    return null;
+  });
   if (setupInfo === null) return "proceed";
 
   return applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {
     rid: romId,
+    surface,
     confirmSlotChoice: (...args) => withTimeout(confirmSlotChoice(...args), LOCAL_CALL_LIMIT_MS),
     toast: (body) => showToast(body),
     dispatchSavesTab: () => globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } })),
   });
 }
 
+export function ensureTrackingConfiguredBigPicture(romId: number): Promise<"proceed" | "abort"> {
+  return ensureTrackingConfiguredForSurface(romId);
+}
+
+export function ensureTrackingConfiguredDesktop(romId: number): Promise<"proceed" | "abort"> {
+  return ensureTrackingConfiguredForSurface(romId, "desktop");
+}
+
 /**
- * The tracking-setup step for a start with no saves tab to send the user to.
- * Unlike {@link ensureTrackingConfiguredBigPicture}, it MUST NOT route the user
- * to the saves tab. Instead it silently auto-adopts the default/recommended
+ * The tracking-setup step for a start with no save surface to send the user to.
+ * Unlike {@link ensureTrackingConfiguredForSurface}, it MUST NOT route the user
+ * to the save surface. Instead it silently auto-adopts the default/recommended
  * slot (via `confirmSlotChoice`) and proceeds. A start is never blocked on a
  * setup ANSWER — every answer proceeds; any failure (server unreachable,
  * needs-user-choice, a thrown error) is swallowed. Nothing is set up where the
@@ -273,11 +289,11 @@ export async function ensureTrackingConfiguredSilently(romId: number, tag: strin
   });
   if (setupInfo === null) return;
 
-  // Reuse the shared outcome handler with a no-op saves-tab dispatch and a
-  // swallowed toast: the auto_confirm branch fires `confirmSlotChoice`; every
-  // other (abort) branch is irrelevant here because this step never aborts a
-  // start on tracking — an unconfigured slot the user can't resolve at the start
-  // must still let the game start (Big Picture's saves tab on the game page can
+  // Reuse the shared outcome handler with a no-op save-surface dispatch and a
+  // swallowed toast: only the auto_confirm side effect (`confirmSlotChoice`)
+  // matters here, because this step ignores the returned verdict and never
+  // aborts a start on tracking — an unconfigured slot the user can't resolve
+  // at the start still lets the game start (the page's save surface can
   // configure it later).
   await applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {
     rid: romId,

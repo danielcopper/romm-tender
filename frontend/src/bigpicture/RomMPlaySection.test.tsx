@@ -3629,6 +3629,7 @@ describe("RomMPlaySection", () => {
         });
         expect(vi.mocked(backend.deleteLocalSaves)).toHaveBeenCalledWith(42);
         expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: "Deleted 4" }));
+        expect(getGameDetail(testAppId).saveSyncStatus).toBe("none");
         const ev = listener.mock.calls.map((c) => c[0] as CustomEvent).find((e) => e.detail.type === "save_sync");
         expect(ev?.detail).toEqual({ type: "save_sync", rom_id: 42 });
       } finally {

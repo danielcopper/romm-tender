@@ -200,7 +200,7 @@ export interface LocalSaveFile {
   modified_at: string;
 }
 
-/** This device's save files for a game, read without RomM: what the SAVES tab lists while save sync is off. */
+/** This device's save files for a game, read without RomM: what the save surface lists while save sync is off. */
 export interface LocalSaveFiles {
   // Whether a sync would carry the game's saves; where it would not, the refusal stands beside it and `files` is empty.
   available: boolean;

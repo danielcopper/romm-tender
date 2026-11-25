@@ -6,6 +6,7 @@
 
 import { useState, FC, ChangeEvent, KeyboardEvent } from "react";
 import { ConfirmModal, TextField } from "@decky/ui";
+import { NEW_SAVE_SLOT_TITLE } from "../../utils/saveSlotWording";
 
 export const NewSlotModal: FC<{
   closeModal?: () => void;
@@ -18,7 +19,7 @@ export const NewSlotModal: FC<{
       onOK={() => {
         onSubmit(value.trim());
       }}
-      strTitle="New Save Slot"
+      strTitle={NEW_SAVE_SLOT_TITLE}
       bDisableBackgroundDismiss={true}
       // Disable confirm on an empty/whitespace name (parent's no-op is the backstop).
       bOKDisabled={value.trim() === ""}

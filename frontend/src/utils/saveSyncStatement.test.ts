@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { NO_SAVE_YET, noSaveLine, notDownloadedStatement, refusesDownloadedGame } from "./saveSyncStatement";
+import {
+  NOT_DOWNLOADED_NO_SAVE,
+  NO_SAVE_YET,
+  SAVE_SYNC_OFF,
+  noSaveLine,
+  notDownloadedStatement,
+  refusesDownloadedGame,
+} from "./saveSyncStatement";
 import type { SaveSyncAvailability } from "../types";
 
 const REFUSAL = "a refusal's sentence, as the backend words it";
@@ -67,5 +74,12 @@ describe("refusesDownloadedGame (#2149 D1, D5)", () => {
     expect(refusesDownloadedGame(refused({ installed: false }))).toBe(false);
     expect(refusesDownloadedGame(answer())).toBe(false);
     expect(refusesDownloadedGame(null)).toBe(false);
+  });
+});
+
+describe("sync-off wording constants", () => {
+  it("keeps the sync-off and not-downloaded lines", () => {
+    expect(SAVE_SYNC_OFF).toBe("Save sync is off.");
+    expect(NOT_DOWNLOADED_NO_SAVE).toBe("Not downloaded — no save on this device.");
   });
 });

@@ -473,6 +473,67 @@ describe("usePlayLaunch", () => {
       expect(gameDetailStore.recheckStart).not.toHaveBeenCalled();
       expect(toast.showToast).not.toHaveBeenCalled();
     });
+
+    function mockUnconfiguredSetup(
+      recommended_action: "show_wizard" | "auto_confirm_default",
+      server_slots: Array<{ slot: string; saves: never[]; count: number; latest_updated_at: string }> = [],
+    ): void {
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
+        configured: false,
+        active_slot: null,
+        setup_needed: true,
+      });
+      vi.mocked(backend.getSaveSetupInfo).mockResolvedValueOnce({
+        has_local_saves: false,
+        local_files: [],
+        server_slots,
+        default_slot: "default",
+        slot_confirmed: false,
+        active_slot: null,
+        recommended_action,
+      });
+    }
+
+    it("aborts launch, toasts Desktop Saves copy, and dispatches romm_tab_switch when slot tracking needs user choice", async () => {
+      const tabSwitch = vi.fn();
+      globalThis.addEventListener("romm_tab_switch", tabSwitch);
+      try {
+        mockUnconfiguredSetup("show_wizard", [
+          { slot: "default", saves: [], count: 1, latest_updated_at: "2026-01-01T00:00:00Z" },
+        ]);
+
+        const result = renderLaunch();
+        await act(async () => {
+          await result.current.handlePlayClick();
+        });
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(toast.showToast).toHaveBeenCalledWith("Configure save sync in Saves first");
+        expect((tabSwitch.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail).toEqual({ tab: "saves" });
+        expect(backend.preLaunchSync).not.toHaveBeenCalled();
+        expect(runGame).not.toHaveBeenCalled();
+        expect(setPressState).toHaveBeenLastCalledWith(null);
+      } finally {
+        globalThis.removeEventListener("romm_tab_switch", tabSwitch);
+      }
+    });
+
+    it("auto-confirms default slot and launches when getSaveSetupInfo recommends auto_confirm_default", async () => {
+      mockUnconfiguredSetup("auto_confirm_default");
+      vi.mocked(backend.confirmSlotChoice).mockResolvedValueOnce({
+        success: true,
+        needs_conflict_resolution: false,
+        message: "",
+      });
+
+      const result = renderLaunch();
+      await act(async () => {
+        await result.current.handlePlayClick();
+      });
+
+      expect(backend.confirmSlotChoice).toHaveBeenCalledWith(100, "default", false, null, false);
+      expect(runGame).toHaveBeenCalledWith("12345", "", -1, 100);
+    });
   });
 
   describe("after the page's check of whether the game can start went wrong", () => {

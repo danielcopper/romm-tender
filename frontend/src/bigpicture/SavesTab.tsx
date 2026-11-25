@@ -23,7 +23,7 @@ import { useCopyToSlot } from "./saves/useCopyToSlot";
 import { detach } from "../utils/detach";
 import { showToast } from "../utils/toast";
 import { announceSaveSync } from "../utils/saveSyncEvents";
-import { strandedVersionNotice } from "../utils/saveSlotWording";
+import { SLOT_SWITCHING_OFFLINE_NOTICE, strandedVersionNotice } from "../utils/saveSlotWording";
 import { executeSlotSwitch, findStrandedVersion, type StrandedVersion } from "../utils/saveSlotFlow";
 
 interface SavesTabProps {
@@ -126,7 +126,7 @@ export const SavesTab: FC<SavesTabProps> = ({
         color: "#d94126",
       }}
     >
-      {"RomM is offline — slot switching is disabled until the server is reachable. This prevents save sync conflicts."}
+      {SLOT_SWITCHING_OFFLINE_NOTICE}
     </div>
   ) : null;
 

@@ -1058,6 +1058,23 @@ describe("SlotPanel", () => {
       expect((getByText("Delete Slot") as HTMLButtonElement).disabled).toBe(false);
     });
 
+    it("switches nothing while a delete is running", async () => {
+      vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
+      vi.mocked(backend.getSlotDeleteInfo).mockReturnValue(new Promise(() => {}));
+
+      const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
+      fireEvent.click(container.querySelector("button")!);
+      await flushAsync();
+      fireEvent.click(getByText("Delete Slot"));
+      await flushAsync();
+      fireEvent.click(getByText("Activate Slot"));
+      await flushAsync();
+      await flushAsync();
+
+      expect(backend.switchSlot).not.toHaveBeenCalled();
+      expect(getByText("Activate Slot")).toBeTruthy();
+    });
+
     it("ends 'Deleting...' when the info call answers a failure", async () => {
       vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
       vi.mocked(backend.getSlotDeleteInfo).mockResolvedValueOnce({
@@ -1338,6 +1355,46 @@ describe("SlotPanel", () => {
       const { container } = render(<SlotPanel {...defaultProps({ isActive: false })} noSaveLine={line} />);
 
       expect(container.textContent).not.toContain(line);
+    });
+  });
+
+  describe("in-place romId updates on inactive panels", () => {
+    it("queries the updated romId when an inactive collapsed panel rerenders for another ROM before expanding", async () => {
+      vi.mocked(backend.getSlotSaves).mockResolvedValue({
+        success: true,
+        slot: "default",
+        saves: [],
+      });
+
+      const { container, rerender } = render(<SlotPanel {...defaultProps({ romId: 1, isActive: false })} />);
+      rerender(<SlotPanel {...defaultProps({ romId: 2, isActive: false })} />);
+
+      fireEvent.click(container.querySelector("button")!);
+      await flushAsync();
+      expect(vi.mocked(backend.getSlotSaves)).toHaveBeenCalledWith(2, "default");
+    });
+
+    it("still invokes onSlotSwitched when unmounted before switchSlot resolves", async () => {
+      vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
+      let resolveSwitch!: (v: backend.SwitchSlotResult) => void;
+      vi.mocked(backend.switchSlot).mockImplementationOnce(
+        () =>
+          new Promise((res) => {
+            resolveSwitch = res;
+          }),
+      );
+      const onSlotSwitched = vi.fn();
+      const { container, getByText, unmount } = render(<SlotPanel {...defaultProps({ onSlotSwitched })} />);
+      fireEvent.click(container.querySelector("button")!);
+      await flushAsync();
+      fireEvent.click(getByText("Activate Slot"));
+
+      unmount();
+      const status = makeStatus();
+      resolveSwitch({ success: true, save_status: status });
+      await flushAsync();
+
+      expect(onSlotSwitched).toHaveBeenCalledWith("default", status);
     });
   });
 });

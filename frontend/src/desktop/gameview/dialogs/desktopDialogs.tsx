@@ -1,9 +1,10 @@
 /**
  * The desktop dialogs in the shapes their callers ask for: the adoption flow's
  * {@link AdoptionDialogs}, a launch's {@link LaunchPrompts}, the Play button's
- * Resolve Conflict walk and Stop confirm, the Emulation card's BIOS confirm, and
- * a version switch's {@link UnsyncedSavesPrompt}. Every one of them settles with
- * its cancel exit when dismissed.
+ * Resolve Conflict walk and Stop confirm, the Emulation card's BIOS confirm, the
+ * Saves card's conflict, delete-local-saves, copy-slot, and delete-slot dialogs,
+ * and a version switch's {@link UnsyncedSavesPrompt}. Every one of them settles
+ * with its cancel exit when dismissed.
  */
 
 import type {
@@ -19,7 +20,7 @@ import type { LaunchPrompts } from "../../../utils/launchVerdict";
 import type { SyncFinish, SyncWaitChoice, SyncWaitReason } from "../../../utils/launchGate";
 import type { BiosConfirmCopy } from "../../../utils/biosConfirmWording";
 import type { UnsyncedSavesChoice, UnsyncedSavesPrompt } from "../../../utils/versionSwitch";
-import type { SyncConflict } from "../../../types";
+import type { SaveSlotSummary, SlotDeleteInfo, SyncConflict } from "../../../types";
 import type { AskDialog } from "./askDialog";
 import { DesktopAdoptCandidatesDialog } from "./DesktopAdoptCandidatesDialog";
 import { DesktopAdoptCollisionsDialog } from "./DesktopAdoptCollisionsDialog";
@@ -27,6 +28,9 @@ import { DesktopAdoptExistingDialog } from "./DesktopAdoptExistingDialog";
 import { DesktopAdoptUnusableDialog } from "./DesktopAdoptUnusableDialog";
 import { DesktopAdoptVanishedDialog } from "./DesktopAdoptVanishedDialog";
 import { DesktopBiosConfirmDialog } from "./DesktopBiosConfirmDialog";
+import { DesktopCopySlotDialog } from "./DesktopCopySlotDialog";
+import { DesktopDeleteLocalSavesDialog } from "./DesktopDeleteLocalSavesDialog";
+import { DesktopDeleteSlotDialog } from "./DesktopDeleteSlotDialog";
 import { DesktopSaveConflictDialog } from "./DesktopSaveConflictDialog";
 import { DesktopOfflineDriftDialog } from "./DesktopOfflineDriftDialog";
 import { DesktopFallbackLaunchDialog } from "./DesktopFallbackLaunchDialog";
@@ -121,6 +125,42 @@ export function desktopBiosConfirmDialog(
 ): (copy: BiosConfirmCopy, tone: "primary" | "danger") => Promise<boolean> {
   return (copy, tone) =>
     ask<boolean>(false, (resolve) => <DesktopBiosConfirmDialog copy={copy} tone={tone} onChoice={resolve} />);
+}
+
+export function desktopSlotConflictDialog(ask: AskDialog): (conflict: SyncConflict) => Promise<SyncConflictResolution> {
+  return desktopSaveConflictDialog(ask, false);
+}
+
+export function desktopDeleteLocalSavesDialog(ask: AskDialog): () => Promise<boolean> {
+  return () =>
+    ask<boolean>(false, (resolve) => (
+      <DesktopDeleteLocalSavesDialog onDismiss={() => resolve(false)} onConfirm={() => resolve(true)} />
+    ));
+}
+
+export function desktopCopySlotDialog(
+  ask: AskDialog,
+): (sourceSlot: string, availableSlots: SaveSlotSummary[]) => Promise<string | null> {
+  return (sourceSlot, availableSlots) =>
+    ask<string | null>(null, (resolve) => (
+      <DesktopCopySlotDialog
+        sourceSlot={sourceSlot}
+        availableSlots={availableSlots}
+        onDismiss={() => resolve(null)}
+        onCopy={(target) => resolve(target)}
+      />
+    ));
+}
+
+export function desktopDeleteSlotDialog(ask: AskDialog): (deleteInfo: SlotDeleteInfo) => Promise<boolean> {
+  return (deleteInfo) =>
+    ask<boolean>(false, (resolve) => (
+      <DesktopDeleteSlotDialog
+        deleteInfo={deleteInfo}
+        onDismiss={() => resolve(false)}
+        onConfirm={() => resolve(true)}
+      />
+    ));
 }
 
 export function desktopLaunchPrompts(ask: AskDialog): LaunchPrompts {

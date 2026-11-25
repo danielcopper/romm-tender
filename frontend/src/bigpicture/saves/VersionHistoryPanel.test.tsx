@@ -57,6 +57,27 @@ const flushAsync = () =>
     await new Promise((r) => setTimeout(r, 0));
   });
 
+async function renderWithPendingRestore(versions: SaveVersionEntry[] = [makeVersion()]) {
+  vi.mocked(backend.savesListFileVersions).mockResolvedValue({ status: "ok", versions });
+  let resolver: ((v: RollbackStatus) => void) | null = null;
+  vi.mocked(backend.savesRollbackToVersion).mockImplementation(
+    () =>
+      new Promise((res) => {
+        resolver = res;
+      }),
+  );
+  const utils = render(<VersionHistoryPanel {...defaultProps()} />);
+  fireEvent.click(utils.getByText("Previous Versions"));
+  await flushAsync();
+  return {
+    ...utils,
+    resolveRestore: (v: RollbackStatus) => {
+      if (!resolver) throw new Error("restore has not started");
+      resolver(v);
+    },
+  };
+}
+
 describe("VersionHistoryPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -298,12 +319,16 @@ describe("VersionHistoryPanel", () => {
       fireEvent.click(getByText("Restore"));
       await flushAsync();
       await flushAsync();
+      expect(backend.savesRollbackToVersion).toHaveBeenCalledWith(1, "default", 11);
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
         expect.objectContaining({ title: "Tender", body: expect.stringContaining("Save restored") }),
       );
       expect(onRestored).toHaveBeenCalledTimes(1);
-      // Collapsed again — chevron is ▸
+      // Collapsed again — chevron is ▸, and re-expanding refetches cleared versions
       await waitFor(() => expect(container.textContent).toContain("▸"));
+      fireEvent.click(getByText("Previous Versions"));
+      await flushAsync();
+      expect(backend.savesListFileVersions).toHaveBeenCalledTimes(2);
     });
 
     it("status 'conflict_blocked' opens the sync conflict modal and lets the modal own the feedback (no panel toast)", async () => {
@@ -349,15 +374,27 @@ describe("VersionHistoryPanel", () => {
       );
     });
 
+    async function expandAndClickRestore(
+      mockResult: RollbackStatus | Error,
+      props: Partial<React.ComponentProps<typeof VersionHistoryPanel>> = {},
+    ) {
+      if (mockResult instanceof Error) {
+        vi.mocked(backend.savesRollbackToVersion).mockRejectedValue(mockResult);
+      } else {
+        vi.mocked(backend.savesRollbackToVersion).mockResolvedValue(mockResult);
+      }
+      const utils = await expand(props);
+      fireEvent.click(utils.getByText("Restore"));
+      await flushAsync();
+      await flushAsync();
+      return utils;
+    }
+
     it("status 'preflight_failed' toasts the first error detail", async () => {
-      vi.mocked(backend.savesRollbackToVersion).mockResolvedValue({
+      await expandAndClickRestore({
         status: "preflight_failed",
         errors: ["upload failed: timeout"],
       });
-      const { getByText } = await expand();
-      fireEvent.click(getByText("Restore"));
-      await flushAsync();
-      await flushAsync();
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
         expect.objectContaining({ body: "Sync failed before restore: upload failed: timeout" }),
       );
@@ -527,38 +564,31 @@ describe("VersionHistoryPanel", () => {
     });
 
     it("says a restore that threw could not be confirmed, with the error's message as the subtext", async () => {
-      vi.mocked(backend.savesRollbackToVersion).mockRejectedValue(new Error("boom"));
-      const { getByText } = await expand();
-      fireEvent.click(getByText("Restore"));
-      await flushAsync();
-      await flushAsync();
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Couldn't confirm the restore.", subtext: "boom" }),
-      );
-      expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(expect.stringContaining("restore error"));
-      // The row is released for another try.
-      expect(getByText("Restore")).not.toBeDisabled();
+      const warnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+      try {
+        const { getByText } = await expandAndClickRestore(new Error("boom"));
+        expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+          expect.objectContaining({ body: "Couldn't confirm the restore.", subtext: "boom" }),
+        );
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("restore error"));
+        // The row is released for another try.
+        expect(getByText("Restore")).not.toBeDisabled();
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
   });
 
   it("Restore button is disabled while a restore is in flight", async () => {
-    vi.mocked(backend.savesListFileVersions).mockResolvedValue({
-      status: "ok",
-      versions: [makeVersion()],
-    });
-    let resolveRestore: (v: RollbackStatus) => void = () => undefined;
-    vi.mocked(backend.savesRollbackToVersion).mockImplementation(
-      () =>
-        new Promise((res) => {
-          resolveRestore = res;
-        }),
-    );
-    const { getByText } = render(<VersionHistoryPanel {...defaultProps()} />);
-    fireEvent.click(getByText("Previous Versions"));
+    const { getAllByRole, resolveRestore } = await renderWithPendingRestore([
+      makeVersion({ id: 11, file_name: "save-v1.srm" }),
+      makeVersion({ id: 12, file_name: "save-v2.srm" }),
+    ]);
+    fireEvent.click(getAllByRole("button", { name: "Restore" })[0]!);
     await flushAsync();
-    fireEvent.click(getByText("Restore"));
-    await flushAsync();
-    expect(getByText("Restoring...")).toBeDisabled();
+    for (const btn of getAllByRole("button", { name: /^Restor/ })) {
+      expect(btn).toBeDisabled();
+    }
     resolveRestore({ status: "ok" });
     await flushAsync();
   });
@@ -566,17 +596,7 @@ describe("VersionHistoryPanel", () => {
 
 describe("VersionHistoryPanel — the throbber on Restore", () => {
   it("stands beside Restoring... while the restore is in flight, and leaves with it", async () => {
-    vi.mocked(backend.savesListFileVersions).mockResolvedValue({ status: "ok", versions: [makeVersion()] });
-    let resolveRestore: (v: RollbackStatus) => void = () => undefined;
-    vi.mocked(backend.savesRollbackToVersion).mockImplementation(
-      () =>
-        new Promise((res) => {
-          resolveRestore = res;
-        }),
-    );
-    const { getByText, container } = render(<VersionHistoryPanel {...defaultProps()} />);
-    fireEvent.click(getByText("Previous Versions"));
-    await flushAsync();
+    const { getByText, container, resolveRestore } = await renderWithPendingRestore();
     expect(throbberIn(getByText("Restore"))).toBeNull();
     fireEvent.click(getByText("Restore"));
     await flushAsync();
@@ -659,6 +679,73 @@ describe("VersionHistoryPanel — self-refresh on romm_data_changed", () => {
 
     // Cleanup ran: the post-unmount event reached no listener, so no refetch.
     expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears loading when invalidated offline so reconnecting refetches instead of staying stuck on Loading...", async () => {
+    let resolveFirst!: (v: Awaited<ReturnType<typeof backend.savesListFileVersions>>) => void;
+    vi.mocked(backend.savesListFileVersions)
+      .mockImplementationOnce(
+        () =>
+          new Promise((res) => {
+            resolveFirst = res;
+          }),
+      )
+      .mockResolvedValueOnce({ status: "ok", versions: [makeVersion({ id: 2 })] });
+
+    const { getByText, container, rerender } = render(<VersionHistoryPanel {...defaultProps({ isOffline: false })} />);
+    fireEvent.click(getByText("Previous Versions"));
+    expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledTimes(1);
+
+    rerender(<VersionHistoryPanel {...defaultProps({ isOffline: true })} />);
+    dispatchDataChanged(1);
+    await act(async () => {
+      resolveFirst({ status: "ok", versions: [makeVersion({ id: 1 })] });
+    });
+
+    rerender(<VersionHistoryPanel {...defaultProps({ isOffline: false })} />);
+    await waitFor(() => expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(container.textContent).toContain("Previous Versions (1)"));
+  });
+
+  it("re-binds version history fetch and save_sync listener when romId changes in place", async () => {
+    vi.mocked(backend.savesListFileVersions).mockResolvedValue({ status: "ok", versions: [makeVersion({ id: 1 })] });
+    const { getByText, rerender } = render(<VersionHistoryPanel {...defaultProps({ romId: 1 })} />);
+    fireEvent.click(getByText("Previous Versions"));
+    await waitFor(() =>
+      expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledWith(1, "default", "save.srm"),
+    );
+
+    rerender(<VersionHistoryPanel {...defaultProps({ romId: 2 })} />);
+    dispatchDataChanged(2);
+
+    await waitFor(() =>
+      expect(vi.mocked(backend.savesListFileVersions)).toHaveBeenCalledWith(2, "default", "save.srm"),
+    );
+  });
+
+  it("still invokes onRestored when unmounted before savesRollbackToVersion resolves", async () => {
+    vi.mocked(backend.savesListFileVersions).mockResolvedValue({
+      status: "ok",
+      versions: [makeVersion({ id: 11 })],
+    });
+    let resolveRestore!: (v: RollbackStatus) => void;
+    vi.mocked(backend.savesRollbackToVersion).mockImplementationOnce(
+      () =>
+        new Promise((res) => {
+          resolveRestore = res;
+        }),
+    );
+    const onRestored = vi.fn();
+    const { getByText, unmount } = render(<VersionHistoryPanel {...defaultProps({ onRestored })} />);
+    fireEvent.click(getByText("Previous Versions"));
+    await flushAsync();
+    fireEvent.click(getByText("Restore"));
+
+    unmount();
+    resolveRestore({ status: "ok" });
+    await flushAsync();
+
+    expect(onRestored).toHaveBeenCalledTimes(1);
   });
 });
 

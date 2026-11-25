@@ -33,7 +33,9 @@ stand beside the Play button, with a **BIOS** cell where required BIOS files are
 says when the game's saves last synced, or what is keeping them from it. Playtime reads as on Steam's own game pages:
 **Play Time**, in minutes up to two hours and in hours from there, and no cell for a game with none. Below the play row,
 the **Emulation** card lets you pick or unpin an emulator for the game and check, download, replace or delete its BIOS
-files — and pressing **BIOS** in the play row scrolls straight to it.
+files, and the **Saves** card lets you sync saves, confirm or switch slots, create or delete a slot, copy a save to
+another slot, restore an older version or delete local saves — and pressing **BIOS** or **Save Sync** in the play row
+scrolls straight to its card.
 
 Below the play row stand the panel's tabs — **GAME INFO**, **ACHIEVEMENTS**, **SAVES**, **BIOS** and **ARTWORK** — on
 Steam's own tab row, the one a Steam game's page has. **ACHIEVEMENTS** is there for a game RetroAchievements knows;

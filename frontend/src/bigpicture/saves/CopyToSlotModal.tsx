@@ -7,10 +7,20 @@
  * belong to the parent (`useCopyToSlot`).
  */
 
-import { useState, FC, ChangeEvent, KeyboardEvent } from "react";
+import { useState, FC, ChangeEvent, KeyboardEvent, type CSSProperties } from "react";
 import { ModalRoot, DialogButton, TextField } from "@decky/ui";
 import type { SaveSlotSummary } from "../../types";
-import { displaySlot } from "../../utils/saveHelpers";
+import { displaySlot, eligibleCopyTargetSlots } from "../../utils/saveHelpers";
+import { COPY_TO_SLOT_DESCRIPTION, COPY_TO_SLOT_EMPTY_TARGETS } from "../../utils/saveSlotWording";
+
+const MODAL_CONTAINER_STYLE: CSSProperties = { padding: "16px", minWidth: "320px" };
+const MODAL_TITLE_STYLE: CSSProperties = { fontSize: "16px", fontWeight: "bold", marginBottom: "4px", color: "#fff" };
+const MODAL_DESC_STYLE: CSSProperties = {
+  fontSize: "13px",
+  color: "rgba(255,255,255,0.6)",
+  marginBottom: "16px",
+  lineHeight: "1.4",
+};
 
 export const CopyToSlotModal: FC<{
   availableSlots: SaveSlotSummary[];
@@ -20,12 +30,7 @@ export const CopyToSlotModal: FC<{
 }> = ({ availableSlots, sourceSlot, onSubmit, closeModal }) => {
   const [newName, setNewName] = useState("");
 
-  // Existing named slots eligible as targets: never the source (same-slot copy
-  // == rollback) and never the legacy "" bucket (read-only source only). Dedupe
-  // defensively so a repeated slot can't render two identical rows.
-  const targetSlots = Array.from(
-    new Set(availableSlots.map((s) => s.slot).filter((name) => name !== "" && name !== sourceSlot)),
-  ).sort((a, b) => a.localeCompare(b));
+  const targetSlots = eligibleCopyTargetSlots(availableSlots, sourceSlot);
 
   const pick = (target: string) => {
     const trimmed = target.trim();
@@ -52,19 +57,15 @@ export const CopyToSlotModal: FC<{
             key="no-existing"
             style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", fontStyle: "italic" as const }}
           >
-            No other slots yet — create one below.
+            {COPY_TO_SLOT_EMPTY_TARGETS}
           </div>,
         ];
 
   return (
     <ModalRoot {...(closeModal !== undefined ? { closeModal } : {})}>
-      <div style={{ padding: "16px", minWidth: "320px" }}>
-        <div style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "4px", color: "#fff" }}>
-          Copy save to slot
-        </div>
-        <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.6)", marginBottom: "16px", lineHeight: "1.4" }}>
-          Copies this save into the chosen slot, which becomes the active slot. The original save is kept.
-        </div>
+      <div style={MODAL_CONTAINER_STYLE}>
+        <div style={MODAL_TITLE_STYLE}>Copy save to slot</div>
+        <div style={MODAL_DESC_STYLE}>{COPY_TO_SLOT_DESCRIPTION}</div>
         {/* Existing-slot targets. */}
         <div style={{ display: "flex", flexDirection: "column" as const, gap: "8px" }}>{existingRows}</div>
         {/* New-slot creator. */}
