@@ -6151,12 +6151,12 @@ class TestPerCoreFiltering:
 
 
 class TestCheckPlatformBiosPreResolvedCore:
-    """R8: ``check_platform_bios`` takes a pre-resolved ``active_core_so``.
+    """R8: ``check_platform_bios`` takes a pre-resolved ``launching_emulator``.
 
-    The per-game game-detail path resolves the active ``.so`` upstream (folding
-    the ``emulator_override`` pin) and passes it in; the platform-level callers
-    pass ``None`` to mean "use the system default". The filter's ``required_count``
-    must follow the pre-resolved core, not the system default.
+    The per-game game-detail path resolves the ROM's emulator upstream (folding
+    the ``emulator_override`` pin) and passes it in, or ``None`` where nothing
+    could be resolved, to mean "use the platform's own pick". The filter's
+    ``required_count`` must follow the pre-resolved emulator, not the platform's.
     """
 
     def _gba_two_core_service(self, fw, firmware_list):
@@ -6172,35 +6172,30 @@ class TestCheckPlatformBiosPreResolvedCore:
 
     @pytest.mark.asyncio
     async def test_pre_resolved_core_drives_filter_over_system_default(self, fw, tmp_path):
-        """A passed-in ``active_core_so`` overrides the system default for required_count.
+        """A passed-in ``launching_emulator`` decides ``required_count`` over the platform's own pick.
 
-        The system default (set on the fake) is mGBA — which treats gba_bios.bin as
-        optional. Passing the per-game override ``gpsp_libretro`` flips the file to
-        required, proving the pre-resolved core (not the system default) feeds the
-        filter and that ``get_active_core`` is NOT consulted when a core is supplied.
+        gpSP requires gba_bios.bin where mGBA treats it as optional, so a count
+        of 1 proves the passed emulator feeds the filter.
         """
         firmware_list = [
             {"id": 1, "file_name": "gba_bios.bin", "platform_slug": "gba", "md5_hash": ""},
         ]
         self._gba_two_core_service(fw, firmware_list)
-        # System default = mGBA (optional). The per-game override should win.
-        fw._config.core_info.active_core = ("mgba_libretro", "mGBA")
+        _set_platform_emulator(fw, "mgba_libretro", "mGBA")
 
         with patch.object(_resolver(fw), "bios_root", str(tmp_path / "bios")):
             result = await fw.check_platform_bios("gba", "gba", launching_emulator=_pick(_id("gpsp_libretro"), "gpSP"))
 
         assert result["needs_bios"] is True
         assert result["required_count"] == 1  # gpSP requires gba_bios.bin
-        # The pre-resolved core short-circuits the system-default read entirely.
-        assert fw._config.core_info.active_core_calls == []
 
     @pytest.mark.asyncio
     async def test_none_falls_back_to_system_default(self, fw, tmp_path):
         """``launching_emulator=None`` resolves the platform's own emulator.
 
-        Same declarations, no per-game core: the platform-level path resolves the
-        platform's pick (mGBA → optional) so ``required_count`` is 0 — the
-        opposite of the override case, locking in the result-flip.
+        Same declarations, no per-game core: ``None`` resolves the platform's
+        own pick (mGBA → optional) so ``required_count`` is 0 — the opposite of
+        the override case, locking in the result-flip.
         """
         firmware_list = [
             {"id": 1, "file_name": "gba_bios.bin", "platform_slug": "gba", "md5_hash": ""},

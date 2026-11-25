@@ -83,7 +83,7 @@ from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from domain.update_release import LatestRelease, ReleaseTarball
-from host import CallDispatcher, HostStatus
+from host import CallDispatcher
 from host.dispatch import route_names
 from host.protocol import REASON_BACKEND_EXCEPTION, TYPE_ERROR, TYPE_REPLY
 from lib.errors import (
@@ -200,30 +200,19 @@ class _AwaitableService:
         return _hand_back
 
 
-class _RaisingHostStatus:
-    """The host's record of this run, raising *exc* at every read."""
-
-    def __init__(self, exc: BaseException) -> None:
-        self._exc = exc
-
-    def __getattr__(self, name: str) -> Any:
-        raise self._exc
-
-
 def _every_service(service: object) -> ServicesBundle:
     return _make_services_bundle(**{field.name: service for field in dataclasses.fields(ServicesBundle)})
 
 
 def _dispatcher_raising(exc: BaseException) -> CallDispatcher:
     """The real dispatcher over the real ``Endpoints``, with *exc* raised behind every route."""
-    host_status = cast("HostStatus", _RaisingHostStatus(exc))
-    endpoints = Endpoints(_make_application(_every_service(_RaisingService(exc))), host_status)
+    endpoints = Endpoints(_make_application(_every_service(_RaisingService(exc))))
     return CallDispatcher(endpoints, LOGGER)
 
 
 def _dispatcher_answering(result: Any, *, awaitable: bool) -> CallDispatcher:
     services = _every_service(_AnsweringService(result, awaitable=awaitable))
-    endpoints = Endpoints(_make_application(services), HostStatus())
+    endpoints = Endpoints(_make_application(services))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -451,7 +440,7 @@ async def _answer_later(result: Any) -> Any:
 
 
 def _dispatcher_handing_back(make: Any) -> CallDispatcher:
-    endpoints = Endpoints(_make_application(_every_service(_AwaitableService(make))), HostStatus())
+    endpoints = Endpoints(_make_application(_every_service(_AwaitableService(make))))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -581,7 +570,7 @@ def _dispatcher_over_game_process(control: FakeGameProcessControlAdapter) -> Cal
             log_debug=MagicMock(),
         )
     )
-    endpoints = Endpoints(_make_application(_make_services_bundle(game_process_service=service)), HostStatus())
+    endpoints = Endpoints(_make_application(_make_services_bundle(game_process_service=service)))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -636,7 +625,7 @@ def _dispatcher_over_connection(romm_api: MagicMock, settings: dict[str, Any], p
             conflict_rules=_make_conflict_rules(),
         )
     )
-    endpoints = Endpoints(_make_application(_make_services_bundle(connection_service=service)), HostStatus())
+    endpoints = Endpoints(_make_application(_make_services_bundle(connection_service=service)))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -711,7 +700,7 @@ def _dispatcher_over_rom_removal(uow: FakeUnitOfWork, rom_files: FakeRomFileStor
             conflict_rules=_make_conflict_rules(),
         )
     )
-    endpoints = Endpoints(_make_application(_make_services_bundle(rom_removal_service=service)), HostStatus())
+    endpoints = Endpoints(_make_application(_make_services_bundle(rom_removal_service=service)))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -780,7 +769,7 @@ class TestTheSessionStartRefusalOnTheWire:
 
     async def test_an_unknown_rom(self):
         service = _playtime_service_over(FakeUnitOfWork())
-        endpoints = Endpoints(_make_application(_make_services_bundle(playtime_service=service)), HostStatus())
+        endpoints = Endpoints(_make_application(_make_services_bundle(playtime_service=service)))
 
         message = json.loads(await CallDispatcher(endpoints, LOGGER).dispatch(1, "record_session_start", [42]))
         await asyncio.gather(*service._flush_tasks)
@@ -790,7 +779,7 @@ class TestTheSessionStartRefusalOnTheWire:
 
 def _dispatcher_over_saves(service: Any) -> CallDispatcher:
     """The real dispatcher over ``Endpoints`` whose save use cases are the real ``SaveService``."""
-    endpoints = Endpoints(_make_application(_make_services_bundle(save_sync_service=service)), HostStatus())
+    endpoints = Endpoints(_make_application(_make_services_bundle(save_sync_service=service)))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -1279,7 +1268,7 @@ def _dispatcher_over_library(romm_api: FakeRommApi, events: FakeEventSink, home:
             platform_switches=FakePlatformSwitches(),
         ),
     ).service
-    endpoints = Endpoints(_make_application(_make_services_bundle(sync_service=service)), HostStatus())
+    endpoints = Endpoints(_make_application(_make_services_bundle(sync_service=service)))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -1352,7 +1341,7 @@ def _dispatcher_over_cleanup(uow_factory: Any, events: FakeEventSink) -> tuple[C
             artwork_job=FakeShortcutArtworkJob(),
         )
     )
-    endpoints = Endpoints(_make_application(_make_services_bundle(prune_service=service)), HostStatus())
+    endpoints = Endpoints(_make_application(_make_services_bundle(prune_service=service)))
     return CallDispatcher(endpoints, LOGGER), service
 
 
@@ -1472,7 +1461,7 @@ def _dispatcher_over_firmware(
             refiling=FakeListingRefiler(),
         )
     )
-    endpoints = Endpoints(_make_application(_make_services_bundle(firmware_service=service)), HostStatus())
+    endpoints = Endpoints(_make_application(_make_services_bundle(firmware_service=service)))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -1591,7 +1580,7 @@ def _dispatcher_over_update_install(
             log_debug=lambda msg: None,
         )
     )
-    endpoints = Endpoints(_make_application(_make_services_bundle(update_install_service=service)), HostStatus())
+    endpoints = Endpoints(_make_application(_make_services_bundle(update_install_service=service)))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -1607,7 +1596,7 @@ def _dispatcher_over_update_output(journal: FakeJournal, started_at: str | None)
             logger=LOGGER,
         )
     )
-    endpoints = Endpoints(_make_application(_make_services_bundle(update_output_service=service)), HostStatus())
+    endpoints = Endpoints(_make_application(_make_services_bundle(update_output_service=service)))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -1682,7 +1671,7 @@ def _dispatcher_over_steamgrid(api_key: str = "sgdb-key", uow: FakeUnitOfWork | 
             cover=FakeCoverSlotReader(),
         )
     )
-    endpoints = Endpoints(_make_application(_make_services_bundle(sgdb_service=service)), HostStatus())
+    endpoints = Endpoints(_make_application(_make_services_bundle(sgdb_service=service)))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -1791,7 +1780,7 @@ def _dispatcher_over_artwork(romm_api: FakeRommApi) -> CallDispatcher:
             conflict_rules=_make_conflict_rules(),
         )
     )
-    endpoints = Endpoints(_make_application(_make_services_bundle(artwork_service=service)), HostStatus())
+    endpoints = Endpoints(_make_application(_make_services_bundle(artwork_service=service)))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -1852,7 +1841,7 @@ def _dispatcher_over_cores(settings: dict[str, Any], persister: FakeSettingsPers
             conflict_rules=_make_conflict_rules(),
         )
     )
-    endpoints = Endpoints(_make_application(_make_services_bundle(core_service=service)), HostStatus())
+    endpoints = Endpoints(_make_application(_make_services_bundle(core_service=service)))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -1911,7 +1900,7 @@ def _dispatcher_over_migration(store: FakeMigrationFileStore, uow: FakeUnitOfWor
             conflict_rules=_make_conflict_rules(),
         )
     )
-    endpoints = Endpoints(_make_application(_make_services_bundle(migration_service=service)), HostStatus())
+    endpoints = Endpoints(_make_application(_make_services_bundle(migration_service=service)))
     return CallDispatcher(endpoints, LOGGER)
 
 
@@ -2120,7 +2109,7 @@ def _dispatcher_over_adoption(world: _AdoptionWorld) -> CallDispatcher:
         )
     )
     services = _make_services_bundle(download_service=downloads, rom_adoption_service=adoption)
-    return CallDispatcher(Endpoints(_make_application(services), HostStatus()), LOGGER)
+    return CallDispatcher(Endpoints(_make_application(services)), LOGGER)
 
 
 async def _answer(dispatcher: CallDispatcher, route: str, args: list[Any]) -> Any:

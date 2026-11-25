@@ -327,23 +327,13 @@ class StatusService:
         if not save_sync_enabled(self._settings):
             conflicts = []
 
-        # When saves go to the content dir, override the display with a clear
-        # "not supported" status — no local files were probed, so the normal
-        # computation would report a misleading "No saves" (#239).
-        if savefiles_in_content_dir:
-            save_sync_display = {
-                "status": "none",
-                "label": "Save sync off — saves in content dir",
-                "last_sync_check_at": None,
-            }
-        else:
-            save_sync_display = asdict(
-                compute_save_sync_display(
-                    file_statuses,
-                    last_sync_check_at,
-                    server_query_failed=server_query_failed,
-                )
+        save_sync_display = asdict(
+            compute_save_sync_display(
+                file_statuses,
+                last_sync_check_at,
+                server_query_failed=server_query_failed,
             )
+        )
 
         return {
             "rom_id": rom_id,
@@ -410,9 +400,8 @@ class StatusService:
 
         The additive ``savefiles_in_content_dir: bool`` flag is ``True``
         where a save Tender could otherwise sync sits beside the ROM
-        (``SaveAnswer.in_content_directory``): local probing is skipped and
-        the display reads "Save sync off", while playtime / device_id stay
-        intact.
+        (``SaveAnswer.in_content_directory``): local probing is skipped, while
+        playtime / device_id stay intact.
 
         The save-answer reading, the directory follow it feeds (for an installed
         ROM) and the ``rom_save_sync_states`` read-modify-write (the

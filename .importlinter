@@ -27,11 +27,10 @@ forbidden_modules =
 # ...and the other direction, which is the half that rots without a check. The
 # first service that wants to send an event would reach in here for the sink,
 # and from then on the composition root would no longer be the only place that
-# knows a transport exists. ``main.py`` and ``check.py``, the two entry points,
-# are the modules allowed to know, and neither is a package, so nothing in this
-# list can name them.
-[importlinter:contract:nobody-imports-the-host]
-name = Only the entry point may import the host
+# knows a transport exists. The list names the application's packages, so a
+# module outside them — an entry point, a test, a dev script — is not covered.
+[importlinter:contract:no-layer-imports-the-host]
+name = The application's layers must not import the host
 type = forbidden
 source_modules =
     services

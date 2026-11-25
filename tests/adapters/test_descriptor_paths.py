@@ -502,7 +502,10 @@ class TestIdentityOnlyClaims:
         source = safe / "game"
         self._tree(source)
         claim = claim_source(str(source), str(safe), digest=False)
+        before = (source / "disc.bin").stat()
         (source / "disc.bin").write_bytes(b"\x02" * 4096)
+        # Same size, and the filesystem's timestamp tick can outlast the gap since the claim: move the mtime by hand.
+        os.utime(source / "disc.bin", ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000_000))
 
         with pytest.raises(RuntimeError, match="subtree changed"):
             remove_claimed(str(source), str(safe), claim)

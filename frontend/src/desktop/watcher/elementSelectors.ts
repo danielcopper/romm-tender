@@ -108,10 +108,6 @@ export function locateOverviewPanel(doc: Document): Located | null {
   return null;
 }
 
-export function findSteamOverviewPanel(doc: Document): HTMLElement | null {
-  return locateOverviewPanel(doc)?.element ?? null;
-}
-
 /** `.<class>` for each class `@decky/ui` resolved, leaving out the ones it did not. */
 function classSelectors(...names: (string | undefined)[]): string[] {
   return names.filter((name): name is string => Boolean(name)).map((name) => `.${name}`);

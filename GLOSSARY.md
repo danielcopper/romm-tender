@@ -136,8 +136,7 @@ installed, and the bin root is shared with every other program the user installe
 name of ours. The bin root has no XDG variable either: the basedir spec names the path, so its ladder is
 `TENDER_BIN_DIR` and then the built-in default. Every reader takes the seven off the one `AppDirectories` the entry
 point resolved, which reaches `bootstrap()` as an argument and the services as `WiringConfig.directories`; apart from
-Tender's folder, nothing composes a directory of its own from a home or a folder name. `resolve_directories` has exactly
-one caller (`main.py`), and `config_root` / `data_root` have none left.
+Tender's folder, nothing composes a directory of its own from a home or a folder name.
 
 One folder named after the program is written outside the seven: [Tender's folder](#tenders-folder), `~/Tender` unless
 the user chose another place. It is not a root resolved from the environment, and it sits where it does because it is
@@ -317,9 +316,8 @@ Two objects the backend is made of, built in this order:
 - **Application** — the backend as `bootstrap/` builds it (`build_application()`): every wired service, plus what the
   process does with them as a whole — the start-up repairs and the shutdown. It runs none of them by itself; the entry
   point calls each at its moment.
-- **Endpoints** — the class in `main.py` that holds every Tender endpoint, over the Application and the host's status
-  record: each endpoint calls a use case on a service, except `get_host_status`, which answers from that record.
-  Endpoints answers a refusal the use case raises in the wire's failure shape.
+- **Endpoints** — the class in `main.py` that holds every Tender endpoint, over the Application: each endpoint calls a
+  use case on a service. Endpoints answers a refusal the use case raises in the wire's failure shape.
 
 _Avoid_: **plugin** for either — Tender is not a plugin ([What Tender is](#what-tender-is)).
 

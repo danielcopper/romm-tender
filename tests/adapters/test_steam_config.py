@@ -105,33 +105,7 @@ class TestGridDir:
         assert adapter.grid_dir() is None
 
 
-# ── read_shortcuts / write_shortcuts ────────────────────────
-
-
-class TestReadShortcuts:
-    def test_returns_empty_when_no_path(self, tmp_path):
-        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
-        result = adapter.read_shortcuts()
-        assert result == {"shortcuts": {}}
-
-    def test_returns_empty_when_file_missing(self, tmp_path):
-        userdata = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123"
-        userdata.mkdir(parents=True)
-        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
-        result = adapter.read_shortcuts()
-        assert result == {"shortcuts": {}}
-
-    def test_reads_existing_vdf(self, tmp_path):
-        userdata = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123"
-        config_dir = userdata / "config"
-        config_dir.mkdir(parents=True)
-        vdf_data = {"shortcuts": {"0": {"appname": "Test"}}}
-        vdf_path = config_dir / "shortcuts.vdf"
-        with open(str(vdf_path), "wb") as f:
-            f.write(vdf.binary_dumps(vdf_data))
-        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
-        result = adapter.read_shortcuts()
-        assert result["shortcuts"]["0"]["appname"] == "Test"
+# ── shortcuts.vdf reads ─────────────────────────────────────
 
 
 class TestReadShortcutExes:
@@ -277,38 +251,6 @@ class TestReadShortcutLaunchOptions:
         adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
 
         assert adapter.read_shortcut_launch_options() is None
-
-
-class TestWriteShortcuts:
-    def test_writes_vdf_file(self, tmp_path):
-        userdata = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123"
-        config_dir = userdata / "config"
-        config_dir.mkdir(parents=True)
-        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
-        data = {"shortcuts": {"0": {"appname": "Written"}}}
-        adapter.write_shortcuts(data)
-        vdf_path = config_dir / "shortcuts.vdf"
-        assert vdf_path.exists()
-        with open(str(vdf_path), "rb") as f:
-            loaded = vdf.binary_loads(f.read())
-        assert loaded["shortcuts"]["0"]["appname"] == "Written"
-
-    def test_raises_when_no_user_dir(self, tmp_path):
-        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
-        with pytest.raises(RuntimeError, match="Cannot find"):
-            adapter.write_shortcuts({"shortcuts": {}})
-
-    def test_atomic_write_via_replace(self, tmp_path):
-        """Write uses tmp file + os.replace for atomicity."""
-        userdata = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123"
-        config_dir = userdata / "config"
-        config_dir.mkdir(parents=True)
-        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
-        adapter.write_shortcuts({"shortcuts": {}})
-        # .tmp should not remain
-        tmp_file = config_dir / "shortcuts.vdf.tmp"
-        assert not tmp_file.exists()
-        assert (config_dir / "shortcuts.vdf").exists()
 
 
 # ── write_shortcut_icon ─────────────────────────────────────

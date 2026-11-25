@@ -490,8 +490,7 @@ while Steam is running (Steam holds the file in memory and rewrites it from memo
 `shortcuts.vdf` for three questions — which shortcuts the one-time relocation still has to repoint
 (`read_shortcut_exes`), what a shortcut's launch options are when Steam's reports did not confirm a write
 (`read_shortcut_launch_options`), and which icon each shortcut shows, which tells the shortcut artwork job whether its
-icon slot is filled (`read_shortcut_icons`) — and its whole-file `shortcuts.vdf` helpers (`read_shortcuts`,
-`write_shortcuts`) are on no live path since the icon write moved to `SteamClient.Apps.SetShortcutIcon`.
+icon slot is filled (`read_shortcut_icons`) — and never writes it.
 
 ### shortcuts.vdf structure
 

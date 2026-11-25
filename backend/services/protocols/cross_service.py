@@ -311,37 +311,35 @@ class BiosChecker(Protocol):
 
     ``launching_emulator`` is pre-resolved rather than a ROM filename: the
     per-game emulator is resolved upstream (GameDetailService runs
-    ``ActiveCoreReader.active_emulator_for_rom`` where it already holds the
-    ``rom_id``) so the BIOS filter never re-derives it. It is the whole PICK
+    ``ActiveCoreReader.resolve_rom`` where it already holds the ``rom_id``) so
+    the BIOS filter never re-derives it. It is the whole PICK
     rather than one field of it: the answer states both the emulator it was
     filtered by and the name it prints, so the two travel as one value and no
     caller can pair one emulator's identity with another's name
     (``domain.emulator_commands.LaunchingEmulator``). Its identity names a
-    standalone emulator as readily as a libretro core. ``None`` means "use the
-    platform's own pick" — the ``check_platform_bios`` endpoint passes it (by
-    leaving it out), and so does the per-game path when nothing could be
-    resolved for the ROM.
+    standalone emulator as readily as a libretro core. ``None``, passed when
+    nothing could be resolved for the ROM, means "use the platform's own pick".
 
     ``rom_regions`` are the game's own regions as RomM names them, so a one-of
     group is judged for the regions this game is sold in rather than for every
-    region the group serves. Empty for a caller with no game in hand.
+    region the group serves.
 
     ``install`` is the game's install record, whose system an installed game
     is asked about; ``None`` asks the platform's system in the answering
     source.
 
-    ``platform_folder`` is the folder RomM keeps the game's platform in, whose
-    firmware store the answer reads; ``platform_slug`` is the slug by which the
-    system and the emulator pick are found.
+    ``platform_folder`` is the folder RomM keeps the game's platform in, by
+    which the emulator pick is found and whose firmware store the answer reads;
+    ``platform_slug`` is the slug by which the system is found.
     """
 
     async def check_platform_bios(
         self,
         platform_slug: str,
         platform_folder: str,
-        launching_emulator: LaunchingEmulator | None = None,
-        rom_regions: tuple[str, ...] = (),
-        install: RomInstall | None = None,
+        launching_emulator: LaunchingEmulator | None,
+        rom_regions: tuple[str, ...],
+        install: RomInstall | None,
     ) -> dict[str, Any]: ...
 
 

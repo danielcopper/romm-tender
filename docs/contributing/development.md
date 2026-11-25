@@ -756,7 +756,7 @@ backend/
                                      #   (Backend Architecture → Domain; the aggregate roots: Database Design)
     _aggregate.py                    # the @cosmic_aggregate decorator
   models/                            # Data shapes (TypedDicts/dataclasses) — independent of other layers
-  lib/                               # Cross-cutting utilities (errors, list_result, iso_time, path_safety, late_binding, ...)
+  lib/                               # Cross-cutting utilities (errors, list_result, path_safety, late_binding, ...)
   _vendor/                           # Vendored third-party deps — not our code, only imported by adapters;
                                      #   each package's provenance is in _vendor/README.md
 frontend/src/                        # Frontend TypeScript

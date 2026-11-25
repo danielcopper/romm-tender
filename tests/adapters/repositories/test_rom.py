@@ -605,16 +605,6 @@ class TestEmulatorOverride:
         stored = uow._conn.execute("SELECT emulator_override FROM roms WHERE rom_id = 1").fetchone()[0]
         assert stored is None
 
-    def test_get_all_overrides_omits_null_rows(self, uow: SqliteUnitOfWork):
-        uow.roms.save(_rom(1))
-        uow.roms.save(_rom(2))
-        uow.roms.save(_rom(3))
-        uow.roms.set_emulator_override(1, "PCSX ReARMed", "retrodeck")
-        uow.roms.set_emulator_override(3, "Beetle PSX HW", "retrodeck")
-
-        overrides = uow.roms.get_all_emulator_overrides()
-        assert overrides == {1: "PCSX ReARMed", 3: "Beetle PSX HW"}
-
     def test_the_source_round_trips_beside_the_label(self, uow: SqliteUnitOfWork):
         uow.roms.save(_rom(1))
         uow.roms.set_emulator_override(1, "PCSX ReARMed", "emudeck")
@@ -622,11 +612,6 @@ class TestEmulatorOverride:
         loaded = uow.roms.get(1)
         assert loaded is not None
         assert (loaded.emulator_override, loaded.emulator_override_source) == ("PCSX ReARMed", "emudeck")
-
-    def test_get_all_overrides_empty_when_none_pinned(self, uow: SqliteUnitOfWork):
-        uow.roms.save(_rom(1))
-        uow.roms.save(_rom(2))
-        assert uow.roms.get_all_emulator_overrides() == {}
 
 
 class TestResyncPreservesOverride:

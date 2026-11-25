@@ -43,7 +43,6 @@ _EXPECTED_READS = frozenset(
         "count",
         "count_bound",
         "get",
-        "get_all_emulator_overrides",
         "get_all_for_rom",
         "get_bound_platform_folders",
         "get_by_app_id",
@@ -174,7 +173,6 @@ class TestReadsAreNotFlagged:
             "def go(uow):\n"
             "    uow.roms.get(1)\n"
             "    uow.roms.get_by_app_id(2)\n"
-            "    uow.roms.get_all_emulator_overrides()\n"
             "    uow.roms.iter_all()\n"
             "    uow.roms.iter_by_platform_folder('n64')\n"
             "    uow.roms.iter_by_group_key('k')\n"

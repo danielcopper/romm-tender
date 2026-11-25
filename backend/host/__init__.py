@@ -5,15 +5,11 @@ single-instance lock, brings the backend up in an order that makes its readiness
 signal true, binds a loopback port, serves the panel bundle, and carries calls
 and events over one WebSocket.
 
-**Standard library only.** Nothing here imports ``services``, ``adapters``,
-``domain`` or ``bootstrap``, and nothing outside ``main.py`` imports this
-package — both directions are contracts in ``.importlinter``. The second half is
-the one that rots without a check: the first service that wants to send an event
-would reach in here for the sink, and the composition root would stop being the
-only place that knows a transport exists.
+**Standard library only.** The boundary in both directions, and why:
+``docs/architecture/backend-architecture.md``, "The host".
 
-The names below are this package's whole public surface; ``main.py`` imports
-them from here and never from a submodule.
+The names below are this package's whole public surface; the entry points
+(``main.py``, ``check.py``) import them from here and never from a submodule.
 """
 
 from host.access import new_token

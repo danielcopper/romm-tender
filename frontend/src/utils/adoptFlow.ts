@@ -87,13 +87,9 @@ export interface AdoptionFlowHooks {
   /** What the backend proved about a candidate under another name in the folder. */
   setCandidatePresent(present: boolean): void;
   /**
-   * Called only when the flow ends `adopted`, which a launch-options write
-   * that rejects, or is skipped for want of an appId or a launch command, does
-   * not prevent. A write refused because the caller's lease owner has gone, or
-   * that outlasts the lease's time limit, ends `failed` instead, and this is not
-   * called. Called after both flags are
-   * cleared and before `romm_data_changed` / `rom_adopted` is dispatched and the
-   * success toast shown.
+   * Called only when the flow ends `adopted`, after both flags are cleared and
+   * before `romm_data_changed` / `rom_adopted` is dispatched and the success
+   * toast shown.
    */
   onAdopted(): void;
 }
@@ -304,10 +300,7 @@ async function resolveVanished(
   return "cancelled";
 }
 
-// Record what is on disk as the install, then write the launch command onto
-// the shortcut as the download-complete listener does — an adopted
-// install is an install (ADR-0028), so it must be as launchable as a
-// downloaded one the moment the dialog closes.
+// Record what is on disk as the install: an adopted install is an install (ADR-0028).
 async function adopt(
   flow: DownloadWithAdoption,
   candidatePath: string | undefined,

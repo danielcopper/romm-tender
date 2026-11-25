@@ -1,56 +1,16 @@
-"""Where Tender's user data lives.
+"""The name Tender's own directories carry, and where its launcher sits.
 
-Contract: the name every directory this program derives for itself carries, two
-roots composed out of a home directory, and the two ways the launcher's path is
-composed. Nothing here touches the filesystem.
+Nothing here touches the filesystem.
 
-``domain/app_directories.py`` is what actually answers where the directories
-are, and it names five of its seven after the constant below. The two functions
-here compose the same two names from a home directory alone; they have no
-production caller today.
-
-The roots are named after :data:`APP_DIR_NAME` and nothing else. Which older
-directory a user's data might once have come from is not a question this program
-asks any more: the backend is told where its directories are
-(``domain/app_directories.py``) rather than deriving them from a folder a plugin
-loader named.
+``domain/app_directories.py`` is what answers where the directories are.
 """
 
 from __future__ import annotations
 
 import os
 
-# The name every directory this program derives for itself carries — the two
-# below, and five of the seven in ``domain/app_directories.py``. Never derived
-# from ``domain/identity.py``'s ``PACKAGE_NAME``, which happens to spell it
-# identically: that one names the package a server is told about and is free to
-# be renamed with it, and a one-line edit there would then move every user's
-# library on the next start, with nothing failing and nothing said.
-# ``domain/identity.py`` carries the rest of that split.
+# Not derived from ``PACKAGE_NAME``, which spells it identically; ``domain/identity.py``'s docstring says why.
 APP_DIR_NAME = "romm-tender"
-
-# The two functions below compose a root out of a home directory and nothing
-# else. The environment is read in ``domain/app_directories.py``, which is the
-# module that answers where this program's directories are; these two answer
-# what they are CALLED, and are what a caller uses when it already has a home.
-
-
-def config_root(user_home: str) -> str:
-    """The root holding user-intent configuration for the user at *user_home*."""
-    return os.path.join(user_home, ".config", APP_DIR_NAME)
-
-
-def data_root(user_home: str) -> str:
-    """The root holding what cannot be fetched again — GLOSSARY.md names what that is.
-
-    Two things are NOT here, and both were once. Covers and artwork are
-    re-derivable from the server and live under the cache root
-    (``domain/app_directories.py``); the launcher is an executable and lives in
-    the directory a user's own executables go in, which is not named after this
-    program at all.
-    """
-    return os.path.join(user_home, ".local", "share", APP_DIR_NAME)
-
 
 # The launcher's own file name, the directory name it sits in where a root is
 # what a caller has, and the suffix a shortcut is recognised by. All three are

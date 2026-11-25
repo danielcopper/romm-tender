@@ -1064,14 +1064,7 @@ class TestPruneOrphanedArtworkCache:
 
 
 def _forbidden_vdf(*_args, **_kwargs):
-    """Stand-in for shortcuts.vdf I/O that must never run during an icon save.
-
-    Steam owns shortcuts.vdf in memory and clobbers external writes, so the
-    icon-save path only lays down the grid PNG. Wiring this in for
-    ``read_shortcuts`` / ``write_shortcuts`` turns any regression that
-    re-introduces the VDF read-modify-write into a loud failure.
-    """
-    raise AssertionError("shortcuts.vdf must not be read or written during an icon save")
+    raise AssertionError("shortcuts.vdf must not be read here")
 
 
 class TestSaveShortcutIcon:
@@ -1087,8 +1080,6 @@ class TestSaveShortcutIcon:
         self, steamgrid, uow, sgdb_artwork_cache, tmp_path
     ):
         written = _record_icon_writes(steamgrid, tmp_path)
-        steamgrid.steam_config.read_shortcuts = _forbidden_vdf  # type: ignore[method-assign]
-        steamgrid.steam_config.write_shortcuts = _forbidden_vdf  # type: ignore[method-assign]
         steamgrid.service._loop = asyncio.get_running_loop()
         _seed_rom(uow, 42, app_id=12345, sgdb_id=9999)
         _cache_icon(sgdb_artwork_cache, 42, b"real icon png", image_id=31)

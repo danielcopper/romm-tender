@@ -159,12 +159,6 @@ class HostServer:
         self._port = 0
         self._connection: HostConnection | None = None
         self._panel_present = asyncio.Event()
-        # Summed across connections rather than read off the live one. The case
-        # this counter exists for is a panel and a backend that disagree about
-        # the wire, and the development loop reaches it by swapping the frontend
-        # — which is a NEW connection, so a per-connection count would reset at
-        # exactly the moment it had something to report.
-        self._dropped_by_closed_connections = 0
         # None until the injector is wired: nothing has looked at Steam's context then.
         self._reload_outlook: Callable[[], Awaitable[ReloadOutlook]] | None = None
         self._stranded_sessions: OrderedDict[str, ReloadOutlook] = OrderedDict()
@@ -197,12 +191,6 @@ class HostServer:
     async def wait_connected(self) -> None:
         """Return once a panel is connected — at once, if one already is."""
         await self._panel_present.wait()
-
-    @property
-    def dropped_messages(self) -> int:
-        """How many messages this SERVER could not make sense of, across every connection."""
-        live = self._connection.dropped_messages if self._connection is not None else 0
-        return self._dropped_by_closed_connections + live
 
     def asset_url(self, filename: str) -> str:
         """The complete address *filename* is served at, token included.
@@ -502,7 +490,6 @@ class HostServer:
             await connection.run()
         finally:
             self._events.detach(sender)
-            self._dropped_by_closed_connections += connection.dropped_messages
             if self._connection is connection:
                 self._connection = None
                 self._panel_present.clear()

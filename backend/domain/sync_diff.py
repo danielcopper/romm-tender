@@ -6,9 +6,8 @@ stale), enabled-collection add/remove diffs, the platform-collection
 membership predicate that drives the platform-collection diff, and the platform
 name a ROM is filed under.
 
-State reads (registry, last_synced_*), setting reads, network fetches, and
-Steam interaction stay in LibraryService; this module receives the relevant
-slices as primitive parameters and returns primitives or NamedTuple results.
+It reads no state or settings, fetches nothing and touches no Steam: callers
+hand it the slices it compares.
 """
 
 from __future__ import annotations

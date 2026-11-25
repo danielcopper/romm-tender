@@ -360,20 +360,7 @@ def bootstrap(
     # and every later seam (uuid_gen/sleeper neighbours, runtime bundle).
     clock = SystemClock()
 
-    # The launcher is installed outside every directory this program owns: a
-    # shortcut's ``exe`` names it, and that is the one thing about a shortcut
-    # this program cannot repair from inside. The bin root is XDG's place for a
-    # user's own executables, and a place the uninstaller never removes — so a
-    # shortcut goes on working after the program that wrote it is gone. It is
-    # written on every start rather than once, so the launcher a shortcut runs
-    # is always the one this release ships — installed once, it would freeze at
-    # whatever version the day of the move happened to bring.
-    #
-    # The path a new shortcut is built against follows the INSTALL, not the
-    # intent: the bin root only where this start actually got the launcher into
-    # it, and the copy the release ships otherwise. A start whose write failed is
-    # the second case, and pointing a shortcut at a home the write never reached
-    # would name a file that is not there.
+    # Why the bin root, and why every start: docs/architecture/backend-architecture.md, "The launcher's home".
     installed_launcher = launcher_in_bin_dir(directories.bin_dir)
     launcher_at_home = LauncherInstallAdapter(
         source=launcher_path(directories.code_dir),
@@ -410,9 +397,6 @@ def bootstrap(
         logger.exception("SQLite schema migration failed; the backend cannot start")
         raise
 
-    # The runtime Unit-of-Work factory: each call opens a fresh sync sqlite3
-    # connection on db_path (ADR-0004). Wired here but not yet threaded into any
-    # service config — the service cutover (#784) consumes it.
     uow_factory: UnitOfWorkFactory = functools.partial(SqliteUnitOfWork, db_path)
 
     persistence = PersistenceAdapter(directories.config_dir, logger, clock=clock)

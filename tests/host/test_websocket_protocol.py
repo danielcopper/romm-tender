@@ -305,39 +305,6 @@ class TestUnknownMessages:
 
         assert answer["result"] == {"echo": "alive"}
 
-    async def test_every_dropped_message_is_counted(self, running_host):
-        client = await WsTestClient.connect(running_host.port, running_host.token)
-        try:
-            await client.send_json({"type": "greeting"})
-            await client.send_text("{not json")
-            await client.call(1, "echo", ["settle"])
-        finally:
-            await client.close()
-
-        assert running_host.server.dropped_messages == 2
-
-    async def test_the_count_survives_the_connection_that_earned_it(self, running_host):
-        """A reconnect is exactly when this counter has something to say.
-
-        The development loop swaps the frontend without restarting the backend,
-        which is a new connection — so a per-connection count would reset at the
-        moment a panel and backend first disagreed about the wire.
-        """
-        first = await WsTestClient.connect(running_host.port, running_host.token, session="panel-1")
-        await first.send_json({"type": "greeting"})
-        await first.call(1, "echo", ["settle"])
-        await first.close()
-        await _until_no_panel(running_host)
-
-        second = await WsTestClient.connect(running_host.port, running_host.token, session="panel-2")
-        try:
-            await second.send_json({"type": "greeting"})
-            await second.call(2, "echo", ["settle"])
-        finally:
-            await second.close()
-
-        assert running_host.server.dropped_messages == 2
-
     async def test_a_binary_frame_closes_the_connection(self, running_host):
         """Every message here is text; a binary frame is a protocol disagreement."""
         client = await WsTestClient.connect(running_host.port, running_host.token)

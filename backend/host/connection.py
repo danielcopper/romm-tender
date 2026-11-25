@@ -99,18 +99,12 @@ class HostConnection:
         self._write_lock = asyncio.Lock()
         self._calls: set[asyncio.Task[None]] = set()
         self._closed = False
-        self._dropped_messages = 0
         self._last_pong = 0.0
 
     @property
     def session_id(self) -> str:
         """The identity the caller claimed for itself when it connected."""
         return self._session_id
-
-    @property
-    def dropped_messages(self) -> int:
-        """How many messages this connection could not make sense of."""
-        return self._dropped_messages
 
     @property
     def closed(self) -> bool:
@@ -293,13 +287,11 @@ class HostConnection:
         try:
             message = decode_message(raw.decode("utf-8"))
         except ValueError as exc:
-            self._dropped_messages += 1
             self._logger.warning(f"host: dropping a message that is not a protocol message: {exc}")
             return
 
         kind = message.get("type")
         if kind != TYPE_CALL:
-            self._dropped_messages += 1
             self._logger.warning(f"host: dropping a message of type {kind!r} (id {message.get('id')!r})")
             return
 
@@ -307,7 +299,6 @@ class HostConnection:
         method = message.get("method")
         args = message.get("args", [])
         if call_id is None or not isinstance(method, str) or not isinstance(args, list):
-            self._dropped_messages += 1
             self._logger.warning(f"host: dropping a malformed call (id {call_id!r}, method {method!r})")
             return
 

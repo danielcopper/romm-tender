@@ -1,7 +1,7 @@
 ---
 status: accepted
 decided: 2026-09-16
-updated: 2026-10-07
+updated: 2026-11-25
 amended-by: [0043]
 ---
 
@@ -137,3 +137,10 @@ repository's layout, and it would be wrong the moment the program was installed 
   directories, which is why hosting moves no files.
 - [ADR-0006](0006-narrow-unit-of-work-scope.md) — every unit of work opens with `BEGIN IMMEDIATE`, which is what the
   single-instance lock protects.
+
+## Amendment — who imports the host
+
+Recorded for [#2777](https://github.com/danielcopper/romm-tender/issues/2777). §1's "nothing but `backend/main.py`
+imports it" no longer holds: the `.importlinter` contract keeps only the application's layers from `host`, and modules
+outside them import it. What holds now is in
+[backend-architecture.md, "The host"](../architecture/backend-architecture.md#the-host-backendhost).

@@ -37,8 +37,6 @@ import { sourceName } from "./emulatorSourceWording";
 import { transportFailureSentence } from "./transportFailureWording";
 import { TimeoutError } from "./withTimeout";
 
-const REFUSING: ReadonlySet<GameLaunch["state"]> = new Set(["needs_installing", "not_this_emulator"]);
-
 /**
  * Why the verdict could not be established, worded; the reason is Tender's word
  * for the resolver's. `source` is the source that answered, named as the user
@@ -441,11 +439,6 @@ function listedExtensions(extensions: readonly string[]): string {
   return shown.join(", ");
 }
 
-/** Whether this verdict refuses a start. */
-export function launchRefused(launch: GameLaunch | null): boolean {
-  return launch !== null && REFUSING.has(launch.state);
-}
-
 /**
  * Why the game cannot start with its entry, or `null` where the verdict lets it
  * start: the refusal's sentence, then what the resolver says beside it.
@@ -498,11 +491,6 @@ export function launchNotes(launch: GameLaunch | null, source: AnsweringSource |
   }
   if (launch.state !== "starts") return [];
   return allSaid(launch, true, source).map((each) => each.note);
-}
-
-/** The first of {@link launchNotes}, or `null` where there is nothing to say. */
-export function launchNote(launch: GameLaunch | null, source: AnsweringSource | null): string | null {
-  return launchNotes(launch, source)[0] ?? null;
 }
 
 /**

@@ -218,15 +218,6 @@ class SqliteRomRepository(BaseRepository):
             (label, source, rom_id),
         )
 
-    def get_all_emulator_overrides(self) -> dict[int, str]:
-        """Return ``rom_id`` -> pinned core label for every ROM with an override.
-
-        Rows whose ``emulator_override`` is NULL (no override) are omitted, so
-        the map holds only the ROMs that deviate from the system default.
-        """
-        cursor = self._conn.execute("SELECT rom_id, emulator_override FROM roms WHERE emulator_override IS NOT NULL")
-        return {row["rom_id"]: row["emulator_override"] for row in cursor}
-
     def set_selected_disc(self, rom_id: int, filename: str | None) -> None:
         """Write (or clear) the per-game disc selection for ``rom_id``.
 

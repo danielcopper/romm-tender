@@ -230,11 +230,7 @@ class UnitApplier:
         if box.is_cancelling():
             return 0
 
-        # Per-unit incremental skip: registry already matches the
-        # server-side state for this platform, so neither apply nor
-        # commit have any work. Skip the frontend roundtrip and the
-        # no-op two-phase commit. Force Full Sync clears ``last_sync``
-        # upstream, so ``skipped`` is always False on forced runs.
+        # Force Full Sync clears every completion stamp (``SyncReporter.clear_sync_cache``), so its run skips no unit.
         if skipped:
             self._logger.info(f"Per-unit apply skipped: {unit.name} ({len(unit_roms)} ROMs unchanged)")
             # A wholesale-skipped unit's ROMs are already correct in Steam, so they

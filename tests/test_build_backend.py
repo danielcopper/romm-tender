@@ -130,17 +130,13 @@ class TestBuildBackend:
 
         assert built.server_identity == app.user_agent
 
-    async def test_calls_reach_the_endpoints_over_the_application_and_the_host_status(
-        self, tmp_path, monkeypatch: pytest.MonkeyPatch
-    ):
+    async def test_calls_reach_the_endpoints_over_the_application(self, tmp_path, monkeypatch: pytest.MonkeyPatch):
         built, _app, _status, _events, _asked = await self._build(tmp_path, monkeypatch)
 
         service_answer = json.loads(await built.dispatcher.dispatch(1, "test_connection", []))
-        host_answer = json.loads(await built.dispatcher.dispatch(2, "get_host_status", []))
 
         assert built.dispatcher.method_names == route_names(Endpoints)
         assert service_answer["result"] == {"success": True}
-        assert host_answer["result"]["failed_startup_steps"] == ["prune_orphaned_cover_cache"]
 
 
 class TestTheFocusWatcher:

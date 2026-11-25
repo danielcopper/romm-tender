@@ -123,10 +123,9 @@ def _translating_refusals[C: type](cls: C) -> C:
 class Endpoints:
     """What the panel can call: one public method marked ``@route`` per endpoint.
 
-    Every endpoint but ``get_host_status`` calls a use case on a service and
-    hands its answer back; the few that do more translate an argument or an
-    answer for the wire and nothing else. ``get_host_status`` answers from the
-    host's own record of this run, which no service holds.
+    Every endpoint calls a use case on a service and hands its answer back;
+    the few that do more translate an argument or an answer for the wire and
+    nothing else.
 
     A use case that raises its refusal leaves the wire's failure shape to this
     class: every endpoint answers a raised ``Refused`` or ``DomainRefused`` with
@@ -137,9 +136,8 @@ class Endpoints:
     error.
     """
 
-    def __init__(self, app: Application, host_status: HostStatus) -> None:
+    def __init__(self, app: Application) -> None:
         self._services = app.services
-        self._host_status = host_status
 
     @route
     async def test_connection(self):
@@ -375,12 +373,6 @@ class Endpoints:
     @route
     async def identify_library_firmware(self, md5):
         return await self._services.firmware_service.identify_library_firmware(md5)
-
-    @route
-    async def check_platform_bios(self, platform_slug, platform_folder):
-        # Platform-level BIOS check: no per-game core to thread, so the system
-        # default drives the filter.
-        return await self._services.firmware_service.check_platform_bios(platform_slug, platform_folder)
 
     @route
     async def get_bios_status(self, rom_id):
@@ -1219,27 +1211,6 @@ class Endpoints:
         """
         return await self._services.shortcut_file_service.get_shortcut_launch_options(app_ids)
 
-    @route
-    def get_host_status(self):
-        """Report what only the process hosting this backend knows about its own run.
-
-        Returns ``{"port": int, "failed_startup_steps": [str],
-        "dropped_messages": int}``.
-
-        Both counts exist because the alternative is a fault that lives only in a
-        log file. A start-up repair that fails on every start would otherwise be
-        noticed by nobody who did not go looking, and a panel and backend that
-        disagree about the protocol would show as nothing at all — the messages
-        are dropped and the connection is deliberately kept. Neither is worth an
-        event: an event is a statement about a moment, and both of these are
-        states, read when the panel opens.
-        """
-        return {
-            "port": self._host_status.port,
-            "failed_startup_steps": list(self._host_status.failed_startup_steps),
-            "dropped_messages": self._host_status.count_dropped_messages(),
-        }
-
 
 async def build_backend(
     *,
@@ -1254,10 +1225,9 @@ async def build_backend(
 ) -> BackendBuild:
     """Build the :class:`Application`, run its start-up repairs, and answer with what the host needs of it.
 
-    A start-up repair that fails is recorded on *status*, which is where
-    ``get_host_status`` reads it from. *focus_watcher* is the focus watcher's
-    switch, which sends through the host's attachment to Steam and releases
-    its pin in the host's step before that attachment ends.
+    A start-up repair that fails is recorded on *status*. *focus_watcher* is
+    the focus watcher's switch, which sends through the host's attachment to
+    Steam and releases its pin in the host's step before that attachment ends.
     """
     app = build_application(
         directories=directories,
@@ -1275,7 +1245,7 @@ async def build_backend(
     app.run_startup_repairs(status.record_failed_step)
     logger.info("Tender backend loaded")
     return BackendBuild(
-        dispatcher=CallDispatcher(Endpoints(app, status), logger),
+        dispatcher=CallDispatcher(Endpoints(app), logger),
         server_identity=app.user_agent,
         shutdown=app.shutdown,
         before_detach=app.services.controller_focus_service.release_pin,

@@ -245,7 +245,7 @@ describe("saveSyncBadge", () => {
     });
 
     describe("where the availability read failed", () => {
-      const BESIDE_THE_CONTENT = { status: "none", label: "Save sync off — saves in content dir" } as const;
+      const BESIDE_THE_CONTENT = { status: "none", label: "No saves" } as const;
       const saveStatus = status({ savefiles_in_content_dir: true });
 
       it("says so in grey from the save status, over the store's sentence", () => {

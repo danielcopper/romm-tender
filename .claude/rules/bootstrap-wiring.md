@@ -19,9 +19,9 @@ never deep-import a submodule. Adapter instantiation never happens in `main.py` 
 in `bootstrap()` and passed through `CallbackBundle`.
 
 **Process boundaries — `main.py` vs `bootstrap/`**: `[ours]` `main.py` owns the process entry point (`run()` and
-`build_backend()`) and `Endpoints` (one public method marked `@route` per endpoint), which takes the `Application` and
-the host's status record in its constructor and holds nothing else. `bootstrap/` owns adapter instantiation, service
-wiring and the `Application`. The split is binding — no endpoints in `bootstrap/`, no service wiring in `main.py`.
+`build_backend()`) and `Endpoints` (one public method marked `@route` per endpoint), which takes the `Application` in
+its constructor and holds nothing else. `bootstrap/` owns adapter instantiation, service wiring and the `Application`.
+The split is binding — no endpoints in `bootstrap/`, no service wiring in `main.py`.
 
 `check.py` beside `main.py` is the second entry point, the pre-install check's (`check()`): it builds the `Application`
 on copies of the live data and runs nothing of it — no start-up repair, no host. It is a file of its own rather than a
@@ -31,15 +31,16 @@ logging, and the event sink and Steam reader `build_application` takes — as `m
 itself, which the build never reaches, so a `main.py` that does not import is refused too — and so importing `main.py`
 may start nothing: its start stays behind `__name__ == "__main__"`.
 
-`main.py` and `check.py` are also the **only** modules that may import `host/`, which is an `.importlinter` contract in
-both directions. Everything the host needs from the application it gets handed: a dispatcher, an event sink, and the
-directories the entry point resolved. `bootstrap()` is **told** where those directories are and derives none of them.
-What the `Application` needs from the host it takes as a plain callable or a Protocol-typed reader, never the status
-record — `run_startup_repairs` gets the failure recorder, and `build_application` the event sink's emit, the host's
-reading of Steam (`SteamInterfaceReader`) and the host's way of handing Steam a URL (`SteamUrlControl`, with the focus
-watcher's switch beside it) — and what the host needs from the `Application` it gets on the `BackendBuild`: the
-dispatcher, the identity, `shutdown`, and `before_detach`, the one step that runs while the host is still attached to
-Steam's debugger at stop (the focus watcher's release of its pin, and nothing else).
+Who may import `host/`, and what `host/` may import, are two `.importlinter` contracts:
+[backend-architecture.md, "The host"](../../docs/architecture/backend-architecture.md#the-host-backendhost). Everything
+the host needs from the application it gets handed: a dispatcher, an event sink, and the directories the entry point
+resolved. `bootstrap()` is **told** where those directories are and derives none of them. What the `Application` needs
+from the host it takes as a plain callable or a Protocol-typed reader, never the status record — `run_startup_repairs`
+gets the failure recorder, and `build_application` the event sink's emit, the host's reading of Steam
+(`SteamInterfaceReader`) and the host's way of handing Steam a URL (`SteamUrlControl`, with the focus watcher's switch
+beside it) — and what the host needs from the `Application` it gets on the `BackendBuild`: the dispatcher, the identity,
+`shutdown`, and `before_detach`, the one step that runs while the host is still attached to Steam's debugger at stop
+(the focus watcher's release of its pin, and nothing else).
 
 What `bootstrap()` does NOT read is the program's own name and version: they are constants in `domain/identity.py`,
 imported directly, and the outgoing User-Agent is composed from them. No seam, adapter or Protocol stands between the

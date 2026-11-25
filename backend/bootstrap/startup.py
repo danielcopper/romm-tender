@@ -39,8 +39,7 @@ class StartupSteps:
         """Run *step*, and answer whether it finished.
 
         A failure is logged with its traceback and reported to the caller's
-        recorder, so a routine that fails on every start is a number the panel
-        shows rather than a line only a log reader would ever find.
+        recorder.
         """
         try:
             step()

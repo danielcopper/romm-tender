@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  findSteamOverviewPanel,
   findSteamPlaySection,
   findSteamPlayButton,
   findSteamContentSections,
@@ -80,48 +79,6 @@ describe("elementSelectors", () => {
       const el = document.createElement("div");
       el.className = "RightColumn";
       expect(isPlayBarElement(el)).toBe(false);
-    });
-  });
-
-  describe("findSteamOverviewPanel", () => {
-    it("finds panel using exact class from appDetailsClasses", () => {
-      const doc = document.implementation.createHTMLDocument("Test");
-      const panel = doc.createElement("div");
-      panel.className = deckyUiInternals.appDetailsClasses?.AppDetailsOverviewPanel || "AppDetailsOverviewPanel";
-      doc.body.appendChild(panel);
-
-      expect(findSteamOverviewPanel(doc)).toBe(panel);
-    });
-
-    it("falls back to substring class match when webpack class is hashed", () => {
-      const doc = document.implementation.createHTMLDocument("Test");
-      const panel = doc.createElement("div");
-      panel.className = "appdetailsoverview_AppDetailsOverviewPanel_3xK9 custom-other";
-      doc.body.appendChild(panel);
-
-      expect(findSteamOverviewPanel(doc)).toBe(panel);
-    });
-
-    it("finds panel via Fiber component name when classes are unhashed", () => {
-      const doc = document.implementation.createHTMLDocument();
-      const panel = doc.createElement("div");
-      panel.className = "CustomPanelWrapper";
-      (panel as unknown as Record<string, unknown>)["__reactFiber$123"] = {
-        type: { displayName: "AppDetailsOverviewPanel" },
-      };
-      doc.body.appendChild(panel);
-
-      expect(findSteamOverviewPanel(doc)).toBe(panel);
-    });
-
-    it("ignores our own substitute container even if classes match", () => {
-      const doc = document.implementation.createHTMLDocument("Test");
-      const sub = doc.createElement("div");
-      sub.id = TENDER_SUBSTITUTE_ID;
-      sub.className = "AppDetailsOverviewPanel";
-      doc.body.appendChild(sub);
-
-      expect(findSteamOverviewPanel(doc)).toBeNull();
     });
   });
 
@@ -238,6 +195,16 @@ describe("elementSelectors", () => {
       doc.body.appendChild(rightPanel);
 
       expect(locateOverviewPanel(doc)).toEqual({ element: firstChild, rung: "structure" });
+    });
+
+    it("ignores our own substitute container even if classes match", () => {
+      const doc = document.implementation.createHTMLDocument("Test");
+      const sub = doc.createElement("div");
+      sub.id = TENDER_SUBSTITUTE_ID;
+      sub.className = "AppDetailsOverviewPanel";
+      doc.body.appendChild(sub);
+
+      expect(locateOverviewPanel(doc)).toBeNull();
     });
   });
 
