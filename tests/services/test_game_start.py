@@ -7,6 +7,7 @@ other launch tests use, and the conflict rules are the real ones.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -19,6 +20,10 @@ from _factories import (
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, libretro_option, standalone_option
 from fakes.fake_disc_resolver import FakeDiscResolver
+from fakes.fake_platform_systems import FakePlatformSystems
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
+from fakes.fake_save_file_store import FakeSaveFileStore
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 
@@ -32,6 +37,7 @@ from domain.start_command import ENVIRONMENT_UNREAD, SOURCE_STARTS_NO_GAMES, Sta
 from domain.tender_folder import TenderPlace
 from lib.errors import Refused
 from services.game_start import START_FOLDER, GameStartService, GameStartServiceConfig
+from services.saves.rom_info import RomInfoService, RomInfoServiceConfig
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -317,6 +323,59 @@ class TestAGameKeptAsAFolder:
         await self._start(core_info, commands)
 
         assert commands.asked[0]["content_path"] == self._EBOOT
+
+
+class TestTheSaveIsAskedAboutWhatStarts:
+    """#2221 Done when: a game's save lands where the resolver named it for that path.
+
+    The save place is the resolver's answer for the system, path and entry it
+    is asked about, so it is where the game saves when the start asks with the
+    same three.
+    """
+
+    _FOLDER = f"{_ROMS}/ps3/Game.ps3"
+    _EBOOT = f"{_FOLDER}/PS3_GAME/USRDIR/EBOOT.BIN"
+
+    @staticmethod
+    def _saves_asked(uow: FakeUnitOfWork, active_core: FakeActiveCoreResolver) -> list[tuple[Any, str, str | None]]:
+        saves = FakeSaveLocationReader()
+        RomInfoService(
+            config=RomInfoServiceConfig(
+                uow_factory=FakeUnitOfWorkFactory(uow=uow),
+                save_file_store=FakeSaveFileStore(),
+                retrodeck_folders=FakeRetroDeckFolders(),
+                active_core=active_core,
+                save_locations=saves,
+                platform_systems=FakePlatformSystems(),
+                logger=logging.getLogger(__name__),
+            )
+        ).save_answer(1)
+        return saves.calls
+
+    async def test_the_save_is_asked_with_the_system_path_and_entry_the_command_is_asked_with(self):
+        uow = FakeUnitOfWork()
+        _seed(uow)
+        active_core = FakeActiveCoreResolver(
+            default_emulator=libretro_option("mupen64plus_next_libretro", "Mupen64Plus-Next")
+        )
+        commands = _Commands()
+
+        await _service(uow, commands=commands, active_core=active_core).prepare_game_start(1)
+
+        assert self._saves_asked(uow, active_core) == [
+            (a["system"], a["content_path"], a["label"]) for a in commands.asked
+        ]
+
+    async def test_a_ps3_game_kept_as_a_folder_has_its_save_asked_about_what_its_launch_verdict_is(self):
+        """D3: the resolver is asked about the recorded launch file; only the emulator gets the folder."""
+        uow = FakeUnitOfWork()
+        _seed(uow, file_path=self._EBOOT, rom_dir=self._FOLDER, system="ps3")
+        active_core = FakeActiveCoreResolver(default_emulator=standalone_option("RPCS3 Directory (Standalone)"))
+        core_info = FakeCoreInfoProvider()
+
+        await _service(uow, core_info=core_info, active_core=active_core).prepare_game_start(1)
+
+        assert self._saves_asked(uow, active_core) == core_info.launchability_calls
 
 
 class TestAStartThatDoesNotComeAbout:
