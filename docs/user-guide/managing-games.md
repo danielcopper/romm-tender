@@ -775,9 +775,13 @@ because installing the package by hand in the emulator is exactly what you would
 PS3 folder downloaded before this version is renamed so once, when Tender next starts; a folder whose new name is
 already taken keeps its name. Where the download holds the game one folder deeper — `<game>.ps3` holding just one
 folder, with `PS3_GAME` inside that — the inner folder becomes `<game>.ps3` itself; a download already on the device is
-fixed so once, when Tender next starts. Where anything else lies beside that inner folder, nothing is moved: with RPCS3
-Shortcut, RetroDECK's default, the game's page says it cannot start a game installed as a folder, and with RPCS3
-Directory or RPCS3 ISO that it finds nothing to start in the folder.
+fixed so once, when Tender next starts. Where anything else lies beside that inner folder, nothing is moved.
+
+Tender asks about a PS3 game kept as a folder by its `EBOOT.BIN`, and RPCS3 gets the folder the answer names as the disc
+it mounts — the one holding `PS3_DISC.SFB`, wherever it lies inside `<game>.ps3`. With RPCS3 Directory or RPCS3 ISO the
+game's page says the game starts, with the line "ES-DE would not list EBOOT.BIN under this name" under **Play**: ES-DE's
+own game list shows the folder, not the file. With RPCS3 Shortcut, RetroDECK's default, the page says whether it starts
+the game cannot be established.
 
 ## Picking a Disc for Multi-Disc Games
 
