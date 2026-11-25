@@ -1,8 +1,6 @@
 """The name Tender's own directories carry, and where its launcher sits.
 
-Contract: the name every directory this program derives for itself carries, and
-the two ways the launcher's path is composed. Nothing here touches the
-filesystem.
+Nothing here touches the filesystem.
 
 ``domain/app_directories.py`` is what answers where the directories are.
 """
@@ -11,10 +9,8 @@ from __future__ import annotations
 
 import os
 
-# Never derived from ``domain/identity.py``'s ``PACKAGE_NAME``, which spells it
-# identically: a one-line edit there would then move every user's library on the
-# next start, with nothing failing and nothing said. That module's docstring
-# carries the rest of the split.
+# Never derived from ``domain/identity.py``'s ``PACKAGE_NAME``, which spells it identically; that module's docstring
+# says why.
 APP_DIR_NAME = "romm-tender"
 
 # The launcher's own file name, the directory name it sits in where a root is

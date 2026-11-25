@@ -7,10 +7,8 @@ paths:
 
 `backend/host/` is the process, not a layer of the application: the port, the protocol, the single-instance lock, the
 lifetime, and loading the panel into Steam. Standard library only. Two `.importlinter` contracts hold it apart from the
-code it hosts — it imports nothing from `services`, `adapters`, `bootstrap` or `domain`, and **no layer of the
-application imports it**; only the two entry points, `main.py` and `check.py`, do. The second half is the one that rots
-without a check: the first service that wants to send an event reaches in here for the sink, and from then on the
-composition root is no longer the only place that knows a transport exists.
+code it hosts, one in each direction:
+[backend-architecture.md, "The host"](../../docs/architecture/backend-architecture.md#the-host-backendhost).
 
 None of the seven below has a mechanical check. Each of them fails green.
 

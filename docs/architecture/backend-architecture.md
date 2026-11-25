@@ -42,10 +42,11 @@ that used to be a plugin loader's job: the single-instance lock, the start-up or
 and one WebSocket carrying calls and events. Standard library only.
 
 It is deliberately **not** a layer of the application, and the boundary runs in both directions. `host/` imports nothing
-from `services`, `adapters`, `bootstrap` or `domain`; and **no layer of the application imports `host`** — only the two
-entry points, `main.py` and `check.py`, do. Both halves are `.importlinter` contracts. The second half is the one that
-would rot without a check: the first service that wanted to send an event would reach in here for the sink, and the
-composition root would stop being the only place that knows a transport exists.
+from `services`, `adapters`, `bootstrap` or `domain`; and **no layer of the application imports `host`** — the entry
+points `main.py` and `check.py` do, and so do the tests and `scripts/dev_backend_lock.py`. Both halves are
+`.importlinter` contracts. The second half is the one that would rot without a check: the first service that wanted to
+send an event would reach in here for the sink, and the composition root would stop being the only place that knows a
+transport exists.
 
 | Module               | Owns                                                                                     |
 | -------------------- | ---------------------------------------------------------------------------------------- |
@@ -3703,13 +3704,14 @@ namespace and re-exports only — consumers write `from bootstrap import …` an
    they are the vocabulary the second half consumes.
 
 2. **`services.py`** — owns `WiringConfig` and `wire_services()`, which takes a `WiringConfig` — the four bundles and
-   the entry point's answers — and constructs every service, injecting each one's `*ServiceConfig`. Returns a frozen
-   `ServicesBundle` holding every service and the prune conflicts as typed fields. The library service's wiring is a
-   module of its own, **`library.py`**: `wire_library()` takes a `LibraryWiring` (the adapters, runtime seams and peer
-   services the parts are built from), builds the state box and every part, and answers them with the service as
-   `LibraryParts`; `wire_services()` keeps the service, and the library tests call `wire_library()` with fakes. The save
-   service's is **`saves.py`** in the same shape: `wire_saves()` takes a `SaveWiring` and answers `SaveParts`, and the
-   save tests build the package through it, handing a stand-in matrix executor in where one is needed.
+   the values carried beside them (its docstring names each) — and constructs every service, injecting each one's
+   `*ServiceConfig`. Returns a frozen `ServicesBundle` holding every service and the prune conflicts as typed fields.
+   The library service's wiring is a module of its own, **`library.py`**: `wire_library()` takes a `LibraryWiring` (the
+   adapters, runtime seams and peer services the parts are built from), builds the state box and every part, and answers
+   them with the service as `LibraryParts`; `wire_services()` keeps the service, and the library tests call
+   `wire_library()` with fakes. The save service's is **`saves.py`** in the same shape: `wire_saves()` takes a
+   `SaveWiring` and answers `SaveParts`, and the save tests build the package through it, handing a stand-in matrix
+   executor in where one is needed.
 
 3. **`application.py`** — owns `Application` and `build_application()`. `build_application()` is synchronous: it calls
    `bootstrap()`, composes the runtime bundle from the loop, the event sink's emit and the host's reading of Steam the

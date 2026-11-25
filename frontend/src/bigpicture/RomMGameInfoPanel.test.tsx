@@ -1612,7 +1612,6 @@ describe("RomMGameInfoPanel", () => {
     });
 
     it("bios: shows the rom-keyed answer, which knows the per-game pin (#1718)", async () => {
-      // The game's core needs firmware the platform's default core does not.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail());
       vi.mocked(backend.getBiosStatus).mockImplementation((romId: number) =>
         Promise.resolve(

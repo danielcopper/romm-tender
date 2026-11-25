@@ -74,8 +74,6 @@ class SteamUrls:
 
 @dataclass
 class HostStatus:
-    """The host's own record of this run, filled in as start-up proceeds."""
-
     port: int = 0
     failed_startup_steps: list[str] = field(default_factory=list)
 
