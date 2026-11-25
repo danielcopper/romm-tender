@@ -300,10 +300,7 @@ async function resolveVanished(
   return "cancelled";
 }
 
-// Record what is on disk as the install, then write the launch command onto
-// the shortcut as the download-complete listener does — an adopted
-// install is an install (ADR-0028), so it must be as launchable as a
-// downloaded one the moment the dialog closes.
+// Record what is on disk as the install: an adopted install is an install (ADR-0028).
 async function adopt(
   flow: DownloadWithAdoption,
   candidatePath: string | undefined,

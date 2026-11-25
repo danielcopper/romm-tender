@@ -42,10 +42,10 @@ that used to be a plugin loader's job: the single-instance lock, the start-up or
 and one WebSocket carrying calls and events. Standard library only.
 
 It is deliberately **not** a layer of the application, and the boundary runs in both directions. `host/` imports nothing
-from `services`, `adapters`, `bootstrap` or `domain`; and **nothing but `main.py` imports `host`** — both are
-`.importlinter` contracts. The second half is the one that would rot without a check: the first service that wanted to
-send an event would reach in here for the sink, and the composition root would stop being the only place that knows a
-transport exists.
+from `services`, `adapters`, `bootstrap` or `domain`; and **no layer of the application imports `host`** — only the two
+entry points, `main.py` and `check.py`, do. Both halves are `.importlinter` contracts. The second half is the one that
+would rot without a check: the first service that wanted to send an event would reach in here for the sink, and the
+composition root would stop being the only place that knows a transport exists.
 
 | Module               | Owns                                                                                     |
 | -------------------- | ---------------------------------------------------------------------------------------- |
