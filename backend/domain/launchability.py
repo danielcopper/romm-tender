@@ -154,8 +154,9 @@ class Launchability:
     ``contents_unread`` says the file is an archive whose contents were not
     read; ``format_unestablished`` that whether the entry reads this format was
     not established. ``content_path`` is the path the verdict was asked
-    about; ``mounted_disc`` is the folder the entry's emulator mounts as the
-    disc where the resolver names one, and ``None`` where it names none.
+    about; ``mounted_disc`` is what the entry's emulator mounts as the disc
+    where the resolver names it — a PS3 game's folder, or a PS3 image itself —
+    and ``None`` where it names none.
     ``start_path`` is what a start of the file with the entry hands the
     emulator and asks its command with (#2221 D3). The panel is handed neither
     path.

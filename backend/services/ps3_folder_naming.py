@@ -25,8 +25,6 @@ folder's only entry; anything beside it keeps the install as it is, so nothing
 is deleted or left behind. The game folder waits in a sibling while the
 install's folder is emptied, and goes back inside it where that folder cannot
 be removed; a pass stopped at any point is finished at the next start.
-
-A game's start depends on neither its folder's name nor its level (#2221 D3).
 """
 
 from __future__ import annotations
