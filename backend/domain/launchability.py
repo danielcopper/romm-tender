@@ -129,8 +129,8 @@ class Launchability:
     """One file's verdict for one entry, with what each state's sentence names.
 
     ``system`` is the key of the system it was asked as, ``None`` where it was
-    asked by several pairs; ``file`` the file's name and ``extension`` the
-    token compared, as the resolver states it. ``starts_from`` is the system's
+    asked by several pairs; ``extension`` is the token compared, as the
+    resolver states it. ``starts_from`` is the system's
     accept-list, the names the frontend lists, read for
     :data:`FRONTEND_WOULD_NOT_LIST`; ``other_entries`` the labels of the system's
     entries established to start the file, read for :data:`NOT_THIS_EMULATOR`;

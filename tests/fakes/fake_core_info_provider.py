@@ -63,8 +63,7 @@ class FakeCoreInfoProvider:
     ``get_emulator_options`` call was asked with.
 
     ``readings`` records the reading each ``get_emulator_options`` call was
-    handed (``None`` for a call that asks fresh); ``readings_taken`` counts the
-    ``sources_reading`` calls. ``active_core_calls`` and
+    handed (``None`` for a call that asks fresh). ``active_core_calls`` and
     ``emulator_options_calls`` record the ``system_name`` each seam was invoked
     with so callers can assert a normalized system (not the raw platform slug)
     reached the read seam.
