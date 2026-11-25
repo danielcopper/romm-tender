@@ -31,12 +31,7 @@ _LAUNCHER_MODE = 0o700
 
 
 class LauncherInstallAdapter:
-    """Keeps this release's shortcut launcher at its installed home.
-
-    Run on every start rather than once, so the launcher a shortcut executes is
-    always the one this release ships: installed a single time it would freeze
-    at whatever version that day happened to bring.
-    """
+    """Why it runs on every start: ``docs/architecture/backend-architecture.md``, "The launcher's home"."""
 
     def __init__(self, *, source: str, destination: str, logger: logging.Logger) -> None:
         self._source = source
