@@ -7,8 +7,8 @@ question about it draw the path from this seam, so what starts never diverges
 from the picker's current selection, and the picker use cases enumerate through
 the same seam so the list they show is the list a start resolves over.
 
-Resolution is a path-override layer only: it returns the path a start opens,
-it never rewrites the install's ``file_path`` (save-path / core /
+Resolution is a path-override layer only: it returns the path a start and
+every question about it is asked with (#2221 D3), it never rewrites the install's ``file_path`` (save-path / core /
 displayed-filename derivations stay stable). A non-multi-disc ROM (single-file install, or a folder
 with fewer than two disc images) resolves to its own ``file_path`` unchanged —
 zero behavior change. A stale pin (the selected disc is no longer present)
@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from domain.disc_selection import Disc, enumerate_discs, resolve_launch_path
-from domain.rom_files import folder_boot_root
 
 if TYPE_CHECKING:
     import logging
@@ -52,7 +51,7 @@ class DiscLaunchResolverConfig:
 
 
 class DiscLaunchResolver:
-    """Resolve the path a start opens and the disc list for one installed ROM."""
+    """Resolve the path a start is asked with and the disc list for one installed ROM."""
 
     def __init__(self, *, config: DiscLaunchResolverConfig) -> None:
         self._list_files = config.list_files
@@ -80,7 +79,7 @@ class DiscLaunchResolver:
         return enumerate_discs(files, supported or None)
 
     def resolve_disc_path(self, install: RomInstall, discs: list[Disc], selected_disc: str | None) -> str:
-        """Return the path a start of *install* opens.
+        """Return the path a start of *install* and every question about it is asked with.
 
         Every installed game gets one, whether or not its file starts: that is
         asked when the game's page reads it, never here (#2195 D26, D28).
@@ -91,13 +90,6 @@ class DiscLaunchResolver:
         unpinned ROM both resolve to the default (the ``.m3u`` when ``file_path``
         is one, else disc 1), a valid pin resolves to that disc, and a stale pin
         degrades to the default with a WARNING — never fatal, never a bogus path.
-
-        A final folder-boot override layer (``folder_boot_root``) then answers the
-        game **directory** for a system whose emulator boots a folder rather than
-        the nested launch file (PS3/RPCS3 — ``…/PS3_GAME/USRDIR/EBOOT.BIN`` →
-        ``…``, ADR-0019). It only fires when the resolved path still carries a
-        folder-boot marker, so a resolved disc path is never rewritten;
-        ``file_path`` itself is left untouched.
         """
         path, stale = resolve_launch_path(install.file_path, discs, selected_disc)
         if stale:
@@ -107,13 +99,12 @@ class DiscLaunchResolver:
                 selected_disc,
                 install.rom_id,
             )
-        root = folder_boot_root(path, install.rom_dir)
-        return root or path
+        return path
 
     def resolve_for_install(
         self, install: RomInstall, selected_disc: str | None, *, reading: SourcesReading | None = None
     ) -> str:
-        """Enumerate *install* and resolve the path a start opens in one call.
+        """Enumerate *install* and resolve the path a start is asked with in one call.
 
         The convenience wrapper: enumerate the discs, then resolve the
         *selected_disc* pin over them. Equivalent to :meth:`enumerate_discs`

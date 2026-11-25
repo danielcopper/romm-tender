@@ -195,33 +195,28 @@ def detect_launch_file(files: list[tuple[str, int]], m3u_supported: bool) -> str
     return max(files, key=lambda t: t[1])[0]
 
 
-# Folder-boot systems launch the game *directory*, not the nested launch file
-# ``detect_launch_file`` picks. Each marker is the trailing component run that
-# identifies such a layout; it is matched case-sensitively (the on-disk layout
-# is standardised uppercase) and stripped to yield the game root. A future
-# folder-boot system is a data-only addition here.
+# A freshly unpacked game kept as a folder, recognised by the download and the
+# one-time naming step alone; no start and no question about one reads it
+# (#2221 D22). Each marker is the trailing component run that identifies such a
+# layout; it is matched case-sensitively (the on-disk layout is standardised
+# uppercase) and stripped to yield the game root.
 FOLDER_BOOT_MARKERS: tuple[tuple[str, ...], ...] = (("PS3_GAME", "USRDIR", "EBOOT.BIN"),)
 
 
 def folder_boot_root(launch_path: str, rom_dir: str | None) -> str | None:
-    """Return the game-root directory a start of a folder-boot ROM opens, or ``None``.
+    """Return the game-root directory of a folder-boot install, or ``None``.
 
-    Some emulators boot a game **directory** rather than the nested launch file
-    ``detect_launch_file`` selects: RPCS3 rejects ``…/PS3_GAME/USRDIR/EBOOT.BIN``
-    and wants the folder that contains ``PS3_GAME``. When *launch_path*'s trailing
-    components match a folder-boot marker (:data:`FOLDER_BOOT_MARKERS`), those
-    components are stripped and the remaining game root is returned. This also
-    collapses a one-level-deeper extract
-    (``rom_dir/<Game>/PS3_GAME/USRDIR/EBOOT.BIN`` → ``rom_dir/<Game>``).
+    When *launch_path*'s trailing components match a folder-boot marker
+    (:data:`FOLDER_BOOT_MARKERS`), those components are stripped and the
+    remaining game root is returned. This also collapses a one-level-deeper
+    extract (``rom_dir/<Game>/PS3_GAME/USRDIR/EBOOT.BIN`` → ``rom_dir/<Game>``).
 
     The root is returned only when *rom_dir* is set — a single-file ROM owns no
     folder and is never a folder-boot game — **and** the derived root is
     inside-or-equal *rom_dir*, so a bare ``<roms>/<system>/PS3_GAME/USRDIR/EBOOT.BIN``
     sitting directly in the shared system directory never makes that shared
-    directory the launch target. Returns ``None`` when no marker matches or the
-    containment guard fails; the caller then keeps the launch file unchanged.
-
-    Pure path algebra, stdlib only.
+    directory a game root. Returns ``None`` when no marker matches or the
+    containment guard fails.
     """
     if rom_dir is None:
         return None
@@ -454,16 +449,3 @@ def resolve_extract_dir_name(rom_detail: dict[str, Any]) -> str:
         return fs_name_no_ext
     fs_name = rom_detail.get("fs_name", synthetic_rom_name(rom_detail))
     return os.path.splitext(fs_name)[0]
-
-
-def asked_path(file_path: str, rom_dir: str | None, disc_path: str) -> str:
-    """The path an installed game is started with and asked about: its folder for a game kept as one, else *disc_path*.
-
-    *disc_path* is the disc pick folded over the install (``DiscResolver``).
-    A game kept as a folder is asked about as ES-DE scans it (#2195 D11). One
-    answer for every question about the game's start — the launch verdict, the
-    launch command and the start itself (#2221 D3).
-    """
-    if rom_dir is not None and folder_boot_root(file_path, rom_dir) is not None:
-        return rom_dir
-    return disc_path

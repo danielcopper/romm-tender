@@ -741,6 +741,7 @@ def _launchability(answer: Any, *, system: SystemArgument, content_path: str, la
         statements=_statements(answer, state),
         contents_unread=CAVEAT_ARCHIVE_CONTENTS_UNREAD in codes,
         format_unestablished=CAVEAT_ENTRY_FORMAT_UNESTABLISHED in codes,
+        mounted_disc=answer.boots.disc_root if holds and answer.boots is not None else None,
     )
 
 
