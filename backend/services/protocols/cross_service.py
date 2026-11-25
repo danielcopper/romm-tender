@@ -328,9 +328,9 @@ class BiosChecker(Protocol):
     is asked about; ``None`` asks the platform's system in the answering
     source.
 
-    ``platform_folder`` is the folder RomM keeps the game's platform in, whose
-    firmware store the answer reads; ``platform_slug`` is the slug by which the
-    system and the emulator pick are found.
+    ``platform_folder`` is the folder RomM keeps the game's platform in, by
+    which the emulator pick is found and whose firmware store the answer reads;
+    ``platform_slug`` is the slug by which the system is found.
     """
 
     async def check_platform_bios(

@@ -6172,7 +6172,7 @@ class TestCheckPlatformBiosPreResolvedCore:
 
     @pytest.mark.asyncio
     async def test_pre_resolved_core_drives_filter_over_system_default(self, fw, tmp_path):
-        """A passed-in ``active_core_so`` overrides the system default for required_count.
+        """A passed-in ``launching_emulator`` overrides the system default for required_count.
 
         The system default (set on the fake) is mGBA — which treats gba_bios.bin as
         optional. Passing the per-game override ``gpsp_libretro`` flips the file to
@@ -6198,9 +6198,9 @@ class TestCheckPlatformBiosPreResolvedCore:
     async def test_none_falls_back_to_system_default(self, fw, tmp_path):
         """``launching_emulator=None`` resolves the platform's own emulator.
 
-        Same declarations, no per-game core: the platform-level path resolves the
-        platform's pick (mGBA → optional) so ``required_count`` is 0 — the
-        opposite of the override case, locking in the result-flip.
+        Same declarations, no per-game core: ``None`` resolves the platform's
+        own pick (mGBA → optional) so ``required_count`` is 0 — the opposite of
+        the override case, locking in the result-flip.
         """
         firmware_list = [
             {"id": 1, "file_name": "gba_bios.bin", "platform_slug": "gba", "md5_hash": ""},

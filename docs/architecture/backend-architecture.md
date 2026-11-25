@@ -3657,13 +3657,8 @@ every start and the only question left is whether the write succeeded. A start w
 `ShortcutLauncher.path` is then the copy that ships beside the program: a real file, so a sync in that state still
 produces shortcuts that launch.
 
-`ShortcutLauncher` carries the two answers apart on purpose. `path` is what a newly built shortcut names, and follows
-the INSTALL rather than the intent: the home where this start actually got the launcher into it, the shipped copy
-otherwise — including the start whose write failed, whose home is empty. The one case where even the shipped copy is not
-a real file is a package shipped without its launcher, which is the same reason the install failed. `at_home` is the
-narrower question — `path` is the home in the bin root (`launcher_in_bin_dir(directories.bin_dir)`), with this release's
-launcher in it — and it is what repointing an EXISTING shortcut turns on: pointing one at a launcher nothing put there
-stops its game from starting, and no part of Tender could put it back.
+`ShortcutLauncher` (`models/shortcut_launcher.py`) carries two answers apart — the path a new shortcut names, and
+whether that path is the home an existing one may be repointed at; its docstring says where they part.
 
 ### Repointing the shortcuts that already exist
 
@@ -3842,9 +3837,8 @@ type = forbidden
 source_modules = host
 forbidden_modules = services, adapters, bootstrap, domain
 
-# ...and only the entry point may reach the host. main.py is not a package,
-# so nothing in this list can name it.
-[importlinter:contract:nobody-imports-the-host]
+# ...and no layer of the application reaches the host
+[importlinter:contract:no-layer-imports-the-host]
 type = forbidden
 source_modules = services, adapters, bootstrap, domain, lib, models
 forbidden_modules = host

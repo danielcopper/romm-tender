@@ -360,15 +360,8 @@ def bootstrap(
     # and every later seam (uuid_gen/sleeper neighbours, runtime bundle).
     clock = SystemClock()
 
-    # The launcher is installed outside every directory this program owns: a
-    # shortcut's ``exe`` names it, and that is the one thing about a shortcut
-    # this program cannot repair from inside. The bin root is XDG's place for a
-    # user's own executables, and a place the uninstaller never removes — so a
-    # shortcut goes on working after the program that wrote it is gone. It is
-    # written on every start rather than once, so the launcher a shortcut runs
-    # is always the one this release ships — installed once, it would freeze at
-    # whatever version the day of the move happened to bring. Which path a new
-    # shortcut is built against: ``ShortcutLauncher``.
+    # Why the bin root, and why every start: docs/architecture/backend-architecture.md, "The launcher's home". The path
+    # a new shortcut names: ``ShortcutLauncher``.
     installed_launcher = launcher_in_bin_dir(directories.bin_dir)
     launcher_at_home = LauncherInstallAdapter(
         source=launcher_path(directories.code_dir),
