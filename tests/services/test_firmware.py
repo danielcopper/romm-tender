@@ -6151,12 +6151,12 @@ class TestPerCoreFiltering:
 
 
 class TestCheckPlatformBiosPreResolvedCore:
-    """R8: ``check_platform_bios`` takes a pre-resolved ``active_core_so``.
+    """R8: ``check_platform_bios`` takes a pre-resolved ``launching_emulator``.
 
-    The per-game game-detail path resolves the active ``.so`` upstream (folding
-    the ``emulator_override`` pin) and passes it in; the platform-level callers
-    pass ``None`` to mean "use the system default". The filter's ``required_count``
-    must follow the pre-resolved core, not the system default.
+    The per-game game-detail path resolves the ROM's emulator upstream (folding
+    the ``emulator_override`` pin) and passes it in, or ``None`` where nothing
+    could be resolved, to mean "use the platform's own pick". The filter's
+    ``required_count`` must follow the pre-resolved emulator, not the platform's.
     """
 
     def _gba_two_core_service(self, fw, firmware_list):

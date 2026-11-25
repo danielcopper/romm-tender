@@ -228,12 +228,11 @@ class FirmwareStatusReader:
         A non-``None`` *launching_emulator* is the ROM's chosen entry (the
         game-detail path runs ``ActiveCoreResolver.resolve_rom`` upstream),
         whatever starting with it comes to, and is used as-is — libretro or
-        standalone, since the identity names both. ``None`` is the
-        platform-level callers' "use the platform's own pick" signal, and it is
-        also what the per-game path passes where the ROM has no system to ask or
-        no entry is chosen. Both are answered by :meth:`_platform_emulator`, so the game
-        page and the platform pane cannot key their answers on two different
-        emulators.
+        standalone, since the identity names both. ``None`` is what the
+        per-game path passes where the ROM has no system to ask or no entry is
+        chosen, and is answered by :meth:`_platform_emulator`, the platform
+        pane's own pick, so the game page and the platform pane cannot key their
+        answers on two different emulators.
         """
         if launching_emulator is not None:
             return launching_emulator
@@ -569,8 +568,8 @@ class FirmwareStatusReader:
 
         *rom_regions* are the game's own regions as RomM names them. Where any
         maps onto a console region, the launching emulator's one-of groups are
-        judged for those regions alone; where none does — or for the platform's
-        own check, which passes none — they are judged over every region.
+        judged for those regions alone; where none does, they are judged over
+        every region.
 
         An unreachable server costs the files only it knows about, not the
         answer: what the platform's emulators want is read locally either way.
