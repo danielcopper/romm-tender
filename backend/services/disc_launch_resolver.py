@@ -7,13 +7,14 @@ question about it draw the path from this seam, so what starts never diverges
 from the picker's current selection, and the picker use cases enumerate through
 the same seam so the list they show is the list a start resolves over.
 
-Resolution is a path-override layer only: it returns the path a start and
-every question about it is asked with (#2221 D3), it never rewrites the install's ``file_path`` (save-path / core /
-displayed-filename derivations stay stable). A non-multi-disc ROM (single-file install, or a folder
-with fewer than two disc images) resolves to its own ``file_path`` unchanged —
-zero behavior change. A stale pin (the selected disc is no longer present)
-degrades to the default with a WARNING, never fatal, mirroring
-``ActiveCoreResolver``'s stale-label handling. See ADR-0014.
+Resolution is a path-override layer only: it returns the path the resolver is
+asked about the game with (#2221 D3), and never rewrites the install's
+``file_path`` (save-path / core / displayed-filename derivations stay stable).
+A non-multi-disc ROM (single-file install, or a folder with fewer than two disc
+images) resolves to its own ``file_path`` unchanged — zero behavior change. A
+stale pin (the selected disc is no longer present) degrades to the default with
+a WARNING, never fatal, mirroring ``ActiveCoreResolver``'s stale-label
+handling. See ADR-0014.
 """
 
 from __future__ import annotations
@@ -51,7 +52,7 @@ class DiscLaunchResolverConfig:
 
 
 class DiscLaunchResolver:
-    """Resolve the path a start is asked with and the disc list for one installed ROM."""
+    """Resolve the path the resolver is asked about one installed ROM with, and its disc list."""
 
     def __init__(self, *, config: DiscLaunchResolverConfig) -> None:
         self._list_files = config.list_files
@@ -79,10 +80,10 @@ class DiscLaunchResolver:
         return enumerate_discs(files, supported or None)
 
     def resolve_disc_path(self, install: RomInstall, discs: list[Disc], selected_disc: str | None) -> str:
-        """Return the path a start of *install* and every question about it is asked with.
+        """Return the path the resolver is asked about *install* with.
 
         Every installed game gets one, whether or not its file starts: that is
-        asked when the game's page reads it, never here (#2195 D26, D28).
+        asked by the game's page and the start, never here (#2195 D26, D28).
 
         *discs* is the result of :meth:`enumerate_discs` (passed in so a caller
         that already enumerated for the picker does not re-scan). Resolves the
@@ -104,12 +105,6 @@ class DiscLaunchResolver:
     def resolve_for_install(
         self, install: RomInstall, selected_disc: str | None, *, reading: SourcesReading | None = None
     ) -> str:
-        """Enumerate *install* and resolve the path a start is asked with in one call.
-
-        The convenience wrapper: enumerate the discs, then resolve the
-        *selected_disc* pin over them. Equivalent to :meth:`enumerate_discs`
-        followed by :meth:`resolve_disc_path`; callers that also need the disc
-        list (the picker) call the two halves directly to avoid re-scanning.
-        """
+        """A caller that also needs the disc list (the picker) calls the two halves itself, so as not to scan twice."""
         discs = self.enumerate_discs(install, reading=reading)
         return self.resolve_disc_path(install, discs, selected_disc)

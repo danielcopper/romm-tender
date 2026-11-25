@@ -195,28 +195,18 @@ def detect_launch_file(files: list[tuple[str, int]], m3u_supported: bool) -> str
     return max(files, key=lambda t: t[1])[0]
 
 
-# A freshly unpacked game kept as a folder, recognised by the download and the
-# one-time naming step alone; no start and no question about one reads it
-# (#2221 D22). Each marker is the trailing component run that identifies such a
-# layout; it is matched case-sensitively (the on-disk layout is standardised
-# uppercase) and stripped to yield the game root.
+# Each marker is the trailing component run that identifies a PS3 game kept as
+# a folder; it is matched case-sensitively (the on-disk layout is standardised
+# uppercase) and stripped to yield the game root. No start and no question about
+# one reads it: docs/architecture/core-emulator-selection.md, "Folder-boot launch target".
 FOLDER_BOOT_MARKERS: tuple[tuple[str, ...], ...] = (("PS3_GAME", "USRDIR", "EBOOT.BIN"),)
 
 
 def folder_boot_root(launch_path: str, rom_dir: str | None) -> str | None:
-    """Return the game-root directory of a folder-boot install, or ``None``.
+    """``None`` unless *rom_dir* is set and the root lies inside or at it.
 
-    When *launch_path*'s trailing components match a folder-boot marker
-    (:data:`FOLDER_BOOT_MARKERS`), those components are stripped and the
-    remaining game root is returned. This also collapses a one-level-deeper
-    extract (``rom_dir/<Game>/PS3_GAME/USRDIR/EBOOT.BIN`` → ``rom_dir/<Game>``).
-
-    The root is returned only when *rom_dir* is set — a single-file ROM owns no
-    folder and is never a folder-boot game — **and** the derived root is
-    inside-or-equal *rom_dir*, so a bare ``<roms>/<system>/PS3_GAME/USRDIR/EBOOT.BIN``
-    sitting directly in the shared system directory never makes that shared
-    directory a game root. Returns ``None`` when no marker matches or the
-    containment guard fails.
+    A bare ``<roms>/<system>/PS3_GAME/USRDIR/EBOOT.BIN`` in the shared system
+    directory never makes that directory a game root.
     """
     if rom_dir is None:
         return None
@@ -232,8 +222,7 @@ def folder_boot_root(launch_path: str, rom_dir: str | None) -> str | None:
 
 
 # ES-DE scans a folder named with an extension its system accepts as one game,
-# and ps3's accept-list carries ``.ps3`` for a game kept as a folder; the
-# resolver is asked about that folder (#2195 D11).
+# and ps3's accept-list carries ``.ps3`` for a game kept as a folder (#2195 D11).
 PS3_FOLDER_SUFFIX = ".ps3"
 
 

@@ -231,7 +231,7 @@ class TestTendersJudgementIsTheResolvers:
             assert result.reason not in _STOP_WORDS
 
     def test_the_disc_the_emulator_mounts_is_the_one_the_resolver_names_where_the_answer_holds(self, vector):
-        """#2221 D3: a start hands the emulator ``boots.disc_root`` in place of the path asked about."""
+        """#2221 D3: the disc the resolver names the emulator mounting is read where the answer holds."""
         kind, answer, query, label = _asked(vector)
         recorded = vector["expected"]["launchable"]
         boots = recorded.get("boots")
