@@ -192,8 +192,8 @@ class CoreService:
         resolved = self._active_core.resolve_rom(rom_id)
         choice = resolved.choice if resolved is not None else _NO_CHOICE
         option = choice.option
-        reading = self._core_info.sources_reading()
-        launch = self._chosen_launch(rom, install, resolved, reading)
+        chosen = self._chosen_launch(rom, install, resolved)
+        launch = chosen[0] if chosen is not None else None
         stored = pick_for(
             game_platform_pick(
                 rom.platform_fs_slug,
@@ -217,15 +217,15 @@ class CoreService:
             "start": start_payload(
                 choice,
                 resolved.options if resolved is not None else [],
-                self._chosen_command(install, resolved, launch, reading),
+                self._chosen_command(install, resolved, chosen),
             ),
             "launch": launch.payload(platform_name=self._platform_name(rom)) if launch is not None else None,
             "vanished_pick": vanished_payload(choice),
         }
 
     def _chosen_launch(
-        self, rom: Rom, install: RomInstall | None, resolved: ResolvedEmulator | None, reading: SourcesReading
-    ) -> Launchability | None:
+        self, rom: Rom, install: RomInstall | None, resolved: ResolvedEmulator | None
+    ) -> tuple[Launchability, SourcesReading] | None:
         """Nothing is asked for a game that is not installed, has no system to ask, or has no entry chosen.
 
         No entry chosen is no default and no pick (#2195 D7): its start is
@@ -233,23 +233,25 @@ class CoreService:
         """
         if install is None or resolved is None or resolved.choice.option is None:
             return None
+        reading = self._core_info.sources_reading()
         path = self._disc_resolver.resolve_for_install(install, rom.selected_disc)
-        return self._core_info.launchability(install.system, path, label=resolved.choice.option.label, reading=reading)
+        label = resolved.choice.option.label
+        return self._core_info.launchability(install.system, path, label=label, reading=reading), reading
 
     def _chosen_command(
         self,
         install: RomInstall | None,
         resolved: ResolvedEmulator | None,
-        launch: Launchability | None,
-        reading: SourcesReading,
+        chosen: tuple[Launchability, SourcesReading] | None,
     ) -> StartAnswer | None:
         """Nothing is asked where no launch verdict was, nor for an entry the resolver states not installed.
 
         Such an entry's start is refused for that reason, so the page says what
         the start would do.
         """
-        if install is None or resolved is None or resolved.choice.option is None or launch is None:
+        if install is None or resolved is None or resolved.choice.option is None or chosen is None:
             return None
+        launch, reading = chosen
         refusal = source_refusal(resolved.source)
         if refusal is not None:
             return refusal

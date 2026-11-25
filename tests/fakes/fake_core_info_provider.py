@@ -63,7 +63,8 @@ class FakeCoreInfoProvider:
     ``get_emulator_options`` call was asked with.
 
     ``readings`` records the reading each ``get_emulator_options`` call was
-    handed (``None`` for a call that asks fresh). ``active_core_calls`` and
+    handed (``None`` for a call that asks fresh); ``readings_taken`` counts the
+    ``sources_reading`` calls. ``active_core_calls`` and
     ``emulator_options_calls`` record the ``system_name`` each seam was invoked
     with so callers can assert a normalized system (not the raw platform slug)
     reached the read seam.
@@ -100,6 +101,7 @@ class FakeCoreInfoProvider:
         self.launch_verdicts: dict[str, Launchability] = {}
         self.launchability_calls: list[tuple[SystemArgument, str, str]] = []
         self.launchability_readings: list[SourcesReading | None] = []
+        self.readings_taken = 0
 
     @property
     def available_cores(self) -> list[dict[str, Any]]:
@@ -118,6 +120,7 @@ class FakeCoreInfoProvider:
         return self.active_core
 
     def sources_reading(self) -> FakeSourcesReading:
+        self.readings_taken += 1
         return FakeSourcesReading((ArrangedSource(kind="retrodeck", enabled=True, starts_games=True),), {})
 
     def get_emulator_options(

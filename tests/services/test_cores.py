@@ -1425,6 +1425,17 @@ class TestWhatTheResolversCommandSaysOfTheStart:
         assert core_info.launchability_calls == [("ps3", self._EBOOT, self._DIRECTORY.label)]
         assert start_commands.asked == [("ps3", self._FOLDER, self._DIRECTORY.label)]
 
+    def test_a_page_for_a_game_not_installed_takes_no_reading_of_the_sources(
+        self, event_loop, service, core_info, active_core, uow
+    ):
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        active_core.resolved[42] = _resolved(self._DIRECTORY, chosen=self._DIRECTORY)
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["launch"] is None
+        assert core_info.readings_taken == 0
+
     def test_the_pages_verdict_and_command_are_asked_in_one_reading(
         self, event_loop, service, core_info, active_core, start_commands, uow
     ):
