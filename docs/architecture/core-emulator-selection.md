@@ -184,10 +184,9 @@ established, so there is no default until the user picks one (D9); `no_entry` wh
 platform page asks no command, since a platform has no game to ask it with. Beside a `starts`, `remarks` names each
 placeholder ES-DE leaves unfilled in the command. A `cannot_start` or `choose` answer disables the game page's Play, and
 the launch watcher refuses Steam's own Play on the shortcut with the same sentence
-(`frontend/src/utils/emulatorStart.ts`). Whether the entry starts the game's own file — a game installed as a folder
-included, which RPCS3 Shortcut does not take — is the resolver's launch verdict, not the start's (D21; see
-[Whether an entry starts the installed game](#whether-an-entry-starts-the-installed-game)). Tender never switches such a
-game to another entry by itself.
+(`frontend/src/utils/emulatorStart.ts`). Whether the entry starts the game's own file is the resolver's launch verdict,
+not the start's (D21; see [Whether an entry starts the installed game](#whether-an-entry-starts-the-installed-game)).
+Tender never switches such a game to another entry by itself.
 
 ### Which emulator source answers
 
@@ -481,8 +480,7 @@ launchability verdict asked with that entry's label (`CoreService.get_emulator_l
 menu opens at once with every entry choosable, and the rows wait together on Play's throbber (`romm-throbber`) for the
 one request that answers them all; an answer that lands after the page moved to another version, or after the menu
 closed, is dropped (`utils/emulatorLaunches.ts`). Each line says what the resolver states: an entry that refuses the
-file names the resolver's reason where it gives one — RPCS3 Shortcut "cannot start a game installed as a folder" for a
-game kept as a `<game>.ps3` folder, Beetle PCE "it starts no game from a playlist" for a `.m3u`
+file names the resolver's reason where it gives one — Beetle PCE "it starts no game from a playlist" for a `.m3u`
 ([#2698](https://github.com/danielcopper/romm-tender/issues/2698) D7). Where the resolver could not establish whether
 the entry starts the file — its verdict `unestablished`, an entry reading that ended without a take or a refusal — the
 line names what could not be established, where the reading stopped short (D40), and never says the entry can start the
@@ -514,9 +512,10 @@ answer does to a start, is [Launch-target validation](backend-architecture.md#la
 A game starts with the command the resolver gives for it
 ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D1,
 [ADR-0044](../adr/0044-every-start-asks-the-resolver.md)): `launch_command(system, path, label=<entry in effect>)`,
-asked of the answering source with the game's own path, the path the launch verdict is asked with (D3).
-`adapters/atlas_launch.py` is the one module that reads that answer, into `domain/start_command.py`'s view: a complete
-command as Tender runs it, or why the resolver gives none (D2).
+asked of the answering source with the disc the launch verdict names the entry's emulator mounting, else the game's own
+path (D3; [The start](#the-start-one-command-handed-over-for-one-start)). `adapters/atlas_launch.py` is the one module
+that reads that answer, into `domain/start_command.py`'s view: a complete command as Tender runs it, or why the resolver
+gives none (D2).
 
 A command is complete where nothing in it is missing: the resolver answers one, states what the program reads from its
 distribution's own start (`distribution_environment`; not stated is `launch-environment-unpinned`), gives every variable
@@ -549,15 +548,16 @@ Nothing of the command is stored (#2221 D7). Just before a start, the panel asks
 (`services/game_start.py`): the entry in effect, the game's path (its recorded `file_path`, the disc pick folded over by
 `DiscLaunchResolver`), the launch verdict for them, the resolver's command, and the game's folder — its own folder for a
 game kept in one, else the folder its file lies in — and Tender's firmware store as the grants. The command is asked
+about the verdict, in the same reading of the emulator sources (`StartCommandReader.start_command` takes the verdict):
 with the disc the entry's emulator mounts where the verdict names one (`boots.disc_root`, read into `mounted_disc` by
 `adapters/atlas_catalogue.py`; D3), else with the game's path, and the emulator gets the path it was asked with. The
-game page and the emulator menu ask the command the same way, each entry with its own verdict, so they say what the
-start would do. The command goes into a file of its own, `<runtime dir>/start/<appId>` (D15): the folder the command
-starts in, then the program and its arguments, each ended by a NUL, written whole through a staging file into an
-owner-only folder and readable by the user only (`adapters/start_handover.py`). The runtime directory is
-`$XDG_RUNTIME_DIR/romm-tender`, in memory and emptied at logout; a session with no `XDG_RUNTIME_DIR` hands nothing over,
-and its starts are refused. The folder is the one the command names (created where ES-DE would create it), else
-`start-folder/` in Tender's data folder, created at the start (D6).
+game page and the emulator menu ask it the same way, each entry with its own verdict, so they say what the start would
+do. The command goes into a file of its own, `<runtime dir>/start/<appId>` (D15): the folder the command starts in, then
+the program and its arguments, each ended by a NUL, written whole through a staging file into an owner-only folder and
+readable by the user only (`adapters/start_handover.py`). The runtime directory is `$XDG_RUNTIME_DIR/romm-tender`, in
+memory and emptied at logout; a session with no `XDG_RUNTIME_DIR` hands nothing over, and its starts are refused. The
+folder is the one the command names (created where ES-DE would create it), else `start-folder/` in Tender's data folder,
+created at the start (D6).
 
 The shortcut's launch options are its appId, and the answer names them; the panel sets them back before the start (D16).
 Steam starts `tender-rom-launcher <appId>`, which ignores every word after the appId, claims the file by renaming it,
@@ -662,33 +662,34 @@ a start is asked with, and `file_path`-derived values (save path, core, displaye
 
 Some systems boot a game **directory**, not the nested launch file. A PS3 game installs as a folder whose payload is
 `…/PS3_GAME/USRDIR/EBOOT.BIN`, and `detect_launch_file` picks that EBOOT as `file_path` — correct as the launch _file_
-identity, but RPCS3's directory-boot rejects it and wants the folder that contains `PS3_GAME`
-([#1212](https://github.com/danielcopper/romm-tender/issues/1212)).
+identity, but [ADR-0019](../adr/0019-folder-as-launch-target.md) measured RPCS3 refusing it, and RPCS3's directory boot
+takes the folder that contains `PS3_GAME` ([#1212](https://github.com/danielcopper/romm-tender/issues/1212)).
 
 The resolver names that folder ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D3). It is asked about
-the recorded `file_path`, the EBOOT, with the entry in effect — the default entry (`RPCS3 Shortcut`) reads no boot and
-names none, so the entry is always passed. Where its launch verdict names the disc the entry's emulator mounts
-(`boots.disc_root`: for RPCS3 the folder holding `PS3_DISC.SFB`, or an image itself), the start command is asked with
-that path and the emulator gets it; where it names none — a game that boots without a disc, or an entry whose boot it
-does not read — the command is asked with the EBOOT ([The start](#the-start-one-command-handed-over-for-one-start)). The
-verdict says ES-DE's naming only as a note beside the start (it would not list the EBOOT under its name). Tender's own
-table of the boot folder (`FOLDER_BOOT_MARKERS`, `domain/rom_files.py`) feeds no start and no question about one (D22).
+the recorded `file_path`, the EBOOT, with the entry in effect; where its launch verdict names the disc the entry's
+emulator mounts (`boots.disc_root`: for RPCS3 the folder holding `PS3_DISC.SFB`), the emulator gets that folder, as
+[The start](#the-start-one-command-handed-over-for-one-start) says. The verdict says ES-DE's naming only as a note
+beside the start (it would not list the EBOOT under its name). RetroDECK's default entry, `RPCS3 Shortcut`, reads no
+boot and names no disc: asked about the EBOOT, its verdict is not established, so Play stays on with the note saying so,
+and its command is asked with the EBOOT (D23).
 
 `RomInstall.file_path` stays the EBOOT (the [ADR-0008](../adr/0008-rom-install-launch-file-and-rom-dir.md) anchor), so
 save-path, core, and displayed-filename derivations are untouched. See
 [ADR-0019](../adr/0019-folder-as-launch-target.md).
 
 **The folder is named as ES-DE scans it.** A folder-boot download's folder is renamed `<game>.ps3` (`ps3_folder_rename`,
-`domain/rom_files.py`), the name ps3's accept-list carries for a game kept as a folder. The download and this one-time
-naming step are the table's last readers: they recognise a freshly unpacked PS3 game by it until the download into
-Tender's own library ([#2737](https://github.com/danielcopper/romm-tender/issues/2737)) decides each of them
-([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D22). A folder whose name already ends in a suffix the
-accept-list carries, compared verbatim as ES-DE compares it, keeps its name, and so does one whose new name is taken:
-nothing is moved over another folder. A download whose game folder lies exactly one level inside the folder it was
-unpacked into has that game folder placed as the folder itself (`ps3_folder_lift`), since ES-DE, the resolver and RPCS3
-look only at the folder and find nothing to boot one level above the game (D39) — only where the game folder is its only
-entry, so nothing beside it is deleted or left outside the install. An older install is renamed and lifted once at
-start-up (D27, D39; see [Launch-target validation](backend-architecture.md#launch-target-validation)).
+`domain/rom_files.py`; [#2195](https://github.com/danielcopper/romm-tender/issues/2195) D11), the name ps3's accept-list
+carries for a game kept as a folder. A folder whose name already ends in a suffix the accept-list carries, compared
+verbatim as ES-DE compares it, keeps its name, and so does one whose new name is taken: nothing is moved over another
+folder. A download whose game folder lies exactly one level inside the folder it was unpacked into has that game folder
+placed as the folder itself (`ps3_folder_lift`, D39) — only where the game folder is its only entry, so nothing beside
+it is deleted or left outside the install. An older install is renamed and lifted once by the one-time naming step at
+start-up (D27, D39; see [Launch-target validation](backend-architecture.md#launch-target-validation)). A game's start
+depends on neither its folder's name nor its level ([#2221](https://github.com/danielcopper/romm-tender/issues/2221)
+D3). Tender's table of the boot folder (`FOLDER_BOOT_MARKERS`, `domain/rom_files.py`) is read only by the download and
+the one-time naming step, which recognise a PS3 game kept as a folder by it until the download into Tender's own library
+([#2737](https://github.com/danielcopper/romm-tender/issues/2737)) decides each of them; neither a start nor a question
+about one reads it ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D22).
 
 ### The picker use cases
 

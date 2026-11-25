@@ -464,9 +464,9 @@ The two path fields on `RomInstall` (`domain/rom_install.py`) answer different q
   a start is asked with — but the path asked with may differ without rewriting `file_path`: a multi-disc pin asks with
   the selected disc's path
   ([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)). A game kept as
-  a folder (PS3/RPCS3) is asked about its launch file, and its emulator gets the game **directory** the resolver names
-  it mounting ([ADR-0019](docs/adr/0019-folder-as-launch-target.md)). `file_path` stays the launch **file** anchor in
-  every case.
+  a folder (PS3/RPCS3) is asked about its launch file, and its emulator gets the game **directory** where the entry's
+  verdict names it as the disc the emulator mounts ([ADR-0019](docs/adr/0019-folder-as-launch-target.md)). `file_path`
+  stays the launch **file** anchor in every case.
 - **`rom_dir`** — the **dedicated per-ROM directory**, set for every game that lands in a folder of its own: a game RomM
   holds as a folder, whatever a download fetches of it, or a single `.zip` unpacked into a folder (**served shape**).
   **NULL only for a game RomM holds as one file, kept as it arrived**, which lives as a bare file directly in the shared
@@ -489,14 +489,14 @@ entry's label when the game's page, its emulator menu or a press on Steam's own 
 ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D2, D13, D26). It has four states, each with its own
 sentence: it **starts**; it **has to be installed first** in an emulator (a PS3 `.pkg`, a 3DS `.cia`), named by the
 system's entry for it where the system has one (D35); **this emulator does not start it**, with the resolver's reason
-where it states one (RPCS3 Shortcut takes no folder) and the other emulators of the system established to start it,
-where there are any; or whether it starts is **not established** — the resolver's reading of the file ended without a
-take or a refusal, or no verdict could be given — which keeps Play on, names what could not be established (RPCS3's own
-list of games not read, a disc image's key not checked, whether the entry reads its format at all) and never says the
-game can start (D40, D41). The resolver judges a file by what the emulator starts, not by what the frontend lists; a
-file the frontend would not list under its name gets a note saying so beside a start or a verdict not established. Which
-of them refuse a start is `frontend/src/utils/gameLaunch.ts`'s. The resolver compares the file's extension case-exactly,
-as ES-DE does, and Tender folds no case before it asks (D3).
+where it states one (an encrypted PS3 image without its key file) and the other emulators of the system established to
+start it, where there are any; or whether it starts is **not established** — the resolver's reading of the file ended
+without a take or a refusal, or no verdict could be given — which keeps Play on, names what could not be established
+(RPCS3's own list of games not read, a disc image's key not checked, whether the entry reads its format at all) and
+never says the game can start (D40, D41). The resolver judges a file by what the emulator starts, not by what the
+frontend lists; a file the frontend would not list under its name gets a note saying so beside a start or a verdict not
+established. Which of them refuse a start is `frontend/src/utils/gameLaunch.ts`'s. The resolver compares the file's
+extension case-exactly, as ES-DE does, and Tender folds no case before it asks (D3).
 
 ### Start command / start hand-over
 

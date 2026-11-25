@@ -698,12 +698,12 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   emulator named, before anything starts it. **Play** is off.
 - **"Azahar (Standalone) does not start .zip; other emulators of this system do. Choose another emulator in the emulator
   menu."** — **Play** is off until you do.
-- **"RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) or RPCS3 ISO
-  (Standalone) can — choose one in the emulator menu."** — where the emulator's own reading of the game says why it
-  cannot start it, the sentence says so: a folder it does not take, nothing in the folder for it to start, a file that
-  is neither a disc image nor a game program, a disc game whose disc cannot be mounted, or an encrypted disc image
-  without its key file. **Play** is off. Where Tender cannot start that emulator yet either, this reason is still the
-  one said.
+- **"RPCS3 Directory (Standalone) cannot start this game: it is a disc game, and no PS3_GAME folder above it has a valid
+  PS3_DISC.SFB beside it."** — where the emulator's own reading of the game says why it cannot start it, the sentence
+  says so: nothing in the folder for it to start, a file that is neither a disc image nor a game program, a disc game
+  whose disc cannot be mounted, or an encrypted disc image without its key file. Where other emulators of the system are
+  known to start the game, the sentence names them for you to choose in the emulator menu. **Play** is off. Where Tender
+  cannot start that emulator yet either, this reason is still the one said.
 - **"Beetle PSX cannot start Game.cue: Game (Track 2).bin is missing."** — for a disc game started from a `.cue`,
   `.ccd`, `.gdi` or `.m3u`, or a disc image, the emulator's own opening of its files was followed, and the sentence
   names the file it stops on: a file that is missing, a track or a cue sheet or playlist it refuses, a file that is not
@@ -735,8 +735,6 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
 - **"Whether _emulator_ starts this game cannot be established: _Source_ has several systems for _platform_ and names
   none of them."** — several systems fit the game's platform and answer it differently, so the emulator source names
   none of them for the question. **Play** stays on.
-- **"Game.ps3 holds files RPCS3 Directory (Standalone) would take as games of their own: _files_."** — a game kept as a
-  folder holds files the emulator would start on their own. **Play** stays on.
 - **"ES-DE would not list track03.bin under this name; it lists files ending in .cdi, .chd, .cue, …"** — whether the
   emulator starts the file is its own answer, but ES-DE's game list would not show the file under its name. **Play**
   stays on.
@@ -777,11 +775,12 @@ already taken keeps its name. Where the download holds the game one folder deepe
 folder, with `PS3_GAME` inside that — the inner folder becomes `<game>.ps3` itself; a download already on the device is
 fixed so once, when Tender next starts. Where anything else lies beside that inner folder, nothing is moved.
 
-Tender asks about a PS3 game kept as a folder by its `EBOOT.BIN`, and RPCS3 gets the folder the answer names as the disc
-it mounts — the one holding `PS3_DISC.SFB`, wherever it lies inside `<game>.ps3`. With RPCS3 Directory or RPCS3 ISO the
-game's page says the game starts, with the line "ES-DE would not list EBOOT.BIN under this name" under **Play**: ES-DE's
-own game list shows the folder, not the file. With RPCS3 Shortcut, RetroDECK's default, the page says whether it starts
-the game cannot be established.
+Tender asks about a PS3 game kept as a folder by its `EBOOT.BIN`, and where the answer names the folder RPCS3 mounts as
+the disc — the one holding `PS3_DISC.SFB`, wherever it lies inside `<game>.ps3` — RPCS3 gets that folder. With RPCS3
+Directory or RPCS3 ISO the game's page says the game starts, with the line "ES-DE would not list EBOOT.BIN under this
+name" under **Play**: ES-DE's own game list shows the folder, not the file. With RPCS3 Shortcut, RetroDECK's default,
+the answer names no folder: the page says whether it starts the game cannot be established, **Play** stays on, and a
+start hands it the `EBOOT.BIN`.
 
 ## Picking a Disc for Multi-Disc Games
 

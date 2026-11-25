@@ -1,7 +1,7 @@
 ---
 status: accepted
 decided: 2026-10-05
-updated: 2026-10-26
+updated: 2026-11-25
 amends: [0011, 0028, 0030, 0041]
 ---
 
@@ -126,3 +126,13 @@ answer and disagreed. Its reading half is now held by checks; the rest stays pro
   display; a name that means something else in a module, on a list of its own that only shrinks; and a word of the
   resolver's vocabularies that Tender's own code speaks with a meaning of its own too widely to except file by file,
   left unwatched on lists that only shrink, one for the backend and the panel and one for the panel alone.
+
+## Amendment — the resolver is asked with the recorded path, and the emulator may get the folder it names
+
+§3's "Tender asks the resolver with exactly the path it starts the emulator with" and §6's "the path Tender starts the
+game with" changed with [#2221](https://github.com/danielcopper/romm-tender/issues/2221) D3 and epic
+[#2217](https://github.com/danielcopper/romm-tender/issues/2217) D9, both changed 2026-11-25: Tender asks the resolver
+with exactly the path it records for the game, unresolved, and starts the emulator with that path; where the resolver's
+answer names a folder the emulator mounts as the disc (`boots.disc_root`, a PS3 game kept as a folder), the emulator
+gets that folder ([ADR-0044](0044-every-start-asks-the-resolver.md), its amendment of the same day). A save lives where
+the emulator writes it for the path the resolver is asked about.
