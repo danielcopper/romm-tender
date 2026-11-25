@@ -337,12 +337,12 @@ class TestAGameKeptAsAFolder:
         assert commands.asked[0]["content_path"] == self._EBOOT
 
 
-class TestTheSaveOfAGameWithNoDiscPickIsAskedAboutWhatStarts:
+class TestTheSaveOfAGameWithNoDiscPickIsAskedAboutWhatItsLaunchVerdictIs:
     """#2221 Done when, for a game with no disc pick: its save lands where the resolver named it for that path.
 
     The save place is the resolver's answer for the system, path and entry it
-    is asked about, so it is where the game saves when the start asks with the
-    same three.
+    is asked about, so it is where the game saves when the start's launch
+    verdict is asked about the same three (D3).
     """
 
     _FOLDER = f"{_ROMS}/ps3/Game.ps3"
