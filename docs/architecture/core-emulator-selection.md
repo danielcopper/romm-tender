@@ -512,10 +512,9 @@ answer does to a start, is [Launch-target validation](backend-architecture.md#la
 A game starts with the command the resolver gives for it
 ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D1,
 [ADR-0044](../adr/0044-every-start-asks-the-resolver.md)): `launch_command(system, path, label=<entry in effect>)`,
-asked of the answering source with the disc the launch verdict names the entry's emulator mounting, else the game's own
-path (D3; [The start](#the-start-one-command-handed-over-for-one-start)). `adapters/atlas_launch.py` is the one module
-that reads that answer, into `domain/start_command.py`'s view: a complete command as Tender runs it, or why the resolver
-gives none (D2).
+asked of the answering source with the path [The start](#the-start-one-command-handed-over-for-one-start) names.
+`adapters/atlas_launch.py` is the one module that reads that answer, into `domain/start_command.py`'s view: a complete
+command as Tender runs it, or why the resolver gives none (D2).
 
 A command is complete where nothing in it is missing: the resolver answers one, states what the program reads from its
 distribution's own start (`distribution_environment`; not stated is `launch-environment-unpinned`), gives every variable
@@ -656,7 +655,8 @@ resolve_for_install(install, selected_disc):
 A **non-multi-disc ROM resolves to its own `file_path`** — zero behavior change for the overwhelming majority of games.
 A **stale pin** (the selected disc no longer present) degrades to the default with a WARNING, never fatal, exactly like
 `ActiveCoreResolver`'s stale-label handling. Crucially, the resolver **never rewrites `file_path`**: it returns the path
-a start is asked with, and `file_path`-derived values (save path, core, displayed filename) stay stable.
+a launch verdict for the game is asked with, and `file_path`-derived values (save path, core, displayed filename) stay
+stable.
 
 ### Folder-boot launch target
 

@@ -461,12 +461,12 @@ The two path fields on `RomInstall` (`domain/rom_install.py`) answer different q
 
 - **`file_path`** — the **launch file**: the single file that is the ROM's launch identity. Present for every ROM;
   save-path resolution, ES-DE core resolution, and the displayed filename all derive from it. It is the **default** path
-  a start is asked with — but the path asked with may differ without rewriting `file_path`: a multi-disc pin asks with
-  the selected disc's path
+  a game's launch verdict is asked with — but the path asked with may differ without rewriting `file_path`: a multi-disc
+  pin asks with the selected disc's path
   ([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)). A game kept as
-  a folder (PS3/RPCS3) is asked about its launch file, and its emulator gets the game **directory** where the entry's
-  verdict names it as the disc the emulator mounts ([ADR-0019](docs/adr/0019-folder-as-launch-target.md)). `file_path`
-  stays the launch **file** anchor in every case.
+  a folder (PS3/RPCS3) is asked about its launch file too; what its emulator gets is said under
+  [The start](docs/architecture/core-emulator-selection.md#the-start-one-command-handed-over-for-one-start)
+  ([ADR-0019](docs/adr/0019-folder-as-launch-target.md)). `file_path` stays the launch **file** anchor in every case.
 - **`rom_dir`** — the **dedicated per-ROM directory**, set for every game that lands in a folder of its own: a game RomM
   holds as a folder, whatever a download fetches of it, or a single `.zip` unpacked into a folder (**served shape**).
   **NULL only for a game RomM holds as one file, kept as it arrived**, which lives as a bare file directly in the shared
