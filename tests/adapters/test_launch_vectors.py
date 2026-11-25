@@ -174,6 +174,30 @@ def test_a_mounted_disc_beside_an_answer_that_does_not_hold_for_the_platform_is_
     assert _read(kind, unresolved, query, label).mounted_disc is None
 
 
+@pytest.mark.parametrize(
+    ("label", "state", "mounted"),
+    [
+        ("RPCS3 Directory (Standalone)", STARTS, True),
+        ("RPCS3 Shortcut (Standalone)", NOT_ESTABLISHED, False),
+    ],
+)
+def test_a_ps3_game_asked_about_its_eboot_mounts_its_folder_where_the_entry_reads_its_boot(label, state, mounted):
+    """#2221 D3: asked about the recorded launch file with the entry in effect, the resolver names the folder."""
+    vector = next(v for _stem, v in _VECTORS if v["name"] == _MOUNTS_ITS_FOLDER)
+    inp = vector["input"]
+    folder = _content_path(vector)
+    adapter = AtlasCatalogueAdapter(
+        sources=EmulatorSourcesAdapter(
+            user_home=inp["home"], settings={}, log_debug=lambda _line: None, machine=fixture_machine(inp)
+        ),
+        log_debug=lambda _line: None,
+    )
+
+    result = adapter.launchability("ps3", f"{folder}/PS3_GAME/USRDIR/EBOOT.BIN", label=label)
+
+    assert (result.state, result.mounted_disc) == (state, folder if mounted else None)
+
+
 @pytest.mark.parametrize("vector", [pytest.param(v, id=f"{stem}:{v['name']}") for stem, v in _VECTORS])
 class TestTendersJudgementIsTheResolvers:
     def test_the_live_answer_is_the_recorded_one(self, vector):
