@@ -141,6 +141,6 @@ repository's layout, and it would be wrong the moment the program was installed 
 ## Amendment — who imports the host
 
 Recorded for [#2777](https://github.com/danielcopper/romm-tender/issues/2777). §1's "nothing but `backend/main.py`
-imports it" no longer holds: `backend/check.py`, the tests and `scripts/dev_backend_lock.py` import `host` too, and the
-`.importlinter` contract keeps only the application's layers from it. What holds now is in
+imports it" no longer holds: the `.importlinter` contract keeps only the application's layers from `host`, and modules
+outside them import it. What holds now is in
 [backend-architecture.md, "The host"](../architecture/backend-architecture.md#the-host-backendhost).
