@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import os
 
-# Never derived from ``domain/identity.py``'s ``PACKAGE_NAME``, which spells it identically; that module's docstring
-# says why.
+# Not derived from ``PACKAGE_NAME``, which spells it identically; ``domain/identity.py``'s docstring says why.
 APP_DIR_NAME = "romm-tender"
 
 # The launcher's own file name, the directory name it sits in where a root is

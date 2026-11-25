@@ -174,7 +174,7 @@ releases. Nothing shuts those down: `asyncio.run` cancels them once the host has
 ```text
 host/ (the process: lock, port, protocol, lifetime — imports none of the below)
     ↑ dispatches onto
-main.py (run(), build_backend() — the process; Endpoints — the endpoints; the only importer of host/)
+main.py (run(), build_backend() — the process; Endpoints — the endpoints; imports host/, as check.py does)
     ↓ calls
 bootstrap/ (composition root: build_application() composes adapters.bootstrap() and services.wire_services() into an Application)
     ↓ creates

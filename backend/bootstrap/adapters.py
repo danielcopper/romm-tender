@@ -360,8 +360,7 @@ def bootstrap(
     # and every later seam (uuid_gen/sleeper neighbours, runtime bundle).
     clock = SystemClock()
 
-    # Why the bin root, and why every start: docs/architecture/backend-architecture.md, "The launcher's home". The path
-    # a new shortcut names: ``ShortcutLauncher``.
+    # Why the bin root, and why every start: docs/architecture/backend-architecture.md, "The launcher's home".
     installed_launcher = launcher_in_bin_dir(directories.bin_dir)
     launcher_at_home = LauncherInstallAdapter(
         source=launcher_path(directories.code_dir),
