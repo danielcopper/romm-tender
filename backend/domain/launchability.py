@@ -152,11 +152,12 @@ class Launchability:
     establish.
     ``contents_unread`` says the file is an archive whose contents were not
     read; ``format_unestablished`` that whether the entry reads this format was
-    not established. ``mounted_disc`` is what the entry's emulator mounts as
-    the disc where the resolver read its boot of the file — a PS3 game's
-    folder, or an image itself — and ``None`` where it states none; a start
-    hands it to the emulator in place of the file asked about (#2221 D3), and
-    the panel is not handed it.
+    not established. ``content_path`` is the path the verdict was asked
+    about; ``mounted_disc`` is the folder the entry's emulator mounts as the
+    disc where the resolver names one, and ``None`` where it names none.
+    ``start_path`` is what a start of the file with the entry hands the
+    emulator and asks its command with (#2221 D3). The panel is handed neither
+    path.
     """
 
     state: str
@@ -164,6 +165,7 @@ class Launchability:
     system: str | None
     file: str
     extension: str
+    content_path: str
     starts_from: tuple[str, ...] = ()
     other_entries: tuple[str, ...] = ()
     install_in: tuple[str, ...] | None = None
@@ -174,8 +176,9 @@ class Launchability:
     format_unestablished: bool = False
     mounted_disc: str | None = None
 
-    def start_path(self, asked: str) -> str:
-        return self.mounted_disc if self.mounted_disc is not None else asked
+    @property
+    def start_path(self) -> str:
+        return self.mounted_disc if self.mounted_disc is not None else self.content_path
 
     def payload(self, *, platform_name: str) -> dict[str, Any]:
         """The verdict as the panel reads it, with the name the game page shows the game's platform under.

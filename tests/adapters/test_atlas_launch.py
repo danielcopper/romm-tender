@@ -61,6 +61,7 @@ from _vendor.atlas.placement import Caveat
 from adapters.atlas_launch import AtlasLaunchAdapter, read_start
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.emulator_commands import NOT_ESTABLISHED_FIND_RULES_UNREAD, NOT_ESTABLISHED_NO_FIND_RULE, NOT_INSTALLED
+from domain.launchability import STARTS, Launchability
 from domain.start_command import (
     COMMAND_TOO_LONG,
     COMMAND_UNREAD,
@@ -409,33 +410,55 @@ def _adapter(installations: list[Any], traces: list[str]) -> AtlasLaunchAdapter:
     )
 
 
+def _verdict(label: str, content_path: str = _GAME, *, mounted_disc: str | None = None) -> Launchability:
+    return Launchability(
+        state=STARTS,
+        entry=label,
+        system="gc",
+        file="Game.rvz",
+        extension=".rvz",
+        content_path=content_path,
+        mounted_disc=mounted_disc,
+    )
+
+
 class TestTheAdapter:
     def test_it_asks_the_answering_source_with_the_entry_tender_starts_the_game_through(self):
         installation = _Installation(_answer(_command()))
         traces: list[str] = []
 
-        result = _adapter([installation], traces).start_command("gc", _GAME, label="Dolphin (Standalone)")
+        result = _adapter([installation], traces).start_command("gc", _verdict("Dolphin (Standalone)"))
 
         assert isinstance(result, StartCommand)
         assert installation.calls == [("gc", _GAME, "Dolphin (Standalone)")]
+
+    def test_it_asks_with_the_disc_the_verdict_names_the_emulator_mounting(self):
+        """#2221 D3: the emulator gets the folder the resolver names, never the file the verdict was asked about."""
+        installation = _Installation(_answer(_command()))
+        eboot, folder = "/roms/ps3/Game.ps3/PS3_GAME/USRDIR/EBOOT.BIN", "/roms/ps3/Game.ps3"
+        launch = _verdict("RPCS3 Directory (Standalone)", eboot, mounted_disc=folder)
+
+        _adapter([installation], []).start_command("ps3", launch)
+
+        assert installation.calls == [("ps3", folder, "RPCS3 Directory (Standalone)")]
 
     def test_one_reading_asks_each_question_once(self):
         installation = _Installation(_answer(_command()))
         adapter = _adapter([installation], [])
         reading = adapter._sources.read()
 
-        adapter.start_command("gc", _GAME, label="Dolphin (Standalone)", reading=reading)
-        adapter.start_command("gc", _GAME, label="Dolphin (Standalone)", reading=reading)
+        adapter.start_command("gc", _verdict("Dolphin (Standalone)"), reading=reading)
+        adapter.start_command("gc", _verdict("Dolphin (Standalone)"), reading=reading)
 
         assert len(installation.calls) == 1
 
     def test_with_no_source_answering_the_command_could_not_be_read(self):
-        assert _adapter([], []).start_command("gc", _GAME, label="Dolphin (Standalone)") == StartRefused(COMMAND_UNREAD)
+        assert _adapter([], []).start_command("gc", _verdict("Dolphin (Standalone)")) == StartRefused(COMMAND_UNREAD)
 
     def test_a_resolver_that_raises_is_a_command_that_could_not_be_read_and_is_traced(self):
         traces: list[str] = []
 
-        result = _adapter([_Installation(RuntimeError("boom"))], traces).start_command("gc", _GAME, label="Dolphin")
+        result = _adapter([_Installation(RuntimeError("boom"))], traces).start_command("gc", _verdict("Dolphin"))
 
         assert result == StartRefused(COMMAND_UNREAD)
         assert any("resolver failed on launch_command" in line for line in traces)

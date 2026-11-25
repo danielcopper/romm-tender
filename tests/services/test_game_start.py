@@ -60,8 +60,8 @@ class _Commands:
         self.answer = answer if answer is not None else StartCommand(argv=_COMMAND, folder=None)
         self.asked: list[dict[str, Any]] = []
 
-    def start_command(self, system: SystemArgument, content_path: str, **asked: Any) -> StartAnswer:
-        self.asked.append({"system": system, "content_path": content_path, **asked})
+    def start_command(self, system: SystemArgument, launch: Launchability, **asked: Any) -> StartAnswer:
+        self.asked.append({"system": system, "content_path": launch.start_path, "label": launch.entry, **asked})
         return self.answer
 
 
@@ -206,6 +206,18 @@ class TestAStartThatComesAbout:
 
         assert core_info.launchability_calls == [("n64", _GAME, "Mupen64Plus-Next")]
 
+    async def test_the_command_is_asked_in_the_reading_its_launch_verdict_was_asked_in(self):
+        uow = FakeUnitOfWork()
+        _seed(uow)
+        core_info = FakeCoreInfoProvider()
+        commands = _Commands()
+
+        await _service(uow, core_info=core_info, commands=commands).prepare_game_start(1)
+
+        (reading,) = core_info.launchability_readings
+        assert reading is not None
+        assert commands.asked[0]["reading"] is reading
+
     async def test_the_games_folder_is_granted_writable_and_tenders_firmware_store_read_only(self):
         uow = FakeUnitOfWork()
         _seed(uow)
@@ -283,6 +295,7 @@ class TestAGameKeptAsAFolder:
             system="ps3",
             file="EBOOT.BIN",
             extension=".BIN",
+            content_path=self._EBOOT,
             mounted_disc=mounted_disc,
         )
         return core_info, _Commands()
@@ -325,8 +338,8 @@ class TestAGameKeptAsAFolder:
         assert commands.asked[0]["content_path"] == self._EBOOT
 
 
-class TestTheSaveIsAskedAboutWhatStarts:
-    """#2221 Done when: a game's save lands where the resolver named it for that path.
+class TestTheSaveOfAGameWithNoDiscPickIsAskedAboutWhatStarts:
+    """#2221 Done when, for a game with no disc pick: its save lands where the resolver named it for that path.
 
     The save place is the resolver's answer for the system, path and entry it
     is asked about, so it is where the game saves when the start asks with the

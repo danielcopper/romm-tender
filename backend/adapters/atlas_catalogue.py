@@ -733,6 +733,7 @@ def _launchability(answer: Any, *, system: SystemArgument, content_path: str, la
         system=system_key(system),
         file=os.path.basename(content_path),
         extension=answer.extension,
+        content_path=content_path,
         starts_from=tuple(answer.accepted),
         other_entries=tuple(answer.alternatives),
         install_in=None if answer.installers is None else _installed_in(answer.installers),
@@ -1002,6 +1003,7 @@ class AtlasCatalogueAdapter:
                 system=system_key(system),
                 file=os.path.basename(content_path),
                 extension="",
+                content_path=content_path,
                 reason=NO_SOURCE,
             )
 
@@ -1020,6 +1022,7 @@ class AtlasCatalogueAdapter:
                 system=system_key(system),
                 file=os.path.basename(content_path),
                 extension="",
+                content_path=content_path,
             )
         return _launchability(answer, system=system, content_path=content_path, label=label)
 

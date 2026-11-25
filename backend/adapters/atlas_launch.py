@@ -74,6 +74,7 @@ if TYPE_CHECKING:
 
     from adapters.emulator_sources import EmulatorSourcesAdapter
     from domain.emulator_sources import SourcesReading
+    from domain.launchability import Launchability
     from domain.platform_system import SystemArgument
 
 # Why the resolver gives no command, each in Tender's word; a refusal this map
@@ -220,19 +221,14 @@ class AtlasLaunchAdapter:
     def start_command(
         self,
         system: SystemArgument,
-        content_path: str,
+        launch: Launchability,
         *,
-        label: str,
         writable: tuple[str, ...] = (),
         read_only: tuple[str, ...] = (),
         reading: SourcesReading | None = None,
     ) -> StartAnswer:
-        """How *content_path* starts as *system*'s content with the entry *label* names, or why it does not.
-
-        Asked of the answering source with the entry Tender starts the game
-        through. Where no source answers or the resolver could not be asked, the
-        command could not be read (:data:`~domain.start_command.COMMAND_UNREAD`).
-        """
+        """Answer :data:`~domain.start_command.COMMAND_UNREAD` where no source answers or asking the resolver fails."""
+        content_path, label = launch.start_path, launch.entry
         reading = reading if reading is not None else self._sources.read()
         installation = reading.answering_installation()
         if installation is None:

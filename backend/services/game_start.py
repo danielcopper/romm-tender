@@ -1,11 +1,10 @@
 """GameStartService — prepares one start of a game: the resolver's command, handed to the launcher.
 
 Every start goes through here, Tender's Play and Steam's own Play alike (#2221
-D7): the start check asks for the command the resolver gives for the game's
-entry in effect, with the game's own path — or with the disc the entry's
-emulator mounts where the resolver names one (D3) — and hands it to the
-shortcut launcher for that one start (D15). Nothing of the command is stored; a start
-whose hand-over does not come about starts nothing (D11, D19).
+D7): the start check asks for the command the resolver gives for the game with
+its entry in effect and hands it to the shortcut launcher for that one start
+(D15). Nothing of the command is stored; a start whose hand-over does not come
+about starts nothing (D11, D19).
 
 The shortcut's launch options are Tender's: the answer names them, the
 shortcut's appId, and the panel sets them back before the start (D16).
@@ -49,16 +48,9 @@ START_FOLDER = "start-folder"
 class GameStartServiceConfig:
     """Frozen wiring bundle handed to ``GameStartService.__init__``.
 
-    Carries the Unit-of-Work factory (the game's record, its install and its
-    shortcut), the entry the game starts with (``active_core``), the path it is
-    asked about (``disc_resolver``), the disc the entry's emulator mounts
-    (``core_info``), the resolver's command (``start_commands``), the hand-over
-    to the launcher — ``None`` where this session has no runtime directory to
-    hand a start over in (#2708 D4) — and Tender's folder, whose firmware store
-    a start may read. ``start_folder`` is
-    the folder a command that names none starts in (#2221 D6). ``loop`` runs the
-    preparation off the loop thread, ``conflict_rules`` are what it checks and
-    leases through.
+    ``handover`` is ``None`` where this session has no runtime directory to
+    hand a start over in (#2708 D4). ``start_folder`` is the folder a command
+    that names none starts in (#2221 D6).
     """
 
     uow_factory: UnitOfWorkFactory
@@ -132,8 +124,7 @@ class GameStartService:
         launch = self._core_info.launchability(install.system, path, label=label, reading=reading)
         command = self._start_commands.start_command(
             install.system,
-            launch.start_path(path),
-            label=label,
+            launch,
             writable=(install.rom_dir or os.path.dirname(path),),
             read_only=(os.path.join(self._tender_folder.place().folder, STORE_FOLDER),),
             reading=reading,

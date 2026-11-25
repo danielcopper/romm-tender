@@ -377,19 +377,19 @@ class StartCommandReader(Protocol):
     """How one game starts with one entry, as the resolver's launch command states it (#2221 D1, D2).
 
     The composition root satisfies this with ``AtlasLaunchAdapter``.
-    ``start_command`` asks the answering source with the system, the game's own
-    path and the entry's label, and answers a complete command as Tender runs
-    it — the folders in *writable* and *read_only* granted to a Flatpak start —
-    or why the resolver gives no complete command.
+    ``start_command`` is asked about a launch verdict: it asks the answering
+    source with the system, the verdict's ``start_path`` and its entry's
+    label, and answers a complete command as Tender runs it — the folders in
+    *writable* and *read_only* granted to a Flatpak start — or why the
+    resolver gives no complete command.
     """
 
     def start_command(
         self,
         system: SystemArgument,
-        content_path: str,
+        launch: Launchability,
         /,
         *,
-        label: str,
         writable: tuple[str, ...] = (),
         read_only: tuple[str, ...] = (),
         reading: SourcesReading | None = None,
