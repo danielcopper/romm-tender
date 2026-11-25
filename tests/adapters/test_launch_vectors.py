@@ -193,9 +193,15 @@ def test_a_ps3_game_asked_about_its_eboot_mounts_its_folder_where_the_entry_read
         log_debug=lambda _line: None,
     )
 
-    result = adapter.launchability("ps3", f"{folder}/PS3_GAME/USRDIR/EBOOT.BIN", label=label)
+    eboot = f"{folder}/PS3_GAME/USRDIR/EBOOT.BIN"
 
-    assert (result.state, result.mounted_disc) == (state, folder if mounted else None)
+    result = adapter.launchability("ps3", eboot, label=label)
+
+    assert (result.state, result.mounted_disc, result.start_path) == (
+        state,
+        folder if mounted else None,
+        folder if mounted else eboot,
+    )
 
 
 @pytest.mark.parametrize("vector", [pytest.param(v, id=f"{stem}:{v['name']}") for stem, v in _VECTORS])
@@ -230,17 +236,21 @@ class TestTendersJudgementIsTheResolvers:
             assert not stops
             assert result.reason not in _STOP_WORDS
 
-    def test_the_disc_the_emulator_mounts_is_the_one_the_resolver_names_where_the_answer_holds(self, vector):
+    def test_a_start_hands_over_the_disc_the_resolver_names_where_the_answer_holds_and_the_asked_path_otherwise(
+        self, vector
+    ):
         """#2221 D3: the disc the resolver names the emulator mounting is read where the answer holds."""
         kind, answer, query, label = _asked(vector)
         recorded = vector["expected"]["launchable"]
         boots = recorded.get("boots")
         resolution = recorded.get("resolution")
         holds = resolution is None or resolution["status"] in (RESOLUTION_RESOLVED, RESOLUTION_UNANIMOUS)
+        mounted = boots["disc_root"] if boots is not None and holds else None
 
         result = _read(kind, answer, query, label)
 
-        assert result.mounted_disc == (boots["disc_root"] if boots is not None and holds else None)
+        assert result.mounted_disc == mounted
+        assert result.start_path == (mounted if mounted is not None else _content_path(vector))
 
     def test_every_other_stated_failure_is_said_in_its_own_group_in_order(self, vector):
         kind, answer, query, label = _asked(vector)

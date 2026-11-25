@@ -294,6 +294,7 @@ class TestTheRealResolverOverAMachine:
         answer = adapter.launchability("gba", "/roms/gba/Game.gba", label="mGBA")
 
         assert (answer.state, answer.reason, answer.file) == (NOT_ESTABLISHED, NO_SOURCE, "Game.gba")
+        assert answer.start_path == "/roms/gba/Game.gba"
 
 
 class _Installation:
@@ -595,6 +596,7 @@ class TestEachVerdictInTendersWords:
         result, _ = _ask(RuntimeError("an invariant broke"), traces)
 
         assert (result.state, result.reason, result.file) == (NOT_ESTABLISHED, None, "Game.z64")
+        assert result.start_path == "/roms/n64/Game.z64"
         assert any("resolver failed on launchable('n64'" in line for line in traces)
 
 
