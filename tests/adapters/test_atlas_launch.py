@@ -415,7 +415,6 @@ def _verdict(label: str, content_path: str = _GAME, *, mounted_disc: str | None 
         state=STARTS,
         entry=label,
         system="gc",
-        file="Game.rvz",
         extension=".rvz",
         content_path=content_path,
         mounted_disc=mounted_disc,

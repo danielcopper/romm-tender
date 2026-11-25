@@ -731,7 +731,6 @@ def _launchability(answer: Any, *, system: SystemArgument, content_path: str, la
         state=state,
         entry=label,
         system=system_key(system),
-        file=os.path.basename(content_path),
         extension=answer.extension,
         content_path=content_path,
         starts_from=tuple(answer.accepted),
@@ -1001,7 +1000,6 @@ class AtlasCatalogueAdapter:
                 state=LAUNCH_NOT_ESTABLISHED,
                 entry=label,
                 system=system_key(system),
-                file=os.path.basename(content_path),
                 extension="",
                 content_path=content_path,
                 reason=NO_SOURCE,
@@ -1020,7 +1018,6 @@ class AtlasCatalogueAdapter:
                 state=LAUNCH_NOT_ESTABLISHED,
                 entry=label,
                 system=system_key(system),
-                file=os.path.basename(content_path),
                 extension="",
                 content_path=content_path,
             )

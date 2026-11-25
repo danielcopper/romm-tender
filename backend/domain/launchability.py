@@ -10,6 +10,7 @@ Pure compute — no I/O.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -163,7 +164,6 @@ class Launchability:
     state: str
     entry: str
     system: str | None
-    file: str
     extension: str
     content_path: str
     starts_from: tuple[str, ...] = ()
@@ -175,6 +175,10 @@ class Launchability:
     contents_unread: bool = False
     format_unestablished: bool = False
     mounted_disc: str | None = None
+
+    @property
+    def file(self) -> str:
+        return os.path.basename(self.content_path)
 
     @property
     def start_path(self) -> str:

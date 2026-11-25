@@ -293,7 +293,6 @@ class TestAGameKeptAsAFolder:
             state=state,
             entry=self._DIRECTORY.label,
             system="ps3",
-            file="EBOOT.BIN",
             extension=".BIN",
             content_path=self._EBOOT,
             mounted_disc=mounted_disc,

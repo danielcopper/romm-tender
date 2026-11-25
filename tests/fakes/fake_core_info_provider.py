@@ -157,7 +157,6 @@ class FakeCoreInfoProvider:
             state=STARTS,
             entry=label,
             system=system_key(system_name),
-            file=os.path.basename(content_path),
             extension=os.path.splitext(content_path)[1],
             content_path=content_path,
         )

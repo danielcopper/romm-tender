@@ -1241,7 +1241,6 @@ class TestTheChosenEntrysLaunch:
             state=NEEDS_INSTALLING,
             entry="RPCS3 Directory (Standalone)",
             system="ps3",
-            file="Puppeteer.pkg",
             extension=".pkg",
             content_path="/roms/ps3/Puppeteer/Puppeteer.pkg",
             install_in=("RPCS3 Game Serial (Standalone)",),
@@ -1267,7 +1266,6 @@ class TestTheChosenEntrysLaunch:
             state=NOT_ESTABLISHED,
             entry="RPCS3 Shortcut (Standalone)",
             system="ps3",
-            file="EBOOT.BIN",
             extension=".BIN",
             content_path=eboot,
         )
@@ -1410,7 +1408,6 @@ class TestWhatTheResolversCommandSaysOfTheStart:
             state=STARTS,
             entry=self._DIRECTORY.label,
             system="ps3",
-            file="EBOOT.BIN",
             extension=".BIN",
             content_path=self._EBOOT,
             mounted_disc=self._FOLDER,
