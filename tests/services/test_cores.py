@@ -40,6 +40,7 @@ from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.start_command import (
     DESKTOP_FILE,
+    ENVIRONMENT_UNKNOWN,
     PLACEHOLDER_UNFILLED,
     SOURCE_STARTS_NO_GAMES,
     StartCommand,
@@ -1254,10 +1255,10 @@ class TestTheChosenEntrysLaunch:
         assert result["launch"]["state"] == NEEDS_INSTALLING
         assert result["launch"]["install_in"] == ["RPCS3 Game Serial (Standalone)"]
 
-    def test_a_folder_game_under_an_entry_that_names_no_mounted_disc_is_asked_and_started_with_its_launch_file(
+    def test_a_folder_game_under_an_entry_whose_command_states_no_distribution_environment_cannot_start(
         self, event_loop, service, core_info, active_core, start_commands, uow
     ):
-        """#2221 D23: shown and started as the resolver answers its launch file, with Play on."""
+        """#2221 D23 as changed 2026-11-26: asked about its launch file, and Play off for the unstated environment."""
         eboot = "/roms/ps3/Game.ps3/PS3_GAME/USRDIR/EBOOT.BIN"
         _seed_rom(uow, rom_id=42, platform_slug="ps3")
         _seed_install(uow, rom_id=42, file_path=eboot, rom_dir="/roms/ps3/Game.ps3", platform_slug="ps3")
@@ -1269,11 +1270,16 @@ class TestTheChosenEntrysLaunch:
             extension=".BIN",
             content_path=eboot,
         )
+        start_commands.answers["RPCS3 Shortcut (Standalone)"] = StartRefused(ENVIRONMENT_UNKNOWN)
 
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
 
         assert result["launch"]["state"] == NOT_ESTABLISHED
-        assert result["start"]["state"] == "starts"
+        assert result["start"] == {
+            "state": "cannot_start",
+            "reason": ENVIRONMENT_UNKNOWN,
+            "entry": "RPCS3 Shortcut (Standalone)",
+        }
         assert start_commands.asked == [("ps3", eboot, "RPCS3 Shortcut (Standalone)")]
 
     def test_the_answer_names_the_platform_as_the_game_page_does(self, event_loop, service, active_core, uow):
