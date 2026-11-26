@@ -779,8 +779,8 @@ Tender asks about a PS3 game kept as a folder by its `EBOOT.BIN`, and where the 
 the disc — the one holding `PS3_DISC.SFB`, wherever it lies inside `<game>.ps3` — RPCS3 gets that folder. With RPCS3
 Directory or RPCS3 ISO the game's page says the game starts, with the line "ES-DE would not list EBOOT.BIN under this
 name" under **Play**: ES-DE's own game list shows the folder, not the file. With RPCS3 Shortcut, RetroDECK's default,
-the answer names no folder: the page says whether it starts the game cannot be established, **Play** stays on, and a
-start hands it the `EBOOT.BIN`.
+the answer names no folder, and **Play** is off with "Tender cannot start RPCS3 Shortcut (Standalone) yet: what it needs
+from RetroDECK's start is not known yet." Choose RPCS3 Directory in the emulator menu to play it.
 
 ## Picking a Disc for Multi-Disc Games
 

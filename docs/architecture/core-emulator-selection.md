@@ -670,8 +670,9 @@ the recorded `file_path`, the EBOOT, with the entry in effect; where its launch 
 emulator mounts (`boots.disc_root`: for RPCS3 the folder holding `PS3_DISC.SFB`), the emulator gets that folder, as
 [The start](#the-start-one-command-handed-over-for-one-start) says. The verdict says ES-DE's naming only as a note
 beside the start (it would not list the EBOOT under its name). RetroDECK's default entry, `RPCS3 Shortcut`, reads no
-boot and names no disc: asked about the EBOOT, its verdict is not established, so Play stays on with the note saying so,
-and its command is asked with the EBOOT (D23).
+boot and names no disc: asked about the EBOOT, its verdict is not established, and its command, asked with the EBOOT,
+states no distribution environment (`launch-environment-unpinned`), so the entry is not startable through Tender yet and
+Play is off with that reason (D23 as changed 2026-11-26).
 
 `RomInstall.file_path` stays the EBOOT (the [ADR-0008](../adr/0008-rom-install-launch-file-and-rom-dir.md) anchor), so
 save-path, core, and displayed-filename derivations are untouched. See

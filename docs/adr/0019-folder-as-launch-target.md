@@ -1,7 +1,7 @@
 ---
 status: accepted
 decided: 2026-07-04
-updated: 2026-11-25
+updated: 2026-11-26
 amended-by: [0044]
 ---
 
@@ -272,9 +272,10 @@ reads the folder the resolver names.
 
 `file_path` stays the launch file anchor. Which folder a game kept as a folder is started with, and the path the
 resolver is asked with, changed ([ADR-0044](0044-every-start-asks-the-resolver.md),
-[#2221](https://github.com/danielcopper/romm-tender/issues/2221) D3 as changed 2026-11-25, D8, D22, D23): the resolver
-is asked about `file_path`, the `EBOOT.BIN`, with the entry in effect. Where its launch verdict names the folder RPCS3
-mounts as the disc (`boots.disc_root`), the start command is asked with that folder and the emulator gets it; under an
-entry whose verdict names none, such as RetroDECK's default `RPCS3 Shortcut`, the emulator gets the `EBOOT.BIN`. The
-marker table (`FOLDER_BOOT_MARKERS`) and `folder_boot_root` no longer reach a start; they stay for the download (§5–§6)
-and the one-time naming step.
+[#2221](https://github.com/danielcopper/romm-tender/issues/2221) D3 as changed 2026-11-25, D8, D22, D23 as changed
+2026-11-26): the resolver is asked about `file_path`, the `EBOOT.BIN`, with the entry in effect. Where its launch
+verdict names the folder RPCS3 mounts as the disc (`boots.disc_root`), the start command is asked with that folder and
+the emulator gets it; under an entry whose verdict names none, the start command is asked with the `EBOOT.BIN`. Under
+RetroDECK's default `RPCS3 Shortcut` that command states no distribution environment, so the entry is not startable
+through Tender yet and Play is off with that reason. The marker table (`FOLDER_BOOT_MARKERS`) and `folder_boot_root` no
+longer reach a start; they stay for the download (§5–§6) and the one-time naming step.
