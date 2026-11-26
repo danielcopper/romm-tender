@@ -31,7 +31,7 @@ from domain.emulator_choice import DEFAULT, EmulatorChoice, ResolvedEmulator, Va
 from domain.emulator_commands import options_to_payload
 from domain.emulator_pick import StoredPick
 from domain.emulator_sources import ArrangedSource
-from domain.launchability import NEEDS_INSTALLING, NOT_THIS_EMULATOR, TAKES_NO_FOLDER, Launchability
+from domain.launchability import NEEDS_INSTALLING, NOT_ESTABLISHED, STARTS, Launchability
 from domain.platform_system import (
     NO_SYSTEM,
     SWITCHED_OFF,
@@ -40,6 +40,7 @@ from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.start_command import (
     DESKTOP_FILE,
+    ENVIRONMENT_UNKNOWN,
     PLACEHOLDER_UNFILLED,
     SOURCE_STARTS_NO_GAMES,
     StartCommand,
@@ -1149,7 +1150,10 @@ class TestGetEmulatorLaunches:
             ("ps3", "/roms/ps3/Game.iso", "RPCS3 Directory (Standalone)"),
         ]
 
-    def test_a_game_kept_as_a_folder_is_asked_about_its_folder(self, event_loop, service, core_info, active_core, uow):
+    def test_a_game_kept_as_a_folder_is_asked_about_its_recorded_file(
+        self, event_loop, service, core_info, active_core, uow
+    ):
+        """#2221 D3: the resolver is asked with the path Tender records, never the folder its own table finds."""
         _seed_rom(uow, rom_id=42, platform_slug="ps3")
         _seed_install(
             uow,
@@ -1162,7 +1166,9 @@ class TestGetEmulatorLaunches:
 
         event_loop.run_until_complete(service.get_emulator_launches(42))
 
-        assert core_info.launchability_calls == [("ps3", "/roms/ps3/Game.ps3", "RPCS3 Directory (Standalone)")]
+        assert core_info.launchability_calls == [
+            ("ps3", "/roms/ps3/Game.ps3/PS3_GAME/USRDIR/EBOOT.BIN", "RPCS3 Directory (Standalone)")
+        ]
 
     def test_a_multi_disc_game_is_asked_about_the_disc_it_starts(
         self, event_loop, service, core_info, active_core, disc_resolver, uow
@@ -1236,8 +1242,8 @@ class TestTheChosenEntrysLaunch:
             state=NEEDS_INSTALLING,
             entry="RPCS3 Directory (Standalone)",
             system="ps3",
-            file="Puppeteer.pkg",
             extension=".pkg",
+            content_path="/roms/ps3/Puppeteer/Puppeteer.pkg",
             install_in=("RPCS3 Game Serial (Standalone)",),
         )
 
@@ -1249,37 +1255,32 @@ class TestTheChosenEntrysLaunch:
         assert result["launch"]["state"] == NEEDS_INSTALLING
         assert result["launch"]["install_in"] == ["RPCS3 Game Serial (Standalone)"]
 
-    def test_a_folder_game_whose_entry_takes_no_folder_is_refused_by_the_verdict_not_by_its_start(
-        self, event_loop, service, core_info, active_core, uow
+    def test_a_folder_game_under_an_entry_whose_command_states_no_distribution_environment_cannot_start(
+        self, event_loop, service, core_info, active_core, start_commands, uow
     ):
-        # Whether the entry takes a folder is the resolver's (#2195 D21 changed).
+        """#2221 D23 as changed 2026-11-26: asked about its launch file, and Play off for the unstated environment."""
+        eboot = "/roms/ps3/Game.ps3/PS3_GAME/USRDIR/EBOOT.BIN"
         _seed_rom(uow, rom_id=42, platform_slug="ps3")
-        _seed_install(
-            uow,
-            rom_id=42,
-            file_path="/roms/ps3/Game.ps3/PS3_GAME/USRDIR/EBOOT.BIN",
-            rom_dir="/roms/ps3/Game.ps3",
-            platform_slug="ps3",
-        )
+        _seed_install(uow, rom_id=42, file_path=eboot, rom_dir="/roms/ps3/Game.ps3", platform_slug="ps3")
         active_core.resolved[42] = _resolved(self._SHORTCUT, self._DIRECTORY, chosen=self._SHORTCUT)
         core_info.launch_verdicts["RPCS3 Shortcut (Standalone)"] = Launchability(
-            state=NOT_THIS_EMULATOR,
+            state=NOT_ESTABLISHED,
             entry="RPCS3 Shortcut (Standalone)",
             system="ps3",
-            file="Game.ps3",
-            extension=".ps3",
-            other_entries=("RPCS3 Directory (Standalone)",),
-            reason=TAKES_NO_FOLDER,
+            extension=".BIN",
+            content_path=eboot,
         )
+        start_commands.answers["RPCS3 Shortcut (Standalone)"] = StartRefused(ENVIRONMENT_UNKNOWN)
 
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
 
-        assert result["start"] == {"state": "starts", "reason": None, "entry": "RPCS3 Shortcut (Standalone)"}
-        assert (result["launch"]["state"], result["launch"]["reason"], result["launch"]["other_entries"]) == (
-            NOT_THIS_EMULATOR,
-            TAKES_NO_FOLDER,
-            ["RPCS3 Directory (Standalone)"],
-        )
+        assert result["launch"]["state"] == NOT_ESTABLISHED
+        assert result["start"] == {
+            "state": "cannot_start",
+            "reason": ENVIRONMENT_UNKNOWN,
+            "entry": "RPCS3 Shortcut (Standalone)",
+        }
+        assert start_commands.asked == [("ps3", eboot, "RPCS3 Shortcut (Standalone)")]
 
     def test_the_answer_names_the_platform_as_the_game_page_does(self, event_loop, service, active_core, uow):
         # The sentences name the platform, never the system short name (#2195 D36).
@@ -1401,6 +1402,71 @@ class TestWhatTheResolversCommandSaysOfTheStart:
         assert start_commands.asked == [
             ("ps3", "/roms/ps3/Game.iso", "RPCS3 Shortcut (Standalone)"),
             ("ps3", "/roms/ps3/Game.iso", "RPCS3 Directory (Standalone)"),
+        ]
+
+    _FOLDER = "/roms/ps3/Game.ps3"
+    _EBOOT = f"{_FOLDER}/PS3_GAME/USRDIR/EBOOT.BIN"
+
+    def _kept_as_a_folder(self, uow: FakeUnitOfWork, core_info: FakeCoreInfoProvider) -> None:
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        _seed_install(uow, rom_id=42, file_path=self._EBOOT, rom_dir=self._FOLDER, platform_slug="ps3")
+        core_info.launch_verdicts[self._DIRECTORY.label] = Launchability(
+            state=STARTS,
+            entry=self._DIRECTORY.label,
+            system="ps3",
+            extension=".BIN",
+            content_path=self._EBOOT,
+            mounted_disc=self._FOLDER,
+        )
+
+    def test_the_pages_command_is_asked_with_the_folder_the_emulator_mounts(
+        self, event_loop, service, core_info, active_core, start_commands, uow
+    ):
+        """#2221 D3: the page asks the command the start asks, with the folder the resolver names."""
+        self._kept_as_a_folder(uow, core_info)
+        active_core.resolved[42] = _resolved(self._DIRECTORY, chosen=self._DIRECTORY)
+
+        event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert core_info.launchability_calls == [("ps3", self._EBOOT, self._DIRECTORY.label)]
+        assert start_commands.asked == [("ps3", self._FOLDER, self._DIRECTORY.label)]
+
+    def test_a_page_for_a_game_not_installed_takes_no_reading_of_the_sources(
+        self, event_loop, service, core_info, active_core, uow
+    ):
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        active_core.resolved[42] = _resolved(self._DIRECTORY, chosen=self._DIRECTORY)
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["launch"] is None
+        assert core_info.readings_taken == 0
+
+    def test_the_pages_verdict_and_command_are_asked_in_one_reading(
+        self, event_loop, service, core_info, active_core, start_commands, uow
+    ):
+        self._installed(uow)
+        active_core.resolved[42] = _resolved(self._DIRECTORY, chosen=self._DIRECTORY)
+
+        event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        (reading,) = core_info.launchability_readings
+        assert reading is not None
+        (command_reading,) = start_commands.readings
+        assert command_reading is reading
+
+    def test_the_menu_asks_each_entrys_command_with_what_that_entrys_emulator_mounts(
+        self, event_loop, service, core_info, active_core, start_commands, uow
+    ):
+        """The Shortcut entry names no mounted disc, so its command is asked with the recorded file (#2221 D3)."""
+        self._kept_as_a_folder(uow, core_info)
+        active_core.resolved[42] = _resolved(self._SHORTCUT, self._DIRECTORY)
+
+        event_loop.run_until_complete(service.get_emulator_launches(42))
+
+        assert start_commands.asked == [
+            ("ps3", self._EBOOT, self._SHORTCUT.label),
+            ("ps3", self._FOLDER, self._DIRECTORY.label),
         ]
 
     def test_a_game_the_answering_source_starts_no_game_through_cannot_start_and_asks_nothing(

@@ -7,6 +7,7 @@ other launch tests use, and the conflict rules are the real ones.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -17,20 +18,26 @@ from _factories import (
     _refused_by_conflict_rule,
 )
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
-from fakes.fake_core_info_provider import libretro_option
+from fakes.fake_core_info_provider import FakeCoreInfoProvider, libretro_option, standalone_option
 from fakes.fake_disc_resolver import FakeDiscResolver
+from fakes.fake_platform_systems import FakePlatformSystems
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
+from fakes.fake_save_file_store import FakeSaveFileStore
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 
 from domain.disc_selection import Disc
 from domain.emulator_choice import EmulatorChoice, ResolvedEmulator
 from domain.emulator_commands import NOT_INSTALLED, PROGRAM, EmulatorOption
+from domain.launchability import NOT_ESTABLISHED, STARTS, Launchability
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.start_command import ENVIRONMENT_UNREAD, SOURCE_STARTS_NO_GAMES, StartCommand, StartRefused
 from domain.tender_folder import TenderPlace
 from lib.errors import Refused
 from services.game_start import START_FOLDER, GameStartService, GameStartServiceConfig
+from services.saves.rom_info import RomInfoService, RomInfoServiceConfig
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -53,8 +60,8 @@ class _Commands:
         self.answer = answer if answer is not None else StartCommand(argv=_COMMAND, folder=None)
         self.asked: list[dict[str, Any]] = []
 
-    def start_command(self, system: SystemArgument, content_path: str, **asked: Any) -> StartAnswer:
-        self.asked.append({"system": system, "content_path": content_path, **asked})
+    def start_command(self, system: SystemArgument, launch: Launchability, **asked: Any) -> StartAnswer:
+        self.asked.append({"system": system, "content_path": launch.start_path, "label": launch.entry, **asked})
         return self.answer
 
 
@@ -82,6 +89,7 @@ def _seed(
     file_path: str = _GAME,
     rom_dir: str | None = None,
     selected_disc: str | None = None,
+    system: str = "n64",
 ) -> None:
     with uow:
         uow.roms.save(
@@ -100,8 +108,8 @@ def _seed(
                     rom_id=1,
                     file_path=file_path,
                     rom_dir=rom_dir,
-                    platform_slug="n64",
-                    system="n64",
+                    platform_slug=system,
+                    system=system,
                     installed_at="2025-01-01T00:00:00",
                 )
             )
@@ -117,6 +125,7 @@ def _service(
     no_handover: bool = False,
     active_core: FakeActiveCoreResolver | None = None,
     disc_resolver: FakeDiscResolver | None = None,
+    core_info: FakeCoreInfoProvider | None = None,
     prune_conflicts: PruneConflicts | None = None,
 ) -> GameStartService:
     return GameStartService(
@@ -128,6 +137,7 @@ def _service(
                 default_emulator=libretro_option("mupen64plus_next_libretro", "Mupen64Plus-Next")
             ),
             disc_resolver=disc_resolver if disc_resolver is not None else FakeDiscResolver(),
+            core_info=core_info if core_info is not None else FakeCoreInfoProvider(),
             start_commands=commands if commands is not None else _Commands(),
             handover=None if no_handover else (handover if handover is not None else _Handover()),
             tender_folder=_TenderFolder(),
@@ -187,15 +197,26 @@ class TestAStartThatComesAbout:
 
         assert commands.asked[0]["content_path"] == f"{folder}/Game (Disc 2).chd"
 
-    async def test_a_game_kept_as_a_folder_is_asked_about_as_its_folder(self):
+    async def test_the_launch_verdict_is_asked_with_the_entry_in_effect_and_the_games_own_path(self):
         uow = FakeUnitOfWork()
-        folder = f"{_ROMS}/ps3/Game.ps3"
-        _seed(uow, file_path=f"{folder}/PS3_GAME/USRDIR/EBOOT.BIN", rom_dir=folder)
+        _seed(uow)
+        core_info = FakeCoreInfoProvider()
+
+        await _service(uow, core_info=core_info).prepare_game_start(1)
+
+        assert core_info.launchability_calls == [("n64", _GAME, "Mupen64Plus-Next")]
+
+    async def test_the_command_is_asked_in_the_reading_its_launch_verdict_was_asked_in(self):
+        uow = FakeUnitOfWork()
+        _seed(uow)
+        core_info = FakeCoreInfoProvider()
         commands = _Commands()
 
-        await _service(uow, commands=commands).prepare_game_start(1)
+        await _service(uow, core_info=core_info, commands=commands).prepare_game_start(1)
 
-        assert commands.asked[0]["content_path"] == folder
+        (reading,) = core_info.launchability_readings
+        assert reading is not None
+        assert commands.asked[0]["reading"] is reading
 
     async def test_the_games_folder_is_granted_writable_and_tenders_firmware_store_read_only(self):
         uow = FakeUnitOfWork()
@@ -257,6 +278,116 @@ class TestAStartThatComesAbout:
         await _service(uow, prune_conflicts=prune_conflicts).prepare_game_start(1)
 
         assert seen == [["prepare_game_start"]]
+
+
+class TestAGameKeptAsAFolder:
+    """#2221 D3, D22: asked about its recorded file, the emulator gets the folder the resolver names it mounting."""
+
+    _FOLDER = f"{_ROMS}/ps3/Game.ps3"
+    _EBOOT = f"{_FOLDER}/PS3_GAME/USRDIR/EBOOT.BIN"
+    _DIRECTORY = standalone_option("RPCS3 Directory (Standalone)")
+
+    def _answering(self, mounted_disc: str | None, *, state: str = STARTS) -> tuple[FakeCoreInfoProvider, _Commands]:
+        core_info = FakeCoreInfoProvider()
+        core_info.launch_verdicts[self._DIRECTORY.label] = Launchability(
+            state=state,
+            entry=self._DIRECTORY.label,
+            system="ps3",
+            extension=".BIN",
+            content_path=self._EBOOT,
+            mounted_disc=mounted_disc,
+        )
+        return core_info, _Commands()
+
+    async def _start(self, core_info: FakeCoreInfoProvider, commands: _Commands) -> None:
+        uow = FakeUnitOfWork()
+        _seed(uow, file_path=self._EBOOT, rom_dir=self._FOLDER, system="ps3")
+        active_core = FakeActiveCoreResolver(default_emulator=self._DIRECTORY)
+        await _service(uow, commands=commands, core_info=core_info, active_core=active_core).prepare_game_start(1)
+
+    async def test_the_launch_verdict_is_asked_about_its_recorded_file_with_the_entry_in_effect(self):
+        core_info, commands = self._answering(self._FOLDER)
+
+        await self._start(core_info, commands)
+
+        assert core_info.launchability_calls == [("ps3", self._EBOOT, self._DIRECTORY.label)]
+
+    async def test_the_command_is_asked_with_the_folder_the_resolver_names_the_emulator_mounting(self):
+        core_info, commands = self._answering(self._FOLDER)
+
+        await self._start(core_info, commands)
+
+        assert [(a["content_path"], a["label"], a["writable"]) for a in commands.asked] == [
+            (self._FOLDER, self._DIRECTORY.label, (self._FOLDER,))
+        ]
+
+    async def test_a_mounted_disc_beside_a_verdict_not_established_is_still_what_the_emulator_gets(self):
+        core_info, commands = self._answering(self._FOLDER, state=NOT_ESTABLISHED)
+
+        await self._start(core_info, commands)
+
+        assert commands.asked[0]["content_path"] == self._FOLDER
+
+    async def test_where_the_resolver_names_no_mounted_disc_the_command_is_asked_with_the_recorded_file(self):
+        """Never the folder Tender's own table of the boot folder would find (D22)."""
+        core_info, commands = self._answering(None)
+
+        await self._start(core_info, commands)
+
+        assert commands.asked[0]["content_path"] == self._EBOOT
+
+
+class TestTheSaveOfAGameWithNoDiscPickIsAskedAboutItsLaunchVerdictsPath:
+    """#2221 Done when, for a game with no disc pick: its save lands where the resolver named it for that path.
+
+    The save place is the resolver's answer for the system, path and entry it
+    is asked about, so it is where the game saves when the start's launch
+    verdict is asked about the same three (D3).
+    """
+
+    _FOLDER = f"{_ROMS}/ps3/Game.ps3"
+    _EBOOT = f"{_FOLDER}/PS3_GAME/USRDIR/EBOOT.BIN"
+
+    @staticmethod
+    def _saves_asked(uow: FakeUnitOfWork, active_core: FakeActiveCoreResolver) -> list[tuple[Any, str, str | None]]:
+        saves = FakeSaveLocationReader()
+        RomInfoService(
+            config=RomInfoServiceConfig(
+                uow_factory=FakeUnitOfWorkFactory(uow=uow),
+                save_file_store=FakeSaveFileStore(),
+                retrodeck_folders=FakeRetroDeckFolders(),
+                active_core=active_core,
+                save_locations=saves,
+                platform_systems=FakePlatformSystems(),
+                logger=logging.getLogger(__name__),
+            )
+        ).save_answer(1)
+        return saves.calls
+
+    async def test_the_save_is_asked_with_the_system_path_and_entry_the_command_is_asked_with(self):
+        uow = FakeUnitOfWork()
+        _seed(uow)
+        active_core = FakeActiveCoreResolver(
+            default_emulator=libretro_option("mupen64plus_next_libretro", "Mupen64Plus-Next")
+        )
+        commands = _Commands()
+
+        await _service(uow, commands=commands, active_core=active_core).prepare_game_start(1)
+
+        assert self._saves_asked(uow, active_core) == [
+            (a["system"], a["content_path"], a["label"]) for a in commands.asked
+        ]
+
+    async def test_a_ps3_game_kept_as_a_folder_has_its_save_asked_about_what_its_launch_verdict_is(self):
+        """D3: the resolver is asked about the recorded launch file; only the emulator gets the folder."""
+        uow = FakeUnitOfWork()
+        _seed(uow, file_path=self._EBOOT, rom_dir=self._FOLDER, system="ps3")
+        active_core = FakeActiveCoreResolver(default_emulator=standalone_option("RPCS3 Directory (Standalone)"))
+        core_info = FakeCoreInfoProvider()
+
+        await _service(uow, core_info=core_info, active_core=active_core).prepare_game_start(1)
+
+        assert self._saves_asked(uow, active_core) == core_info.launchability_calls
 
 
 class TestAStartThatDoesNotComeAbout:

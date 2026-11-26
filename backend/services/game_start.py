@@ -1,10 +1,10 @@
 """GameStartService — prepares one start of a game: the resolver's command, handed to the launcher.
 
 Every start goes through here, Tender's Play and Steam's own Play alike (#2221
-D7): the start check asks for the command the resolver gives for the game's
-entry in effect, with the game's own path, and hands it to the shortcut
-launcher for that one start (D15). Nothing of the command is stored; a start
-whose hand-over does not come about starts nothing (D11, D19).
+D7): the start check asks for the command the resolver gives for the game with
+its entry in effect and hands it to the shortcut launcher for that one start
+(D15). Nothing of the command is stored; a start whose hand-over does not come
+about starts nothing (D11, D19).
 
 The shortcut's launch options are Tender's: the answer names them, the
 shortcut's appId, and the panel sets them back before the start (D16).
@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 
 from domain.emulator_choice import NO_ENTRY, STARTS, start_payload
 from domain.firmware_store import STORE_FOLDER
-from domain.rom_files import asked_path
 from domain.shortcut_data import shortcut_launch_options
 from domain.start_command import StartRefused, source_refusal
 from lib.errors import Refused
@@ -31,6 +30,7 @@ if TYPE_CHECKING:
     from services.protocols import (
         ActiveCoreReader,
         ConflictRules,
+        CoreInfoProvider,
         DebugLogger,
         DiscResolver,
         StartCommandReader,
@@ -48,20 +48,15 @@ START_FOLDER = "start-folder"
 class GameStartServiceConfig:
     """Frozen wiring bundle handed to ``GameStartService.__init__``.
 
-    Carries the Unit-of-Work factory (the game's record, its install and its
-    shortcut), the entry the game starts with (``active_core``) and the path it
-    starts with (``disc_resolver``), the resolver's command
-    (``start_commands``), the hand-over to the launcher — ``None`` where this
-    session has no runtime directory to hand a start over in (#2708 D4) — and
-    Tender's folder, whose firmware store a start may read. ``start_folder`` is
-    the folder a command that names none starts in (#2221 D6). ``loop`` runs the
-    preparation off the loop thread, ``conflict_rules`` are what it checks and
-    leases through.
+    ``handover`` is ``None`` where this session has no runtime directory to
+    hand a start over in (#2708 D4). ``start_folder`` is the folder a command
+    that names none starts in (#2221 D6).
     """
 
     uow_factory: UnitOfWorkFactory
     active_core: ActiveCoreReader
     disc_resolver: DiscResolver
+    core_info: CoreInfoProvider
     start_commands: StartCommandReader
     handover: StartHandover | None
     tender_folder: TenderFolderPlace
@@ -78,6 +73,7 @@ class GameStartService:
         self._uow_factory = config.uow_factory
         self._active_core = config.active_core
         self._disc_resolver = config.disc_resolver
+        self._core_info = config.core_info
         self._start_commands = config.start_commands
         self._handover = config.handover
         self._tender_folder = config.tender_folder
@@ -123,15 +119,15 @@ class GameStartService:
         if start["state"] != STARTS or resolved is None or resolved.choice.option is None:
             raise Refused("cannot_start", f"ROM {rom_id} cannot start: {start}", start=start)
         label = resolved.choice.option.label
-        path = asked_path(
-            install.file_path, install.rom_dir, self._disc_resolver.resolve_for_install(install, rom.selected_disc)
-        )
+        path = self._disc_resolver.resolve_for_install(install, rom.selected_disc)
+        reading = self._core_info.sources_reading()
+        launch = self._core_info.launchability(install.system, path, label=label, reading=reading)
         command = self._start_commands.start_command(
             install.system,
-            path,
-            label=label,
+            launch,
             writable=(install.rom_dir or os.path.dirname(path),),
             read_only=(os.path.join(self._tender_folder.place().folder, STORE_FOLDER),),
+            reading=reading,
         )
         if isinstance(command, StartRefused):
             start = start_payload(resolved.choice, resolved.options, command)

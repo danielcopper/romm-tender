@@ -1,7 +1,7 @@
 ---
 status: accepted
 decided: 2026-09-25
-updated: 2026-10-05
+updated: 2026-11-25
 amended-by: [0042]
 ---
 
@@ -104,3 +104,11 @@ Under [ADR-0042](0042-tender-takes-emulator-answers-starts-emulators-and-keeps-i
 with exactly the path Tender starts the game with, which for a download is its path in Tender's library. Backups taken
 before an overwrite move from the emulator's save folder into Tender's own data folder. A save still lives where the
 emulator writes it; Tender keeps no save folder of its own.
+
+## Amendment — the save is asked about the recorded path, not the folder the emulator mounts
+
+The path the resolver is asked with is no longer always the one the emulator gets. Where the resolver names a folder the
+emulator mounts as the disc (`boots.disc_root`, a PS3 game kept as a folder), the emulator gets that folder, and the
+save is not asked about it: the resolver is asked about the path Tender records for the game
+([ADR-0044](0044-every-start-asks-the-resolver.md), its amendment "a PS3 game kept as a folder is asked about its launch
+file"; [#2221](https://github.com/danielcopper/romm-tender/issues/2221) D3 as changed 2026-11-25).

@@ -1,7 +1,7 @@
 ---
 status: accepted
 decided: 2026-06-23
-updated: 2026-11-04
+updated: 2026-11-25
 amended-by: [0044]
 ---
 
@@ -214,3 +214,11 @@ goes ([ADR-0044](0044-every-start-asks-the-resolver.md),
 pick rewrites nothing in Steam. At every start the resolver is asked for the command with the path the emulator gets —
 the picked disc, else the default — and the emulator is handed that same path, unresolved
 (`domain/rom_files.py::asked_path`). The seam is `DiscResolver.resolve_disc_path`, no longer a bake site's.
+
+## Amendment — the emulator gets the folder the resolver names it mounting
+
+The resolver is asked with the recorded path, the disc pick folded over, as above. Where its launch verdict for the
+entry in effect names a folder the emulator mounts as the disc (`boots.disc_root`, a PS3 game kept as a folder), the
+start command is asked with that folder and the emulator gets it
+([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D3 as changed 2026-11-25, D8). The path asked about is
+`DiscResolver.resolve_disc_path`'s alone, with no folder layer over it.

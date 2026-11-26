@@ -26,6 +26,7 @@ judge it; the reading module's classification and its own tests stand for it.
 
 from __future__ import annotations
 
+import dataclasses
 import os
 from typing import Any
 
@@ -36,11 +37,15 @@ from _vendor.atlas import (
     EFFECT_GOES_ON,
     EFFECT_STOPS,
     EFFECT_UNESTABLISHED,
+    RESOLUTION_RESOLVED,
+    RESOLUTION_UNANIMOUS,
+    RESOLUTION_UNKNOWN,
     VERDICT_ENTRY_NOT_ACCEPTED,
     VERDICT_LAUNCHABLE,
     VERDICT_NEEDS_INSTALLATION,
     VERDICT_UNESTABLISHED,
     VERDICT_UNKNOWN,
+    SystemResolution,
 )
 
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
@@ -83,6 +88,9 @@ _GOES_ON_WORDS = {
 _NOT_ESTABLISHED_WORDS = {PATH_TOO_LONG_UNCHECKED}
 
 _VECTORS = vectors_asking("launchable")
+
+# A PS3 game kept as a folder, which RPCS3 mounts as the disc.
+_MOUNTS_ITS_FOLDER = "rpcs3-a-disc-dump-folder-boots-its-eboot-with-the-folder-as-the-disc"
 
 
 class _Answering:
@@ -139,6 +147,63 @@ def test_the_sweep_reaches_every_verdict_and_every_effect():
     assert stated == {EFFECT_STOPS, EFFECT_GOES_ON, EFFECT_UNESTABLISHED}
 
 
+def test_the_sweep_reaches_a_mounted_folder_a_mounted_image_and_a_boot_without_a_disc():
+    mounted: set[str] = set()
+    for _stem, vector in _VECTORS:
+        launchable = vector["expected"]["launchable"]
+        boots = launchable.get("boots")
+        if boots is None:
+            continue
+        root = boots["disc_root"]
+        if root is None:
+            mounted.add("none")
+        elif root == _content_path(vector):
+            mounted.add("asked")
+        else:
+            mounted.add("other")
+
+    assert mounted == {"none", "asked", "other"}
+
+
+def test_a_mounted_disc_beside_an_answer_that_does_not_hold_for_the_platform_is_not_read():
+    vector = next(v for _stem, v in _VECTORS if v["name"] == _MOUNTS_ITS_FOLDER)
+    kind, answer, query, label = _asked(vector)
+    unresolved = dataclasses.replace(answer, resolution=SystemResolution(RESOLUTION_UNKNOWN, None, None))
+
+    assert _read(kind, answer, query, label).mounted_disc == _content_path(vector)
+    assert _read(kind, unresolved, query, label).mounted_disc is None
+
+
+@pytest.mark.parametrize(
+    ("label", "state", "mounted"),
+    [
+        ("RPCS3 Directory (Standalone)", STARTS, True),
+        ("RPCS3 Shortcut (Standalone)", NOT_ESTABLISHED, False),
+    ],
+)
+def test_a_ps3_game_asked_about_its_eboot_mounts_its_folder_where_the_entry_reads_its_boot(label, state, mounted):
+    """#2221 D3: asked about the recorded launch file with the entry in effect, the resolver names the folder."""
+    vector = next(v for _stem, v in _VECTORS if v["name"] == _MOUNTS_ITS_FOLDER)
+    inp = vector["input"]
+    folder = _content_path(vector)
+    adapter = AtlasCatalogueAdapter(
+        sources=EmulatorSourcesAdapter(
+            user_home=inp["home"], settings={}, log_debug=lambda _line: None, machine=fixture_machine(inp)
+        ),
+        log_debug=lambda _line: None,
+    )
+
+    eboot = f"{folder}/PS3_GAME/USRDIR/EBOOT.BIN"
+
+    result = adapter.launchability("ps3", eboot, label=label)
+
+    assert (result.state, result.mounted_disc, result.start_path) == (
+        state,
+        folder if mounted else None,
+        folder if mounted else eboot,
+    )
+
+
 @pytest.mark.parametrize("vector", [pytest.param(v, id=f"{stem}:{v['name']}") for stem, v in _VECTORS])
 class TestTendersJudgementIsTheResolvers:
     def test_the_live_answer_is_the_recorded_one(self, vector):
@@ -171,6 +236,22 @@ class TestTendersJudgementIsTheResolvers:
             assert not stops
             assert result.reason not in _STOP_WORDS
 
+    def test_a_start_hands_over_the_disc_the_resolver_names_where_the_answer_holds_and_the_asked_path_otherwise(
+        self, vector
+    ):
+        """#2221 D3: the disc the resolver names the emulator mounting is read where the answer holds."""
+        kind, answer, query, label = _asked(vector)
+        recorded = vector["expected"]["launchable"]
+        boots = recorded.get("boots")
+        resolution = recorded.get("resolution")
+        holds = resolution is None or resolution["status"] in (RESOLUTION_RESOLVED, RESOLUTION_UNANIMOUS)
+        mounted = boots["disc_root"] if boots is not None and holds else None
+
+        result = _read(kind, answer, query, label)
+
+        assert result.mounted_disc == mounted
+        assert result.start_path == (mounted if mounted is not None else _content_path(vector))
+
     def test_every_other_stated_failure_is_said_in_its_own_group_in_order(self, vector):
         kind, answer, query, label = _asked(vector)
         stated = [caveat for caveat in _effect_caveats(answer) if caveat.data["effect"] != EFFECT_STOPS]
@@ -183,6 +264,10 @@ class TestTendersJudgementIsTheResolvers:
         assert [(_group_of(statement.reason), statement.file) for statement in said] == [
             (caveat.data["effect"], _named(caveat.data["file"])) for caveat in stated
         ]
+
+
+def _content_path(vector: dict[str, Any]) -> str:
+    return vector["input"]["launchable_query"]["content_path"]
 
 
 def _group_of(reason: str) -> str:

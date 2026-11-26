@@ -731,8 +731,8 @@ def _launchability(answer: Any, *, system: SystemArgument, content_path: str, la
         state=state,
         entry=label,
         system=system_key(system),
-        file=os.path.basename(content_path),
         extension=answer.extension,
+        content_path=content_path,
         starts_from=tuple(answer.accepted),
         other_entries=tuple(answer.alternatives),
         install_in=None if answer.installers is None else _installed_in(answer.installers),
@@ -741,6 +741,7 @@ def _launchability(answer: Any, *, system: SystemArgument, content_path: str, la
         statements=_statements(answer, state),
         contents_unread=CAVEAT_ARCHIVE_CONTENTS_UNREAD in codes,
         format_unestablished=CAVEAT_ENTRY_FORMAT_UNESTABLISHED in codes,
+        mounted_disc=answer.boots.disc_root if holds and answer.boots is not None else None,
     )
 
 
@@ -999,8 +1000,8 @@ class AtlasCatalogueAdapter:
                 state=LAUNCH_NOT_ESTABLISHED,
                 entry=label,
                 system=system_key(system),
-                file=os.path.basename(content_path),
                 extension="",
+                content_path=content_path,
                 reason=NO_SOURCE,
             )
 
@@ -1017,8 +1018,8 @@ class AtlasCatalogueAdapter:
                 state=LAUNCH_NOT_ESTABLISHED,
                 entry=label,
                 system=system_key(system),
-                file=os.path.basename(content_path),
                 extension="",
+                content_path=content_path,
             )
         return _launchability(answer, system=system, content_path=content_path, label=label)
 

@@ -95,9 +95,12 @@ class FakeCoreInfoProvider:
         self.readings: list[SourcesReading | None] = []
         self.options_calls: list[dict[str, str | None]] = []
         # The verdict ``launchability`` answers for each label it is asked
-        # with; a label it does not hold starts its file. Each call is recorded.
+        # with; a label it does not hold starts its file. Each call is
+        # recorded, and the reading it was asked in.
         self.launch_verdicts: dict[str, Launchability] = {}
         self.launchability_calls: list[tuple[SystemArgument, str, str]] = []
+        self.launchability_readings: list[SourcesReading | None] = []
+        self.readings_taken = 0
 
     @property
     def available_cores(self) -> list[dict[str, Any]]:
@@ -116,6 +119,7 @@ class FakeCoreInfoProvider:
         return self.active_core
 
     def sources_reading(self) -> FakeSourcesReading:
+        self.readings_taken += 1
         return FakeSourcesReading((ArrangedSource(kind="retrodeck", enabled=True, starts_games=True),), {})
 
     def get_emulator_options(
@@ -143,13 +147,18 @@ class FakeCoreInfoProvider:
         self, system_name: SystemArgument, content_path: str, *, label: str, reading: SourcesReading | None = None
     ) -> Launchability:
         self.launchability_calls.append((system_name, content_path, label))
+        self.launchability_readings.append(reading)
         verdict = self.launch_verdicts.get(label)
         if verdict is not None:
+            # A verdict is about the path it was asked about, as the resolver's is.
+            assert verdict.content_path == content_path, (
+                f"{label} stubbed for {verdict.content_path}, asked {content_path}"
+            )
             return verdict
         return Launchability(
             state=STARTS,
             entry=label,
             system=system_key(system_name),
-            file=os.path.basename(content_path),
             extension=os.path.splitext(content_path)[1],
+            content_path=content_path,
         )

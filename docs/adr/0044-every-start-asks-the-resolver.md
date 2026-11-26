@@ -1,7 +1,7 @@
 ---
 status: accepted
 decided: 2026-11-03
-updated: 2026-11-04
+updated: 2026-11-26
 supersedes: [0009]
 amends: [0012, 0014, 0015, 0019, 0020, 0025]
 ---
@@ -64,3 +64,18 @@ without Tender would run a stale command.
   command, since without a game there is nothing to ask with (D20).
 - The table of a PS3 game's boot folder (`FOLDER_BOOT_MARKERS`) still decides the folder a start is asked with, until a
   later cut of #2221 reads the resolver's.
+
+## Amendment — a PS3 game kept as a folder is asked about its launch file
+
+The resolver is asked with exactly the path Tender records for the game, its disc pick folded over, and never with a
+folder Tender's own table of the boot folder finds ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D3,
+changed 2026-11-25, and D22). Where the launch verdict for the entry in effect names a folder its emulator mounts as the
+disc (`boots.disc_root`, a PS3 game kept as a folder), the start command is asked with that folder and the emulator gets
+it; otherwise the command is asked with the recorded path and the emulator gets it. Under RetroDECK's default
+`RPCS3 Shortcut`, whose verdict names none, the command asked with the `EBOOT.BIN` states no distribution environment,
+so the entry is not startable through Tender yet and Play is off with that reason (D23, changed 2026-11-26). The command
+is asked about the verdict, so the game page, the emulator menu and the start ask it the same way. Starting RPCS3 with
+the `EBOOT.BIN` itself was not chosen: [ADR-0019](0019-folder-as-launch-target.md) measured RPCS3 refusing it. Choosing
+the folder by ES-DE's naming rule was not chosen: since emu-atlas#776 the resolver's answer is the emulator's, not
+ES-DE's scan. `FOLDER_BOOT_MARKERS` feeds no start and no question about one; the download and the one-time naming step
+keep it to recognise a PS3 game kept as a folder.

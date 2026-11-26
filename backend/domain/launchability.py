@@ -10,6 +10,7 @@ Pure compute — no I/O.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -128,8 +129,8 @@ class Launchability:
     """One file's verdict for one entry, with what each state's sentence names.
 
     ``system`` is the key of the system it was asked as, ``None`` where it was
-    asked by several pairs; ``file`` the file's name and ``extension`` the
-    token compared, as the resolver states it. ``starts_from`` is the system's
+    asked by several pairs; ``extension`` is the token compared, as the
+    resolver states it. ``starts_from`` is the system's
     accept-list, the names the frontend lists, read for
     :data:`FRONTEND_WOULD_NOT_LIST`; ``other_entries`` the labels of the system's
     entries established to start the file, read for :data:`NOT_THIS_EMULATOR`;
@@ -152,14 +153,20 @@ class Launchability:
     establish.
     ``contents_unread`` says the file is an archive whose contents were not
     read; ``format_unestablished`` that whether the entry reads this format was
-    not established.
+    not established. ``content_path`` is the path the verdict was asked
+    about; ``mounted_disc`` is what the entry's emulator mounts as the disc
+    where the resolver names it — a PS3 game's folder, or a PS3 image itself —
+    and ``None`` where it names none.
+    ``start_path`` is what a start of the file with the entry hands the
+    emulator and asks its command with (#2221 D3). The panel is handed neither
+    path.
     """
 
     state: str
     entry: str
     system: str | None
-    file: str
     extension: str
+    content_path: str
     starts_from: tuple[str, ...] = ()
     other_entries: tuple[str, ...] = ()
     install_in: tuple[str, ...] | None = None
@@ -168,6 +175,15 @@ class Launchability:
     statements: tuple[LaunchStatement, ...] = ()
     contents_unread: bool = False
     format_unestablished: bool = False
+    mounted_disc: str | None = None
+
+    @property
+    def file(self) -> str:
+        return os.path.basename(self.content_path)
+
+    @property
+    def start_path(self) -> str:
+        return self.mounted_disc if self.mounted_disc is not None else self.content_path
 
     def payload(self, *, platform_name: str) -> dict[str, Any]:
         """The verdict as the panel reads it, with the name the game page shows the game's platform under.

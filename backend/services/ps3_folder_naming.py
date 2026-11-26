@@ -1,18 +1,16 @@
 """Ps3FolderNamingService — naming and placing the PS3 games already installed as folders as ES-DE scans them.
 
 A one-time step (#2195 D27): a download names a PS3 game kept as a folder
-``<game>.ps3`` (D11), and the resolver answers a folder without that name as no
-launch file, so one installed before that name came in is renamed once, with
-its install record following, and keeps starting without a new download. The
-step stays in every later release, so an update that skips releases still
-gets it; it is safe to run again, because a folder already named for ES-DE is
-never renamed.
+``<game>.ps3`` (D11), the name ES-DE lists it under, so one installed before
+that name came in is renamed once, with its install record following, without
+a new download. The step stays in every later release, so an update that
+skips releases still gets it; it is safe to run again, because a folder already
+named for ES-DE is never renamed.
 
 Which installs it renames is fixed at its first pass and recorded in
-``kv_config``: a folder adopted later is recorded as it stands and gets the
-resolver's answer for its name (D27), even while the step is still open. Its
-completion is stamped only after a pass that left none of those it could
-still rename: a folder that is not there — a drive not mounted, a RetroDECK
+``kv_config``: a folder adopted later is recorded as it stands (D27), even
+while the step is still open. Its completion is stamped only after a pass that
+left none of those it could still rename: a folder that is not there — a drive not mounted, a RetroDECK
 move not yet followed — or whose move or record failed is asked about again at
 the next start. A folder whose new name is taken keeps its name and counts as
 done: nothing is moved over another folder. A folder already moved whose

@@ -837,6 +837,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             uow_factory=cfg.callbacks.uow_factory,
             active_core=active_core_resolver,
             disc_resolver=disc_launch_resolver,
+            core_info=cfg.adapters.core_info_provider,
             start_commands=cfg.adapters.start_commands,
             handover=cfg.adapters.start_handover,
             tender_folder=cfg.adapters.tender_folder,
